@@ -13,7 +13,7 @@ It is a **consumer** of the TSON library, not part of it. The library lives in t
 and consumed as a Gradle **included build** (see "Consuming tson-java" below). Destination remote:
 `https://github.com/litterat/` — not yet pushed.
 
-**Status.** All four modules are built and tested (138 tests), each adapter with a runnable demo server and a
+**Status.** All four modules are built and tested (168 tests), each adapter with a runnable demo server and a
 concurrency suite driving it under load. Responses are self-describing in both directions: an error body names
 `problem-1.tn`, a demo's order reply names the schema governing it, and this server publishes both documents so
 those URLs resolve. Every adapter proves the full loop: a schema
@@ -137,6 +137,36 @@ streaming test uses a body past Jetty's buffer, so it asserts that the document 
 asserting a framework's buffering habit. A difference that survives that treatment is worth writing down
 here; one that does not is a bad test.
 
+### Serving several schema versions
+
+§10 makes a published schema immutable: a shape change is a new document under a new name (`order-1.tn`,
+`order-2.tn`), so versions coexist rather than replace each other, and a server outliving one of its clients
+serves both. `TsonSchemaVersions` is that, and `TsonDocumentPeek` is what lets it route.
+
+**A `DataBindContext` per version, because binding is name-based.** `DataNameBinder.resolve(String)` is handed a
+schema *type name* and nothing else — no schema, no version. Both versions declare `order`, so one binder cannot
+map it to two classes. The failure is at least loud: *"the schema's root type `order` binds to OrderV1, which is
+not assignable to the requested OrderV2"*. Tree mode has none of this difficulty; one `Tson` holds every version
+happily, because no classes are involved. Reach for `TsonSchemaVersions` only in bind mode.
+
+**Routing is a safety feature, not a convenience.** A codec built for v1 will read a v2 document and silently
+drop what its class has no component for — `OrderV1[sku=A, quantity=1]`, no error, **no diagnostic even
+collecting** (`UPSTREAM.md` #10). So `route` refuses a document naming a version this endpoint does not serve,
+and refuses one naming none. Do not add a fallback that guesses; that is the failure it exists to prevent.
+`defaultVersion` exists for an older unversioned client and is off by default for the same reason.
+
+**Two ways to model the Java side**, both tested: a class per version, switching on `Routed.schemaId()`; or one
+class with a field for everything any version has, nullable for what is not in all of them.
+
+**Multiple constructors do not select a version.** This is the tempting model and it does not work: binding
+always uses the canonical constructor — the sole public one, or the `@Record`-annotated one — and passes `null`
+for a field the schema does not declare. Measured, not assumed: a two-argument constructor stamping a marker was
+never called. A second constructor is for your code, invisible to binding.
+
+**`Routed.schemaId()` is the registered id, not what the document spelled.** A client may write the same
+identity with a different scheme or a `?sha256=` pin (§2.2.1); a caller switching on the version must not see
+that. An earlier version of this returned the reference and would have broken the moment a client pinned one.
+
 ### Identity is not location
 
 The single most important thing to understand before touching the schema source. [TSON-DATA] §2.2.1:
@@ -250,6 +280,10 @@ Each cost a debugging cycle here and is pinned by a test.
   `UnsupportedOperationException: no bound Java class for '<type>'` — which the status policy correctly
   reports as 501, so it looks like a library gap rather than missing configuration. Chain to
   `SchemaMetaNameBinder.INSTANCE` for everything you do not map yourself.
+- **`TsonDocumentPeek` is a hand-rolled scanner, and must stay conservative.** There is no public header peek
+  upstream (`UPSTREAM.md` #9) despite §7.1 designing for exactly this. Its governing rule: it may answer "I
+  could not tell", but it must never answer with a schema the document does not name — a wrong answer routes a
+  request to the wrong version. When changing it, add to `neverInventsASchemaForRubbish` first.
 - **`describing()` needs a root type name as well as a schema URI, for an object.** A bound record writes no
   type-ref of its own, so `!!schema` alone yields a document whose reader cannot select a type. The tree form
   takes one argument, because a tree node already carries a type-ref. `TsonHttpCodec.write(value, schemaUri,

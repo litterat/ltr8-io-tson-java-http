@@ -216,6 +216,65 @@ descriptor resolution off the request thread, not a correctness measure.
 
 ---
 
+## 9. No public way to read a data document's header without reading the document
+
+**Hit:** routing a request to the right schema version means knowing which schema the document names *before*
+choosing how to read it. There is no API for that. `TsonDataParser.peekDirectiveName()` exists and is exactly
+right, but is package-private in a package `tson-compiler` does not export; `TsonSchemaParser` handles schema
+documents, not data ones; and everything public reads the whole document, which is the thing that needs the
+answer first.
+
+**This is a designed-for capability with no door.** [TSON-DATA] §7.1: "classification requires at most two
+directives of lookahead and no value parsing, so streams, previews, and content sniffers can classify a
+document from its opening bytes." That sentence describes a use case the format deliberately supports and this
+library cannot serve.
+
+**Workaround in place:** `TsonDocumentPeek`, a small strict scanner over the leading bytes, with adversarial
+tests whose governing rule is that it may answer "I could not tell" but must never answer with a schema the
+document does not name. It is a second implementation of a fragment of the lexer, which is exactly what should
+not exist.
+
+**Change:** expose it — a `TsonDocumentHeader` for *data* documents (`!!id`, `!!schema`) read from a stream
+without consuming it, or simply make the existing peek reachable. Symmetric with the `DocumentHeader` the
+writers just gained (#7), which names the same two directives from the other end.
+
+**Blast radius:** additive.
+
+---
+
+## 10. Binding drops a schema field the target class has no component for, silently
+
+**Hit:** the multi-version case, which is where it matters. Given `order-2.tn` adding a `currency` field, a
+codec whose binder maps `order` to a v1 class reads a v2 document and returns `OrderV1[sku=A, quantity=1]`. The
+currency is gone. No exception, and **no diagnostic even under a collecting receiver** — `diagnostics=0`. Tree
+mode over the same document keeps `currency=AUD`, so the document was read correctly against its own schema; it
+is the bind that discards the field.
+
+The reverse is silent too: a class with a component the schema does not declare gets `null` for it.
+
+**Why it is worth reporting rather than shrugging at.** Ignoring unknown fields is a reasonable evolution
+policy — it is what most wire formats do. Doing it *invisibly* is the problem, because the caller cannot tell a
+deliberate leniency from a misconfiguration. In a server the misconfiguration is realistic and the consequence
+is not cosmetic: a v1 endpoint reachable by a v2 client processes an order and drops its currency.
+
+Note the contrast with §7.2's record closure, which this library enforces properly: a field in the *data* that
+the *schema* does not declare is an `UNRECOGNIZED_FIELD` error. It is only the schema-to-class direction that
+says nothing.
+
+**Change:** make it reportable — a diagnostic through the receiver (`UNBOUND_FIELD`, say) when a schema field
+finds no component on the bound class, and its converse when a component finds no field. A caller wanting
+leniency ignores it; a caller wanting strictness fails on it; neither has to guess. Not an exception by default,
+which would break the evolution case this leniency is presumably for.
+
+**Workaround in place:** `TsonSchemaVersions` refuses to route a document to a codec built for a different
+version, so the mismatch cannot arise. That is a guard around the gap, not a fix for it — anything binding
+outside that router is still exposed.
+
+**Pinned by** `TsonSchemaVersionsTest.aCodecFromTheWrongVersionSilentlyDropsFieldsItsClassLacks`, which asserts
+the current behaviour so that a fix upstream makes it fail and say so.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off.
