@@ -13,15 +13,19 @@ It is a **consumer** of the TSON library, not part of it. The library lives in t
 and consumed as a Gradle **included build** (see "Consuming tson-java" below). Destination remote:
 `https://github.com/litterat/` — not yet pushed.
 
-**Status.** All four modules are built and tested (137 tests), each adapter with a runnable demo server and a
-concurrency suite driving it under load. Every adapter proves the full loop: a schema
+**Status.** All four modules are built and tested (138 tests), each adapter with a runnable demo server and a
+concurrency suite driving it under load. Responses are self-describing in both directions: an error body names
+`problem-1.tn`, a demo's order reply names the schema governing it, and this server publishes both documents so
+those URLs resolve. Every adapter proves the full loop: a schema
 served at its identity path, fetched back by `TsonHttpSchemaSource`, and used to validate a document. The
 project does what it set out to do; what remains is polish and the open questions below.
 
-**Open question, undecided:** whether a request should be able to name its schema in a header
-(`Content-Type: application/tson; schema="…"`) rather than only via the body's `!!schema`. The reasoning,
-the recommendation, and the conflict rule it would need are in `UPSTREAM.md`'s spec-feedback section. Nothing
-is implemented; do not add one without a decision.
+**Open question, undecided:** whether a *request* should be able to name its schema in a header
+(`Content-Type: application/tson; schema="…"`). **The case has narrowed:** it originally covered responses too,
+and `describing()` solved that half in-band and better. What is left is JSON bodies, which cannot carry a
+`!!schema` and have no in-band option at all — so this is now a JSON-compatibility feature, not a TSON one, and
+should be judged on that. Reasoning and the conflict rule it would need are in `UPSTREAM.md`'s spec-feedback
+section. Nothing is implemented; do not add one without a decision.
 
 **Hard constraints:**
 - Java 25 only (matches tson-java).
@@ -246,13 +250,13 @@ Each cost a debugging cycle here and is pinned by a test.
   `UnsupportedOperationException: no bound Java class for '<type>'` — which the status policy correctly
   reports as 501, so it looks like a library gap rather than missing configuration. Chain to
   `SchemaMetaNameBinder.INSTANCE` for everything you do not map yourself.
-- **A class must be `prepareToWrite`n before it is written concurrently.** `DataBindContext.getDescriptor`
-  resolves lazily with a check-then-act that is not atomic, so two threads writing a class for the first time
-  race and the loser gets `DataBindException: Class already registered` (`UPSTREAM.md` #8 — a real fault, not a
-  doc gap). `TsonHttpCodec`'s constructor prepares its own wire types, because an error body must not be the
-  thing that meets the race; an application calls `prepareToWrite` at startup for its own, as all three demos
-  do. **Reads are unaffected** — a compiled schema binds its classes when it compiles — which is why a route
-  that reads before it writes hides this, and a write-only route does not.
+- **`describing()` needs a root type name as well as a schema URI, for an object.** A bound record writes no
+  type-ref of its own, so `!!schema` alone yields a document whose reader cannot select a type. The tree form
+  takes one argument, because a tree node already carries a type-ref. `TsonHttpCodec.write(value, schemaUri,
+  rootTypeName)` and `writeTree(value, schemaUri)` mirror that asymmetry deliberately.
+- **`prepareToWrite` is a warm-up, not a correctness measure** — it was one, before `UPSTREAM.md` #8 was fixed
+  upstream. Keep calling it at startup to move first-write descriptor resolution off the request thread; do not
+  treat it as load-bearing for concurrency any more.
 - **A schema reference may not carry a port, userinfo or a fragment** (§2.2.1), so a schema origin cannot run
   on a non-default port. Use `mapHost`. See "Identity is not location" above — this is the trap that costs the
   most time, because the failure surfaces from the resolver rather than from the fetch.

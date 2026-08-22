@@ -31,14 +31,11 @@ import java.util.function.Supplier;
  * schema during single-threaded startup, then share it for reads. Never resolve a schema from a request handler.
  * See {@code CLAUDE.md}.
  *
- * <p><b>A class must be prepared before it is written concurrently.</b> {@code DataBindContext.getDescriptor}
- * resolves a class descriptor lazily, and does so with a check-then-act that is not atomic -- two threads
- * writing a given class for the first time race, and the loser gets {@code DataBindException: Class already
- * registered} ({@code UPSTREAM.md} #8). Reading is unaffected, because a compiled schema binds its classes when
- * it compiles. This constructor prepares its own wire types, so an error body never hits the race; an
- * application calls {@link #prepareToWrite} at startup for the types <em>it</em> writes. The window is the first
- * write of each class and closes for good after it, which is exactly why it survives every single-threaded test
- * and appears under load.
+ * <p><b>An error body says what governs it.</b> {@link #writeProblem} writes through a {@code describing}
+ * writer, so a problem carries {@code !!schema:"…/problem-1.tn"} and reads back with no out-of-band knowledge --
+ * and this project's own schema handler publishes that document, so the URL in it resolves. Every other write
+ * is bare unless a caller asks otherwise, because the codec cannot know what governs an arbitrary object; the
+ * overloads taking a schema and root type are how an application says.
  *
  * <p><b>An ordinary response streams; an error body does not.</b> {@link #writeTo} and {@link #writeTreeTo} hand
  * the response stream straight to the writer, so a large or open-ended document never exists as a {@code String}
@@ -54,25 +51,31 @@ public final class TsonHttpCodec {
     private final Tson tson;
     private final TsonObjectWriter objectWriter;
     private final TsonTreeWriter treeWriter;
+    private final TsonObjectWriter problemWriter;
 
     /** A codec over {@code tson}, whose schemas are expected to be already resolved. */
     public TsonHttpCodec(Tson tson) {
         this.tson = tson;
         this.objectWriter = tson.objectWriter();
         this.treeWriter = tson.treeWriter();
-        // This codec's own wire types, prepared here rather than on first use. writeProblem runs when something
-        // has already gone wrong, often for many requests at once, so it is the worst possible place to meet a
-        // first-write race -- the error response would fail while reporting a failure.
+        // Built once: an error body always names problem-1.tn and its root type, so there is nothing per-call
+        // to decide. Both arguments are required -- a bound record writes no type-ref of its own, so a
+        // !!schema without one produces a document a reader cannot select a type from.
+        this.problemWriter = objectWriter.describing(TsonProblemSchema.ID, "problem");
+        // Warm-up, not a correctness measure. writeProblem runs when something has already gone wrong, often
+        // for many requests at once, and resolving a descriptor for the first time on that path adds latency
+        // exactly where it is least wanted.
         prepareToWrite(TsonProblem.class, TsonProblemDiagnostic.class);
     }
 
     /**
-     * Resolves the binding descriptors for {@code classes} now, so a later concurrent first write of any of them
-     * cannot race. Call at startup for every type this server writes; it is idempotent and cheap.
+     * Resolves the binding descriptors for {@code classes} now, rather than on the first request that writes
+     * one. Idempotent and cheap; call it at startup for every type this server writes.
      *
-     * <p>Needed because descriptor resolution is lazy and its check-then-act is not atomic -- see the class note
-     * and {@code UPSTREAM.md} #8. Once tson-java makes that resolution atomic this becomes a no-op worth keeping
-     * only as a warm-up.
+     * <p><b>A warm-up, not a correctness measure.</b> It began as one: descriptor resolution used to race on a
+     * concurrent first write and the loser got {@code Class already registered} ({@code UPSTREAM.md} #8, now
+     * fixed upstream -- a lost race takes the winner's entry). What remains is the latency, which is worth
+     * moving off the request thread.
      */
     public void prepareToWrite(Class<?>... classes) {
         for (Class<?> target : classes) {
@@ -170,9 +173,42 @@ public final class TsonHttpCodec {
         return buffered(out -> objectWriter.write(value, out));
     }
 
+    /**
+     * A bound object as a <b>self-describing</b> response body: the document names {@code schemaUri} in a
+     * {@code !!schema} directive and {@code rootTypeName} as its root type-ref, so a client reads it back
+     * without being told either out of band.
+     *
+     * <p>Both are required and neither is guessed. A bound record writes no type-ref of its own, so a
+     * {@code !!schema} alone yields a document whose reader cannot select a type -- half self-describing is not
+     * self-describing.
+     */
+    public byte[] write(Object value, String schemaUri, String rootTypeName) {
+        TsonObjectWriter describing = objectWriter.describing(schemaUri, rootTypeName);
+        return buffered(out -> describing.write(value, out));
+    }
+
+    /** {@link #write(Object, String, String)}, streamed. */
+    public void writeTo(Object value, String schemaUri, String rootTypeName, OutputStream out) {
+        objectWriter.describing(schemaUri, rootTypeName).write(value, out);
+    }
+
     /** A tree as a response body, in hand. */
     public byte[] writeTree(TsonValue value) {
         return buffered(out -> treeWriter.write(value, out));
+    }
+
+    /**
+     * A tree as a <b>self-describing</b> response body. One argument where {@link #write(Object, String,
+     * String)} takes two, because a tree node carries its own type-ref already.
+     */
+    public byte[] writeTree(TsonValue value, String schemaUri) {
+        TsonTreeWriter describing = treeWriter.describing(schemaUri);
+        return buffered(out -> describing.write(value, out));
+    }
+
+    /** {@link #writeTree(TsonValue, String)}, streamed. */
+    public void writeTreeTo(TsonValue value, String schemaUri, OutputStream out) {
+        treeWriter.describing(schemaUri).write(value, out);
     }
 
     /**
@@ -183,7 +219,7 @@ public final class TsonHttpCodec {
      */
     public byte[] writeProblem(TsonProblem problem) {
         try {
-            return buffered(out -> objectWriter.write(problem, out));
+            return buffered(out -> problemWriter.write(problem, out));
         } catch (RuntimeException e) {
             throw new IllegalStateException("failed to render this server's own problem body as TSON", e);
         }

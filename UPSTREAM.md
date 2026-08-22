@@ -176,88 +176,43 @@ past a document that will not parse, so there is no "collect and carry on" to of
 
 ---
 
-## 7. The readers honour `!!schema`; the writers cannot produce it
+## 7. ~~The writers cannot produce `!!schema`~~ — DONE (`2335e00`)
 
-**Hit:** deciding whether an HTTP request should be able to name its schema in a header turned up that a
-response cannot name one at all. `TsonObjectWriter` and `TsonTreeWriter` emit no header directives, and the
-gap is not at the facade — `TsonDataEmitter`'s whole surface is `beginRecord`/`field`/`beginArray`/
-`annotation`/`typeRef`/the value methods. There is no `!!id`, no `!!schema`, no directive method of any kind.
-`TsonValue` carries no schema reference either, so a tree that was read from a self-describing document has
-already lost the fact by the time anything could write it back.
+`TsonObjectWriter.describing(schemaUri, rootTypeName)` and `TsonTreeWriter.describing(schemaUri)`, plus
+`identifiedBy(documentId)` on both, over a shared `DocumentHeader` that knows §2.2's ordering. Off by default,
+so existing output is unchanged.
 
-**So the round trip is asymmetric.** `treeReader().read(doc)` resolves the document's own `!!schema`,
-validates against it and returns the value — and nothing in the library can write that value back out in the
-form it arrived in. A document this library reads, it cannot reproduce.
+The object form requires **both** arguments, which is the detail worth keeping in mind: a bound record writes
+no type-ref of its own, so a `!!schema` alone yields a document whose reader answers "declares a `!!schema` but
+has no root type-ref to select a type". Half self-describing is not self-describing, and there is deliberately
+no one-argument form to get it wrong with. The tree form needs one, because a tree node already carries a
+type-ref.
 
-**Why it matters here.** A TSON response body is therefore never self-describing: a client that receives one
-cannot tell what governed it without being told out of band. That is what
-`TsonHttpCodecTest.whatItWritesItCanReadBack` is really showing — it has to pass the schema and root type back
-in explicitly via `readObjectAs`, because the bytes do not say. It also removes the honest answer to the
-request-side question: "put it in the body, that is what the directive is for" is only available in one
-direction.
+**Adopted here.** `TsonHttpCodec.writeProblem` writes through a `describing` writer, so an error body names
+`problem-1.tn` and reads back with `readObject` and nothing told out of band — and this project's schema
+handler publishes that document, so the URL in it resolves. `write(value, schemaUri, rootTypeName)` and
+`writeTree(value, schemaUri)` are the opt-in for application types; the JDK and Javalin demos use them, so a
+posted order comes back naming the schema that governs it.
 
-**Change:** a way to emit a document header — at minimum `!!schema`, ideally `!!id` too. Shapes worth
-considering, cheapest first:
-
-- A `TsonDataEmitter` directive method, and an opt-in on the writers (`objectWriter().describing(schemaUri)`),
-  leaving the default output exactly as it is today.
-- The writer deriving it from the compiled schema a bind-mode registry already holds, so a caller writing a
-  type the schema governs gets a self-describing document without naming the URI twice.
-
-**Blast radius:** additive at the emitter. The writer-level opt-in matters more than the mechanism: emitting a
-directive by default would change every existing document this library produces, including `tson validate
---output tson`, so the current output has to stay reachable.
-
-**Priority:** high. It is the difference between TSON over HTTP being self-describing in both directions and
-being self-describing only inbound.
+One place it does not reach: the Helidon demo's order route goes through `TsonMediaSupport`, whose
+`EntityWriter` is handed a value and a stream and has nowhere to learn a schema URI from. That is left as it
+is, and commented, because it is an honest cost of the native seam rather than something to paper over.
 
 ---
 
-## 8. `DataBindContext.getDescriptor` races on the first write of a class
+## 8. ~~`DataBindContext.getDescriptor` races on the first write of a class~~ — DONE (`7c8dbe0`)
 
-**Hit:** a concurrency test over one shared `TsonHttpCodec` — the object all three adapters hold across their
-request threads — failed on 31 of 32 threads with
-`TsonWriteException: cannot write class … : Class already registered: …`.
+A lost cache-fill race now takes the winner's descriptor instead of throwing `Class already registered`.
+Verified from this end: deleting the `prepareToWrite` workaround from `TsonHttpCodecConcurrencyTest` and
+running four times gives four clean runs, where before it failed on 5 of 32 threads every run.
 
-**The mechanism**, in `tson-bind/src/main/java/io/ltr8/bind/DataBindContext.java`:
+The fix's own note is worth reading — it explains why `computeIfAbsent` was not the answer *there*: descriptor
+resolution recurses back into `getDescriptor` for every component type, and `computeIfAbsent` on the map being
+computed is a documented deadlock. (Not the same reason it is wrong for this project's schema cache, where the
+loader is not re-entrant and the objection is holding a bin lock across a network call.)
 
-```java
-DataClass descriptor = descriptors.get(parameterizedType);   // a ConcurrentHashMap
-if (descriptor == null) {
-    descriptor = dataClassResolver.resolve(this, targetClass, parameterizedType);
-    register(parameterizedType, descriptor);                 // throws if the key is already present
-}
-```
-
-The map is concurrent; the compound operation is not. Two threads resolving a given type for the first time
-both see `null`, both resolve, and both call `register` — which is written to reject a duplicate rather than
-tolerate an identical one, so the loser throws.
-
-**Why it survived every other test.** The window is the *first* write of each class and closes permanently
-after it, so anything single-threaded, and anything that happens to read before it writes, never sees it. Reads
-are unaffected entirely: a compiled schema binds its classes when it compiles. It is specifically the lazy
-write-side resolution that races — which is why a server can pass a full test suite and then fail under load,
-on the error path, while reporting some other failure.
-
-**Suggested fix**, one line and behaviour-preserving:
-
-```java
-return descriptors.computeIfAbsent(parameterizedType, key -> { ... resolve ... });
-```
-
-or leave the structure alone and make `register` idempotent for an equal descriptor. `computeIfAbsent` is safe
-here because resolution does not re-enter the map for the same key; if that is not certain, the
-tolerant-`register` variant has no such requirement.
-
-**Workaround in place:** `TsonHttpCodec` resolves its own wire types in its constructor — an error body must
-not be the thing that meets the race — and exposes `prepareToWrite(Class...)` for an application to do the same
-for its types at startup. Both become unnecessary once this is fixed, and the tests that call it say so.
-
-**Priority: highest of the open items.** It is a real fault reachable from correct usage, not a documentation
-gap, and its symptom is worst exactly when a server is busiest.
-
-**Related:** #3 asks for the thread-safety contract to be *stated*. This is the first place it is measurably
-not met, so the two want fixing together — a stated contract is worth much more once it is true.
+`TsonHttpCodec.prepareToWrite` stays, re-documented as what it now is: a warm-up that keeps first-write
+descriptor resolution off the request thread, not a correctness measure.
 
 ---
 
@@ -273,6 +228,13 @@ Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off.
 validating generated structured output against a schema. But `!!schema` is TSON directive syntax, and a JSON
 document cannot carry one — so for the entire JSON-compatible surface there is no in-band way to say which
 schema governs the document. The spec does not say what the out-of-band channel is.
+
+**Narrowed since first written.** This item originally had two legs; one has gone. With `describing()` (#7) a
+TSON *response* now names its own schema in-band, so "a client cannot tell what governed what it received" is
+no longer an argument for a header — that half is solved, and solved better, in the document itself. What
+remains is JSON bodies, where there is still no in-band option at all. The case for a header is therefore
+narrower and single-purpose than it looked, and should be judged as such: it exists for JSON compatibility, not
+for TSON.
 
 This is not purely an application question, because §7.1 already legislates for HTTP: it defines
 `application/tson`, notes the media type is intended for IANA registration, and specifies

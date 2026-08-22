@@ -46,6 +46,29 @@ class TsonProblemSchemaTest {
         assertEquals(problem, readBack);
     }
 
+    /**
+     * The point of writing an error body through a {@code describing} writer: it names its own schema and root
+     * type, so a client reads it with {@code readTree}/{@code readObject} and no arguments -- nothing told out
+     * of band. The URL it names is one this project's own schema handler publishes, so it resolves too.
+     */
+    @Test
+    void anErrorBodySaysWhatGovernsItAndReadsBackWithNothingToldOutOfBand() {
+        TsonHttpCodec codec = new TsonHttpCodec(TsonProblemSchema.tson());
+        TsonProblem problem = TsonProblem.of(400, "Invalid TSON document", "the request body has 1 problem",
+                List.of(Diagnostic.ofSchemaError("https://example.com/2026/32/app/order-1.tn", "order",
+                        "missing required field 'sku'", Optional.empty())));
+
+        String written = new String(codec.writeProblem(problem), StandardCharsets.UTF_8);
+        assertTrue(written.startsWith("!!schema:\"" + TsonProblemSchema.ID + "\""), written);
+        assertTrue(written.contains("!problem"), "and a root type-ref, or a reader cannot select a type: " + written);
+
+        // read, not readObjectAs: no schema URI, no type name, no prior knowledge of either.
+        TsonProblem readBack = codec.readObject(
+                new ByteArrayInputStream(written.getBytes(StandardCharsets.UTF_8)), "application/tson",
+                TsonProblem.class);
+        assertEquals(problem, readBack);
+    }
+
     /** errors is a list because a 415 or a 406 produces no diagnostic at all, and must still be a valid body. */
     @Test
     void aProblemWithNoDiagnosticsIsStillValid() {

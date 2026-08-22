@@ -70,7 +70,10 @@ public final class OrderServer {
         // never reaches this code, and the client gets a 400 carrying every diagnostic at once.
         app.post("/orders", TsonHandler.asHandler(codec, tsonContext -> {
             Order order = tsonContext.readObject(Order.class);
-            tsonContext.respond(201, new Order(order.sku(), order.quantity() * 2));
+            // Self-describing: the reply names the schema governing it, which this server also publishes, so
+            // a client can validate what it got without being told anything out of band.
+            tsonContext.respondBytes(201, tsonContext.codec()
+                    .write(new Order(order.sku(), order.quantity() * 2), SCHEMA_ID, "order"));
         }));
 
         // `<path>` rather than `{path}`: an identity path has slashes in it, and only the angle form matches

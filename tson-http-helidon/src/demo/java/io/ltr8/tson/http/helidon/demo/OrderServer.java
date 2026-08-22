@@ -75,6 +75,12 @@ public final class OrderServer {
                     // Helidon's own error page.
                     TsonHandler.install(routing, codec);
 
+                    // Left as a plain Helidon handler, and so *not* self-describing, unlike the JDK and
+                    // Javalin demos: the write goes through TsonMediaSupport's EntityWriter, which is handed a
+                    // value and a stream and has nowhere to learn a schema URI from. Naming one would mean
+                    // configuring the media support per type, which is its own design question. The honest
+                    // demonstration is that the native seam costs this, and that a route wanting a
+                    // self-describing reply writes through the codec directly, as the other two demos do.
                     routing.post("/orders", (request, response) -> {
                         Order order = request.content().as(Order.class);
                         response.status(201).send(new Order(order.sku(), order.quantity() * 2));

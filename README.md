@@ -13,7 +13,7 @@ Four modules:
 | `tson-http-javalin` | Adapter for [Javalin](https://javalin.io) 6. |
 | `tson-http-helidon` | Adapter for [Helidon](https://helidon.io) 4 SE, plus `TsonMediaSupport` so plain handlers read and write TSON natively. |
 
-**Status.** All four modules are built and tested (137 tests, including concurrency suites). Each adapter is driven over real HTTP, and
+**Status.** All four modules are built and tested (138 tests, including concurrency suites). Each adapter is driven over real HTTP, and
 each proves the same loop: a schema served at its own identity path, fetched back over HTTP under policy, and
 used to validate a posted document.
 
@@ -29,18 +29,28 @@ Each starts the same server and prints what to try. The same commands work again
 $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binary '
   !!schema:"https://schemas.example.com/2026/32/app/order-1.tn"
   !order { sku: "ABC-1"  quantity: 3 }'
-{ sku: "ABC-1" quantity: 6 }
+!!schema:"https://schemas.example.com/2026/32/app/order-1.tn"
+!order { sku: "ABC-1" quantity: 6 }
 
 $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binary '
   !!schema:"https://schemas.example.com/2026/32/app/order-1.tn"
   !order { }'
-{ status: 400 title: "Invalid TSON document" detail: "the request body has 2 problems" errors: [
+!!schema:"https://tson.io/2026/32/ltr8/http/problem-1.tn"
+!problem { status: 400 title: "Invalid TSON document" detail: "the request body has 2 problems" errors: [
   { path: "/sku" schema_pointer: "/order/sku" code: "FIELD_REQUIRED"
     message: "missing required field \'sku\' for \'order\'" data_position: "3:8:70" ... }
   { path: "/quantity" schema_pointer: "/order/quantity" code: "FIELD_REQUIRED" ... } ] }
 ```
 
 Both problems, in one response — a client fixing one error per round trip needs one round trip per error.
+
+Both replies name the schema that governs them, and the server publishes both documents, so a client can
+validate what it received with nothing told out of band:
+
+```
+$ curl -s localhost:8080/2026/32/ltr8/http/problem-1.tn | head -1
+!!id:"https://tson.io/2026/32/ltr8/http/problem-1.tn"
+```
 
 ```java
 // JDK

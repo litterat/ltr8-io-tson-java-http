@@ -71,7 +71,10 @@ public final class OrderServer {
         server.createContext("/orders", TsonHandler.asHttpHandler(codec, exchange -> {
             exchange.requireMethod("POST");
             Order order = exchange.readObject(Order.class);
-            exchange.respond(201, new Order(order.sku(), order.quantity() * 2));
+            // Self-describing: the reply names the schema governing it, which this server also publishes, so
+            // a client can validate what it got without being told anything out of band.
+            exchange.respondBytes(201, exchange.codec()
+                    .write(new Order(order.sku(), order.quantity() * 2), SCHEMA_ID, "order"));
         }));
 
         // Publishing the schemas at their own identity paths is what makes the URL in a !!schema directive --
