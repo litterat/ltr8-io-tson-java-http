@@ -142,6 +142,24 @@ streaming test uses a body past Jetty's buffer, so it asserts that the document 
 asserting a framework's buffering habit. A difference that survives that treatment is worth writing down
 here; one that does not is a bad test.
 
+### Data can name a schema; only a schema can name a type
+
+The rule behind several decisions here, and worth knowing before designing anything new.
+
+Type-name resolution happens at type-ref positions in a **schema** document and nowhere else. A data document
+can name a schema (`!!schema`) and select a type within the scope it names (a `!order` annotation), but a type
+name in a value position is an inert token — no namespace is active to resolve it. §7.8's `extern` confirms it:
+the sanctioned cross-schema mechanism carries a **value** with a visible scope switch, not a type reference.
+
+Two consequences:
+
+- **Anything whose job is to relate types must be a schema**, not a data document governed by one. That is why
+  `sketch/orders-api-3.tn` is a schema and why `api-1.tn` — which describes an API as *data* — cannot check
+  anything it says.
+- **The recurring `(schema identity, root type name)` pair is the data layer's workaround for this.**
+  `describing(…)`, `readObjectAs(…)`, the `TSON-Schema` header plus a route-supplied type: two strings
+  reassembled at every call site, because the thing they name cannot be referenced.
+
 ### Describing an API (`api-1.tn`, `TsonApi`)
 
 An OpenAPI-shaped description of an HTTP API whose payloads are TSON — minus the part OpenAPI mostly is.

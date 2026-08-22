@@ -12,15 +12,42 @@ what this file claims, so a fix upstream shows up as a failing test rather than 
 **`orders-api-3.tn` is the one to read.** It needs no meta layer, no kernel import, no `top`, and no
 annotations — an ordinary schema, which means any TSON toolchain can already read it.
 
+## Why an API description has to be a schema
+
+Not a preference. A consequence of how TSON layers data and types.
+
+**Data can name a schema, and select a type within the scope it names. It cannot hold a reference to a type.**
+`!!schema` names a schema; a `!order` annotation selects a type within the active scope; but a type *name*
+sitting in a value position is an inert token, because no type-name namespace is active there to resolve it
+against. Type-name resolution happens at type-ref positions in a **schema** document, and nowhere else.
+
+§7.8's `extern` is the proof rather than the exception. It is the sanctioned way for one schema's data to carry
+another schema's values, and it does not work by naming a type either: *"values matched by an `extern` field
+MUST carry their own `!!schema` directive identifying the external schema and a `!type` annotation identifying
+the type within it — schema scope changes are always visible in the data, never implicit."* Even here, the data
+carries a **value** with a visible scope switch. Nothing anywhere lets data point at a type.
+
+**So anything whose job is to relate types must live in the schema layer** — an API description, a mapping
+spec, a data catalogue, a codegen config. The compensation is that such an artifact then gets resolution,
+linking, imports, identity, §10 versioning and `?sha256=` pinning for free, because it is a schema and all of
+that is what schemas already have.
+
+**This also explains a pattern that runs through the whole of `tson-http`.** Every place the codec points at a
+type, it needs a *(schema identity, root type name)* pair: `describing(schemaUri, rootTypeName)`,
+`readObjectAs(schemaUri, typeName, class)`, the `TSON-Schema` header plus a route-supplied type. That pair is
+not a design choice — it is the data layer's only way to point at a type, given it cannot reference one. Two
+strings, reassembled by hand at every call site, because the thing they name is out of reach.
+
 ## The problem with `api-1.tn`, which does ship
 
 ```tson
 body => { schema: uri  type: non_empty_text }
 ```
 
-A schema URI and a type name, both carried as **data**. Nothing resolves either. That is
-`$ref: "#/components/schemas/Order"` in TSON's clothing — and it is why `TsonApiConformanceTest` exists at all:
-it hand-checks coherence that a resolver should establish by construction.
+A schema URI and a type name, both carried as **data**. Nothing resolves either — and by the rule above,
+nothing *could*. That is `$ref: "#/components/schemas/Order"` in TSON's clothing, and it is why
+`TsonApiConformanceTest` exists at all: it hand-checks coherence a resolver should establish by construction,
+and the reason it had to be hand-checked is structural, not an oversight.
 
 ## The plainest design, and the best of the three
 
