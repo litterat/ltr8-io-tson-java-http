@@ -13,9 +13,9 @@ It is a **consumer** of the TSON library, not part of it. The library lives in t
 and consumed as a Gradle **included build** (see "Consuming tson-java" below). Destination remote:
 `https://github.com/litterat/` — not yet pushed.
 
-**Status.** `tson-http` is built and tested (55 tests): media type and `Accept` negotiation, the read/write
-codec, the status policy, the `problem-1.tn` error body, and the HTTP-backed `TsonSchemaSource`. Still to
-build there: schema serving. The three adapters are empty — build files and nothing else. Treat their
+**Status.** `tson-http` and `tson-http-jdk` are built and tested (77 tests), including the full loop: a
+schema served at its identity path, fetched back by `TsonHttpSchemaSource`, and used to validate a document.
+`tson-http-javalin` and `tson-http-helidon` are empty — build files and nothing else. Treat their
 descriptions below as the design being built to, not as code you can go read.
 
 **Hard constraints:**
@@ -43,13 +43,15 @@ Package group `io.ltr8`, as in tson-java (reverse-DNS names who *publishes*, not
   - **Error mapping** — `Diagnostic` and the exception hierarchy → status code + a TSON error body.
   - **`TsonSchemaSource` over HTTP** — `TsonHttpSchemaSource`: host allow-list, host→location mapping,
     caps on size and time, identity-keyed cache.
-  - **Schema serving** — exposing the registry's own schemas so those URLs actually resolve. Only
-    `TsonProblemSchema.source()` exists so far, which is the piece that makes the `!!id` in an error body
-    resolvable. **Not built yet.**
+  - **Schema serving** lives in the *adapter*, not here — it is an HTTP route, not a server-agnostic
+    utility. `tson-http` contributes only `TsonProblemSchema.source()`, the text that makes the `!!id` in an
+    error body resolvable.
 - **`tson-http-jdk`** (`io.ltr8.tson.http.jdk`) — adapter for `com.sun.net.httpserver` (JDK module
   `jdk.httpserver`). Zero external dependencies, so it is both the "no framework needed" demo and the
   reference the other two adapters are read against — when an adapter's behaviour looks odd, diff it
-  against this one.
+  against this one. Three types: `TsonExchange` (one request and its response, in TSON terms),
+  `TsonHandler` (what a route is written as, plus `asHttpHandler` which wraps it in the error boundary),
+  and `TsonSchemaHandler` (serves schemas at their own identity paths).
 - **`tson-http-javalin`** (`io.ltr8.tson.http.javalin`) — adapter for Javalin 6.7.0 (Jetty 11,
   `jakarta.*` namespace). Javalin's integration seam is its `JsonMapper`-style plugin/handler surface.
 - **`tson-http-helidon`** (`io.ltr8.tson.http.helidon`) — adapter for Helidon 4.2.2 SE. Helidon's
@@ -74,6 +76,25 @@ each other.
   schema, and the reader that proves the two agree.
 - `TsonHttpSchemaSource` / `TsonSchemaFetchException` — fetching a schema named by an untrusted request
   body, under policy. Read its class notes before changing anything in it; every rule there is load-bearing.
+
+### What an adapter owes the codec
+
+`tson-http-jdk` sets the pattern the other two adapters follow. An adapter is a translation layer and holds
+no TSON knowledge of its own; what it *does* own is the error boundary, and that boundary has four jobs:
+
+1. **Check `Accept` before the handler runs.** Every route produces TSON, so a client that will not take it
+   is told before the work is done — and only the boundary can make that unforgettable.
+2. **Map a failure through `TsonHttpException.from`, and nothing else.** An adapter never re-decides a
+   status. What `from` declines to classify is a fault in this server: catch the rethrow, make it a 500.
+3. **Never overwrite a committed response.** Status and headers go out together, so after a handler has
+   answered, a later failure cannot become a 500 — attempting it throws inside the boundary and loses the
+   original. Log it and close instead. `TsonExchange.committed()` is how the boundary knows.
+4. **A 5xx body carries status and title and no detail.** An internal message can name a class, a path, an
+   internal host or a query, and a client is not the audience. The exception goes to a `System.Logger` — which
+   keeps this module dependency-free, since it may not take a logging dependency. A 4xx is the opposite: its
+   detail and diagnostics are the entire point.
+
+A handler that returns without answering is a bug in the handler, so it is a 500 rather than a silent 200.
 
 ### Identity is not location
 
