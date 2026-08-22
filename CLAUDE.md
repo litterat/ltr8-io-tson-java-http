@@ -20,11 +20,12 @@ those URLs resolve. Every adapter proves the full loop: a schema
 served at its identity path, fetched back by `TsonHttpSchemaSource`, and used to validate a document. The
 project does what it set out to do; what remains is polish and the open questions below.
 
-**Designed, not built:** a `TSON-Schema` header naming the governing schema. **`SCHEMA-HEADER.md`** carries the
-settled rules, the naming procedure, and the reasoning behind each decision. In short: an RFC 9651 sf-string
-(quoted, always); permitted on requests and responses and on a body of any media type; may coexist with the
-body's `!!schema` and must then agree by canonical identity; and a schemaless body stays valid TSON, with the
-"must name a schema" requirement living in endpoint policy rather than in the media type.
+**`TSON-Schema` header — built.** `SCHEMA-HEADER.md` carries the rules and the reasoning; `TsonSchemaHeader` is
+the implementation. An RFC 9651 sf-string (quoted, always — an unquoted URI parses as an sf-token right up
+until someone pins a schema, which is why the strictness is deliberate); permitted on requests and responses
+and on a body of any media type; may coexist with the body's `!!schema` and must then agree by canonical
+identity, a mismatch being a 400 rather than a precedence question; and a schemaless body stays valid TSON,
+with "must name a schema" living in endpoint policy — which is what `TsonSchemaVersions.route` enforces.
 
 **Hard constraints:**
 - Java 25 only (matches tson-java).
@@ -51,6 +52,8 @@ Package group `io.ltr8`, as in tson-java (reverse-DNS names who *publishes*, not
   - **Error mapping** — `Diagnostic` and the exception hierarchy → status code + a TSON error body.
   - **`TsonSchemaSource` over HTTP** — `TsonHttpSchemaSource`: host allow-list, host→location mapping,
     caps on size and time, identity-keyed cache.
+  - **`TsonSchemaHeader`** — the `TSON-Schema` field: sf-string parse/format, and `resolve` reading both
+    channels and enforcing agreement. **`TsonHttpCodec.acceptingJson()`** is what admits a JSON body, opt-in.
   - **`TsonSchemaCatalog`** — the schemas a server publishes, indexed by the path each one's own `!!id`
     names, plus the cache policy. Server-agnostic because every adapter needs the same lookup and the same two
     headers; only the routing differs, so an adapter's schema handler is a dozen lines over it.
@@ -279,6 +282,9 @@ Each cost a debugging cycle here and is pinned by a test.
   `UnsupportedOperationException: no bound Java class for '<type>'` — which the status policy correctly
   reports as 501, so it looks like a library gap rather than missing configuration. Chain to
   `SchemaMetaNameBinder.INSTANCE` for everything you do not map yourself.
+- **A JSON body names neither its schema nor its root type**, and cannot — directive syntax is not JSON. So the
+  schema comes from the `TSON-Schema` header and the root type from the route, which means reading one is
+  `readObjectAs`/`readTreeAs`, never the bare `read`. Same two-part requirement as `describing()`, same reason.
 - **`TsonDocumentPeek` is a hand-rolled scanner, and must stay conservative.** There is no public header peek
   upstream (`UPSTREAM.md` #9) despite §7.1 designing for exactly this. Its governing rule: it may answer "I
   could not tell", but it must never answer with a schema the document does not name — a wrong answer routes a

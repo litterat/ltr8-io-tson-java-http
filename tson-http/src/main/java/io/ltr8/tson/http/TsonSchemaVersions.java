@@ -114,26 +114,45 @@ public final class TsonSchemaVersions {
     /**
      * The schema a document declares, without consuming it -- the routing question on its own, for a caller
      * that dispatches somewhere other than a codec (a proxy choosing an upstream, say).
+     *
+     * <p>A proxy with a {@code TSON-Schema} header to read should read that instead and not touch the body at
+     * all; this is for one that has no header to go on.
      */
     public static Optional<String> declaredSchemaOf(InputStream body) {
         return TsonDocumentPeek.of(body).schema();
     }
 
-    /**
-     * Routes {@code body} to the codec for the version it declares, handing back a stream still positioned at
-     * the start.
-     *
-     * @throws TsonHttpException 400 if the document declares no schema and no default is configured, or
-     *                           declares one this endpoint does not serve
-     */
+    /** {@link #route(InputStream, String)} for a message carrying no {@code TSON-Schema} header. */
     public Routed route(InputStream body) {
-        TsonDocumentPeek peek = TsonDocumentPeek.of(body);
-        String schemaId = peek.schema().or(() -> defaultSchemaId).orElseThrow(() -> new TsonHttpException(
+        return route(body, null);
+    }
+
+    /**
+     * Routes {@code body} to the codec for the version that governs it, handing back a stream still positioned
+     * at the start.
+     *
+     * <p>The schema comes from the {@code TSON-Schema} header, the body's own {@code !!schema}, or both -- and
+     * where both are present they must agree, which {@link TsonSchemaHeader#resolve} enforces. A JSON body has
+     * only the header, which is the case the header exists for.
+     *
+     * <p><b>This still peeks at the body.</b> A header cannot be trusted over a directive that contradicts it,
+     * so verification costs the same read it always did. The header's value is to whatever routed the request
+     * <em>here</em> -- a gateway that will not parse a body, and cannot parse a compressed one.
+     *
+     * @param body       the message body
+     * @param fieldValue the {@code TSON-Schema} header value, or {@code null}
+     * @throws TsonHttpException 400 if nothing names a schema and no default is configured, if the header and
+     *                           the body disagree, or if the schema named is one this endpoint does not serve
+     */
+    public Routed route(InputStream body, String fieldValue) {
+        TsonSchemaHeader.Governing governing = TsonSchemaHeader.resolve(body, fieldValue);
+        String schemaId = governing.schema().or(() -> defaultSchemaId).orElseThrow(() -> new TsonHttpException(
                 TsonHttpException.BAD_REQUEST, "No schema declared",
-                "this endpoint serves several schema versions, so a document must name the one that governs it "
-                        + "in a !!schema directive; it serves " + schemaIds(), List.of(), null));
-        // The registered id, not what the document spelled -- see Routed's own note.
-        return new Routed(declaredIds.get(identityOf(schemaId)), codecFor(schemaId), peek.body());
+                "this endpoint serves several schema versions, so a message must name the one that governs it "
+                        + "-- in a " + TsonSchemaHeader.NAME + " header or a !!schema directive; it serves "
+                        + schemaIds(), List.of(), null));
+        // The registered id, not what the message spelled -- see Routed's own note.
+        return new Routed(declaredIds.get(identityOf(schemaId)), codecFor(schemaId), governing.body());
     }
 
     private TsonHttpException unknownSchema(String schemaId) {

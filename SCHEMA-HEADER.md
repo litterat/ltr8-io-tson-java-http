@@ -1,6 +1,6 @@
 # Naming the governing schema in an HTTP header
 
-A proposal, written up for the spec author. Nothing here is implemented yet.
+A proposal, written up for the spec author. **Implemented in this repo** — see §6 for what it took.
 
 **Decided:**
 
@@ -28,8 +28,6 @@ A proposal, written up for the spec author. Nothing here is implemented yet.
    simply has nothing to compare against.
 5. A body naming no schema by either channel is schemaless (Class 1) and still valid TSON. **A schema-governed
    endpoint MUST reject it**; that is endpoint policy, not a property of the media type.
-
-Nothing is implemented yet.
 
 ## 1. What it is, and why the case got stronger
 
@@ -198,21 +196,25 @@ the whole point of allowing both is that they are the same string.
 Mandating sf-string from the start avoids this entirely. It is one sentence in the spec and a class of bug that
 never happens.
 
-## 6. What it would change here
+## 6. What it took
 
-Contained, because the pieces exist:
+- **`TsonSchemaHeader`** — the field name, a strict sf-string parse and format, and `resolve(body, fieldValue)`,
+  which reads both channels and enforces rule 3. Everything about the header in one place.
+- **`TsonSchemaVersions.route(body, fieldValue)`** — routes on whichever channel names a schema.
+- **`TsonHttpCodec.acceptingJson()`** — a derived codec that also admits `application/json`. Opt-in, because
+  "reads TSON" and "reads JSON" are different promises and an endpoint wanting only the first should go on
+  answering 415 (it does, by default, and a test pins that).
+- **`TsonDocumentPeek` stays.** Verification needs it, and so does any endpoint the header does not reach.
 
-- `TsonMediaType`/`TsonAcceptHeader` already parse headers; a structured-field Item parser is small.
-- `TsonSchemaVersions.route` gains a header-first path: read the header, fall back to the peek, verify when
-  both are present, 400 on a mismatch by canonical identity. Routing can then answer from the header alone,
-  which is the point; verification still costs a peek, which is the honest limit.
-- `TsonDocumentPeek` stays regardless — verification needs it, and so does any endpoint the header does not
-  reach.
-- `TsonHttpCodec` gains the reciprocal on the write side: a response written with `describing()` should carry
-  the header too, since both are now permitted and a response is the thing most likely to be logged.
-- A JSON request body becomes readable for the first time — the header names the schema, and nothing in the
-  body needs to. That also closes this project's last untested gap, JSON bodies having only ever been exercised
-  as a 415 rejection.
+**A JSON body is now readable, which it never was before.** The header names the schema; the root type comes
+from the route, because a JSON body carries no type-ref either — the same two-part requirement as writing a
+self-describing document, for the same reason. `{"sku": "ABC-1", "quantity": 3, "currency": "AUD"}` posted with
+a `TSON-Schema` header validates against `order-2.tn`, and an incomplete one comes back 400 with every
+diagnostic. Before this, JSON appeared in this repo only as something to answer 415 to.
+
+**The honest limit held.** `route` still peeks: a header cannot be trusted over a directive that contradicts
+it, so verification costs the same read it always did. What the header buys is that whatever routed the request
+*here* — a gateway, which will not parse a body and cannot parse a compressed one — never had to.
 
 ## 7. What this should not become
 

@@ -52,9 +52,15 @@ public final class TsonHttpCodec {
     private final TsonObjectWriter objectWriter;
     private final TsonTreeWriter treeWriter;
     private final TsonObjectWriter problemWriter;
+    private final boolean acceptingJson;
 
     /** A codec over {@code tson}, whose schemas are expected to be already resolved. */
     public TsonHttpCodec(Tson tson) {
+        this(tson, false);
+    }
+
+    private TsonHttpCodec(Tson tson, boolean acceptingJson) {
+        this.acceptingJson = acceptingJson;
         this.tson = tson;
         this.objectWriter = tson.objectWriter();
         this.treeWriter = tson.treeWriter();
@@ -225,6 +231,23 @@ public final class TsonHttpCodec {
         }
     }
 
+    /**
+     * A codec that also reads an {@code application/json} body. [TSON-DATA] §6 makes every valid JSON document
+     * a valid TSON document, so the reader needs no help -- what this changes is only whether the endpoint
+     * admits the media type.
+     *
+     * <p><b>Opt-in, because "reads TSON" and "reads JSON" are different promises.</b> An endpoint that wants
+     * only TSON should go on answering 415, and does by default.
+     *
+     * <p><b>A JSON body names neither its schema nor its root type.</b> It cannot: directive syntax is not JSON.
+     * So the schema comes from the {@code TSON-Schema} header ({@link TsonSchemaHeader}) and the root type from
+     * the route -- which means reading one is {@link #readObjectAs}/{@link #readTreeAs}, never the bare
+     * {@code read}. The same two-part requirement as writing a self-describing document, for the same reason.
+     */
+    public TsonHttpCodec acceptingJson() {
+        return new TsonHttpCodec(tson, true);
+    }
+
     /** The {@code Content-Type} every response body from this codec carries. */
     public TsonMediaType contentType() {
         return TsonMediaType.APPLICATION_TSON;
@@ -264,14 +287,20 @@ public final class TsonHttpCodec {
             throw TsonHttpException.unsupportedMediaType("Content-Type '" + contentType + "' is not a media type: "
                     + malformed.getMessage());
         }
-        if (!mediaType.isTson()) {
+        if (!mediaType.isTson() && !(acceptingJson && isJson(mediaType))) {
             throw TsonHttpException.unsupportedMediaType("this endpoint reads " + TsonMediaType.APPLICATION_TSON
-                    + ", not " + mediaType);
+                    + (acceptingJson ? " and application/json" : "") + ", not " + mediaType);
         }
         if (mediaType.hasUnsupportedCharset()) {
             throw TsonHttpException.unsupportedMediaType("a TSON document is UTF-8 ([TSON-DATA] §7.1); '"
                     + contentType + "' claims " + mediaType.charset().orElseThrow());
         }
+    }
+
+    /** Whether {@code mediaType} is JSON -- §6's "every valid JSON document is a valid TSON document". */
+    private static boolean isJson(TsonMediaType mediaType) {
+        return "application".equals(mediaType.type())
+                && ("json".equals(mediaType.subtype()) || mediaType.subtype().endsWith("+json"));
     }
 
     /** Runs a read, classifying anything the library throws out of it into a status. */

@@ -13,7 +13,9 @@ Four modules:
 | `tson-http-javalin` | Adapter for [Javalin](https://javalin.io) 6. |
 | `tson-http-helidon` | Adapter for [Helidon](https://helidon.io) 4 SE, plus `TsonMediaSupport` so plain handlers read and write TSON natively. |
 
-**Status.** All four modules are built and tested (138 tests, including concurrency suites). Each adapter is driven over real HTTP, and
+**Status.** All four modules are built and tested (191 tests, including concurrency suites). Serves
+multiple schema versions side by side, routed by the `TSON-Schema` header or the body's own `!!schema`, and
+validates JSON bodies against TSON schemas. Each adapter is driven over real HTTP, and
 each proves the same loop: a schema served at its own identity path, fetched back over HTTP under policy, and
 used to validate a posted document.
 
