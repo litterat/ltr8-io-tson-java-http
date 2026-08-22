@@ -9,25 +9,25 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           path: tson-java-http
 
       # This build consumes tson-java either as an included build or from mavenLocal; both need the
       # sibling repo on disk, since it publishes to mavenLocal only and there is no remote to fetch from.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: litterat/ltr8-io-tson-java
           path: ltr8-io-tson-java
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "25"
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Build and test
         working-directory: tson-java-http
