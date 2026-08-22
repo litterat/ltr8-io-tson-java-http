@@ -4,52 +4,49 @@ That repo is **hands-off** for now. Anything this project would like changed the
 first, and only landed on the user's say-so. Each item states what this project hits, why the workaround
 is unsatisfying, and what the change would be.
 
-Ordered by how much they block or shape work here.
+Ordered by how much they block or shape work here. **Done** items stay, with what actually landed, so the
+constraint they used to impose is not reintroduced by someone reading around them.
 
 ---
 
-## 1. No `maven-publish` — nothing to depend on
+## 1. ~~No `maven-publish`~~ — DONE (`e76eb3b`)
 
-**Hit:** tson-java declares no publishing of any kind (no `maven-publish` plugin, no publications,
-anywhere in its `*.gradle.kts`). There is no artifact for this repo to depend on.
+Every module now applies `maven-publish` with a `mavenJava` publication, sources and javadoc jars, and a POM
+carrying name, description, url and licence. `./gradlew publishToMavenLocal` puts the whole set in `~/.m2`.
 
-**Workaround in place:** a Gradle **included build** (`settings.gradle.kts`), substituting `io.ltr8:tson`
-with the sibling checkout's `:tson` project. This works today and has a real upside during co-development —
-an edit upstream is picked up with no publish step.
+**Deliberately no remote repository** — that is packaging, not release. So a checkout of the sibling is still
+needed either way, and this project keeps both consumption paths:
 
-**Why it is still unsatisfying:** it hard-requires the sibling checkout at a known path, so CI has to
-check out two repos, and a broken sibling breaks this build. More to the point, it does not survive this
-repo being published: an external reader who clones `ltr8-io-tson-java-http` alone cannot build it.
+- **Included build, the default.** A `git pull` in the sibling is picked up by a plain `./gradlew build` with
+  no publish step. During co-development that matters: the sibling moves often, and a stale `~/.m2` would
+  silently give this build the old behaviour with nothing to warn anyone.
+- **Published artifacts, `-Ptson.published=true`.** Resolves `io.ltr8:tson:0.1.0-SNAPSHOT` from mavenLocal.
+  Verified working, with the transitive set arriving correctly from the POM.
 
-**Change:** add `maven-publish` to tson-java's `subprojects` block with a `mavenJava` publication
-(`from(components["java"])`, plus sources and javadoc jars), so `./gradlew publishToMavenLocal` produces
-`io.ltr8:tson:0.1.0-SNAPSHOT`. This repo would then take a normal `mavenLocal()` dependency and keep the
-included build as an opt-in (`-Ptson.composite=true`) for co-development.
-
-**Blast radius:** additive; no existing behaviour changes.
+CI runs both, because the included build substitutes projects and never touches a jar — so it proves nothing
+about what tson-java actually publishes. The second job does: a broken POM, a missing transitive dependency
+or a bad module descriptor fails there rather than in whatever project depends on them next.
 
 ---
 
-## 2. Writers have no stream sink — every response body is materialised in memory
+## 2. ~~Writers have no stream sink~~ — DONE (`60cddae`)
 
-**Hit:** `TsonObjectWriter.toTson(Object)` and `TsonTreeWriter.toTson(TsonValue)` return a `String`, and
-that is the entire write surface. An HTTP response must therefore build the whole document as a `String`,
-then encode it to UTF-8, then write it — two full copies of the body in memory before the first byte
-goes out, and no way to stream a large or open-ended response.
+`TsonObjectWriter` and `TsonTreeWriter` both gained `write(value, OutputStream)` and
+`write(value, Appendable)`; `toTson` is now that method over a `StringBuilder`. The stream is flushed and not
+closed, which is the right ownership for a response body, and the encoder does its own buffering.
 
-The asymmetry is the tell: the **read** side already does this right. `TsonTreeReader` and
-`TsonObjectReader` both take `InputStream` on `read`/`readWithoutSchema`/`readAs`, so a request body
-streams in. Only the write side forces materialisation.
+`TsonHttpCodec` uses it:
 
-**Change:** add `void write(Object value, OutputStream out)` / `write(TsonValue, OutputStream)` — or an
-`Appendable` overload, whichever fits `TsonDataEmitter`'s internals — alongside the existing `toTson`.
-`toTson` stays as the convenience wrapper over it.
+- **Ordinary responses stream** — `writeTo`/`writeTreeTo` hand the response stream straight to the writer, so
+  a large or open-ended document never exists as a `String`. The cost is no `Content-Length`; the buffering
+  `write`/`writeTree` remain for a caller that wants it.
+- **Error bodies stay buffered.** `writeProblem` is deliberately not streamed: a failure part-way through
+  leaves a client holding a truncated problem on a response whose status is already sent, which is worse than
+  the failure being reported. A problem is small, so there is nothing to gain.
 
-**Blast radius:** additive. Worth checking against `TsonDataEmitter` ("not thread-safe; single-use") and
-against the atom-refinement round-trip in `DefinitionResolver`, which is the one existing internal caller
-of `TsonObjectWriter` and must keep behaving identically.
-
-**Priority:** highest of the API items. Every adapter in this repo pays for it on every response.
+Pinned by `TsonHttpCodecTest.streamingAndBufferingProduceTheSameBytes` — which one an adapter happens to call
+must not be observable to a client — and by a test that the writer flushes a short document and leaves the
+stream open.
 
 ---
 

@@ -8,22 +8,24 @@ Four modules:
 
 | Module | What it is |
 |---|---|
-| `tson-http` | Server-agnostic core: media type, codec, error mapping, HTTP-backed schema source. No external dependencies. |
+| `tson-http` | Server-agnostic core: media type and `Accept` negotiation, codec, status policy, TSON error body, HTTP-backed schema source. No external dependencies. |
 | `tson-http-jdk` | Adapter for the JDK's own `com.sun.net.httpserver`. No external dependencies. |
 | `tson-http-javalin` | Adapter for [Javalin](https://javalin.io) 6. |
 | `tson-http-helidon` | Adapter for [Helidon](https://helidon.io) 4 SE, via its `MediaSupport` SPI. |
 
-**Status: scaffold.** The build and module layout are in place; no Java source yet.
+**Status.** `tson-http` is built and tested; the three adapters are not started.
 
 ## Building
 
 Requires JDK 25 and a checkout of [ltr8-io-tson-java](https://github.com/litterat/ltr8-io-tson-java) at
-`../ltr8-io-tson-java` — that library has no published artifact yet, so it is consumed as a Gradle
-included build.
+`../ltr8-io-tson-java`. That library publishes to mavenLocal only, so a checkout is needed either way.
 
 ```
-./gradlew build
+./gradlew build                                            # consumes the sibling as an included build
 ./gradlew build -Ptson.path=/elsewhere/ltr8-io-tson-java   # if it lives somewhere else
+
+# or against its published artifacts, after `./gradlew publishToMavenLocal` in that checkout
+./gradlew build -Ptson.published=true
 ```
 
 ## Licence

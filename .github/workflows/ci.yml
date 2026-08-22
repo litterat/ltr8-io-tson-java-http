@@ -13,8 +13,8 @@ jobs:
         with:
           path: tson-java-http
 
-      # This build consumes tson-java as a Gradle included build (no published artifact yet -- see
-      # UPSTREAM.md #1), so the sibling repo has to be on disk before `build` can resolve io.ltr8:tson.
+      # This build consumes tson-java either as an included build or from mavenLocal; both need the
+      # sibling repo on disk, since it publishes to mavenLocal only and there is no remote to fetch from.
       - uses: actions/checkout@v4
         with:
           repository: litterat/ltr8-io-tson-java
@@ -32,6 +32,15 @@ jobs:
       - name: Build and test
         working-directory: tson-java-http
         run: ./gradlew build -Ptson.path=../ltr8-io-tson-java
+
+      # The included build above substitutes the sibling's projects and never touches a jar, so it proves
+      # nothing about what tson-java actually publishes. This does: publish the real artifacts, then build
+      # against them, so a broken POM, a missing transitive dependency or a bad module descriptor fails here
+      # rather than in whatever project depends on them next.
+      - name: Publish tson-java and build against the published artifacts
+        run: |
+          cd ltr8-io-tson-java && ./gradlew publishToMavenLocal
+          cd ../tson-java-http && ./gradlew build -Ptson.published=true
 
       # Not reached by `build` -- javadoc is its own task tree, so a broken doc comment
       # is invisible to the line above.

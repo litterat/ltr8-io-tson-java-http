@@ -3,6 +3,10 @@ allprojects {
     version = "0.1.0-SNAPSHOT"
 
     repositories {
+        // tson-java publishes to mavenLocal only -- deliberately, since Maven Central needs signing and a
+        // release decision. First, so a locally published snapshot wins over anything of the same
+        // coordinates that might appear remotely.
+        mavenLocal()
         mavenCentral()
     }
 }

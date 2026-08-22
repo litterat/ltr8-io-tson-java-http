@@ -96,17 +96,21 @@ stack trace through the resolver.
 
 ## Consuming tson-java
 
-tson-java **publishes nothing** — it has no `maven-publish` (see `UPSTREAM.md` #1). So `settings.gradle.kts`
-pulls it in as a Gradle included build and Gradle substitutes `io.ltr8:tson` with the included build's
-`:tson` project. Consequences worth knowing:
+tson-java publishes to **mavenLocal only** — deliberately; a remote release is a decision that build does not
+make quietly. So a checkout of the sibling is required either way, and there are two paths:
 
-- An edit in `../ltr8-io-tson-java` is picked up by a plain `./gradlew build` here — no publish step,
-  no stale jar. The flip side is that a **broken sibling breaks this build**, and the compile output
-  will name files under `../ltr8-io-tson-java/…`. That is expected, not a path bug.
-- The path is `tson.path` in `gradle.properties`, overridable with `-Ptson.path=…`, because CI checks
-  the two repos out side by side under names it chooses.
-- **Do not modify `../ltr8-io-tson-java`.** Changes wanted there are written up in `UPSTREAM.md`
-  instead, and only landed in that repo on the user's say-so.
+- **Included build — the default.** Gradle substitutes `io.ltr8:tson` with the sibling's own `:tson` project,
+  so an edit or a `git pull` there is picked up by a plain `./gradlew build`, no publish step, no stale jar.
+  The flip side: a **broken sibling breaks this build**, and compile output names files under
+  `../ltr8-io-tson-java/…`. That is expected, not a path bug. Path is `tson.path`, overridable with
+  `-Ptson.path=…`.
+- **Published artifacts — `-Ptson.published=true`.** Resolves `io.ltr8:tson:${tson.version}` from mavenLocal,
+  after `./gradlew publishToMavenLocal` in the sibling. Easy to leave stale, which is why it is not the
+  default — but it is the only path that exercises the published POM, module metadata and real jars, so CI
+  runs it as well.
+
+**Do not modify `../ltr8-io-tson-java`.** Changes wanted there are written up in `UPSTREAM.md` instead, and
+only landed in that repo on the user's say-so. Pulling it is fine when asked.
 
 ## The tson API surface this project builds on
 
@@ -122,10 +126,11 @@ Bootstrapping loads meta-kernel + `meta.tn` + `core.tn`. From a `Tson` you get `
 (`read`, `readWithoutSchema`, `readAs`), so a request body streams in without being buffered into a
 `String` first.
 
-**Writers are `String`-only.** `TsonObjectWriter.toTson(Object)` and `TsonTreeWriter.toTson(TsonValue)`
-return a `String` — there is no `OutputStream`/`Appendable` sink. Every response body is therefore fully
-materialised in memory before a byte is written. Accept that for now and encode once to UTF-8 at the
-adapter boundary; `UPSTREAM.md` #2 is the fix.
+**Writers take a sink.** `TsonObjectWriter`/`TsonTreeWriter` have `write(value, OutputStream)` and
+`write(value, Appendable)` alongside `toTson`; the stream is flushed and not closed, so it stays the
+adapter's. `TsonHttpCodec.writeTo`/`writeTreeTo` stream an ordinary response; `write`/`writeTree` buffer for
+a caller that wants `Content-Length`. **An error body is only ever buffered** — streaming one means a failure
+part-way through leaves a client holding a truncated problem on a response whose status is already sent.
 
 **A self-describing document carries its own `!!schema` directive** and the reader resolves it through
 the configured `TsonSchemaSource`. This is the crux of the HTTP story: a schema URL arriving in a request
@@ -236,6 +241,7 @@ No system Gradle — always use the wrapper (Gradle 9.4.1, Java 25 toolchain):
 
 ```
 ./gradlew build                       # also builds the included tson-java build
+./gradlew build -Ptson.published=true # against tson-java's published artifacts instead
 ./gradlew test
 ./gradlew :tson-http:test --tests "io.ltr8.tson.http.TsonHttpCodecTest"
 ./gradlew :tson-http:test

@@ -8,9 +8,11 @@ import io.ltr8.tson.compiler.TsonObjectWriter;
 import io.ltr8.tson.compiler.TsonTreeWriter;
 import io.ltr8.tson.tree.TsonValue;
 
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
+import java.io.OutputStream;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -29,10 +31,14 @@ import java.util.function.Supplier;
  * schema during single-threaded startup, then share it for reads. Never resolve a schema from a request handler.
  * See {@code CLAUDE.md}.
  *
- * <p><b>Writing materialises the whole body.</b> {@link TsonObjectWriter} and {@link TsonTreeWriter} return a
- * {@code String} and offer no stream sink, so a response is built in full, then encoded to UTF-8. Both write
- * paths funnel through one private {@code encode} for that reason -- it is the single place a streaming writer
- * replaces once {@code UPSTREAM.md} #2 lands.
+ * <p><b>An ordinary response streams; an error body does not.</b> {@link #writeTo} and {@link #writeTreeTo} hand
+ * the response stream straight to the writer, so a large or open-ended document never exists as a {@code String}
+ * -- the write-side counterpart to reading from an {@code InputStream}. The buffering {@link #write}/
+ * {@link #writeTree} remain for a caller that wants the bytes in hand, typically to set {@code Content-Length}.
+ *
+ * <p>{@link #writeProblem} is deliberately only buffered. Streaming an error body means a failure part-way
+ * through leaves a client holding a truncated problem on a response whose status is already sent, which is worse
+ * than the failure being reported. A problem is small, so there is nothing to gain by streaming it.
  */
 public final class TsonHttpCodec {
 
@@ -112,14 +118,30 @@ public final class TsonHttpCodec {
                 .readAs(body, typeName, targetClass)), problems);
     }
 
-    /** A bound object as a response body. */
-    public byte[] write(Object value) {
-        return encode(objectWriter.toTson(value));
+    /**
+     * Writes a bound object into the response stream as it goes, so the document never exists as a
+     * {@code String}. The stream is flushed and not closed -- it belongs to the adapter.
+     *
+     * <p>A response written this way carries no {@code Content-Length}, since the length is not known until the
+     * document is finished; the framework sends it chunked. Use {@link #write(Object)} where that matters.
+     */
+    public void writeTo(Object value, OutputStream out) {
+        objectWriter.write(value, out);
     }
 
-    /** A tree as a response body. */
+    /** {@link #writeTo} for a tree. */
+    public void writeTreeTo(TsonValue value, OutputStream out) {
+        treeWriter.write(value, out);
+    }
+
+    /** A bound object as a response body, in hand -- for a caller that wants to set {@code Content-Length}. */
+    public byte[] write(Object value) {
+        return buffered(out -> objectWriter.write(value, out));
+    }
+
+    /** A tree as a response body, in hand. */
     public byte[] writeTree(TsonValue value) {
-        return encode(treeWriter.toTson(value));
+        return buffered(out -> treeWriter.write(value, out));
     }
 
     /**
@@ -130,7 +152,7 @@ public final class TsonHttpCodec {
      */
     public byte[] writeProblem(TsonProblem problem) {
         try {
-            return encode(objectWriter.toTson(problem));
+            return buffered(out -> objectWriter.write(problem, out));
         } catch (RuntimeException e) {
             throw new IllegalStateException("failed to render this server's own problem body as TSON", e);
         }
@@ -208,10 +230,12 @@ public final class TsonHttpCodec {
     }
 
     /**
-     * The one place a rendered document becomes response bytes. UTF-8 without a BOM: [TSON-DATA] §7.1 fixes the
-     * encoding, and §9.4 treats a BOM as a confusable hazard rather than a signal.
+     * A write collected into bytes. The writer encodes UTF-8 itself and emits no BOM -- [TSON-DATA] §7.1 fixes
+     * the encoding and §9.4 treats a BOM as a confusable hazard rather than a signal.
      */
-    private static byte[] encode(String document) {
-        return document.getBytes(StandardCharsets.UTF_8);
+    private static byte[] buffered(Consumer<OutputStream> write) {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        write.accept(bytes);
+        return bytes.toByteArray();
     }
 }

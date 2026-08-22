@@ -16,7 +16,9 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -179,10 +181,39 @@ class TsonHttpCodecTest {
         assertEquals("application/tson", codec.contentType().toString());
     }
 
+    /**
+     * Streaming and buffering must produce the same document, byte for byte -- otherwise which one an adapter
+     * happens to call becomes observable to a client.
+     */
+    @Test
+    void streamingAndBufferingProduceTheSameBytes() {
+        Order order = new Order("ABC-1", 3);
+        var streamed = new java.io.ByteArrayOutputStream();
+        codec.writeTo(order, streamed);
+        assertArrayEquals(codec.write(order), streamed.toByteArray());
+    }
+
+    /** The stream belongs to the adapter: the writer must flush what it buffered, and must not close it. */
+    @Test
+    void writingFlushesTheStreamAndLeavesItOpen() {
+        var closed = new java.util.concurrent.atomic.AtomicBoolean();
+        var sink = new java.io.ByteArrayOutputStream() {
+            @Override
+            public void close() {
+                closed.set(true);
+            }
+        };
+        codec.writeTo(new Order("ABC-1", 3), sink);
+        assertTrue(sink.size() > 0, "a short document must not be left in the encoder's buffer");
+        assertFalse(closed.get(), "the response stream belongs to the adapter");
+    }
+
     /** What is written must read back -- the round trip is the only thing that proves the writer agrees with the reader. */
     @Test
     void whatItWritesItCanReadBack() {
-        byte[] written = codec.write(new Order("ABC-1", 3));
+        var streamed = new java.io.ByteArrayOutputStream();
+        codec.writeTo(new Order("ABC-1", 3), streamed);
+        byte[] written = streamed.toByteArray();
         Order read = codec.readObjectAs(new ByteArrayInputStream(written), "application/tson", SCHEMA_ID, "order",
                 Order.class);
         assertEquals(new Order("ABC-1", 3), read);
