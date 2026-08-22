@@ -138,10 +138,15 @@ public final class TsonHttpSchemaSource implements TsonSchemaSource, AutoCloseab
     public String fetch(String reference) {
         // Policy first and always -- a cache hit skips the network, not the allow-list.
         Identity identity = permitted(reference);
-        // Deliberately get-then-put rather than computeIfAbsent: fetching a schema resolves its transitive
-        // !!import/!!meta, each of which re-enters fetch, and a recursive computeIfAbsent on one
-        // ConcurrentHashMap deadlocks or throws. Two threads racing one identity fetch it twice and store
-        // identical content, which costs a request and breaks nothing.
+        // Deliberately get-then-put rather than computeIfAbsent, which would hold a ConcurrentHashMap bin
+        // lock for the whole of a network fetch -- blocking every other thread whose key lands in that bin,
+        // and stalling a resize, for as long as the timeout allows. Two threads racing one identity fetch it
+        // twice and store identical content, which costs a request and breaks nothing.
+        //
+        // (The loader is not re-entrant, so a recursive computeIfAbsent is not the hazard here: it fetches a
+        // document, returns, and only then resolves and fetches its imports. Pinned by
+        // TsonHttpSchemaSourceConcurrencyTest.fetchIsNeverReenteredByATransitiveImport, because a loader that
+        // became re-entrant would make computeIfAbsent unsafe as well as slow.)
         String cached = cache.get(identity.canonical());
         if (cached != null) {
             return cached;

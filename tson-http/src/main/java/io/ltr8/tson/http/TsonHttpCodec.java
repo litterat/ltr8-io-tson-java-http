@@ -31,6 +31,15 @@ import java.util.function.Supplier;
  * schema during single-threaded startup, then share it for reads. Never resolve a schema from a request handler.
  * See {@code CLAUDE.md}.
  *
+ * <p><b>A class must be prepared before it is written concurrently.</b> {@code DataBindContext.getDescriptor}
+ * resolves a class descriptor lazily, and does so with a check-then-act that is not atomic -- two threads
+ * writing a given class for the first time race, and the loser gets {@code DataBindException: Class already
+ * registered} ({@code UPSTREAM.md} #8). Reading is unaffected, because a compiled schema binds its classes when
+ * it compiles. This constructor prepares its own wire types, so an error body never hits the race; an
+ * application calls {@link #prepareToWrite} at startup for the types <em>it</em> writes. The window is the first
+ * write of each class and closes for good after it, which is exactly why it survives every single-threaded test
+ * and appears under load.
+ *
  * <p><b>An ordinary response streams; an error body does not.</b> {@link #writeTo} and {@link #writeTreeTo} hand
  * the response stream straight to the writer, so a large or open-ended document never exists as a {@code String}
  * -- the write-side counterpart to reading from an {@code InputStream}. The buffering {@link #write}/
@@ -51,6 +60,28 @@ public final class TsonHttpCodec {
         this.tson = tson;
         this.objectWriter = tson.objectWriter();
         this.treeWriter = tson.treeWriter();
+        // This codec's own wire types, prepared here rather than on first use. writeProblem runs when something
+        // has already gone wrong, often for many requests at once, so it is the worst possible place to meet a
+        // first-write race -- the error response would fail while reporting a failure.
+        prepareToWrite(TsonProblem.class, TsonProblemDiagnostic.class);
+    }
+
+    /**
+     * Resolves the binding descriptors for {@code classes} now, so a later concurrent first write of any of them
+     * cannot race. Call at startup for every type this server writes; it is idempotent and cheap.
+     *
+     * <p>Needed because descriptor resolution is lazy and its check-then-act is not atomic -- see the class note
+     * and {@code UPSTREAM.md} #8. Once tson-java makes that resolution atomic this becomes a no-op worth keeping
+     * only as a warm-up.
+     */
+    public void prepareToWrite(Class<?>... classes) {
+        for (Class<?> target : classes) {
+            try {
+                tson.dataBindContext().getDescriptor(target);
+            } catch (Exception e) {
+                throw new IllegalStateException("cannot prepare " + target.getName() + " for writing", e);
+            }
+        }
     }
 
     /**

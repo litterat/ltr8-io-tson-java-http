@@ -59,6 +59,10 @@ public final class OrderServer {
         Tson tson = Tson.builder().schemaSource(uri -> SCHEMA).dataBindContext(bind).build();
         tson.resolve(SCHEMA);
         TsonHttpCodec codec = new TsonHttpCodec(tson);
+        // Every type this server writes, resolved now rather than on a request thread. Descriptor resolution
+        // is lazy and its check-then-act is not atomic, so a concurrent first write of a class races
+        // (UPSTREAM.md #8). Reads happen to warm it here, but a route that only writes would not.
+        codec.prepareToWrite(Order.class);
 
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
 

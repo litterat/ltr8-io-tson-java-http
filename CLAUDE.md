@@ -13,7 +13,8 @@ It is a **consumer** of the TSON library, not part of it. The library lives in t
 and consumed as a Gradle **included build** (see "Consuming tson-java" below). Destination remote:
 `https://github.com/litterat/` — not yet pushed.
 
-**Status.** All four modules are built and tested (126 tests), each adapter with a runnable demo server. Every adapter proves the full loop: a schema
+**Status.** All four modules are built and tested (137 tests), each adapter with a runnable demo server and a
+concurrency suite driving it under load. Every adapter proves the full loop: a schema
 served at its identity path, fetched back by `TsonHttpSchemaSource`, and used to validate a document. The
 project does what it set out to do; what remains is polish and the open questions below.
 
@@ -111,6 +112,13 @@ no TSON knowledge of its own; what it *does* own is the error boundary, and that
    detail and diagnostics are the entire point.
 
 A handler that returns without answering is a bug in the handler, so it is a 500 rather than a silent 200.
+
+**Concurrency is tested, not assumed.** Every adapter shares one `TsonHttpCodec` across request threads, and
+every other test in this repo is single-threaded — so a codec wrong under concurrency would pass all of them.
+`TsonHttpCodecConcurrencyTest`, `TsonHttpSchemaSourceConcurrencyTest` and each adapter's
+`demo/OrderServerConcurrencyTest` close that gap, and each task checks its own result: the failure worth
+looking for is a crossed or torn value, not a call that threw. Writing them is what found `UPSTREAM.md` #8.
+Keep them green, and add to them rather than around them.
 
 **The adapter test suites are near-copies on purpose.** `TsonJdkAdapterTest`, `TsonJavalinAdapterTest` and
 `TsonHelidonAdapterTest` ask the same questions and assert the same answers, because three adapters over one
@@ -238,13 +246,24 @@ Each cost a debugging cycle here and is pinned by a test.
   `UnsupportedOperationException: no bound Java class for '<type>'` — which the status policy correctly
   reports as 501, so it looks like a library gap rather than missing configuration. Chain to
   `SchemaMetaNameBinder.INSTANCE` for everything you do not map yourself.
+- **A class must be `prepareToWrite`n before it is written concurrently.** `DataBindContext.getDescriptor`
+  resolves lazily with a check-then-act that is not atomic, so two threads writing a class for the first time
+  race and the loser gets `DataBindException: Class already registered` (`UPSTREAM.md` #8 — a real fault, not a
+  doc gap). `TsonHttpCodec`'s constructor prepares its own wire types, because an error body must not be the
+  thing that meets the race; an application calls `prepareToWrite` at startup for its own, as all three demos
+  do. **Reads are unaffected** — a compiled schema binds its classes when it compiles — which is why a route
+  that reads before it writes hides this, and a write-only route does not.
 - **A schema reference may not carry a port, userinfo or a fragment** (§2.2.1), so a schema origin cannot run
   on a non-default port. Use `mapHost`. See "Identity is not location" above — this is the trap that costs the
   most time, because the failure surfaces from the resolver rather than from the fetch.
-- **Never `computeIfAbsent` on the schema cache.** Fetching a schema resolves its transitive
-  `!!import`/`!!meta`, each of which re-enters `fetch`, and a recursive `computeIfAbsent` on one
-  `ConcurrentHashMap` deadlocks or throws. `TsonHttpSchemaSource` uses get-then-put deliberately; two threads
-  racing one identity fetch it twice and store identical content, which costs a request and breaks nothing.
+- **Never `computeIfAbsent` on the schema cache.** It holds a `ConcurrentHashMap` bin lock for the whole of a
+  network fetch, blocking every other thread whose key lands in that bin — and stalling a resize — for as long
+  as the timeout allows. `TsonHttpSchemaSource` uses get-then-put; two threads racing one identity fetch it
+  twice and store identical content, which costs a request and breaks nothing.
+
+  *Not* because the loader is re-entrant: it isn't. It fetches a document, returns, and only then resolves and
+  fetches its imports, so `fetch` is never called from inside `fetch` (measured — max depth 1, pinned by
+  `TsonHttpSchemaSourceConcurrencyTest`). An earlier version of this note claimed otherwise.
 - **Policy is checked on every reference, cached or not.** A cache hit must skip the network, never the
   allow-list — otherwise a schema fetched for one request becomes fetchable for a request that would have been
   refused.

@@ -75,6 +75,12 @@ it with a test that hammers one compiled schema from many threads.
 **Blast radius:** documentation plus a test, unless the test finds the contract isn't actually met — in
 which case that is the more valuable outcome.
 
+**Update: that is what happened.** Writing the test found #8, a real race in `DataBindContext`. This project
+now carries `TsonHttpCodecConcurrencyTest`, `TsonHttpSchemaSourceConcurrencyTest` and an
+`OrderServerConcurrencyTest` per adapter, all green — so the contract as stated in this project's `CLAUDE.md`
+(resolve and compile at startup, then share for reads) is measured rather than assumed, for everything except
+the first write of a class. Those tests are the obvious starting point for the upstream ones.
+
 ---
 
 ## 4. No HTTP-backed `TsonSchemaSource` — now built here
@@ -204,6 +210,54 @@ directive by default would change every existing document this library produces,
 
 **Priority:** high. It is the difference between TSON over HTTP being self-describing in both directions and
 being self-describing only inbound.
+
+---
+
+## 8. `DataBindContext.getDescriptor` races on the first write of a class
+
+**Hit:** a concurrency test over one shared `TsonHttpCodec` — the object all three adapters hold across their
+request threads — failed on 31 of 32 threads with
+`TsonWriteException: cannot write class … : Class already registered: …`.
+
+**The mechanism**, in `tson-bind/src/main/java/io/ltr8/bind/DataBindContext.java`:
+
+```java
+DataClass descriptor = descriptors.get(parameterizedType);   // a ConcurrentHashMap
+if (descriptor == null) {
+    descriptor = dataClassResolver.resolve(this, targetClass, parameterizedType);
+    register(parameterizedType, descriptor);                 // throws if the key is already present
+}
+```
+
+The map is concurrent; the compound operation is not. Two threads resolving a given type for the first time
+both see `null`, both resolve, and both call `register` — which is written to reject a duplicate rather than
+tolerate an identical one, so the loser throws.
+
+**Why it survived every other test.** The window is the *first* write of each class and closes permanently
+after it, so anything single-threaded, and anything that happens to read before it writes, never sees it. Reads
+are unaffected entirely: a compiled schema binds its classes when it compiles. It is specifically the lazy
+write-side resolution that races — which is why a server can pass a full test suite and then fail under load,
+on the error path, while reporting some other failure.
+
+**Suggested fix**, one line and behaviour-preserving:
+
+```java
+return descriptors.computeIfAbsent(parameterizedType, key -> { ... resolve ... });
+```
+
+or leave the structure alone and make `register` idempotent for an equal descriptor. `computeIfAbsent` is safe
+here because resolution does not re-enter the map for the same key; if that is not certain, the
+tolerant-`register` variant has no such requirement.
+
+**Workaround in place:** `TsonHttpCodec` resolves its own wire types in its constructor — an error body must
+not be the thing that meets the race — and exposes `prepareToWrite(Class...)` for an application to do the same
+for its types at startup. Both become unnecessary once this is fixed, and the tests that call it say so.
+
+**Priority: highest of the open items.** It is a real fault reachable from correct usage, not a documentation
+gap, and its symptom is worst exactly when a server is busiest.
+
+**Related:** #3 asks for the thread-safety contract to be *stated*. This is the first place it is measurably
+not met, so the two want fixing together — a stated contract is worth much more once it is true.
 
 ---
 
