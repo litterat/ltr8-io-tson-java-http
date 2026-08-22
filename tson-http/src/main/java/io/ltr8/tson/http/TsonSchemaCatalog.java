@@ -50,6 +50,14 @@ public final class TsonSchemaCatalog {
      *                                  with a path, or names a path another already claims
      */
     public static TsonSchemaCatalog of(String... schemaTexts) {
+        return of(java.util.List.of(schemaTexts));
+    }
+
+    /**
+     * {@link #of(String...)} over a collection -- for a caller holding a schema's whole published history, as
+     * {@code TsonProblemSchema.publishedSources()} returns.
+     */
+    public static TsonSchemaCatalog of(java.util.Collection<String> schemaTexts) {
         Map<String, byte[]> byPath = new LinkedHashMap<>();
         for (String text : schemaTexts) {
             String id = new TsonSchemaParser(text).parseSchemaDocument().id()
@@ -76,7 +84,7 @@ public final class TsonSchemaCatalog {
 
     /** A 404 for {@code path}, so every adapter phrases it the same way. */
     public TsonHttpException noSuchSchema(String path) {
-        return new TsonHttpException(404, "No such schema", "this server publishes no schema at '" + path + "'",
+        return new TsonHttpException(404, TsonHttpException.TYPES + "no-such-schema", "No such schema", "this server publishes no schema at '" + path + "'",
                 java.util.List.of(), null);
     }
 

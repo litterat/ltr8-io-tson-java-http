@@ -79,7 +79,8 @@ public final class TsonExchange {
             return;
         }
         exchange.getResponseHeaders().set("Allow", String.join(", ", allowed));
-        throw new TsonHttpException(405, "Method not allowed",
+        throw new TsonHttpException(405, TsonHttpException.TYPES + "method-not-allowed",
+                "Method not allowed",
                 method() + " is not allowed here; try " + String.join(", ", allowed), List.of(), null);
     }
 

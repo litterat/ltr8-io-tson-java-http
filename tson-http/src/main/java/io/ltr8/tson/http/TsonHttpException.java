@@ -71,15 +71,44 @@ public final class TsonHttpException extends RuntimeException {
     /** A dependency of this server did not answer in time. */
     public static final int GATEWAY_TIMEOUT = 504;
 
+    /**
+     * Where this project's problem-type identifiers live. They dereference to nothing yet; the point today is
+     * that they are stable and matchable where a title is prose.
+     */
+    public static final String TYPES = "https://tson.io/2026/32/ltr8/http/problems/";
+
+    /** RFC 9457's own default: no semantics beyond the status code. */
+    public static final String ABOUT_BLANK = "about:blank";
+
     private final int status;
+    private final String type;
     private final String title;
     private final transient List<Diagnostic> diagnostics;
 
+    /**
+     * A failure with no more specific type than its status code. Prefer the overload naming one: {@code type}
+     * is what a client matches on, and defaulting it silently is how it never gets set.
+     */
     public TsonHttpException(int status, String title, String detail, List<Diagnostic> diagnostics, Throwable cause) {
+        this(status, ABOUT_BLANK, title, detail, diagnostics, cause);
+    }
+
+    /**
+     * @param type a URI reference identifying the class of failure (RFC 9457 {@code type}) -- stable, unlike
+     *             {@code title}, which is prose
+     */
+    public TsonHttpException(int status, String type, String title, String detail, List<Diagnostic> diagnostics,
+                             Throwable cause) {
         super(detail == null || detail.isBlank() ? title : detail, cause);
         this.status = status;
+        this.type = type;
         this.title = title;
         this.diagnostics = List.copyOf(diagnostics);
+    }
+
+    /** The class of failure, as a URI reference. See {@link #TYPES}. */
+    public String type() {
+        return type;
     }
 
     /** The status this failure earns. */
@@ -99,12 +128,12 @@ public final class TsonHttpException extends RuntimeException {
 
     /** This failure as the body to write. */
     public TsonProblem problem() {
-        return TsonProblem.of(status, title, getMessage(), diagnostics);
+        return TsonProblem.of(type, status, title, getMessage(), diagnostics);
     }
 
     /** A document that read but did not validate -- the diagnostics say what was wrong with it. */
     public static TsonHttpException invalidDocument(List<Diagnostic> diagnostics) {
-        return new TsonHttpException(BAD_REQUEST, "Invalid TSON document",
+        return new TsonHttpException(BAD_REQUEST, TYPES + "invalid-document", "Invalid TSON document",
                 diagnostics.size() == 1 ? "the request body has 1 problem"
                         : "the request body has " + diagnostics.size() + " problems",
                 diagnostics, null);
@@ -112,12 +141,14 @@ public final class TsonHttpException extends RuntimeException {
 
     /** The request body is not something this handler can read. */
     public static TsonHttpException unsupportedMediaType(String detail) {
-        return new TsonHttpException(UNSUPPORTED_MEDIA_TYPE, "Unsupported media type", detail, List.of(), null);
+        return new TsonHttpException(UNSUPPORTED_MEDIA_TYPE, TYPES + "unsupported-media-type",
+                "Unsupported media type", detail, List.of(), null);
     }
 
     /** The client's {@code Accept} rules out the only representation this handler produces. */
     public static TsonHttpException notAcceptable(String detail) {
-        return new TsonHttpException(NOT_ACCEPTABLE, "Not acceptable", detail, List.of(), null);
+        return new TsonHttpException(NOT_ACCEPTABLE, TYPES + "not-acceptable", "Not acceptable", detail,
+                List.of(), null);
     }
 
     /**
@@ -129,27 +160,28 @@ public final class TsonHttpException extends RuntimeException {
     public static TsonHttpException from(RuntimeException e) {
         return switch (e) {
             case TsonSchemaFetchException fetch -> switch (fetch.reason()) {
-                case NOT_PERMITTED, NOT_FOUND -> new TsonHttpException(BAD_REQUEST, "Unusable schema reference",
-                        fetch.getMessage(), List.of(), fetch);
-                case TIMEOUT -> new TsonHttpException(GATEWAY_TIMEOUT, "Schema origin timed out",
-                        fetch.getMessage(), List.of(), fetch);
-                case TRANSPORT, TOO_LARGE -> new TsonHttpException(BAD_GATEWAY, "Schema origin failed",
-                        fetch.getMessage(), List.of(), fetch);
+                case NOT_PERMITTED, NOT_FOUND -> new TsonHttpException(BAD_REQUEST,
+                        TYPES + "unusable-schema-reference", "Unusable schema reference", fetch.getMessage(),
+                        List.of(), fetch);
+                case TIMEOUT -> new TsonHttpException(GATEWAY_TIMEOUT, TYPES + "schema-origin-timeout",
+                        "Schema origin timed out", fetch.getMessage(), List.of(), fetch);
+                case TRANSPORT, TOO_LARGE -> new TsonHttpException(BAD_GATEWAY, TYPES + "schema-origin-failed",
+                        "Schema origin failed", fetch.getMessage(), List.of(), fetch);
             };
-            case TsonReadException read -> new TsonHttpException(BAD_REQUEST, "Invalid TSON document",
-                    read.getMessage(), List.of(read.diagnostic()), read);
-            case TsonSchemaValidationException schema -> new TsonHttpException(BAD_REQUEST, "Invalid TSON schema",
-                    schema.getMessage(), List.of(), schema);
-            case UnsupportedOperationException gap -> new TsonHttpException(NOT_IMPLEMENTED, "Not implemented",
-                    gap.getMessage(), List.of(), gap);
-            case IllegalStateException fault -> new TsonHttpException(INTERNAL_SERVER_ERROR, "Internal error",
-                    fault.getMessage(), List.of(), fault);
+            case TsonReadException read -> new TsonHttpException(BAD_REQUEST, TYPES + "invalid-document",
+                    "Invalid TSON document", read.getMessage(), List.of(read.diagnostic()), read);
+            case TsonSchemaValidationException schema -> new TsonHttpException(BAD_REQUEST,
+                    TYPES + "invalid-schema", "Invalid TSON schema", schema.getMessage(), List.of(), schema);
+            case UnsupportedOperationException gap -> new TsonHttpException(NOT_IMPLEMENTED,
+                    TYPES + "not-implemented", "Not implemented", gap.getMessage(), List.of(), gap);
+            case IllegalStateException fault -> new TsonHttpException(INTERNAL_SERVER_ERROR,
+                    TYPES + "internal-error", "Internal error", fault.getMessage(), List.of(), fault);
             // Not a fallthrough: ofBaseSyntaxError classifies the three base-syntax failures and rethrows
             // anything else, so an unclassified fault still leaves here as itself.
             default -> {
                 Diagnostic syntax = Diagnostic.ofBaseSyntaxError(e);
-                yield new TsonHttpException(BAD_REQUEST, "Malformed TSON document", e.getMessage(),
-                        List.of(syntax), e);
+                yield new TsonHttpException(BAD_REQUEST, TYPES + "malformed-document", "Malformed TSON document",
+                        e.getMessage(), List.of(syntax), e);
             }
         };
     }

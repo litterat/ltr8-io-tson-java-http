@@ -114,7 +114,8 @@ public final class TsonSchemaHeader {
                 && !identityOf(fromHeader.get()).equals(identityOf(fromBody.get()))) {
             // §2.2.1's own rule for conflicting content hashes, applied to the same shape of problem: at most
             // one of them describes what this body really is, so report it rather than choose.
-            throw new TsonHttpException(TsonHttpException.BAD_REQUEST, "Conflicting schema",
+            throw new TsonHttpException(TsonHttpException.BAD_REQUEST,
+                    TsonHttpException.TYPES + "conflicting-schema", "Conflicting schema",
                     "the " + NAME + " header names '" + fromHeader.get() + "' and the body's !!schema names '"
                             + fromBody.get() + "'; at most one of them governs it", List.of(), null);
         }
@@ -128,14 +129,16 @@ public final class TsonSchemaHeader {
         try {
             return TsonCanonicalIdentity.canonicalize(reference);
         } catch (RuntimeException notAnIdentity) {
-            throw new TsonHttpException(TsonHttpException.BAD_REQUEST, "Unusable schema reference",
+            throw new TsonHttpException(TsonHttpException.BAD_REQUEST,
+                    TsonHttpException.TYPES + "unusable-schema-reference", "Unusable schema reference",
                     "'" + reference + "' is not a schema identity: " + notAnIdentity.getMessage(), List.of(),
                     notAnIdentity);
         }
     }
 
     private static TsonHttpException malformed(String fieldValue, String why) {
-        return new TsonHttpException(TsonHttpException.BAD_REQUEST, "Malformed " + NAME + " header",
+        return new TsonHttpException(TsonHttpException.BAD_REQUEST,
+                TsonHttpException.TYPES + "malformed-schema-header", "Malformed " + NAME + " header",
                 "'" + fieldValue + "' is not a valid " + NAME + " value: " + why, List.of(), null);
     }
 }

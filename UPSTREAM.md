@@ -121,33 +121,35 @@ naive fetcher is an SSRF primitive.
 
 ---
 
-## 5. The diagnostic wire schema exists, but only `tson-cli` can reach it
+## 5. ~~Lift the diagnostic wire schema out of `tson-cli`~~ — REJECTED, and rightly
 
-**Hit:** building this project's error body turned up `tson-cli/src/main/resources/diagnostics.tn`
-(`!!id` `.../ltr8/cli/diagnostics-6.tn`), which already declares `diagnostic_code` and `diagnostic`
-exactly as an HTTP error body needs them, alongside `CliDiagnostic` — the `Optional`-narrowed,
-`@Field`-annotated DTO that binds to it — and `DiagnosticsSchema`, which compiles it in bind mode.
+**Asked for:** moving `diagnostic_code`/`diagnostic` and the `CliDiagnostic` DTO into a module both `tson-cli`
+and this project could depend on, so the CLI and the server would describe a failure identically instead of
+maintaining two hand-synchronised copies.
 
-So the wire form is not missing. It is unreachable: `tson-cli` is an application module that exports
-nothing, publishes no schema, and keeps all three types package-private.
+**Rejected upstream**, on the grounds that keeping them aligned was going to fail anyway: a CLI reports on
+**files** and a server reports on **requests**, and a shape stretched across both fits neither. This project
+should own its error structure and its schema.
 
-**Workaround in place:** `tson-http` copies `diagnostic_code` and `diagnostic` into its own
-`problem-1.tn`, field for field, and `TsonProblemDiagnostic` reproduces `CliDiagnostic` line for line
-including the `absentIfEmpty` narrowing and the `line:column:byteOffset` position rendering. Both
-copies say so in their own doc comments.
+**That is the better answer, and the divergence arrived immediately.** Given ownership, the error body became
+what an HTTP error body should be:
 
-**Why it is unsatisfying:** two copies of one wire contract, kept identical by hand. The moment the CLI
-adds a `Diagnostic.Code` member — as `diagnostics-6.tn`'s own `@doc` records happening twice already —
-the server and the CLI describe the same failure differently, and nothing fails to warn anyone.
+- `problem` now follows **RFC 9457** (Problem Details for HTTP APIs, obsoleting 7807) — `type`, `title`,
+  `status`, `detail`, `instance`, plus `errors`. Ordinary HTTP tooling recognises that; nothing in it makes
+  sense for a CLI, whose envelope is built around per-file reports.
+- `type` is the member a client matches on: stable where `title` is prose, and dereferenceable. `errors` is not
+  an invention either — RFC 9457 §3.1 uses an `errors` extension for exactly this, a list of validation
+  failures inside one problem.
+- `diagnostic` stays close to what a TSON read produces, because that is what it reports. Deliberately *not*
+  RFC 9457's suggested per-error shape (`detail` + `pointer`), which would throw away the code vocabulary, the
+  two-ended location model and the source positions §8.1 requires.
 
-**Change:** lift the shared half — `diagnostic_code`, `diagnostic`, `CliDiagnostic` (renamed) and the
-`DiagnosticsSchema` compile — into a module a consumer can depend on, with the CLI's own
-`validation_report`/`file_report`/`validation_run` staying behind. `tson-schema` is the natural home:
-`Diagnostic` itself lives in `tson-compiler`, and its wire form is a value model, which is what that
-module is for. Then `problem-1.tn` imports it by `!!id` instead of copying it.
+**Versioned rather than edited**, which is §10 demonstrated rather than described: `problem-1.tn` is superseded
+by `problem-2.tn` and is **still published**, because a document that named it must go on resolving. The demos
+serve the whole history via `TsonProblemSchema.publishedSources()`.
 
-**Note:** `Diagnostic.Code` needs no change — the twelve codes map cleanly onto 4xx detail. It is only
-the sharing that is missing.
+**What stays true from the original finding:** `tson-cli` exports nothing and publishes no schema, so a
+consumer cannot reach its shapes. That is now simply not this project's problem.
 
 ---
 

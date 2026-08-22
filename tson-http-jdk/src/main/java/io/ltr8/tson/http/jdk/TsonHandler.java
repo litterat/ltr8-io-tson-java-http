@@ -132,8 +132,10 @@ public interface TsonHandler {
 
         /** A 5xx body carries status and title only -- see the class note on why the detail is dropped. */
         private static TsonProblem bodyFor(TsonHttpException failure) {
+            // The type survives redaction: it classifies the failure and carries nothing internal, so a client
+            // can still tell a schema-origin outage from a bug in this server.
             return failure.status() >= 500
-                    ? TsonProblem.of(failure.status(), failure.title(), null, List.of())
+                    ? TsonProblem.of(failure.type(), failure.status(), failure.title(), null, List.of())
                     : failure.problem();
         }
     }

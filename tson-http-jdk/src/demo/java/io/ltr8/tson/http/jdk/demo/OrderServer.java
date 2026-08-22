@@ -9,6 +9,10 @@ import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
 import io.ltr8.tson.compiler.config.TsonAtomContext;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonProblemSchema;
+import io.ltr8.tson.http.TsonSchemaCatalog;
+
+import java.util.ArrayList;
+import java.util.List;
 import io.ltr8.tson.http.jdk.TsonHandler;
 import io.ltr8.tson.http.jdk.TsonSchemaHandler;
 
@@ -80,10 +84,22 @@ public final class OrderServer {
         // Publishing the schemas at their own identity paths is what makes the URL in a !!schema directive --
         // and the one in an error body -- something a client can actually dereference.
         server.createContext("/", TsonHandler.asHttpHandler(codec,
-                TsonSchemaHandler.of(SCHEMA, TsonProblemSchema.source())));
+                TsonSchemaHandler.of(catalog())));
 
         server.start();
         return server;
+    }
+
+    /**
+     * This server's whole published schema history: the order schema, and every version of the error-body
+     * schema. §10 makes a published schema immutable, so a superseded one stays served -- a document that named
+     * it must go on resolving, even though nothing new is written against it.
+     */
+    private static TsonSchemaCatalog catalog() {
+        List<String> published = new ArrayList<>();
+        published.add(SCHEMA);
+        published.addAll(TsonProblemSchema.publishedSources());
+        return TsonSchemaCatalog.of(published);
     }
 
     public static void main(String[] args) throws IOException {

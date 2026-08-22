@@ -28,6 +28,11 @@ public final class TsonSchemaHandler implements TsonHandler {
         return new TsonSchemaHandler(TsonSchemaCatalog.of(schemaTexts));
     }
 
+    /** A handler over an already-built catalog. */
+    public static TsonSchemaHandler of(TsonSchemaCatalog catalog) {
+        return new TsonSchemaHandler(catalog);
+    }
+
     /** The identity paths this handler serves. */
     public Set<String> paths() {
         return catalog.paths();

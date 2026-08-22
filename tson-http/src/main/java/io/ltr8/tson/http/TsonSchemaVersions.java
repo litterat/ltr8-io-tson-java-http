@@ -147,7 +147,7 @@ public final class TsonSchemaVersions {
     public Routed route(InputStream body, String fieldValue) {
         TsonSchemaHeader.Governing governing = TsonSchemaHeader.resolve(body, fieldValue);
         String schemaId = governing.schema().or(() -> defaultSchemaId).orElseThrow(() -> new TsonHttpException(
-                TsonHttpException.BAD_REQUEST, "No schema declared",
+                TsonHttpException.BAD_REQUEST, TsonHttpException.TYPES + "no-schema-declared", "No schema declared",
                 "this endpoint serves several schema versions, so a message must name the one that governs it "
                         + "-- in a " + TsonSchemaHeader.NAME + " header or a !!schema directive; it serves "
                         + schemaIds(), List.of(), null));
@@ -156,7 +156,8 @@ public final class TsonSchemaVersions {
     }
 
     private TsonHttpException unknownSchema(String schemaId) {
-        return new TsonHttpException(TsonHttpException.BAD_REQUEST, "Unsupported schema version",
+        return new TsonHttpException(TsonHttpException.BAD_REQUEST,
+                TsonHttpException.TYPES + "unsupported-schema-version", "Unsupported schema version",
                 "this endpoint does not serve '" + schemaId + "'; it serves " + schemaIds(), List.of(), null);
     }
 
@@ -165,7 +166,8 @@ public final class TsonSchemaVersions {
         try {
             return TsonCanonicalIdentity.canonicalize(schemaId);
         } catch (RuntimeException notAnIdentity) {
-            throw new TsonHttpException(TsonHttpException.BAD_REQUEST, "Unsupported schema version",
+            throw new TsonHttpException(TsonHttpException.BAD_REQUEST,
+                    TsonHttpException.TYPES + "unsupported-schema-version", "Unsupported schema version",
                     "'" + schemaId + "' is not a schema identity: " + notAnIdentity.getMessage(), List.of(),
                     notAnIdentity);
         }

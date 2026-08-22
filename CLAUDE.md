@@ -95,8 +95,11 @@ each other.
   writes bodies, and gates on `Content-Type` and `Accept`.
 - `TsonHttpException` — status plus diagnostics. **`from(RuntimeException)` is the entire status policy**;
   put nothing status-shaped anywhere else.
-- `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem-1.tn` — the error body, its
-  schema, and the reader that proves the two agree.
+- `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem-2.tn` — the error body, its schema,
+  and the reader that proves the two agree. **This project's own schema, maintained here** — it began as a copy
+  of `tson-cli`'s `diagnostics.tn` and has diverged on purpose (`UPSTREAM.md` #5): a CLI reports on files and a
+  server reports on requests. `problem` follows **RFC 9457**; `diagnostic` stays close to what a TSON read
+  produces, because that is what it reports.
 - `TsonHttpSchemaSource` / `TsonSchemaFetchException` — fetching a schema named by an untrusted request
   body, under policy. Read its class notes before changing anything in it; every rule there is load-bearing.
 
@@ -323,6 +326,11 @@ handler can classify from the opening bytes without a full parse.
 
 **Use the `.tn` extension, not `.tn1`**, matching tson-java: `.tn1` is a stability claim §7.1 reserves for
 a frozen "TSON version 1" that hasn't happened (tson-java's `SPEC-FEEDBACK.md` #20).
+
+**Superseded schemas stay published.** §10 makes a published schema immutable, so `problem-1.tn` is still
+served alongside `problem-2.tn` — a document that named the old one must go on resolving, even though nothing
+new is written against it. `TsonProblemSchema.publishedSources()` returns the whole history, and the demos
+publish all of it. When bumping a schema here, add the new version and keep serving the old, never edit.
 
 **Project-owned schema `!!id`** follows tson-java's convention with this repo's own group:
 `https://tson.io/2026/32/ltr8/http/<name>-<version>.tn` — `/2026/32` the spec revision, `ltr8` the

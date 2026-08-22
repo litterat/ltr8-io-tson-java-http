@@ -95,6 +95,6 @@ class OrderServerTest {
     @Test
     void publishesBothSchemasAtTheirIdentityPaths() throws Exception {
         assertEquals(OrderServer.SCHEMA, get("/2026/32/app/order-1.tn").body());
-        assertEquals(TsonProblemSchema.source(), get("/2026/32/ltr8/http/problem-1.tn").body());
+        assertEquals(TsonProblemSchema.source(), get("/2026/32/ltr8/http/problem-2.tn").body());
     }
 }

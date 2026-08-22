@@ -10,12 +10,13 @@
   and the trailing -1 this schema's own version. Per that convention's "bump it under a new name"
   rule, never edit a published schema's content in place -- a shape change becomes problem-2.tn.
 
-  diagnostic_code and diagnostic are deliberately field-for-field identical to tson-cli's own
-  diagnostics-6.tn, so the CLI and this server describe the same failure the same way. They are
-  copied rather than imported because tson-cli is an application module that exports nothing and
-  publishes no schema; see UPSTREAM.md #5, which asks for the shared half to be lifted somewhere
-  both can depend on. Until that lands, the two copies can drift, and keeping them identical is a
-  manual obligation of anyone touching either.
+  SUPERSEDED by problem-2.tn, which follows RFC 9457. Still published, and still valid: §10 makes a
+  published schema immutable, so a document that named this one must go on resolving. Nothing new is
+  written against it.
+
+  diagnostic_code and diagnostic began as a copy of tson-cli's diagnostics.tn. They are no longer
+  held to it: a CLI reports on files and a server reports on requests, and the two shapes are free to
+  diverge where that difference matters.
   """
 {
   diagnostic_code => !enum [

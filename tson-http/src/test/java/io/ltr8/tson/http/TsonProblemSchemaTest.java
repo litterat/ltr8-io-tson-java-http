@@ -34,7 +34,7 @@ class TsonProblemSchemaTest {
     @Test
     void whatWriteProblemEmitsValidatesAgainstProblem1AndRoundTrips() {
         TsonHttpCodec codec = new TsonHttpCodec(TsonProblemSchema.tson());
-        TsonProblem problem = TsonProblem.of(400, "Invalid TSON document", "the request body has 1 problem",
+        TsonProblem problem = TsonProblem.of(TsonHttpException.TYPES + "invalid-document", 400, "Invalid TSON document", "the request body has 1 problem",
                 List.of(Diagnostic.ofSchemaError("https://example.com/2026/32/app/order-1.tn", "order",
                         "missing required field 'sku'", Optional.empty())));
 
@@ -54,7 +54,7 @@ class TsonProblemSchemaTest {
     @Test
     void anErrorBodySaysWhatGovernsItAndReadsBackWithNothingToldOutOfBand() {
         TsonHttpCodec codec = new TsonHttpCodec(TsonProblemSchema.tson());
-        TsonProblem problem = TsonProblem.of(400, "Invalid TSON document", "the request body has 1 problem",
+        TsonProblem problem = TsonProblem.of(TsonHttpException.TYPES + "invalid-document", 400, "Invalid TSON document", "the request body has 1 problem",
                 List.of(Diagnostic.ofSchemaError("https://example.com/2026/32/app/order-1.tn", "order",
                         "missing required field 'sku'", Optional.empty())));
 
@@ -87,7 +87,7 @@ class TsonProblemSchemaTest {
     @Test
     void anAbsentDetailStaysAbsent() {
         TsonHttpCodec codec = new TsonHttpCodec(TsonProblemSchema.tson());
-        TsonProblem problem = TsonProblem.of(500, "Internal error", null, List.of());
+        TsonProblem problem = TsonProblem.of(TsonHttpException.TYPES + "internal-error", 500, "Internal error", null, List.of());
         assertEquals(Optional.empty(), problem.detail());
 
         TsonProblem readBack = codec.readObjectAs(new ByteArrayInputStream(codec.writeProblem(problem)),

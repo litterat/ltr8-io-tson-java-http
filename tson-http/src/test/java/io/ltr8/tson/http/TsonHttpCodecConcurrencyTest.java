@@ -213,7 +213,7 @@ class TsonHttpCodecConcurrencyTest {
                         codec.readTree(body(order("SKU-" + thread, i)), "application/tson")
                                 .get("sku").asString().orElseThrow());
                 default -> {
-                    TsonProblem problem = TsonProblem.of(400, "Invalid TSON document", "thread " + thread,
+                    TsonProblem problem = TsonProblem.of(TsonHttpException.TYPES + "invalid-document", 400, "Invalid TSON document", "thread " + thread,
                             List.of());
                     assertTrue(codec.writeProblem(problem).length > 0);
                 }
