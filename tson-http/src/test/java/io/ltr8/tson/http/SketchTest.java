@@ -3,7 +3,9 @@ package io.ltr8.tson.http;
 import io.ltr8.annotation.Annotation;
 import io.ltr8.annotation.Annotations;
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.schema.meta.FieldState;
 import io.ltr8.tson.schema.meta.RecordBody;
+import io.ltr8.tson.schema.meta.RecordField;
 import io.ltr8.tson.schema.meta.TypeDefinition;
 import org.junit.jupiter.api.Test;
 
@@ -11,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -82,6 +85,44 @@ class SketchTest {
 
         var problems = Tson.builder().schemaSource(lib::get).build().validateSchema(broken);
 
+        assertTrue(problems.stream().anyMatch(d -> d.message().contains("sku_not_fund")),
+                () -> "expected an unresolved-reference error, got " + problems);
+    }
+
+    // ── the plainest design: an ordinary schema, no annotations, no top, no meta layer ──
+
+    /**
+     * {@code orders-api-3.tn} needs nothing but the ordinary header — {@code meta.tn} governing,
+     * {@code core.tn} imported. Metadata is carried by FIXED fields, which survive into resolver output with
+     * their values, where a locally declared annotation's value would have been dropped (#12).
+     */
+    @Test
+    void fixedFieldsCarryTheMetadataInAnOrdinarySchema() throws Exception {
+        Tson tson = Tson.builder().schemaSource(u -> null).build();
+        var entries = tson.resolve(sketch("orders-api-3.tn")).schema().entries();
+
+        TypeDefinition create = entries.get("create_order");
+        assertTrue(create.supertypes().contains("operation"),
+                "an operation is found by its supertype, not by a naming convention");
+
+        Map<String, RecordField> fields = new LinkedHashMap<>();
+        ((RecordBody) create.body()).fields().forEach(f -> fields.put(f.name(), f));
+
+        assertEquals(FieldState.REQUIRED_FIXED, fields.get("method").state());
+        assertEquals("POST", fields.get("method").value().orElseThrow().text());
+        assertEquals("/orders", fields.get("path").value().orElseThrow().text());
+
+        // The payloads are resolved references, which is the whole point.
+        assertEquals("order", fields.get("request").type().name());
+        assertTrue(fields.get("response").type().name().startsWith("choice_"),
+                fields.get("response").type().name());
+    }
+
+    /** And the same property: a payload type that does not exist is refused. */
+    @Test
+    void anOrdinarySchemaStillChecksItsPayloadTypes() throws Exception {
+        String broken = sketch("orders-api-3.tn").replace("body: sku_not_found", "body: sku_not_fund");
+        var problems = Tson.builder().schemaSource(u -> null).build().validateSchema(broken);
         assertTrue(problems.stream().anyMatch(d -> d.message().contains("sku_not_fund")),
                 () -> "expected an unresolved-reference error, got " + problems);
     }

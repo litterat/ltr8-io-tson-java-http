@@ -446,11 +446,12 @@ request exercises that.
 
 - `UPSTREAM.md` — changes wanted in `ltr8-io-tson-java`, plus spec feedback staged for its
   `SPEC-FEEDBACK.md`. **The only place upstream changes are recorded** while that repo is hands-off.
-- `sketch/` — an API description made of **types** rather than data about types. Two designs: one **works
-  today** (`meta-http-2.tn` + `orders-api-2.tn` — operations as `top &` entries, metadata on annotations, every
-  payload a resolved `TypeRef`), one is blocked (`meta-http-1.tn`'s `~operation` constructor, on `UPSTREAM.md`
-  #11 and on user meta-schema constructors not being applicable). Nothing here ships. `SketchTest` holds each to
-  what `sketch/README.md` claims, so a fix upstream shows up as a failing test. **Read `sketch/README.md` before
-  `api-1.tn`**, which is the shipping data-shaped version and knows what is wrong with it.
+- `sketch/` — an API description made of **types** rather than data about types. Three designs; the best needs
+  only the **ordinary header** (`orders-api-3.tn`: FIXED fields carry method and path, a `choice` carries the
+  responses, composition enforces the shape, every payload is a resolved `TypeRef`). The other two need a custom
+  meta layer, and the `~operation` one is blocked on `UPSTREAM.md` #11 and on user meta-schema constructors not
+  being applicable. Nothing here ships. `SketchTest` holds each to what `sketch/README.md` claims, so a fix
+  upstream shows up as a failing test. **Read `sketch/README.md` before `api-1.tn`**, which is the shipping
+  data-shaped version and knows what is wrong with it.
 - `SCHEMA-HEADER.md` — the proposal for naming a governing schema in an HTTP header. A design document for the
   spec author, not a description of anything built.

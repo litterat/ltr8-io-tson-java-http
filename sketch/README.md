@@ -1,8 +1,16 @@
 # Sketch: an API description made of types, not data about types
 
-Two designs, four schemas. **One works today** (`meta-http-2.tn` + `orders-api-2.tn`); one is blocked on
-implementation gaps (`meta-http-1.tn` + `orders-api-1.tn`). Nothing here ships. `SketchTest` holds each to what
-this file claims, so a fix upstream shows up as a failing test rather than as nothing happening.
+**Three designs, in increasing order of how little they need.** Nothing here ships. `SketchTest` holds each to
+what this file claims, so a fix upstream shows up as a failing test rather than as nothing happening.
+
+| | Header it needs | Carries metadata with | Status |
+|---|---|---|---|
+| `orders-api-3.tn` | `meta.tn` + `core.tn` — **the ordinary one** | FIXED fields | **works** |
+| `orders-api-2.tn` | a custom meta layer for annotation *types* | annotations | works |
+| `orders-api-1.tn` | a custom meta layer with an `operation` constructor | constructor fields | blocked |
+
+**`orders-api-3.tn` is the one to read.** It needs no meta layer, no kernel import, no `top`, and no
+annotations — an ordinary schema, which means any TSON toolchain can already read it.
 
 ## The problem with `api-1.tn`, which does ship
 
@@ -14,7 +22,65 @@ A schema URI and a type name, both carried as **data**. Nothing resolves either.
 `$ref: "#/components/schemas/Order"` in TSON's clothing — and it is why `TsonApiConformanceTest` exists at all:
 it hand-checks coherence that a resolver should establish by construction.
 
-## The design that works
+## The plainest design, and the best of the three
+
+`orders-api-3.tn` — ordinary header, nothing else:
+
+```tson
+operation => { method: http_method  path: text }
+
+order_created  => { status: status_code = 201  body: order }
+order_invalid  => { status: status_code = 400  body: problem }
+order_sku_gone => { status: status_code = 404  body: sku_not_found }
+
+create_order => operation & {
+  method:   http_method = POST
+  path:     text = "/orders"
+  request:  order
+  response: (order_created | order_invalid | order_sku_gone)
+}
+```
+
+Resolved, that is:
+
+```
+method:   REQUIRED_FIXED  value=Token[text=POST]
+path:     REQUIRED_FIXED  value=Token[text=/orders]
+request:  TypeRef[order]
+response: TypeRef[choice_order_created_order_invalid_order_sku_gone_…]
+supertypes = [operation]
+```
+
+**A FIXED field carries metadata inside the type.** `method: http_method = POST` is checked by the resolver
+and survives into resolver output with its value — where a locally declared annotation's value is silently
+dropped (#12). Metadata that would have sat *beside* the type sits *in* it.
+
+**A response is a `choice`**, which is what one-of means. Each variant fixes its own status, so a reader can
+see which status carries which body. The variants are **not** proved disjoint and need not be: §5.4 requires
+distinct variant *types*, not disjoint value *sets*, and record-set disjointness is explicitly a case a
+resolver may leave unproven. So a response value carries its tag — `!order_created { … }` — which is the
+honest outcome rather than a wrinkle. The tag names the response; nothing is inferred from structure.
+
+**Composition enforces the shape.** Every operation composes `operation`, so the resolver checks each has a
+method and a path, and operations are found in resolved output **by supertype** rather than by a naming
+convention. Composition narrows: an operation inherits `method` and re-declares it FIXED to its own verb.
+
+**An operation value is an exchange.** Because an operation is an ordinary record,
+`{ method: POST  path: "/orders"  request: <an order>  response: !order_created { … } }` is a real value — one
+request and its reply. The same declaration is the contract *and* the shape of a trace or an access log, which
+no data-shaped description can be.
+
+What it still does not state is that `response` must be a choice of responses — each operation's variants
+differ, so the base cannot say it. That last gap is what a type constructor would close.
+
+### Two things that constrain the shape
+
+- **A record is not permitted at a type position** (§5.2), so a parameter set is a named type
+  (`get_schema_parameters`), not an inline `{ … }`.
+- **`!` names reach only the governing meta's structure namespace**, so an ordinary schema cannot write
+  `!text ^ { … }` unless `text` is a constructor there — refinements of core's atoms come from core.
+
+## The annotation design
 
 `orders-api-2.tn`, one schema, one import:
 
@@ -71,7 +137,7 @@ data value — nobody can write `!create_order { … }` and mean anything. This 
 "a `@status` field is a response" rule is prose in a `@doc`. A `~operation` constructor would have the resolver
 check that an operation has a method and a path — which is exactly what the other design buys, and cannot spend.
 
-## The design that is blocked
+## The constructor design, blocked
 
 `meta-http-1.tn` declares `operation` as a real type constructor:
 
