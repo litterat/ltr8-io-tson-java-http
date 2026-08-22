@@ -13,7 +13,7 @@ It is a **consumer** of the TSON library, not part of it. The library lives in t
 and consumed as a Gradle **included build** (see "Consuming tson-java" below). Destination remote:
 `https://github.com/litterat/` — not yet pushed.
 
-**Status.** All four modules are built and tested (114 tests). Every adapter proves the full loop: a schema
+**Status.** All four modules are built and tested (126 tests), each adapter with a runnable demo server. Every adapter proves the full loop: a schema
 served at its identity path, fetched back by `TsonHttpSchemaSource`, and used to validate a document. The
 project does what it set out to do; what remains is polish and the open questions below.
 
@@ -69,7 +69,11 @@ Package group `io.ltr8`, as in tson-java (reverse-DNS names who *publishes*, not
 
   **`TsonHandler.install` is not optional when using `TsonMediaSupport`.** The read happens inside Helidon's
   entity machinery, before any handler code runs, so there is no handler boundary to catch a rejection.
-  Without `install`, a body that breaks its schema gets Helidon's own error page and the diagnostics are lost.
+  Without `install`, a body that breaks its schema gets Helidon's own error page and the diagnostics are lost —
+  and a non-TSON body gets a 500 instead of a 415, because Helidon raises `UnsupportedTypeException` when no
+  reader claims the type and never reaches this adapter's code. `install` maps that too, deciding which side
+  failed by asking the codec about the *request's* content type: not readable means the client's 415, readable
+  means the failure was on the write side and is this server's own 500.
 
 Adapters depend on `tson-http`. `tson-http` names no adapter type, and the adapters never depend on
 each other.
@@ -281,6 +285,23 @@ These are not restated preferences; matching them is what keeps the two repos re
   rather than silently picking an interpretation. Since that repo is read-only for now, stage such
   findings in `UPSTREAM.md` under "Spec feedback to file".
 
+## Demo servers
+
+Each adapter has one, and they are the same server: same routes, same schema, same behaviour, so the same
+`curl` commands work against all three. Starting one prints what to try.
+
+```
+./gradlew :tson-http-jdk:runDemo
+./gradlew :tson-http-javalin:runDemo
+./gradlew :tson-http-helidon:runDemo
+./gradlew :tson-http-jdk:runDemo -Pport=9000
+```
+
+They live in a **`demo` source set**, not `main` — compiled by `build`, so they cannot rot against an API
+change, but absent from the published jar. The test source set can see them, so each adapter's
+`demo/OrderServerTest` drives the *real* demo rather than a copy: a demo nobody exercises is documentation
+that quietly stops being true. Those tests assert exactly what the printed `curl` commands claim.
+
 ## Build and test
 
 No system Gradle — always use the wrapper (Gradle 9.4.1, Java 25 toolchain):
@@ -290,6 +311,7 @@ No system Gradle — always use the wrapper (Gradle 9.4.1, Java 25 toolchain):
 ./gradlew build -Ptson.published=true # against tson-java's published artifacts instead
 ./gradlew test
 ./gradlew :tson-http:test --tests "io.ltr8.tson.http.TsonHttpCodecTest"
+./gradlew :tson-http-helidon:test --tests "io.ltr8.tson.http.helidon.demo.OrderServerTest"
 ./gradlew :tson-http:test
 ./gradlew :tson-http-jdk:test
 ./gradlew :tson-http-javalin:test

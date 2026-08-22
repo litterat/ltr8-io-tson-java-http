@@ -1,5 +1,6 @@
 package io.ltr8.tson.http.helidon;
 
+import io.helidon.http.media.UnsupportedTypeException;
 import io.helidon.webserver.http.Handler;
 import io.helidon.webserver.http.HttpRouting;
 import io.helidon.webserver.http.ServerRequest;
@@ -31,6 +32,12 @@ import java.util.List;
  * {@link TsonMediaSupport}, where the read happens inside Helidon's own entity machinery rather than in a
  * handler. It registers the same failure mapping as a routing error handler, so one application answers
  * failures one way.
+ *
+ * <p>It also maps {@link UnsupportedTypeException}, which is how a 415 reaches a client on the media-support
+ * path. A handler-driven read rejects a non-TSON body itself; an entity-driven one never gets that far --
+ * Helidon looks for a reader, this adapter's says it does not support the type, and Helidon raises its own
+ * exception before any code here runs. Without the mapping that surfaces as a 500, which blames the server for
+ * a request the client got wrong.
  */
 @FunctionalInterface
 public interface TsonHandler {
@@ -64,6 +71,10 @@ public interface TsonHandler {
     static void install(HttpRouting.Builder routing, TsonHttpCodec codec) {
         routing.error(TsonHttpException.class, (request, response, failure) ->
                 Boundary.fail(codec, new TsonContext(request, response, codec), failure));
+        routing.error(UnsupportedTypeException.class, (request, response, failure) -> {
+            TsonContext tson = new TsonContext(request, response, codec);
+            Boundary.fail(codec, tson, Boundary.unreadableEntity(codec, tson, failure));
+        });
     }
 
     /** The shared failure rendering. Reached through {@link #asHandler} and {@link #install}. */
@@ -104,6 +115,22 @@ public interface TsonHandler {
                 }
             }
             return internal(failure);
+        }
+
+        /**
+         * Helidon could not read or write an entity. The exception carries only a message, so which side
+         * failed is decided from the request: if the body was not something the codec reads, this is the
+         * client's 415, and asking the codec produces exactly the message a handler-driven read would have
+         * given. If the body was fine, the failure is on the write side -- no writer for the response type --
+         * which is this server's problem, not the client's.
+         */
+        static Exception unreadableEntity(TsonHttpCodec codec, TsonContext tson, Exception failure) {
+            try {
+                codec.requireTsonBody(tson.header("Content-Type"));
+            } catch (TsonHttpException unsupported) {
+                return unsupported;
+            }
+            return failure;
         }
 
         private static TsonHttpException internal(Throwable cause) {
