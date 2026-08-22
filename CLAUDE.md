@@ -177,8 +177,11 @@ boundary cannot produce it: the boundary only knows how to render a `problem`, a
 These types belong in the **application's** schema, importing `problem-2.tn` — `tson-http` owns the transport
 envelope, the service owns "SKU not found". Two rules that cost time otherwise:
 
-- **Import `problem-2.tn` only.** Importing a schema brings in what *it* imports, so naming `core.tn` as well is
-  `'void' is declared by more than one !!import`. You get `text` through the import chain.
+- **Import `problem-2.tn` only** — and know that this is a **bug being worked around**, not the rule.
+  [TSON-SCHEMA] §2.2.3 says imports are *shallow*, so `core.tn` should be imported explicitly and importing two
+  schemas that both import it should be fine. The implementation treats imports as deep, so `text` arrives
+  through the chain and a second import collides (`UPSTREAM.md` #11). When that is fixed, these schemas need
+  their explicit `!!import:"…/core.tn"` back.
 - **`errors` stays data-level.** A business failure carries `errors: []` and its own fields. They never
   co-occur anyway — validation is a gate, so business logic is not reached on a document that failed it.
 
@@ -443,5 +446,10 @@ request exercises that.
 
 - `UPSTREAM.md` — changes wanted in `ltr8-io-tson-java`, plus spec feedback staged for its
   `SPEC-FEEDBACK.md`. **The only place upstream changes are recorded** while that repo is hands-off.
+- `sketch/` — an API description made of **types** rather than data about types: `meta-http-1.tn` adds an
+  `operation` constructor, `orders-api-1.tn` uses it. `meta-http-1.tn` resolves; the API schema is blocked on
+  `UPSTREAM.md` #11 and on custom meta-schema constructors not being applicable yet. Nothing here ships, and
+  `SketchProbeTest` records exactly which walls each hits, so a fix upstream shows up as a changed outcome.
+  Read `sketch/README.md` before `api-1.tn`, which is the shipping data-shaped version and knows it.
 - `SCHEMA-HEADER.md` — the proposal for naming a governing schema in an HTTP header. A design document for the
   spec author, not a description of anything built.

@@ -1,0 +1,63 @@
+!!id:"https://tson.io/2026/32/ltr8/http/meta-http-1.tn"
+!!meta:"https://tson.io/2026/32/m/meta-kernel.tn"
+!!import:"https://tson.io/2026/32/m/meta-kernel.tn"
+@doc:"""
+  A meta-schema adding HTTP operations to the type system.
+
+  SKETCH. Resolves as written; the orders API beside it does not yet. See sketch/README.md.
+
+  Governed directly by the meta-kernel, which is not a stylistic choice: declaring a type
+  constructor (the ~ marker) is permitted only in a schema whose own !!meta is the kernel. So this
+  is a SIBLING of meta.tn, not a layer above it.
+
+  operation is ~top & rather than ~product & or ~sum & because no data value ever has an operation
+  as its type -- the same reasoning meta-kernel's own reference and instance_template use, where
+  product would oblige an entry to supply access_pattern and size_type as meaningless filler.
+
+  The point of the whole exercise: request and responses are type_ref, not text. An operation names
+  the types it carries, the resolver checks they exist, and identity travels through the import
+  graph. A description that names a type nothing declares fails to load, rather than failing at a
+  client months later.
+  """
+{
+  http_method => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
+
+  @doc:"An HTTP status code. Refined rather than a bare integer, so 42 is not a status."
+  status_code => !integer ^ { min: 100  max: 599 }
+
+  parameter_location => !enum [PATH QUERY HEADER]
+
+  @doc:"""
+    A parameter carried outside the body.
+
+    type is a type_ref like everything else here, but it must name a scalar: a URL segment or a
+    header value cannot carry a record. Nothing in this vocabulary enforces that, which is an open
+    question -- see sketch/README.md.
+    """
+  parameter => {
+    name:     text
+    in:       parameter_location
+    type:     type_ref
+    required: boolean
+  }
+
+  @doc:"body is absent for a response that carries none -- a 204, or a schema document served as bytes."
+  response => {
+    status: status_code
+    body:   type_ref?
+  }
+
+  @doc:"""
+    One operation. A list of responses rather than a map keyed by status, for two reasons: a
+    response is likely to grow members beyond its body, and a map-typed slot cannot hold a template
+    parameter (the structure-templates CR's template_argument has no collection case), so a map
+    would foreclose templated operations before they are tried.
+    """
+  operation => ~top & {
+    method:     http_method
+    path:       text
+    parameters: [parameter]
+    request:    type_ref?
+    responses:  [response]
+  }
+}

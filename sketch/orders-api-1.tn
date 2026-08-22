@@ -1,0 +1,30 @@
+!!id:"https://schemas.example.com/2026/32/app/orders-api-1.tn"
+!!meta:"https://tson.io/2026/32/ltr8/http/meta-http-1.tn"
+!!import:"https://schemas.example.com/2026/32/app/order-1.tn"
+!!import:"https://schemas.example.com/2026/32/app/orders-errors-1.tn"
+@doc:"""
+  The orders service, described as types rather than as data about types.
+
+  SKETCH -- blocked on UPSTREAM.md #11. See sketch/README.md.
+
+  Compare the data version this replaces (a !api document governed by api-1.tn): there, a body was
+  { schema: uri  type: text } and nothing resolved either string. Here order, problem and
+  sku_not_found are references the resolver follows through the imports above. The (schema, type)
+  pair disappears because a type reference already carries identity.
+
+  There is no title, version or envelope either. This document has an !!id, which gives it identity
+  and §10 versioning, and @doc, which documents it. The envelope was re-inventing all three.
+  """
+{
+  create_order => !operation {
+    method:     POST
+    path:       "/orders"
+    parameters: []
+    request:    order
+    responses:  [
+      !response { status: 201  body: order }
+      !response { status: 400  body: problem }
+      !response { status: 404  body: sku_not_found }
+    ]
+  }
+}
