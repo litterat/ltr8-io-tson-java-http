@@ -285,47 +285,32 @@ the current behaviour so that a fix upstream makes it fail and say so.
 
 ---
 
-## 11. `!!import` is transitive in the implementation; the spec says it is shallow
+## 11. ~~A schema could reference types from only one other schema~~ — FIXED on a branch (`0f8a451`)
 
-**Hit:** designing a TSON-native API description, which by nature references types from several
-independently-published schemas. It cannot be written, because a schema cannot import two schemas that both
-import `core.tn` — and every practical schema imports `core.tn`.
+**Was:** a schema could not import two schemas that both import `core.tn` — and every practical schema imports
+`core.tn`. `'void' is declared by more than one !!import`. So a schema could reference types from exactly one
+other published schema: a chain, not a library, and an API description was unwritable.
 
-**The spec is explicit** ([TSON-SCHEMA] §2.2.3):
+**Fixed by `0f8a451`, on `transitive-imports-with-identity-collisions`.** Not yet on `main`, so a plain pull
+does not pick it up. Verified against a clone of that branch: all three symptoms resolve, this project's 204
+tests pass unchanged, and `sketch/orders-api-1.tn` advances past this to its remaining blocker.
 
-> **Imports are shallow.** Only the entries declared in the imported schema's own body are imported — entries
-> the imported schema itself brought in via its own `!!import` directives are not transitively included. Each
-> schema MUST explicitly import all the dependencies it needs.
+**The resolution is the opposite of the one argued here, and the argument for it is better.** This entry
+proposed making the implementation shallow, per §2.2.3. The fix instead **keeps transitivity** and corrects the
+collision rule to compare the declaring schema's canonical identity rather than counting name occurrences — one
+schema reached by several routes unifies; two different schemas declaring one name is an error naming both. It
+diverges from §2.2.3 deliberately, argued in the sibling's `SPEC-FEEDBACK.md` #55: §3.3.1 already gives
+`!!meta` the transitive rule ("the target's local declarations plus its imports"), and `core.tn`'s own
+`void => !unit {}` depends on it. The bundled chain is itself a diamond.
 
-**The implementation treats them as deep**, which produces two symptoms from one cause:
+A bonus the shallow reading would not have given: because identities carry the spec revision, a closure
+reaching two revisions of `core.tn` is now rejected at namespace construction rather than surfacing later as a
+field conflict between two identically-spelled types.
 
-1. **False conflicts.** A schema importing `a-1.tn` and `b-1.tn`, which declare `alpha` and `beta` and each
-   import `core.tn`, is rejected with `'void' is declared by more than one !!import`. Under the shallow rule
-   neither import carries `void`, so there is no collision and this must resolve.
-2. **False availability.** `sku_not_found => problem & { sku: text }`, importing only `problem-2.tn`, resolves
-   — `text` arriving through `problem-2.tn`'s own import of `core.tn`. Under the shallow rule `text` is not in
-   scope and this must fail until `core.tn` is imported explicitly.
-
-§2.2.3's own worked example is the second case exactly: *"If Y declares `y_id => uuid` through its own import
-of core, then X, importing Y but not core, receives `y_id` still bound to core's `uuid`"* — the imported
-entry's internal references keep working, but core's **names** never enter X's namespace.
-
-**Sites:** `SchemaResolver:377` and `TsonSchemaLinker:567` raise the message; whatever collects the imported
-namespace ahead of them is including transitive entries.
-
-**Why it matters beyond correctness.** Shallow imports are what make composition work: any number of schemas
-can be imported side by side, because each contributes only what it declares. Deep imports make every shared
-dependency a collision, so a schema can reference types from **exactly one** other published schema. That is
-the difference between a schema library and a chain.
-
-**This project depends on the bug today.** `orders-errors-1.tn` imports only `problem-2.tn` and uses `text`.
-Under the correct rule it must import `core.tn` as well — which is currently rejected as a double import. So
-the fix is breaking for it in one direction and unblocking in the other, and both demo schemas want revisiting
-when it lands. `CLAUDE.md`'s trap saying "import the derived schema only" is describing the bug, not the rule,
-and is marked as such.
-
-**Priority: high.** It is the one thing standing between this project and a schema that references types from
-more than one place, which is what an API description is.
+**What this project owes it once merged.** `orders-errors-1.tn` in all three demos imports only
+`problem-2.tn` and relies on `text` arriving transitively. That keeps working — transitivity is retained — but
+the explicit `!!import` of `core.tn` becomes legal and is the clearer spelling. `CLAUDE.md`'s "import the
+derived schema only" trap becomes obsolete rather than wrong.
 
 ---
 

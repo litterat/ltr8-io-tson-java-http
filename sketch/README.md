@@ -181,8 +181,8 @@ operation => ~top & {
    `UnsupportedOperationException: 'create': failed to bind 'operation' via the compiled meta-schema reader:
    'operation' is not a constructor '…/meta-http-1.tn' declares`. That exception type is this project's
    classification for *not implemented yet*, not for *your schema is wrong*.
-2. **`!!import` is deep where §2.2.3 says shallow** (`UPSTREAM.md` #11). An API description references types
-   from several published schemas by nature, and any two that both reach `core.tn` collide on `void`.
+2. ~~**A schema could reference types from only one other schema**~~ — `UPSTREAM.md` #11, **fixed on an
+   unmerged branch**. Verified there: this schema now gets past it and stops only at wall 1.
 
 ## Open questions
 
