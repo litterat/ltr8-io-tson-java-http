@@ -20,12 +20,11 @@ those URLs resolve. Every adapter proves the full loop: a schema
 served at its identity path, fetched back by `TsonHttpSchemaSource`, and used to validate a document. The
 project does what it set out to do; what remains is polish and the open questions below.
 
-**Open question, undecided:** whether a *request* should be able to name its schema in a header
-(`Content-Type: application/tson; schema="…"`). **The case has narrowed:** it originally covered responses too,
-and `describing()` solved that half in-band and better. What is left is JSON bodies, which cannot carry a
-`!!schema` and have no in-band option at all — so this is now a JSON-compatibility feature, not a TSON one, and
-should be judged on that. Reasoning and the conflict rule it would need are in `UPSTREAM.md`'s spec-feedback
-section. Nothing is implemented; do not add one without a decision.
+**Designed, not built:** a `TSON-Schema` header naming the governing schema. **`SCHEMA-HEADER.md`** carries the
+settled rules, the naming procedure, and the reasoning behind each decision. In short: an RFC 9651 sf-string
+(quoted, always); permitted on requests and responses and on a body of any media type; may coexist with the
+body's `!!schema` and must then agree by canonical identity; and a schemaless body stays valid TSON, with the
+"must name a schema" requirement living in endpoint policy rather than in the media type.
 
 **Hard constraints:**
 - Java 25 only (matches tson-java).
@@ -386,3 +385,5 @@ request exercises that.
 
 - `UPSTREAM.md` — changes wanted in `ltr8-io-tson-java`, plus spec feedback staged for its
   `SPEC-FEEDBACK.md`. **The only place upstream changes are recorded** while that repo is hands-off.
+- `SCHEMA-HEADER.md` — the proposal for naming a governing schema in an HTTP header. A design document for the
+  spec author, not a description of anything built.

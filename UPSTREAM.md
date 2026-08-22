@@ -286,42 +286,23 @@ Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off.
 **The gap.** §6 makes every valid JSON document a valid TSON document, and the format's stated target use is
 validating generated structured output against a schema. But `!!schema` is TSON directive syntax, and a JSON
 document cannot carry one — so for the entire JSON-compatible surface there is no in-band way to say which
-schema governs the document. The spec does not say what the out-of-band channel is.
+schema governs the document. §7.1 already legislates for HTTP (`application/tson; version=1`, "if
+disambiguation is needed in HTTP contexts") and stops exactly before the parameter that would answer this.
 
-**Narrowed since first written.** This item originally had two legs; one has gone. With `describing()` (#7) a
-TSON *response* now names its own schema in-band, so "a client cannot tell what governed what it received" is
-no longer an argument for a header — that half is solved, and solved better, in the document itself. What
-remains is JSON bodies, where there is still no in-band option at all. The case for a header is therefore
-narrower and single-purpose than it looked, and should be judged as such: it exists for JSON compatibility, not
-for TSON.
+**Now the smaller half of a larger proposal.** Building version routing turned up a stronger reason for an
+out-of-band channel than JSON compatibility: an intermediary routing between two servers by schema cannot parse
+the body to find out which one, and a compressed body makes it impossible rather than merely rude. The full
+proposal — rules, naming procedure, structured-field syntax, and the two decisions it needs — is in
+**`SCHEMA-HEADER.md`**.
 
-This is not purely an application question, because §7.1 already legislates for HTTP: it defines
-`application/tson`, notes the media type is intended for IANA registration, and specifies
-`application/tson; version=1` for when "disambiguation is needed in HTTP contexts". Having gone that far, it
-stops exactly before the parameter that is actually needed in practice.
+**The interpretation this project uses today**, pending a decision: the body's `!!schema` is the only channel;
+`TsonSchemaVersions` refuses a document that names no version rather than guessing one.
 
-**What an implementation must pick something for.** A server validating a posted JSON or TSON body has to
-learn the schema from somewhere. Every implementation will invent a channel, and they will not agree —
-`Content-Type: …; schema=…`, `Link: <…>; rel="describedby"`, a bespoke `Schema:` header, or a
-route-configured constant are all reasonable and mutually incompatible readings.
-
-**The interpretation this project chose**, pending a spec answer: the body's `!!schema` remains primary and
-authoritative; a `schema` media-type parameter on `Content-Type` is accepted where the body carries no
-directive; and where both are present and their canonical identities (§2.2.1) differ, the request is rejected
-rather than resolved by precedence.
-
-**Suggested resolution.** Define a `schema` media-type parameter alongside `version` in §7.1, and state the
-conflict rule. The parameter binds to the representation, which is where a statement about what the
-representation *is* belongs, and it extends a parameter list the section already opened.
-
-**The conflict rule has a precedent in this same spec, and should follow it.** §2.2.1 already answers the
-identical shape of question for content hashes: "two that declare different hashes are in conflict — at most
-one describes the real bytes — and a consumer that observes both MUST report an error rather than choosing
-between them". A header and a body directive naming different schemas is the same situation, and silent
-precedence is how a document gets validated against a schema nobody intended.
-
-**Related:** `UPSTREAM.md` #7 — the writers cannot emit `!!schema`, so a TSON *response* has no in-band
-option either, and this parameter is currently the only channel in that direction.
+**The conflict rule, whatever is decided,** has a precedent in this same spec and should follow it. §2.2.1 on
+content hashes: "two that declare different hashes are in conflict — at most one describes the real bytes — and
+a consumer that observes both MUST report an error rather than choosing between them". A header and a directive
+naming different schemas is the same situation, and silent precedence is how a document gets validated against
+a schema nobody intended.
 
 ### Not to file
 
