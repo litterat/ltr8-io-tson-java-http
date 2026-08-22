@@ -1,0 +1,100 @@
+!!id:"https://tson.io/2026/32/ltr8/http/api-1.tn"
+!!meta:"https://tson.io/2026/32/m/meta.tn"
+!!import:"https://tson.io/2026/32/m/core.tn"
+@doc:"""
+  A description of an HTTP API whose payloads are TSON documents -- what OpenAPI is for JSON, minus
+  the part OpenAPI mostly is.
+
+  OpenAPI is large chiefly because JSON has no schema language, so it embeds one and carries
+  components/schemas along with every document. TSON already has published, identity-addressed,
+  immutable schemas, so this references them instead: an operation names a schema by !!id and a root
+  type within it, and that is the whole of a contract.
+
+  That pair is not invented here. It is what everything handling a TSON payload independently needs
+  -- a writer emitting !!schema needs both, a reader against a stated schema needs both, and a JSON
+  body carries neither so the header supplies one and the route the other. An API description is
+  just: per operation, which pair goes in, and which pairs come out.
+
+  Three things follow from schema references being real identities, which OpenAPI cannot do cleanly.
+  Versioning falls out: an operation names order-1.tn or order-2.tn, rather than naming a component
+  whose name encodes a version. An operation MAY pin the exact bytes of its contract with a
+  ?sha256= reference (§2.2.1). And an error response references a type composed on problem-2.tn
+  (§5.8), where OpenAPI needs allOf.
+
+  A description is itself a TSON document governed by a TSON schema, so it is served, validated and
+  versioned by exactly the machinery it describes.
+
+  DELIBERATELY ABSENT from this revision: security schemes, request/response headers beyond
+  parameters, callbacks, links, examples, and content negotiation across several media types. Each
+  is a real part of describing an API and none is needed to state a contract; adding one is a new
+  version under a new name (§10), never an edit.
+  """
+{
+  http_method => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
+
+  @doc:"Where a parameter is carried. Not BODY: a body is a document, and has its own reference."
+  parameter_location => !enum [PATH QUERY HEADER]
+
+  @doc:"""
+    A parameter carried outside the body.
+
+    type names a scalar type from the standard library -- text, int32, uuid, date -- and is text
+    rather than a type reference on purpose: a URL segment or a header value cannot carry a record,
+    so a full (schema, type) reference here would invite contracts nothing can honour. This is the
+    one place where TSON's document-orientation does not reach, and stating the limit is better than
+    papering over it.
+    """
+  parameter => {
+    name: non_empty_text
+    in: parameter_location
+    type: non_empty_text
+    required: boolean
+    description: text?
+  }
+
+  @doc:"""
+    One TSON payload: the schema that governs it and the root type within that schema.
+
+    Both are required, for the reason they are required everywhere else -- a schema alone does not
+    say which of its types the document is, and a bound record writes no type-ref of its own.
+
+    schema MAY carry a ?sha256= pin, which fixes the exact bytes of the contract rather than merely
+    its name. media_type is absent for application/tson; state it for a body that is not TSON, such
+    as JSON governed by a TSON schema through the TSON-Schema header.
+    """
+  body => {
+    schema: uri
+    type: non_empty_text
+    media_type: text?
+  }
+
+  response => {
+    status: int32
+    body: body?
+    description: text?
+  }
+
+  @doc:"""
+    path is a template: a segment in braces names a PATH parameter, as in /orders/{id}. A server is
+    free to route however it likes; this states the shape a client should expect.
+    """
+  operation => {
+    method: http_method
+    path: non_empty_text
+    summary: text?
+    parameters: [parameter]
+    request: body?
+    responses: [response]
+  }
+
+  @doc:"""
+    base is where this API is served, and is absent when that is not fixed -- a description is about
+    a contract, not a deployment, and the same contract may be served from several places.
+    """
+  api => {
+    title: non_empty_text
+    version: non_empty_text
+    base: uri?
+    operations: [operation]
+  }
+}

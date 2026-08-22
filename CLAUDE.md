@@ -142,6 +142,46 @@ streaming test uses a body past Jetty's buffer, so it asserts that the document 
 asserting a framework's buffering habit. A difference that survives that treatment is worth writing down
 here; one that does not is a bad test.
 
+### Describing an API (`api-1.tn`, `TsonApi`)
+
+An OpenAPI-shaped description of an HTTP API whose payloads are TSON — minus the part OpenAPI mostly is.
+OpenAPI embeds a schema language because JSON has none; TSON already has published, identity-addressed schemas,
+so an operation **references** one by `!!id` and names a root type in it.
+
+**That pair is the contract unit, and it was not invented here.** `describing(schemaUri, rootTypeName)`,
+`readObjectAs(schemaUri, typeName, class)`, the `TSON-Schema` header plus a route-supplied type — everything
+handling a TSON payload independently needs both, for the same reason: a schema alone does not say which of its
+types a document is, and a bound record writes no type-ref of its own. An API description is just *per
+operation, which pair goes in and which pairs come out*.
+
+**The description is checked, not just written.** `TsonApiConformanceTest` fetches it **from the running
+server**, reads it as a TSON document governed by `api-1.tn`, and holds the server to it: every referenced
+schema must be published, and every response's status and its body's own `!!schema`/type-ref must be what the
+description declares. Verified to fail when the description lies. A description nothing executes is
+documentation that quietly stops being true — the same lesson as the demo servers.
+
+**Parameters are where TSON's document-orientation does not reach.** A URL segment cannot carry a record, so
+`parameter.type` names a scalar type as `text` rather than being a full `(schema, type)` reference. Stating
+that limit beats papering over it with expressiveness nothing can honour.
+
+**Deliberately absent** from `api-1.tn`: security schemes, headers beyond parameters, callbacks, links,
+examples, multi-media-type negotiation. Adding one is a new version under a new name (§10), never an edit.
+
+### Business errors compose `problem`
+
+A business error — the request was schema-valid and the domain still said no — is **written by the handler, not
+thrown**. It composes `problem` (§5.8) so it carries RFC 9457's members and adds its own, which means the error
+boundary cannot produce it: the boundary only knows how to render a `problem`, and a `sku_not_found` has a field
+`problem` does not.
+
+These types belong in the **application's** schema, importing `problem-2.tn` — `tson-http` owns the transport
+envelope, the service owns "SKU not found". Two rules that cost time otherwise:
+
+- **Import `problem-2.tn` only.** Importing a schema brings in what *it* imports, so naming `core.tn` as well is
+  `'void' is declared by more than one !!import`. You get `text` through the import chain.
+- **`errors` stays data-level.** A business failure carries `errors: []` and its own fields. They never
+  co-occur anyway — validation is a gate, so business logic is not reached on a document that failed it.
+
 ### Serving several schema versions
 
 §10 makes a published schema immutable: a shape change is a new document under a new name (`order-1.tn`,
