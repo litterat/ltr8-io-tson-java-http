@@ -265,12 +265,16 @@ the upstream contract needs to be stated explicitly rather than inferred, as it 
 
 Each cost a debugging cycle here and is pinned by a test.
 
-- **A collecting receiver does not collect base-syntax failures.** `withDiagnostics(collector)` catches
-  value-level problems; a document that does not lex or parse still *throws*, and two of the three
-  exception types live in `tson-compiler`'s unexported `lexer` package, so you cannot write the `catch`.
-  `Diagnostic.ofBaseSyntaxError(e)` is the classifier — it handles those three and rethrows anything else,
-  which is also what stops an unexpected fault becoming a false verdict about the request. This is why
-  `TsonHttpException.from`'s `default` branch is not a fallthrough. `UPSTREAM.md` #6.
+- **`TsonHttpException.from`'s base-syntax branch is a net, not a path.** A document that will not parse is now
+  reported through the receiver (`UPSTREAM.md` #6, fixed upstream), so a collecting read returns its
+  diagnostics rather than throwing. `Diagnostic.ofBaseSyntaxError` stays in `from` because it classifies the
+  three base-syntax exception types — two of which live in an unexported package, so no caller here could
+  `catch` them — and **rethrows anything else**, which is what stops an unexpected fault becoming a false
+  verdict about the request. Do not delete it for being unreachable.
+- **`problem-2.tn`'s `diagnostic_code` is a hand-written copy of `Diagnostic.Code`.** Nothing but
+  `TsonProblemSchemaTest` checks it is current, and an error body emitting a code its own schema rejects would
+  not otherwise be caught, since no fixture produces a code that is new. The Java enum is the source of truth —
+  never check this schema against tson-cli's, which would only prove they drifted together.
 - **A `text` field accepts any token, including `42`, `true` and `2026-01-01`.** It rejects only what is
   not a token at all — an array, a record. Correct per spec, and it reliably reads as a bug: [TSON-DATA]
   §4 says base type resolution does not apply at a schema-typed position, and §7.1's "form is not meaning"

@@ -153,28 +153,36 @@ consumer cannot reach its shapes. That is now simply not this project's problem.
 
 ---
 
-## 6. A collecting receiver does not collect base-syntax failures
+## 6. ~~A collecting receiver does not collect base-syntax failures~~ — DONE (`45cfd32`)
 
-**Hit:** `treeReader().withDiagnostics(collector).read(body)` still throws for a document that does not
-lex or parse — the collector is not consulted, and `TsonParseException` reaches the caller. This looked
-like a bug in the codec until `Tson.validate`'s own body showed the intended handling: catch, then run
-`Diagnostic.ofBaseSyntaxError(e)`, which classifies the three base-syntax exception types and rethrows
-anything else.
+A document that will not lex or parse is now reported through the receiver rather than thrown past it, so a
+collecting read returns everything wrong with it. Measured from this end: `!order { sku:` now yields **two**
+diagnostics where it previously threw one `TsonParseException`, and `{ a: 1`, `!!schema:` and an empty body
+each report rather than throw.
 
-It is discoverable only by reading `validate`'s implementation. Neither `withDiagnostics` nor `read`
-mentions that a receiver does not see these, and `ofBaseSyntaxError`'s own Javadoc explains why it lives
-on `Diagnostic` without saying that every non-`validate` caller needs it. Two of the three exception
-types are in the unexported `lexer` package, so a caller cannot even write the `catch` without it.
+`Tson.validate`'s own catch-and-classify shrank accordingly, and `TsonReadException` gained a `toString`.
 
-`TsonHttpCodec` does the same thing `validate` does, in `TsonHttpException.from`.
+**Adopted here without a code change**, which is the pleasant part: `TsonHttpCodec` already read with a
+collector and already turned a non-empty diagnostic list into a 400, so a malformed body simply started
+carrying its diagnostics. `TsonHttpCodecTest.rejectsMalformedTsonAsABadRequestCarryingItsDiagnostics` now
+asserts that rather than only the status.
 
-**Change:** state it on `withDiagnostics` — a receiver sees value-level problems, and a base-syntax
-failure throws — and point at `ofBaseSyntaxError` as the classifier for it. Documentation only.
+**`TsonHttpException.from`'s base-syntax branch stays**, as a net rather than a path. `Diagnostic.ofBaseSyntaxError`
+still classifies the three exception types and rethrows anything else, which is what keeps an unexpected fault
+from being laundered into a false verdict — worth keeping even now that nothing routine reaches it.
 
-**Alternative worth considering, but not asked for:** route base-syntax failures through the receiver
-too, so a collecting read never throws for a bad document. That is a behaviour change with real
-consequences (a caller relying on the throw), and the current split is defensible: nothing can continue
-past a document that will not parse, so there is no "collect and carry on" to offer.
+---
+
+## 6b. Also landed: `Diagnostic` says absence once (`bc015bd`)
+
+`schemaIdIfKnown()`, `expectedIfStated()` and `actualIfStated()` narrow the `""`-means-nothing convention at the
+source. `TsonProblemDiagnostic` now goes through them instead of repeating it in a private helper.
+
+That commit also added `DiagnosticsSchemaTest` upstream, checking `diagnostics.tn`'s `diagnostic_code` against
+`Diagnostic.Code` — and its note anticipates this project exactly: *"Any consumer rendering diagnostics — this
+CLI, an HTTP error body, anything else — declares the vocabulary again in its own wire schema, and each copy has
+to be checked against the enum."* `TsonProblemSchemaTest` now does that for `problem-2.tn`, reading the members
+through the compiled schema rather than by matching text, and verified to fail when a code is removed.
 
 ---
 

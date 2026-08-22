@@ -4,6 +4,7 @@ import io.ltr8.bind.DataBindContext;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.compiler.Diagnostic;
+import io.ltr8.tson.compiler.TsonCompiledSchema;
 import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
 import io.ltr8.tson.compiler.config.TsonAtomContext;
 
@@ -79,6 +80,15 @@ public final class TsonProblemSchema {
         Tson tson = Tson.builder().schemaSource(uri -> SOURCE).dataBindContext(context).build();
         tson.resolve(SOURCE);
         return tson;
+    }
+
+    /**
+     * This schema compiled in object-binding mode -- what {@code TsonProblemSchemaTest} reads the declared
+     * {@code diagnostic_code} members out of, so the check is against what a reader would actually enforce
+     * rather than against the source text.
+     */
+    public static TsonCompiledSchema compiled() {
+        return tson().bindRegistry().get(ID);
     }
 
     private static String readResource(String path) {

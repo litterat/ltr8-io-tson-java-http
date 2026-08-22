@@ -127,11 +127,21 @@ class TsonHttpCodecTest {
         assertEquals(Diagnostic.Code.TYPE_MISMATCH, rejected.diagnostics().getFirst().code());
     }
 
+    /**
+     * A document that will not parse reports like any other bad document -- through the collector, carrying
+     * everything found rather than the first thing thrown. It did not always: base-syntax failures used to
+     * throw past the receiver, and the codec had to classify the exception itself ({@code UPSTREAM.md} #6,
+     * fixed upstream). The classifier is still there as a net; this asserts the path that should be taken.
+     */
     @Test
-    void rejectsMalformedTsonAsABadRequest() {
+    void rejectsMalformedTsonAsABadRequestCarryingItsDiagnostics() {
         TsonHttpException rejected = assertThrows(TsonHttpException.class,
                 () -> codec.readTree(body("!order { sku: "), "application/tson"));
         assertEquals(TsonHttpException.BAD_REQUEST, rejected.status());
+        assertFalse(rejected.diagnostics().isEmpty(), "a malformed body reports what was wrong with it");
+        assertTrue(rejected.diagnostics().stream()
+                        .anyMatch(d -> d.code() == Diagnostic.Code.VALIDATION_ERROR),
+                () -> "expected a base-syntax diagnostic, got " + rejected.diagnostics());
     }
 
     @Test

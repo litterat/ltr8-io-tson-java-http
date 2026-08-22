@@ -2,14 +2,18 @@ package io.ltr8.tson.http;
 
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.compiler.Diagnostic;
+import io.ltr8.tson.schema.meta.EnumBody;
+import io.ltr8.tson.schema.meta.TypeDefinition;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TsonProblemSchemaTest {
@@ -93,5 +97,46 @@ class TsonProblemSchemaTest {
         TsonProblem readBack = codec.readObjectAs(new ByteArrayInputStream(codec.writeProblem(problem)),
                 "application/tson", TsonProblemSchema.ID, "problem", TsonProblem.class);
         assertEquals(Optional.empty(), readBack.detail());
+    }
+
+    // ── the enum this schema copies ──────────────────────────────────────
+
+    /**
+     * Read through the real pipeline rather than by matching text: these are the members a reader will
+     * actually enforce, which is the property that matters.
+     */
+    private static List<String> declaredCodes() {
+        TypeDefinition entry = TsonProblemSchema.compiled().schema().entries().get("diagnostic_code");
+        return assertInstanceOf(EnumBody.class, entry.body(), "diagnostic_code is an enum").members();
+    }
+
+    /**
+     * {@code problem-2.tn}'s {@code diagnostic_code} is a hand-written copy of {@link Diagnostic.Code}, and
+     * nothing else checks that the copy is current. Add a member upstream and forget this schema, and an error
+     * body emits a code its own schema rejects -- which no other test here would catch, because no fixture has
+     * ever produced a code that is new.
+     *
+     * <p><b>The Java enum is the source of truth</b>, which is why this asserts against it rather than against
+     * tson-cli's schema. Two schemas checked against each other would only prove they drifted together, and
+     * since {@code UPSTREAM.md} #5 they are free to diverge everywhere else.
+     */
+    @Test
+    void everyDiagnosticCodeIsDeclaredInTheSchema() {
+        List<String> declared = declaredCodes();
+        for (Diagnostic.Code code : Diagnostic.Code.values()) {
+            assertTrue(declared.contains(code.name()),
+                    () -> "Diagnostic.Code." + code + " is missing from problem-2.tn's diagnostic_code: "
+                            + declared + " -- add it there under a new schema version (\u00a710)");
+        }
+    }
+
+    @Test
+    void theSchemaDeclaresNoCodeTheEnumDoesNotHave() {
+        List<String> known = Arrays.stream(Diagnostic.Code.values()).map(Enum::name).toList();
+        for (String declared : declaredCodes()) {
+            assertTrue(known.contains(declared),
+                    () -> "problem-2.tn declares '" + declared + "', which is not a Diagnostic.Code: " + known
+                            + " -- a value no reader can ever produce");
+        }
     }
 }
