@@ -329,6 +329,45 @@ more than one place, which is what an API description is.
 
 ---
 
+## 12. A locally declared annotation's value is silently dropped
+
+**Hit:** describing an API by annotating type declarations — `@method:POST`, `@status:201`. The annotation
+resolves, its name survives into resolver output, and its **value is gone**, with no diagnostic:
+
+```
+Annotation[name=method, value=Optional.empty]
+```
+
+**The mechanism**, `DefinitionResolver.bindAnnotationValue`:
+
+```java
+if (metaDefinitions.getTypeDefinition(annotationName) == null) {
+    return null;   // "or null when that type is out of reach"
+}
+```
+
+An annotation's value binds through the type its name refers to, looked up in the **governing meta-schema's**
+namespace. `@doc` keeps its value because `doc` is meta-kernel's. An annotation type declared in the schema
+that uses it resolves fine as a declaration, and then every value written against it is discarded.
+
+**Why silence is the problem.** The author gets a schema that loads clean and metadata that is not there. There
+is no way to notice except by inspecting resolver output — which is what this project did, by accident, while
+looking for something else.
+
+**Change:** make it an error. *"'@method': the annotation type is declared by this schema, but an annotation's
+value binds through the governing meta-schema — move it there."* Better still if the value could bind from the
+declaring schema, since an annotation type is an ordinary declaration and there is no obvious reason its own
+schema cannot supply the reader — but the diagnostic is the part that matters, and is much the smaller change.
+
+**Workaround in place:** `sketch/meta-http-2.tn` exists solely to hold annotation *types* in a meta layer. It
+declares no constructors and would not otherwise need to exist.
+
+**Related:** the placement rule beside it is correct and merely surprising — annotations before a declaration's
+name annotate the map key and are not hoisted to the value (§6), so they belong after the `=>`. That one is
+documented in the resolver and behaves as specified.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off.

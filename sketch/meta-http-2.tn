@@ -1,0 +1,37 @@
+!!id:"https://tson.io/2026/32/ltr8/http/meta-http-2.tn"
+!!meta:"https://tson.io/2026/32/m/meta-kernel.tn"
+!!import:"https://tson.io/2026/32/m/meta-kernel.tn"
+@doc:"""
+  Annotation types for describing an HTTP API. No type constructors: nothing here carries the ~
+  marker, and an operation is an ordinary `top &` entry in the schema that describes it.
+
+  Governed by the meta-kernel because it has to be. A schema is a meta-schema only if its own !!meta
+  is the kernel -- there is no three-level chain -- so a layer above meta.tn is refused with
+  'is named as the !!meta of another schema but is not a meta-schema'.
+
+  The annotation TYPES have to live here rather than in the describing schema, and that is the whole
+  reason this file exists. An annotation's value is bound through the type its name refers to,
+  looked up in the GOVERNING META-SCHEMA's namespace: a locally declared annotation type resolves,
+  and its values are then silently dropped. @doc keeps its value because doc is meta-kernel's;
+  @method would not keep POST if method were declared beside the operation. See sketch/README.md.
+  """
+{
+  http_method => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
+
+  @doc:"Refined, so 42 is not a status."
+  status_code => !integer ^ { min: 100  max: 599 }
+
+  parameter_location => !enum [PATH QUERY HEADER]
+
+  @doc:"The HTTP method an operation answers."
+  method => @annotation http_method
+
+  @doc:"The path template an operation is served at; a braced segment names a PATH parameter."
+  path => @annotation text
+
+  @doc:"Marks a field as a response, and gives its status. The field's type is the response body."
+  status => @annotation status_code
+
+  @doc:"Marks a field as a parameter, and says where it is carried. The field's type is its type."
+  parameter => @annotation parameter_location
+}
