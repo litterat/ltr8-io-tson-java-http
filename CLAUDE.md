@@ -13,10 +13,9 @@ It is a **consumer** of the TSON library, not part of it. The library lives in t
 and consumed as a Gradle **included build** (see "Consuming tson-java" below). Destination remote:
 `https://github.com/litterat/` — not yet pushed.
 
-**Status.** `tson-http`, `tson-http-jdk` and `tson-http-javalin` are built and tested (94 tests), including
-the full loop on both adapters: a schema served at its identity path, fetched back by `TsonHttpSchemaSource`,
-and used to validate a document. `tson-http-helidon` is empty — build files and nothing else. Treat its
-description below as the design being built to, not as code you can go read.
+**Status.** All four modules are built and tested (114 tests). Every adapter proves the full loop: a schema
+served at its identity path, fetched back by `TsonHttpSchemaSource`, and used to validate a document. The
+project does what it set out to do; what remains is polish and the open questions below.
 
 **Open question, undecided:** whether a request should be able to name its schema in a header
 (`Content-Type: application/tson; schema="…"`) rather than only via the body's `!!schema`. The reasoning,
@@ -62,10 +61,15 @@ Package group `io.ltr8`, as in tson-java (reverse-DNS names who *publishes*, not
   `asHandler`), `TsonSchemaHandler`. It adds `TsonHandler.install(app, codec)`, which maps a
   `TsonHttpException` escaping a *plain* Javalin route to the same problem body — a real application mixes
   route styles and should answer failures one way.
-- **`tson-http-helidon`** (`io.ltr8.tson.http.helidon`) — adapter for Helidon 4.2.2 SE. Helidon's
-  integration seam is the **`MediaSupport` SPI** (`io.helidon.http.media`), which is why that artifact
-  is a direct dependency: register TSON as a media type once and every route reads/writes it, rather
-  than hand-coding entity handling per route.
+- **`tson-http-helidon`** (`io.ltr8.tson.http.helidon`) — adapter for Helidon 4.2.2 SE. The same parallel
+  types (`TsonContext`, `TsonHandler` with `asHandler`/`install`, `TsonSchemaHandler`), plus the one thing no
+  other adapter can offer: **`TsonMediaSupport`**, an implementation of Helidon's `MediaSupport` SPI. Register
+  it once and a plain handler reads and writes TSON through `req.content().as(Order.class)` and
+  `res.send(order)` with no TSON-specific code — same codec, same validation, same diagnostics.
+
+  **`TsonHandler.install` is not optional when using `TsonMediaSupport`.** The read happens inside Helidon's
+  entity machinery, before any handler code runs, so there is no handler boundary to catch a rejection.
+  Without `install`, a body that breaks its schema gets Helidon's own error page and the diagnostics are lost.
 
 Adapters depend on `tson-http`. `tson-http` names no adapter type, and the adapters never depend on
 each other.
@@ -104,10 +108,11 @@ no TSON knowledge of its own; what it *does* own is the error boundary, and that
 
 A handler that returns without answering is a bug in the handler, so it is a 500 rather than a silent 200.
 
-**The adapter test suites are near-copies on purpose.** `TsonJdkAdapterTest` and `TsonJavalinAdapterTest` ask
-the same questions and assert the same answers, because two adapters over one codec should be
-indistinguishable from a client's side and the only way to show that is to ask them the same things. When
-adding a case to one, add it to the other.
+**The adapter test suites are near-copies on purpose.** `TsonJdkAdapterTest`, `TsonJavalinAdapterTest` and
+`TsonHelidonAdapterTest` ask the same questions and assert the same answers, because three adapters over one
+codec should be indistinguishable from a client's side and the only way to show that is to ask them the same
+things. When adding a case to one, add it to all three. The same goes for the three schema-handler suites,
+each of which ends with the same serve-then-fetch loop.
 
 **Where they legitimately differ, and how to tell.** `com.sun.net.httpserver` chunks whatever it is given a
 length of 0 for; Jetty holds a short response in its buffer, discovers the length, and sends a

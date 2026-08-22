@@ -11,17 +11,24 @@ Four modules:
 | `tson-http` | Server-agnostic core: media type and `Accept` negotiation, codec, status policy, TSON error body, HTTP-backed schema source, schema catalog. No external dependencies. |
 | `tson-http-jdk` | Adapter for the JDK's own `com.sun.net.httpserver`, plus schema serving. No external dependencies. |
 | `tson-http-javalin` | Adapter for [Javalin](https://javalin.io) 6. |
-| `tson-http-helidon` | Adapter for [Helidon](https://helidon.io) 4 SE, via its `MediaSupport` SPI. |
+| `tson-http-helidon` | Adapter for [Helidon](https://helidon.io) 4 SE, plus `TsonMediaSupport` so plain handlers read and write TSON natively. |
 
-**Status.** `tson-http`, `tson-http-jdk` and `tson-http-javalin` are built and tested; the Helidon adapter is
-not started.
+**Status.** All four modules are built and tested (114 tests). Each adapter is driven over real HTTP, and
+each proves the same loop: a schema served at its own identity path, fetched back over HTTP under policy, and
+used to validate a posted document.
 
 ```java
+// JDK
 server.createContext("/orders", TsonHandler.asHttpHandler(codec, exchange -> {
-    exchange.requireMethod("POST");
     Order order = exchange.readObject(Order.class);   // validated, or 400 with every diagnostic
     exchange.respond(201, store(order));
 }));
+
+// Javalin
+app.post("/orders", TsonHandler.asHandler(codec, tson -> tson.respond(201, store(tson.readObject(Order.class)))));
+
+// Helidon, with TsonMediaSupport registered -- no TSON-specific code in the handler
+routing.post("/orders", (req, res) -> res.status(201).send(store(req.content().as(Order.class))));
 ```
 
 ## Building
