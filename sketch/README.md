@@ -7,7 +7,7 @@ what this file claims, so a fix upstream shows up as a failing test rather than 
 |---|---|---|---|
 | `orders-api-3.tn` | `meta.tn` + `core.tn` — **the ordinary one** | FIXED fields | **works** |
 | `orders-api-2.tn` | a custom meta layer for annotation *types* | annotations | works |
-| `orders-api-1.tn` | a custom meta layer with an `operation` constructor | constructor fields | blocked |
+| `orders-api-1.tn` | a custom meta layer with an `operation` constructor | constructor fields | blocked on one gap |
 
 **`orders-api-3.tn` is the one to read.** It needs no meta layer, no kernel import, no `top`, and no
 annotations — an ordinary schema, which means any TSON toolchain can already read it.
@@ -175,14 +175,14 @@ operation => ~top & {
 }
 ```
 
-**It resolves.** Two walls stop `orders-api-1.tn` using it:
+**It resolves.** One wall now stops `orders-api-1.tn` using it:
 
 1. **A user-defined meta-schema's constructors cannot be applied.**
    `UnsupportedOperationException: 'create': failed to bind 'operation' via the compiled meta-schema reader:
    'operation' is not a constructor '…/meta-http-1.tn' declares`. That exception type is this project's
    classification for *not implemented yet*, not for *your schema is wrong*.
-2. ~~**A schema could reference types from only one other schema**~~ — `UPSTREAM.md` #11, **fixed on an
-   unmerged branch**. Verified there: this schema now gets past it and stops only at wall 1.
+~~A schema could reference types from only one other schema~~ — `UPSTREAM.md` #11, **fixed and merged**. This
+schema now gets past it, and `SketchTest` drives the real file rather than a trimmed stand-in.
 
 ## Open questions
 

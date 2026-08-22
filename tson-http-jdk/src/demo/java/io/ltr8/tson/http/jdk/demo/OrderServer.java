@@ -55,12 +55,15 @@ public final class OrderServer {
      * own. A record is closed under its type (§7.2), so the extension is <em>declared</em> rather than assumed
      * — which is what RFC 9457 does with an open JSON object, made explicit.
      *
-     * <p>Note the single {@code !!import}: importing {@code problem-2.tn} brings in what it imports, and naming
-     * {@code core.tn} as well is "'void' is declared by more than one !!import".
+     * <p>Both imports are named, which is the clearer spelling. {@code text} would arrive through
+     * {@code problem-2.tn}'s own import of {@code core.tn} either way — imports are transitive — but a schema
+     * that uses a name should say where it comes from. Naming both was rejected until {@code UPSTREAM.md} #11
+     * was fixed.
      */
     public static final String ERRORS = """
             !!id:"https://schemas.example.com/2026/32/app/orders-errors-1.tn"
             !!meta:"https://tson.io/2026/32/m/meta.tn"
+            !!import:"https://tson.io/2026/32/m/core.tn"
             !!import:"https://tson.io/2026/32/ltr8/http/problem-2.tn"
             @doc:"Business errors: the request was schema-valid, and the domain still said no."
             {

@@ -193,12 +193,12 @@ boundary cannot produce it: the boundary only knows how to render a `problem`, a
 `problem` does not.
 
 These types belong in the **application's** schema, importing `problem-2.tn` — `tson-http` owns the transport
-envelope, the service owns "SKU not found". Two rules that cost time otherwise:
+envelope, the service owns "SKU not found". One rule that costs time otherwise:
 
-- **Import `problem-2.tn` only** — for now. Importing `core.tn` as well currently collides
-  (`'void' is declared by more than one !!import`), which is `UPSTREAM.md` #11, **fixed on an unmerged branch**
-  and verified working there. Imports stay transitive, so `text` goes on arriving through the chain; what
-  changes is that naming `core.tn` explicitly becomes legal and clearer. Add it back once that lands.
+- **Imports are transitive, but name what you use anyway.** A name reaches you through what you import, so
+  `orders-errors-1.tn` would get `text` through `problem-2.tn` without saying so. Name `core.tn` too: a
+  collision is judged by the *declaring schema's identity* now, not by how many routes reach it
+  (`UPSTREAM.md` #11), so naming a shared dependency twice is redundant rather than an error.
 - **`errors` stays data-level.** A business failure carries `errors: []` and its own fields. They never
   co-occur anyway — validation is a gate, so business logic is not reached on a document that failed it.
 

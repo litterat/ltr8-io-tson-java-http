@@ -139,24 +139,30 @@ class SketchTest {
      * But a schema governed by it cannot apply the constructor. {@code UnsupportedOperationException} is this
      * project's classification for <em>not implemented</em>, which is what makes this a gap rather than a
      * defect in the sketch. When it lands, this test fails and the README needs updating.
+     *
+     * <p>This drives the real {@code orders-api-1.tn}, which it could not until {@code UPSTREAM.md} #11 was
+     * fixed — before that it stopped at the two-import collision, one wall earlier.
      */
     @Test
     void applyingAUserDefinedConstructorIsNotImplemented() throws Exception {
         Map<String, String> lib = Map.of(
                 "https://tson.io/2026/32/ltr8/http/meta-http-1.tn", sketch("meta-http-1.tn"),
+                "https://tson.io/2026/32/ltr8/http/problem-2.tn", TsonProblemSchema.source(),
                 "https://schemas.example.com/2026/32/app/order-1.tn", """
                         !!id:"https://schemas.example.com/2026/32/app/order-1.tn"
                         !!meta:"https://tson.io/2026/32/m/meta.tn"
                         !!import:"https://tson.io/2026/32/m/core.tn"
-                        { order => { sku: text } }""");
+                        { order => { sku: text  quantity: int32 } }""",
+                "https://schemas.example.com/2026/32/app/orders-errors-1.tn", """
+                        !!id:"https://schemas.example.com/2026/32/app/orders-errors-1.tn"
+                        !!meta:"https://tson.io/2026/32/m/meta.tn"
+                        !!import:"https://tson.io/2026/32/m/core.tn"
+                        !!import:"https://tson.io/2026/32/ltr8/http/problem-2.tn"
+                        { sku_not_found => problem & { sku: text } }""");
 
         UnsupportedOperationException gap = org.junit.jupiter.api.Assertions.assertThrows(
                 UnsupportedOperationException.class,
-                () -> Tson.builder().schemaSource(lib::get).build().validateSchema("""
-                        !!id:"https://schemas.example.com/2026/32/app/probe-1.tn"
-                        !!meta:"https://tson.io/2026/32/ltr8/http/meta-http-1.tn"
-                        !!import:"https://schemas.example.com/2026/32/app/order-1.tn"
-                        { create => !operation { method: POST  path: "/o"  parameters: []  responses: [] } }"""));
+                () -> Tson.builder().schemaSource(lib::get).build().validateSchema(sketch("orders-api-1.tn")));
 
         assertTrue(gap.getMessage().contains("is not a constructor"), gap.getMessage());
     }

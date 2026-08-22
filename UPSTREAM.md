@@ -285,15 +285,16 @@ the current behaviour so that a fix upstream makes it fail and say so.
 
 ---
 
-## 11. ~~A schema could reference types from only one other schema~~ — FIXED on a branch (`0f8a451`)
+## 11. ~~A schema could reference types from only one other schema~~ — DONE (`0f8a451`)
 
 **Was:** a schema could not import two schemas that both import `core.tn` — and every practical schema imports
 `core.tn`. `'void' is declared by more than one !!import`. So a schema could reference types from exactly one
 other published schema: a chain, not a library, and an API description was unwritable.
 
-**Fixed by `0f8a451`, on `transitive-imports-with-identity-collisions`.** Not yet on `main`, so a plain pull
-does not pick it up. Verified against a clone of that branch: all three symptoms resolve, this project's 204
-tests pass unchanged, and `sketch/orders-api-1.tn` advances past this to its remaining blocker.
+**Fixed by `0f8a451`, merged as `ff0e630`.** All three symptoms resolve, this project's 204 tests pass
+unchanged, and `sketch/orders-api-1.tn` advances past this to its one remaining blocker — the custom
+meta-schema constructor still not being applicable — which `SketchTest` now pins by driving the real sketch
+rather than a trimmed single-import stand-in.
 
 **The resolution is the opposite of the one argued here, and the argument for it is better.** This entry
 proposed making the implementation shallow, per §2.2.3. The fix instead **keeps transitivity** and corrects the
@@ -307,10 +308,10 @@ A bonus the shallow reading would not have given: because identities carry the s
 reaching two revisions of `core.tn` is now rejected at namespace construction rather than surfacing later as a
 field conflict between two identically-spelled types.
 
-**What this project owes it once merged.** `orders-errors-1.tn` in all three demos imports only
-`problem-2.tn` and relies on `text` arriving transitively. That keeps working — transitivity is retained — but
-the explicit `!!import` of `core.tn` becomes legal and is the clearer spelling. `CLAUDE.md`'s "import the
-derived schema only" trap becomes obsolete rather than wrong.
+**Adopted.** `orders-errors-1.tn` in all three demos now names both imports. `text` would arrive through
+`problem-2.tn`'s own import either way — transitivity is retained — but a schema that uses a name should say
+where it comes from, and that spelling was rejected until this landed. `CLAUDE.md`'s "import the derived schema
+only" trap is gone rather than corrected: it described a workaround, and there is nothing left to work around.
 
 ---
 
