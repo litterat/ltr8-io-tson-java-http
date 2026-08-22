@@ -13,9 +13,10 @@ It is a **consumer** of the TSON library, not part of it. The library lives in t
 and consumed as a Gradle **included build** (see "Consuming tson-java" below). Destination remote:
 `https://github.com/litterat/` — not yet pushed.
 
-**Status: scaffold only.** The Gradle build, module layout, and this file exist; there is no Java source
-yet. `./gradlew build` passes because there is nothing to compile. Treat the architecture below as the
-design being built to, not as code you can go read.
+**Status.** `tson-http`'s codec core is built and tested (39 tests): media type and `Accept` negotiation,
+the read/write codec, the status policy, and the `problem-1.tn` error body. Still to build there: the
+HTTP-backed `TsonSchemaSource` and schema serving. The three adapters are empty — build files and nothing
+else. Treat their descriptions below as the design being built to, not as code you can go read.
 
 **Hard constraints:**
 - Java 25 only (matches tson-java).
@@ -41,8 +42,10 @@ Package group `io.ltr8`, as in tson-java (reverse-DNS names who *publishes*, not
     object/`TsonValue` → response bytes.
   - **Error mapping** — `Diagnostic` and the exception hierarchy → status code + a TSON error body.
   - **`TsonSchemaSource` over HTTP** — fetching a `!!schema:"https://…"` target, with a
-    whitelist/blacklist policy and a cache.
-  - **Schema serving** — exposing the registry's own schemas so those URLs actually resolve.
+    whitelist/blacklist policy and a cache. **Not built yet.**
+  - **Schema serving** — exposing the registry's own schemas so those URLs actually resolve. Only
+    `TsonProblemSchema.source()` exists so far, which is the piece that makes the `!!id` in an error body
+    resolvable. **Not built yet.**
 - **`tson-http-jdk`** (`io.ltr8.tson.http.jdk`) — adapter for `com.sun.net.httpserver` (JDK module
   `jdk.httpserver`). Zero external dependencies, so it is both the "no framework needed" demo and the
   reference the other two adapters are read against — when an adapter's behaviour looks odd, diff it
@@ -56,6 +59,19 @@ Package group `io.ltr8`, as in tson-java (reverse-DNS names who *publishes*, not
 
 Adapters depend on `tson-http`. `tson-http` names no adapter type, and the adapters never depend on
 each other.
+
+### What `tson-http` looks like today
+
+`TsonHttpCodec` is the type an adapter drives; everything else supports it.
+
+- `TsonMediaType` / `TsonAcceptHeader` — value types, no HTTP-status policy. Malformed input throws
+  `IllegalArgumentException` and the codec decides what that is worth.
+- `TsonHttpCodec` — reads bodies (tree or bound, self-describing or against a stated schema and type),
+  writes bodies, and gates on `Content-Type` and `Accept`.
+- `TsonHttpException` — status plus diagnostics. **`from(RuntimeException)` is the entire status policy**;
+  put nothing status-shaped anywhere else.
+- `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem-1.tn` — the error body, its
+  schema, and the reader that proves the two agree.
 
 ## Consuming tson-java
 
@@ -122,6 +138,34 @@ A schema arriving at runtime (an unknown `!!schema` URL) must go through a singl
 path, not a concurrent one. Treat this as an invariant to be pinned by a test, and see `UPSTREAM.md` #3 —
 the upstream contract needs to be stated explicitly rather than inferred, as it is here.
 
+## Traps — read before touching the code involved
+
+Each cost a debugging cycle here and is pinned by a test.
+
+- **A collecting receiver does not collect base-syntax failures.** `withDiagnostics(collector)` catches
+  value-level problems; a document that does not lex or parse still *throws*, and two of the three
+  exception types live in `tson-compiler`'s unexported `lexer` package, so you cannot write the `catch`.
+  `Diagnostic.ofBaseSyntaxError(e)` is the classifier — it handles those three and rethrows anything else,
+  which is also what stops an unexpected fault becoming a false verdict about the request. This is why
+  `TsonHttpException.from`'s `default` branch is not a fallthrough. `UPSTREAM.md` #6.
+- **A `text` field accepts any token, including `42`, `true` and `2026-01-01`.** It rejects only what is
+  not a token at all — an array, a record. Correct per spec, and it reliably reads as a bug: [TSON-DATA]
+  §4 says base type resolution does not apply at a schema-typed position, and §7.1's "form is not meaning"
+  makes a type contract operate on the token's *text*, not on how it was written. A handler that needs
+  string-ness says so with a `pattern`, not by assuming `text` means it. Pinned by
+  `TsonHttpCodecTest.aTextFieldAcceptsAnyTokenButNotAContainer`.
+- **A bound class must be public.** tson-java declares no `opens` and binding only ever touches public
+  constructors and methods, so a package-private record fails analysis with a bare `DataBindException:
+  Failed to resolve` that names nothing useful.
+- **Object binding needs a `DataNameBinder` on the `DataBindContext`.** The class passed to `readObject` is
+  the expected *result*, not the mapping; without a binder the schema compiles and then throws
+  `UnsupportedOperationException: no bound Java class for '<type>'` — which the status policy correctly
+  reports as 501, so it looks like a library gap rather than missing configuration. Chain to
+  `SchemaMetaNameBinder.INSTANCE` for everything you do not map yourself.
+- **`readAs` requires a schema URI.** Selecting a root type is meaningless without a schema to select it
+  from; `readTreeAs`/`readObjectAs` therefore take one, and it must already be registered. Passing an
+  unregistered URI is a server configuration error and surfaces as 500, by design.
+
 ## Media type and file extension
 
 `application/tson`, optionally `application/tson; version=1` where HTTP-context disambiguation is needed
@@ -162,6 +206,7 @@ No system Gradle — always use the wrapper (Gradle 9.4.1, Java 25 toolchain):
 ```
 ./gradlew build                       # also builds the included tson-java build
 ./gradlew test
+./gradlew :tson-http:test --tests "io.ltr8.tson.http.TsonHttpCodecTest"
 ./gradlew :tson-http:test
 ./gradlew :tson-http-jdk:test
 ./gradlew :tson-http-javalin:test

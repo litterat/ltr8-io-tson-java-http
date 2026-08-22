@@ -1,0 +1,58 @@
+!!id:"https://tson.io/2026/32/ltr8/http/problem-1.tn"
+!!meta:"https://tson.io/2026/32/m/meta.tn"
+!!import:"https://tson.io/2026/32/m/core.tn"
+@doc:"""
+  The error body this project writes when a request cannot be fulfilled -- an HTTP status, a short
+  title, and the diagnostics that produced it.
+
+  !!id convention (tson-java's CLAUDE.md, "Project-owned schema !!id convention"): /2026/32 is the
+  spec revision this is written against, ltr8 the publishing org, http this project's schema group,
+  and the trailing -1 this schema's own version. Per that convention's "bump it under a new name"
+  rule, never edit a published schema's content in place -- a shape change becomes problem-2.tn.
+
+  diagnostic_code and diagnostic are deliberately field-for-field identical to tson-cli's own
+  diagnostics-6.tn, so the CLI and this server describe the same failure the same way. They are
+  copied rather than imported because tson-cli is an application module that exports nothing and
+  publishes no schema; see UPSTREAM.md #5, which asks for the shared half to be lifted somewhere
+  both can depend on. Until that lands, the two copies can drift, and keeping them identical is a
+  manual obligation of anyone touching either.
+  """
+{
+  diagnostic_code => !enum [
+    FIELD_REQUIRED FIELD_FIXED TYPE_MISMATCH WRONG_ARITY UNKNOWN_TYPE_REF ATOM_CONSTRAINT_VIOLATION
+    UNRECOGNIZED_FIELD DUPLICATE_MAP_KEY DUPLICATE_FIELD SCHEMA_ERROR UNKNOWN_TYPE VALIDATION_ERROR
+  ]
+  @doc:"""
+    One problem, located at up to two ends: the value in the data (path, data_position) and the rule
+    in the schema (schema_id, schema_pointer, schema_position). Either end may be absent -- a problem
+    found in a schema has no data, and a schemaless read has no schema.
+
+    A position is "line:column:byte_offset", all three 1-based except byte_offset, which counts
+    UTF-8 bytes from 0 ([TSON-DATA] §8.1).
+    """
+  diagnostic => {
+    path: text?
+    schema_pointer: text?
+    schema_id: text?
+    code: diagnostic_code
+    message: text
+    expected: text?
+    actual: text?
+    data_position: text?
+    schema_position: text?
+  }
+  @doc:"""
+    status is the HTTP status code the response carries, restated in the body so a stored or
+    forwarded problem stays self-describing. title is a short, stable phrase for the class of
+    failure; detail is free prose about this one occurrence, absent when the title says it all.
+
+    errors is empty for a failure that produced no diagnostic at all -- an unsupported media type,
+    an unacceptable Accept -- which is why it is a list rather than a required single value.
+    """
+  problem => {
+    status: int32
+    title: text
+    detail: text?
+    errors: [diagnostic]
+  }
+}

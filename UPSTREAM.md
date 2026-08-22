@@ -103,26 +103,73 @@ allow-list. A naive fetcher is an SSRF primitive.
 
 ---
 
-## 5. `Diagnostic` is shaped for a CLI, not for a response body
+## 5. The diagnostic wire schema exists, but only `tson-cli` can reach it
 
-**Hit:** `Diagnostic` carries `path`, `schemaPointer`, `schemaId`, `code`, and its factories are
-CLI-flavoured (`ofBaseSyntaxError`, `ofSchemaSyntaxError`, `ofSchemaError`). The content is right for an
-HTTP 4xx body; what is missing is a stable, documented serialisation. This repo needs one to define its
-error schema (`https://tson.io/2026/32/ltr8/http/problem-1.tn`), and inventing a private mapping means
-the CLI and the server describe the same failure two different ways.
+**Hit:** building this project's error body turned up `tson-cli/src/main/resources/diagnostics.tn`
+(`!!id` `.../ltr8/cli/diagnostics-6.tn`), which already declares `diagnostic_code` and `diagnostic`
+exactly as an HTTP error body needs them, alongside `CliDiagnostic` — the `Optional`-narrowed,
+`@Field`-annotated DTO that binds to it — and `DiagnosticsSchema`, which compiles it in bind mode.
 
-**Change:** a schema for `Diagnostic` in tson-java, owned there, with the CLI's own rendering and this
-repo's error body both derived from it. Lower priority than 1–3: this repo can define its problem schema
-first and propose promoting it once it has proven out.
+So the wire form is not missing. It is unreachable: `tson-cli` is an application module that exports
+nothing, publishes no schema, and keeps all three types package-private.
 
-**Note:** `Diagnostic.Code` itself needs no change — the twelve codes map cleanly onto 4xx detail. It is
-only the wire form that is missing.
+**Workaround in place:** `tson-http` copies `diagnostic_code` and `diagnostic` into its own
+`problem-1.tn`, field for field, and `TsonProblemDiagnostic` reproduces `CliDiagnostic` line for line
+including the `absentIfEmpty` narrowing and the `line:column:byteOffset` position rendering. Both
+copies say so in their own doc comments.
+
+**Why it is unsatisfying:** two copies of one wire contract, kept identical by hand. The moment the CLI
+adds a `Diagnostic.Code` member — as `diagnostics-6.tn`'s own `@doc` records happening twice already —
+the server and the CLI describe the same failure differently, and nothing fails to warn anyone.
+
+**Change:** lift the shared half — `diagnostic_code`, `diagnostic`, `CliDiagnostic` (renamed) and the
+`DiagnosticsSchema` compile — into a module a consumer can depend on, with the CLI's own
+`validation_report`/`file_report`/`validation_run` staying behind. `tson-schema` is the natural home:
+`Diagnostic` itself lives in `tson-compiler`, and its wire form is a value model, which is what that
+module is for. Then `problem-1.tn` imports it by `!!id` instead of copying it.
+
+**Note:** `Diagnostic.Code` needs no change — the twelve codes map cleanly onto 4xx detail. It is only
+the sharing that is missing.
+
+---
+
+## 6. A collecting receiver does not collect base-syntax failures
+
+**Hit:** `treeReader().withDiagnostics(collector).read(body)` still throws for a document that does not
+lex or parse — the collector is not consulted, and `TsonParseException` reaches the caller. This looked
+like a bug in the codec until `Tson.validate`'s own body showed the intended handling: catch, then run
+`Diagnostic.ofBaseSyntaxError(e)`, which classifies the three base-syntax exception types and rethrows
+anything else.
+
+It is discoverable only by reading `validate`'s implementation. Neither `withDiagnostics` nor `read`
+mentions that a receiver does not see these, and `ofBaseSyntaxError`'s own Javadoc explains why it lives
+on `Diagnostic` without saying that every non-`validate` caller needs it. Two of the three exception
+types are in the unexported `lexer` package, so a caller cannot even write the `catch` without it.
+
+`TsonHttpCodec` does the same thing `validate` does, in `TsonHttpException.from`.
+
+**Change:** state it on `withDiagnostics` — a receiver sees value-level problems, and a base-syntax
+failure throws — and point at `ofBaseSyntaxError` as the classifier for it. Documentation only.
+
+**Alternative worth considering, but not asked for:** route base-syntax failures through the receiver
+too, so a collecting read never throws for a bad document. That is a behaviour change with real
+consequences (a caller relying on the throw), and the current split is defensible: nothing can continue
+past a document that will not parse, so there is no "collect and carry on" to offer.
 
 ---
 
 ## Spec feedback to file
 
-Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. Nothing yet — the
-media-type work in §7.1 has not started. Expected to produce candidates, since §7.1's HTTP prose (the
-`version` parameter, `charset` handling, content sniffing from the header) has had no implementation
-exercise it, and this project is the first.
+Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off.
+
+**Nothing to file yet.** §7.1's media-type prose is now implemented (`TsonMediaType`, `TsonAcceptHeader`)
+and it held up: `application/tson`, the optional `version=1` parameter, and the UTF-8 fix are each stated
+once and unambiguously, and nothing in them needed an interpretation to be chosen.
+
+One near-miss worth recording so it is not re-investigated. A `text`-typed field accepts `42`, `true` and
+`2026-01-01` — any token — and rejects only a non-token such as an array or a record. That reads as
+under-enforcement until two sections settle it: §4 says base type resolution does not apply at a
+schema-typed position, and §7.1's "form is not meaning" makes a type contract operate on the token's
+text rather than on how it was written. The implementation is right and the spec is clear; it is the
+combination that is easy to get wrong. Pinned by
+`TsonHttpCodecTest.aTextFieldAcceptsAnyTokenButNotAContainer`.
