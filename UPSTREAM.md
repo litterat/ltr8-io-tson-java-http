@@ -80,26 +80,41 @@ which case that is the more valuable outcome.
 
 ---
 
-## 4. No HTTP-backed `TsonSchemaSource` (already upstream's own backlog item)
+## 4. No HTTP-backed `TsonSchemaSource` — now built here
 
 **Hit:** `TsonConfig.schemaSource(…)` takes a `TsonSchemaSource`, and every example supplies a lambda
-returning a literal string. `Tson`'s Javadoc is explicit that only a schema governed by
-meta-kernel/`meta.tn`/`core.tn` is supported, and names a real disk/HTTP-backed source as future work;
-tson-java's `BACKLOG.md:370` already tracks it — "A real disk/HTTP-backed `TsonSchemaSource` with
-whitelist/blacklist policy".
+returning a literal string. `Tson`'s Javadoc names a real disk/HTTP-backed source as future work, and
+`BACKLOG.md:370` tracks it — "A real disk/HTTP-backed `TsonSchemaSource` with whitelist/blacklist policy".
 
-**Position:** this repo is going to build one regardless, because a `!!schema:"https://…"` directive
-arriving in a request body is the whole point of the HTTP integration. Building it here first is the
-right order — an HTTP server is the environment that actually exercises origin policy, timeouts, size
-caps, redirect handling, and caching.
+**Status: implemented here** as `TsonHttpSchemaSource`, and built to be liftable — no adapter types in its
+signatures, and its only tson-java dependencies are `TsonSchemaSource` itself and the spec.
 
-**Change:** none requested yet. When the implementation here settles, propose lifting the
-policy-and-cache part upstream as the backlog item's implementation, leaving the servlet-ish parts
-behind. Flagged now so the design here is built to be liftable — no adapter types in its signatures.
+What it does, and what it deliberately leaves to the loader:
 
-**Security note, since it is easy to get wrong:** the URL comes from an untrusted request body. The
-source must be allow-list gated (origins), size- and time-capped, and must not follow redirects off the
-allow-list. A naive fetcher is an SSRF primitive.
+- **Host allow-list, deny by default**, matched exactly — no suffix or wildcard matching, since a suffix
+  test for `.example.com` also matches `evil-example.com`.
+- **Host→location mapping**, which is what makes a non-default port reachable at all (see below).
+- **No redirects followed** — a redirect is the allow-list's exit door.
+- **Refuses a reference that is not a legal identity** — port, userinfo or fragment (§2.2.1) — early and
+  with a message naming the rule, rather than letting it surface from the resolver.
+- **Caps on size and time**, size enforced against bytes delivered rather than `Content-Length`.
+- **Optionally requires a `?sha256=` pin**, which is the one control the loader cannot express: it verifies
+  a pin that is present, but has no way to insist on one.
+- **Does not verify the pin, and does not cross-check the fetched `!!id`** — the loader already does both,
+  after `fetch` returns. Repeating either would be a second implementation to drift from the real one.
+
+**What the design turned on.** §2.2.1 separates identity from storage location: identity is lowercase host
+plus path, the scheme is "a transport hint, not part of the name", and a consumer "MAY fetch by whichever
+scheme its policy allows". A first cut here treated the reference as a fetch URL and allow-listed
+scheme+host+port; that is wrong, and the rule that exposes it is §2.2.1's "no port (default or otherwise)"
+— an identity cannot carry one, so an allow-list keyed on origin can never match anything real, and a
+schema host on a non-default port is unreachable without an explicit mapping.
+
+**Change requested: none yet.** Propose lifting the policy-and-cache part upstream once it has run against
+the three adapters. Flagged now so it stays liftable.
+
+**Security note, since it is easy to get wrong:** the reference comes from an untrusted request body. A
+naive fetcher is an SSRF primitive.
 
 ---
 
@@ -166,7 +181,19 @@ Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off.
 and it held up: `application/tson`, the optional `version=1` parameter, and the UTF-8 fix are each stated
 once and unambiguously, and nothing in them needed an interpretation to be chosen.
 
-One near-miss worth recording so it is not re-investigated. A `text`-typed field accepts `42`, `true` and
+One resolved question and one near-miss, recorded so neither is re-investigated.
+
+**A schema origin cannot run on a non-default port**, since §2.2.1 forbids a port in an identifying URI and
+the same URI is what a `!!schema` reference carries. This reads as an oversight — it makes an ephemeral test
+port, an internal endpoint on `:8443`, and a local development server all unreachable by name. It is not:
+§2.2.1 is explicit that identity is "independent of its storage location" and that a consumer "MAY fetch by
+whichever scheme its policy allows", so mapping an identity to a location is a consumer policy the spec
+anticipates rather than a hole in it. `TsonHttpSchemaSource.mapHost` is that policy. Nothing to file — but
+worth stating in [TSON-GUIDE], if it says anything about deployment, that a fetching consumer is expected to
+carry an identity→location policy rather than dereferencing the identity directly, because every naive
+implementation will dereference it and then discover ports are impossible.
+
+**The near-miss.** A `text`-typed field accepts `42`, `true` and
 `2026-01-01` — any token — and rejects only a non-token such as an array or a record. That reads as
 under-enforcement until two sections settle it: §4 says base type resolution does not apply at a
 schema-typed position, and §7.1's "form is not meaning" makes a type contract operate on the token's

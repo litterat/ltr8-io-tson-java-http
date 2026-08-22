@@ -21,7 +21,14 @@ import java.util.List;
  * <tr><td>{@link UnsupportedOperationException}</td><td>the library hasn't implemented that yet</td><td>501</td></tr>
  * <tr><td>{@link IllegalStateException}</td><td>an internal invariant broke</td><td>500</td></tr>
  * <tr><td>a base-syntax failure</td><td>the body doesn't lex, doesn't parse, or isn't data</td><td>400</td></tr>
+ * <tr><td>{@link TsonSchemaFetchException}</td><td>see below -- 400, 502 or 504 by reason</td><td>4xx/5xx</td></tr>
  * </table>
+ *
+ * <p><b>A fetch failure splits by whose fault it is.</b> A document naming a schema this server will not load, or
+ * one that does not exist, is the document's problem: 400. A permitted origin that is unreachable, oversized or
+ * slow is this server's dependency failing while the request was perfectly good, which is what 502 and 504 are
+ * for. Collapsing these into one status would either blame a client for an outage or hide an outage as a client
+ * error -- and the retry advice differs: a 400 says fix the document, a 502 says try again.
  *
  * <p><b>The last row cannot be written as a {@code catch} here.</b> A document that fails before any reader sees
  * a value throws rather than reporting, and two of the three exception types involved live in {@code
@@ -57,6 +64,12 @@ public final class TsonHttpException extends RuntimeException {
 
     /** The request is well-formed and this implementation does not support it yet. */
     public static final int NOT_IMPLEMENTED = 501;
+
+    /** A dependency of this server -- the origin holding a schema -- failed or answered with nonsense. */
+    public static final int BAD_GATEWAY = 502;
+
+    /** A dependency of this server did not answer in time. */
+    public static final int GATEWAY_TIMEOUT = 504;
 
     private final int status;
     private final String title;
@@ -115,6 +128,14 @@ public final class TsonHttpException extends RuntimeException {
      */
     public static TsonHttpException from(RuntimeException e) {
         return switch (e) {
+            case TsonSchemaFetchException fetch -> switch (fetch.reason()) {
+                case NOT_PERMITTED, NOT_FOUND -> new TsonHttpException(BAD_REQUEST, "Unusable schema reference",
+                        fetch.getMessage(), List.of(), fetch);
+                case TIMEOUT -> new TsonHttpException(GATEWAY_TIMEOUT, "Schema origin timed out",
+                        fetch.getMessage(), List.of(), fetch);
+                case TRANSPORT, TOO_LARGE -> new TsonHttpException(BAD_GATEWAY, "Schema origin failed",
+                        fetch.getMessage(), List.of(), fetch);
+            };
             case TsonReadException read -> new TsonHttpException(BAD_REQUEST, "Invalid TSON document",
                     read.getMessage(), List.of(read.diagnostic()), read);
             case TsonSchemaValidationException schema -> new TsonHttpException(BAD_REQUEST, "Invalid TSON schema",

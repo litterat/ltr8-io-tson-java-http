@@ -13,10 +13,10 @@ It is a **consumer** of the TSON library, not part of it. The library lives in t
 and consumed as a Gradle **included build** (see "Consuming tson-java" below). Destination remote:
 `https://github.com/litterat/` — not yet pushed.
 
-**Status.** `tson-http`'s codec core is built and tested (39 tests): media type and `Accept` negotiation,
-the read/write codec, the status policy, and the `problem-1.tn` error body. Still to build there: the
-HTTP-backed `TsonSchemaSource` and schema serving. The three adapters are empty — build files and nothing
-else. Treat their descriptions below as the design being built to, not as code you can go read.
+**Status.** `tson-http` is built and tested (55 tests): media type and `Accept` negotiation, the read/write
+codec, the status policy, the `problem-1.tn` error body, and the HTTP-backed `TsonSchemaSource`. Still to
+build there: schema serving. The three adapters are empty — build files and nothing else. Treat their
+descriptions below as the design being built to, not as code you can go read.
 
 **Hard constraints:**
 - Java 25 only (matches tson-java).
@@ -41,8 +41,8 @@ Package group `io.ltr8`, as in tson-java (reverse-DNS names who *publishes*, not
   - **Codec** — request `InputStream` → `TsonValue` (tree mode) or a bound Java object (bind mode);
     object/`TsonValue` → response bytes.
   - **Error mapping** — `Diagnostic` and the exception hierarchy → status code + a TSON error body.
-  - **`TsonSchemaSource` over HTTP** — fetching a `!!schema:"https://…"` target, with a
-    whitelist/blacklist policy and a cache. **Not built yet.**
+  - **`TsonSchemaSource` over HTTP** — `TsonHttpSchemaSource`: host allow-list, host→location mapping,
+    caps on size and time, identity-keyed cache.
   - **Schema serving** — exposing the registry's own schemas so those URLs actually resolve. Only
     `TsonProblemSchema.source()` exists so far, which is the piece that makes the `!!id` in an error body
     resolvable. **Not built yet.**
@@ -72,6 +72,27 @@ each other.
   put nothing status-shaped anywhere else.
 - `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem-1.tn` — the error body, its
   schema, and the reader that proves the two agree.
+- `TsonHttpSchemaSource` / `TsonSchemaFetchException` — fetching a schema named by an untrusted request
+  body, under policy. Read its class notes before changing anything in it; every rule there is load-bearing.
+
+### Identity is not location
+
+The single most important thing to understand before touching the schema source. [TSON-DATA] §2.2.1:
+
+> A reference's **canonical identity** is … **lowercase host plus path** … The scheme is a *transport hint*,
+> not part of the name … a consumer **MAY fetch by whichever scheme its policy allows** … an identifying URI
+> MUST already be in canonical form apart from scheme and hash query — lowercase host, no userinfo, **no port
+> (default or otherwise)**, no percent-encoding of unreserved characters, no dot-segments, and no fragment.
+
+So a schema reference names a document; it does not say where to get it. Two separate questions, configured
+separately: `allowHost` decides which schema *names* this server will load (the security boundary), and
+`mapHost` decides where the bytes come from. **The no-port rule means `mapHost` is the only way to reach a
+non-default port** — an ephemeral test port, an internal endpoint, a mirror — because such a URL can never be
+an identity. A mapping renames nothing: the loader still cross-checks the fetched document's `!!id`.
+
+Getting this backwards produces a confusing failure a long way from its cause: a port-carrying `!!schema`
+fails inside `TsonCanonicalIdentity.canonicalize` during resolution, with a message about identity and a
+stack trace through the resolver.
 
 ## Consuming tson-java
 
@@ -162,6 +183,16 @@ Each cost a debugging cycle here and is pinned by a test.
   `UnsupportedOperationException: no bound Java class for '<type>'` — which the status policy correctly
   reports as 501, so it looks like a library gap rather than missing configuration. Chain to
   `SchemaMetaNameBinder.INSTANCE` for everything you do not map yourself.
+- **A schema reference may not carry a port, userinfo or a fragment** (§2.2.1), so a schema origin cannot run
+  on a non-default port. Use `mapHost`. See "Identity is not location" above — this is the trap that costs the
+  most time, because the failure surfaces from the resolver rather than from the fetch.
+- **Never `computeIfAbsent` on the schema cache.** Fetching a schema resolves its transitive
+  `!!import`/`!!meta`, each of which re-enters `fetch`, and a recursive `computeIfAbsent` on one
+  `ConcurrentHashMap` deadlocks or throws. `TsonHttpSchemaSource` uses get-then-put deliberately; two threads
+  racing one identity fetch it twice and store identical content, which costs a request and breaks nothing.
+- **Policy is checked on every reference, cached or not.** A cache hit must skip the network, never the
+  allow-list — otherwise a schema fetched for one request becomes fetchable for a request that would have been
+  refused.
 - **`readAs` requires a schema URI.** Selecting a root type is meaningless without a schema to select it
   from; `readTreeAs`/`readObjectAs` therefore take one, and it must already be registered. Passing an
   unregistered URI is a server configuration error and surfaces as 500, by design.
