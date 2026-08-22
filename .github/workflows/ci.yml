@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: tson-java-http
+
+      # This build consumes tson-java as a Gradle included build (no published artifact yet -- see
+      # UPSTREAM.md #1), so the sibling repo has to be on disk before `build` can resolve io.ltr8:tson.
+      - uses: actions/checkout@v4
+        with:
+          repository: litterat/ltr8-io-tson-java
+          path: ltr8-io-tson-java
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and test
+        working-directory: tson-java-http
+        run: ./gradlew build -Ptson.path=../ltr8-io-tson-java
+
+      # Not reached by `build` -- javadoc is its own task tree, so a broken doc comment
+      # is invisible to the line above.
+      - name: Javadoc
+        working-directory: tson-java-http
+        run: ./gradlew javadoc -Ptson.path=../ltr8-io-tson-java
