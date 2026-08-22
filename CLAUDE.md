@@ -13,10 +13,15 @@ It is a **consumer** of the TSON library, not part of it. The library lives in t
 and consumed as a Gradle **included build** (see "Consuming tson-java" below). Destination remote:
 `https://github.com/litterat/` — not yet pushed.
 
-**Status.** `tson-http` and `tson-http-jdk` are built and tested (77 tests), including the full loop: a
-schema served at its identity path, fetched back by `TsonHttpSchemaSource`, and used to validate a document.
-`tson-http-javalin` and `tson-http-helidon` are empty — build files and nothing else. Treat their
-descriptions below as the design being built to, not as code you can go read.
+**Status.** `tson-http`, `tson-http-jdk` and `tson-http-javalin` are built and tested (94 tests), including
+the full loop on both adapters: a schema served at its identity path, fetched back by `TsonHttpSchemaSource`,
+and used to validate a document. `tson-http-helidon` is empty — build files and nothing else. Treat its
+description below as the design being built to, not as code you can go read.
+
+**Open question, undecided:** whether a request should be able to name its schema in a header
+(`Content-Type: application/tson; schema="…"`) rather than only via the body's `!!schema`. The reasoning,
+the recommendation, and the conflict rule it would need are in `UPSTREAM.md`'s spec-feedback section. Nothing
+is implemented; do not add one without a decision.
 
 **Hard constraints:**
 - Java 25 only (matches tson-java).
@@ -43,17 +48,20 @@ Package group `io.ltr8`, as in tson-java (reverse-DNS names who *publishes*, not
   - **Error mapping** — `Diagnostic` and the exception hierarchy → status code + a TSON error body.
   - **`TsonSchemaSource` over HTTP** — `TsonHttpSchemaSource`: host allow-list, host→location mapping,
     caps on size and time, identity-keyed cache.
-  - **Schema serving** lives in the *adapter*, not here — it is an HTTP route, not a server-agnostic
-    utility. `tson-http` contributes only `TsonProblemSchema.source()`, the text that makes the `!!id` in an
-    error body resolvable.
+  - **`TsonSchemaCatalog`** — the schemas a server publishes, indexed by the path each one's own `!!id`
+    names, plus the cache policy. Server-agnostic because every adapter needs the same lookup and the same two
+    headers; only the routing differs, so an adapter's schema handler is a dozen lines over it.
 - **`tson-http-jdk`** (`io.ltr8.tson.http.jdk`) — adapter for `com.sun.net.httpserver` (JDK module
   `jdk.httpserver`). Zero external dependencies, so it is both the "no framework needed" demo and the
   reference the other two adapters are read against — when an adapter's behaviour looks odd, diff it
   against this one. Three types: `TsonExchange` (one request and its response, in TSON terms),
   `TsonHandler` (what a route is written as, plus `asHttpHandler` which wraps it in the error boundary),
   and `TsonSchemaHandler` (serves schemas at their own identity paths).
-- **`tson-http-javalin`** (`io.ltr8.tson.http.javalin`) — adapter for Javalin 6.7.0 (Jetty 11,
-  `jakarta.*` namespace). Javalin's integration seam is its `JsonMapper`-style plugin/handler surface.
+- **`tson-http-javalin`** (`io.ltr8.tson.http.javalin`) — adapter for Javalin 6.7.0 (Jetty 11, `jakarta.*`
+  namespace). Same three types as the JDK adapter, deliberately: `TsonContext`, `TsonHandler` (with
+  `asHandler`), `TsonSchemaHandler`. It adds `TsonHandler.install(app, codec)`, which maps a
+  `TsonHttpException` escaping a *plain* Javalin route to the same problem body — a real application mixes
+  route styles and should answer failures one way.
 - **`tson-http-helidon`** (`io.ltr8.tson.http.helidon`) — adapter for Helidon 4.2.2 SE. Helidon's
   integration seam is the **`MediaSupport` SPI** (`io.helidon.http.media`), which is why that artifact
   is a direct dependency: register TSON as a media type once and every route reads/writes it, rather
@@ -95,6 +103,18 @@ no TSON knowledge of its own; what it *does* own is the error boundary, and that
    detail and diagnostics are the entire point.
 
 A handler that returns without answering is a bug in the handler, so it is a 500 rather than a silent 200.
+
+**The adapter test suites are near-copies on purpose.** `TsonJdkAdapterTest` and `TsonJavalinAdapterTest` ask
+the same questions and assert the same answers, because two adapters over one codec should be
+indistinguishable from a client's side and the only way to show that is to ask them the same things. When
+adding a case to one, add it to the other.
+
+**Where they legitimately differ, and how to tell.** `com.sun.net.httpserver` chunks whatever it is given a
+length of 0 for; Jetty holds a short response in its buffer, discovers the length, and sends a
+`Content-Length` after all. Both are correct HTTP and a client must depend on neither — which is why the
+streaming test uses a body past Jetty's buffer, so it asserts that the document was streamed rather than
+asserting a framework's buffering habit. A difference that survives that treatment is worth writing down
+here; one that does not is a bad test.
 
 ### Identity is not location
 

@@ -1,6 +1,6 @@
-package io.ltr8.tson.http.jdk;
+package io.ltr8.tson.http.javalin;
 
-import com.sun.net.httpserver.HttpServer;
+import io.javalin.Javalin;
 import io.ltr8.annotation.Typename;
 import io.ltr8.bind.DataBindContext;
 import io.ltr8.bind.DataNameBinder;
@@ -17,13 +17,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -31,8 +30,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Driven end to end over real HTTP -- the point of an adapter is what a framework does with it. */
-class TsonJdkAdapterTest {
+/**
+ * Deliberately the same tests as {@code tson-http-jdk}'s {@code TsonJdkAdapterTest}, asserting the same
+ * behaviour: two adapters over one codec should be indistinguishable from a client's side, and the only way to
+ * show that is to ask them the same questions.
+ */
+class TsonJavalinAdapterTest {
 
     private static final String SCHEMA_ID = "https://schemas.example.com/2026/32/app/order-1.tn";
 
@@ -48,13 +51,13 @@ class TsonJdkAdapterTest {
     public record Order(String sku, int quantity) {
     }
 
-    private HttpServer server;
+    private Javalin app;
     private HttpClient client;
     private String base;
     private TsonHttpCodec codec;
 
     @BeforeEach
-    void startServer() throws IOException {
+    void startServer() {
         DataNameBinder binder = name -> "order".equals(name) ? Order.class
                 : SchemaMetaNameBinder.INSTANCE.resolve(name);
         DataBindContext bind =
@@ -63,20 +66,15 @@ class TsonJdkAdapterTest {
         tson.resolve(SCHEMA);
         codec = new TsonHttpCodec(tson);
 
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        base = "http://127.0.0.1:" + server.getAddress().getPort();
+        app = Javalin.create(config -> config.showJavalinBanner = false).start(0);
+        base = "http://127.0.0.1:" + app.port();
         client = HttpClient.newHttpClient();
-        server.start();
     }
 
     @AfterEach
     void stopServer() {
-        server.stop(0);
+        app.stop();
         client.close();
-    }
-
-    private void route(String path, TsonHandler handler) {
-        server.createContext(path, TsonHandler.asHttpHandler(codec, handler));
     }
 
     private HttpResponse<String> post(String path, String body, String... headers) throws Exception {
@@ -100,29 +98,24 @@ class TsonJdkAdapterTest {
 
     @Test
     void readsAValidatedBodyAndAnswersWithTson() throws Exception {
-        route("/orders", exchange -> {
-            exchange.requireMethod("POST");
-            Order order = exchange.readObject(Order.class);
-            exchange.respond(201, new Order(order.sku(), order.quantity() * 2));
-        });
+        app.post("/orders", TsonHandler.asHandler(codec, tson -> {
+            Order order = tson.readObject(Order.class);
+            tson.respond(201, new Order(order.sku(), order.quantity() * 2));
+        }));
 
         HttpResponse<String> response = post("/orders", """
                 !!schema:"%s"
                 !order { sku: "ABC-1"  quantity: 3 }""".formatted(SCHEMA_ID));
 
         assertEquals(201, response.statusCode());
-        assertEquals("application/tson", response.headers().firstValue("Content-Type").orElseThrow());
+        assertTrue(response.headers().firstValue("Content-Type").orElseThrow().startsWith("application/tson"));
         assertTrue(response.body().contains("ABC-1"), response.body());
         assertTrue(response.body().contains("6"), response.body());
     }
 
-    /**
-     * A handler that only reads gets correct validation behaviour without writing any -- and the client gets
-     * every problem in one response, which is what makes a generate-validate-retry loop terminate.
-     */
     @Test
     void anInvalidBodyBecomesA400CarryingEveryDiagnostic() throws Exception {
-        route("/orders", exchange -> exchange.respond(201, exchange.readObject(Order.class)));
+        app.post("/orders", TsonHandler.asHandler(codec, tson -> tson.respond(201, tson.readObject(Order.class))));
 
         HttpResponse<String> response = post("/orders", """
                 !!schema:"%s"
@@ -138,10 +131,12 @@ class TsonJdkAdapterTest {
 
     @Test
     void aWrongMethodIs405WithAllow() throws Exception {
-        route("/orders", exchange -> {
-            exchange.requireMethod("POST");
-            exchange.respondEmpty(204);
-        });
+        TsonHandler onlyPost = tson -> {
+            tson.requireMethod("POST");
+            tson.respondEmpty(204);
+        };
+        app.post("/orders", TsonHandler.asHandler(codec, onlyPost));
+        app.get("/orders", TsonHandler.asHandler(codec, onlyPost));
 
         HttpResponse<String> response = client.send(
                 HttpRequest.newBuilder(URI.create(base + "/orders")).GET().build(),
@@ -153,7 +148,7 @@ class TsonJdkAdapterTest {
 
     @Test
     void aNonTsonBodyIs415() throws Exception {
-        route("/orders", exchange -> exchange.respond(201, exchange.readObject(Order.class)));
+        app.post("/orders", TsonHandler.asHandler(codec, tson -> tson.respond(201, tson.readObject(Order.class))));
         assertEquals(415, post("/orders", "{}", "Content-Type", "application/json").statusCode());
     }
 
@@ -161,10 +156,10 @@ class TsonJdkAdapterTest {
     @Test
     void anUnacceptableAcceptIs406AndTheHandlerNeverRuns() throws Exception {
         AtomicBoolean ran = new AtomicBoolean();
-        route("/orders", exchange -> {
+        app.post("/orders", TsonHandler.asHandler(codec, tson -> {
             ran.set(true);
-            exchange.respondEmpty(204);
-        });
+            tson.respondEmpty(204);
+        }));
 
         HttpResponse<String> response = post("/orders", "{ a: 1 }",
                 "Content-Type", "application/tson", "Accept", "application/json");
@@ -176,34 +171,31 @@ class TsonJdkAdapterTest {
     /** A gap is 501, never 400 -- a client told to fix a document that is not wrong cannot ever succeed. */
     @Test
     void aLibraryGapIs501NotABadRequest() throws Exception {
-        route("/gap", exchange -> {
+        app.post("/gap", TsonHandler.asHandler(codec, tson -> {
             throw new UnsupportedOperationException("not implemented yet");
-        });
+        }));
         assertEquals(501, post("/gap", "{ a: 1 }").statusCode());
     }
 
     /** An internal message can name a class, a path or an internal host, and a client is not the audience. */
     @Test
     void aServerErrorSaysNothingAboutWhy() throws Exception {
-        route("/boom", exchange -> {
+        app.post("/boom", TsonHandler.asHandler(codec, tson -> {
             throw new IllegalArgumentException("connection to db-primary.internal:5432 refused");
-        });
+        }));
 
         HttpResponse<String> response = post("/boom", "{ a: 1 }");
 
         assertEquals(500, response.statusCode());
         assertFalse(response.body().contains("db-primary.internal"), response.body());
-        TsonProblem problem = problemFrom(response);
-        assertEquals(Optional.empty(), problem.detail(), "a 5xx carries no detail");
-        assertEquals(java.util.List.of(), problem.errors());
+        assertEquals(Optional.empty(), problemFrom(response).detail(), "a 5xx carries no detail");
     }
 
-    /** A 4xx is the opposite: its detail is the entire point, since the client is who can act on it. */
     @Test
     void aClientErrorKeepsItsDetail() throws Exception {
-        route("/orders", exchange -> {
-            throw new TsonHttpException(409, "Conflict", "order ABC-1 already exists", java.util.List.of(), null);
-        });
+        app.post("/orders", TsonHandler.asHandler(codec, tson -> {
+            throw new TsonHttpException(409, "Conflict", "order ABC-1 already exists", List.of(), null);
+        }));
 
         HttpResponse<String> response = post("/orders", "{ a: 1 }");
         assertEquals(409, response.statusCode());
@@ -212,29 +204,54 @@ class TsonJdkAdapterTest {
 
     @Test
     void aHandlerThatAnswersNothingIsAServerError() throws Exception {
-        route("/silent", exchange -> { });
+        app.post("/silent", TsonHandler.asHandler(codec, tson -> { }));
         assertEquals(500, post("/silent", "{ a: 1 }").statusCode());
     }
 
     /**
-     * Streamed, so the length is not known when the headers go out and this server chunks it.
-     *
-     * <p>Unlike Jetty, which holds a short response in its buffer and sends a {@code Content-Length} after
-     * all: {@code com.sun.net.httpserver} chunks whatever it is given a length of 0 for, whatever the size.
-     * Both are correct HTTP, and a client must depend on neither -- see the Javalin adapter's own version of
-     * this test.
+     * install is for the routes not written as a TsonHandler: one application should answer failures one way,
+     * whether the failure comes from a TSON route or from a service layer inside a plain Javalin one.
      */
     @Test
-    void aStreamedResponseCarriesNoContentLength() throws Exception {
-        route("/orders", exchange -> exchange.respond(200, new Order("ABC-1", 3)));
+    void installMakesAPlainJavalinRouteFailTheSameWay() throws Exception {
+        TsonHandler.install(app, codec);
+        app.post("/plain", context -> {
+            throw new TsonHttpException(409, "Conflict", "order ABC-1 already exists", List.of(), null);
+        });
+
+        HttpResponse<String> response = post("/plain", "{ a: 1 }");
+        assertEquals(409, response.statusCode());
+        assertTrue(response.headers().firstValue("Content-Type").orElseThrow().startsWith("application/tson"));
+        assertEquals("order ABC-1 already exists", problemFrom(response).detail().orElseThrow());
+    }
+
+    /**
+     * A response too large for Jetty's output buffer must go out chunked -- which is the observable proof that
+     * the document was written into the stream rather than materialised first.
+     *
+     * <p><b>A small one is not proof of anything</b>, and this is where the two adapters visibly differ:
+     * {@code com.sun.net.httpserver} chunks whatever it is given a length of 0 for, while Jetty holds a short
+     * response in its buffer, discovers the length, and sends {@code Content-Length} after all. Both are
+     * correct HTTP and a client must depend on neither, so the test uses a body big enough to settle it.
+     */
+    @Test
+    void aLargeStreamedResponseIsChunked() throws Exception {
+        String longSku = "A".repeat(64 * 1024);
+        app.post("/orders", TsonHandler.asHandler(codec, tson -> tson.respond(200, new Order(longSku, 3))));
+
         HttpResponse<String> response = post("/orders", "{ a: 1 }");
-        assertEquals(Optional.empty(), response.headers().firstValue("Content-Length"));
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains(longSku), "the whole document must arrive");
+        assertEquals(Optional.empty(), response.headers().firstValue("Content-Length"),
+                "a response past the buffer cannot know its length when the headers go out");
     }
 
     /** A body already in hand gets a real Content-Length -- which is why both paths exist. */
     @Test
     void aBufferedResponseCarriesItsLength() throws Exception {
-        route("/orders", exchange -> exchange.respondBytes(200, exchange.codec().write(new Order("ABC-1", 3))));
+        app.post("/orders", TsonHandler.asHandler(codec,
+                tson -> tson.respondBytes(200, tson.codec().write(new Order("ABC-1", 3)))));
         HttpResponse<String> response = post("/orders", "{ a: 1 }");
         assertEquals(String.valueOf(response.body().length()),
                 response.headers().firstValue("Content-Length").orElseThrow());

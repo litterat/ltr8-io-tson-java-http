@@ -170,13 +170,89 @@ past a document that will not parse, so there is no "collect and carry on" to of
 
 ---
 
+## 7. The readers honour `!!schema`; the writers cannot produce it
+
+**Hit:** deciding whether an HTTP request should be able to name its schema in a header turned up that a
+response cannot name one at all. `TsonObjectWriter` and `TsonTreeWriter` emit no header directives, and the
+gap is not at the facade — `TsonDataEmitter`'s whole surface is `beginRecord`/`field`/`beginArray`/
+`annotation`/`typeRef`/the value methods. There is no `!!id`, no `!!schema`, no directive method of any kind.
+`TsonValue` carries no schema reference either, so a tree that was read from a self-describing document has
+already lost the fact by the time anything could write it back.
+
+**So the round trip is asymmetric.** `treeReader().read(doc)` resolves the document's own `!!schema`,
+validates against it and returns the value — and nothing in the library can write that value back out in the
+form it arrived in. A document this library reads, it cannot reproduce.
+
+**Why it matters here.** A TSON response body is therefore never self-describing: a client that receives one
+cannot tell what governed it without being told out of band. That is what
+`TsonHttpCodecTest.whatItWritesItCanReadBack` is really showing — it has to pass the schema and root type back
+in explicitly via `readObjectAs`, because the bytes do not say. It also removes the honest answer to the
+request-side question: "put it in the body, that is what the directive is for" is only available in one
+direction.
+
+**Change:** a way to emit a document header — at minimum `!!schema`, ideally `!!id` too. Shapes worth
+considering, cheapest first:
+
+- A `TsonDataEmitter` directive method, and an opt-in on the writers (`objectWriter().describing(schemaUri)`),
+  leaving the default output exactly as it is today.
+- The writer deriving it from the compiled schema a bind-mode registry already holds, so a caller writing a
+  type the schema governs gets a self-describing document without naming the URI twice.
+
+**Blast radius:** additive at the emitter. The writer-level opt-in matters more than the mechanism: emitting a
+directive by default would change every existing document this library produces, including `tson validate
+--output tson`, so the current output has to stay reachable.
+
+**Priority:** high. It is the difference between TSON over HTTP being self-describing in both directions and
+being self-describing only inbound.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off.
 
-**Nothing to file yet.** §7.1's media-type prose is now implemented (`TsonMediaType`, `TsonAcceptHeader`)
-and it held up: `application/tson`, the optional `version=1` parameter, and the UTF-8 fix are each stated
-once and unambiguously, and nothing in them needed an interpretation to be chosen.
+### To file: how a schema is named for a document that cannot carry `!!schema` (§6, §7.1)
+
+**Section:** [TSON-DATA] §6 (JSON compatibility) and §7.1 (Encoding, Normalization, and Media Type).
+
+**The gap.** §6 makes every valid JSON document a valid TSON document, and the format's stated target use is
+validating generated structured output against a schema. But `!!schema` is TSON directive syntax, and a JSON
+document cannot carry one — so for the entire JSON-compatible surface there is no in-band way to say which
+schema governs the document. The spec does not say what the out-of-band channel is.
+
+This is not purely an application question, because §7.1 already legislates for HTTP: it defines
+`application/tson`, notes the media type is intended for IANA registration, and specifies
+`application/tson; version=1` for when "disambiguation is needed in HTTP contexts". Having gone that far, it
+stops exactly before the parameter that is actually needed in practice.
+
+**What an implementation must pick something for.** A server validating a posted JSON or TSON body has to
+learn the schema from somewhere. Every implementation will invent a channel, and they will not agree —
+`Content-Type: …; schema=…`, `Link: <…>; rel="describedby"`, a bespoke `Schema:` header, or a
+route-configured constant are all reasonable and mutually incompatible readings.
+
+**The interpretation this project chose**, pending a spec answer: the body's `!!schema` remains primary and
+authoritative; a `schema` media-type parameter on `Content-Type` is accepted where the body carries no
+directive; and where both are present and their canonical identities (§2.2.1) differ, the request is rejected
+rather than resolved by precedence.
+
+**Suggested resolution.** Define a `schema` media-type parameter alongside `version` in §7.1, and state the
+conflict rule. The parameter binds to the representation, which is where a statement about what the
+representation *is* belongs, and it extends a parameter list the section already opened.
+
+**The conflict rule has a precedent in this same spec, and should follow it.** §2.2.1 already answers the
+identical shape of question for content hashes: "two that declare different hashes are in conflict — at most
+one describes the real bytes — and a consumer that observes both MUST report an error rather than choosing
+between them". A header and a body directive naming different schemas is the same situation, and silent
+precedence is how a document gets validated against a schema nobody intended.
+
+**Related:** `UPSTREAM.md` #7 — the writers cannot emit `!!schema`, so a TSON *response* has no in-band
+option either, and this parameter is currently the only channel in that direction.
+
+### Not to file
+
+§7.1's media-type prose is implemented (`TsonMediaType`, `TsonAcceptHeader`) and held up: `application/tson`,
+the optional `version=1` parameter, and the UTF-8 fix are each stated once and unambiguously, and nothing in
+them needed an interpretation to be chosen.
 
 One resolved question and one near-miss, recorded so neither is re-investigated.
 

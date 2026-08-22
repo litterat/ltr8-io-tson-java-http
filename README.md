@@ -8,13 +8,13 @@ Four modules:
 
 | Module | What it is |
 |---|---|
-| `tson-http` | Server-agnostic core: media type and `Accept` negotiation, codec, status policy, TSON error body, HTTP-backed schema source. No external dependencies. |
+| `tson-http` | Server-agnostic core: media type and `Accept` negotiation, codec, status policy, TSON error body, HTTP-backed schema source, schema catalog. No external dependencies. |
 | `tson-http-jdk` | Adapter for the JDK's own `com.sun.net.httpserver`, plus schema serving. No external dependencies. |
 | `tson-http-javalin` | Adapter for [Javalin](https://javalin.io) 6. |
 | `tson-http-helidon` | Adapter for [Helidon](https://helidon.io) 4 SE, via its `MediaSupport` SPI. |
 
-**Status.** `tson-http` and `tson-http-jdk` are built and tested; the Javalin and Helidon adapters are not
-started.
+**Status.** `tson-http`, `tson-http-jdk` and `tson-http-javalin` are built and tested; the Helidon adapter is
+not started.
 
 ```java
 server.createContext("/orders", TsonHandler.asHttpHandler(codec, exchange -> {

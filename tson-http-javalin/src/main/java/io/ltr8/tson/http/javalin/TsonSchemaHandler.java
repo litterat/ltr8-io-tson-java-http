@@ -1,17 +1,18 @@
-package io.ltr8.tson.http.jdk;
+package io.ltr8.tson.http.javalin;
 
 import io.ltr8.tson.http.TsonSchemaCatalog;
 
 import java.util.Set;
 
 /**
- * Serves a {@link TsonSchemaCatalog} over {@code com.sun.net.httpserver} -- the routing around the catalog,
- * and nothing else. The lookup, the identity-path rule and the cache policy all live in the catalog, because
- * every adapter needs exactly the same ones.
+ * Serves a {@link TsonSchemaCatalog} through Javalin -- the routing around the catalog, and nothing else. The
+ * lookup, the identity-path rule and the cache policy live in the catalog, shared with every other adapter.
+ *
+ * <p>Register it on a wildcard route, since the paths it serves are the identity paths of the schemas it holds
+ * rather than anything Javalin's router knows about:
  *
  * <pre>{@code
- * server.createContext("/", TsonHandler.asHttpHandler(codec,
- *         TsonSchemaHandler.of(orderSchemaText, TsonProblemSchema.source())));
+ * app.get("/<path>", TsonHandler.asHandler(codec, TsonSchemaHandler.of(orderSchema, problemSchema)));
  * }</pre>
  */
 public final class TsonSchemaHandler implements TsonHandler {
@@ -33,13 +34,12 @@ public final class TsonSchemaHandler implements TsonHandler {
     }
 
     @Override
-    public void handle(TsonExchange exchange) {
-        exchange.requireMethod("GET", "HEAD");
-        String path = exchange.uri().getPath();
-        byte[] document = catalog.find(path).orElseThrow(() -> catalog.noSuchSchema(path));
-        exchange.setHeader("Cache-Control", TsonSchemaCatalog.IMMUTABLE);
+    public void handle(TsonContext context) {
+        context.requireMethod("GET", "HEAD");
+        byte[] document = catalog.find(context.path()).orElseThrow(() -> catalog.noSuchSchema(context.path()));
+        context.setHeader("Cache-Control", TsonSchemaCatalog.IMMUTABLE);
         // Buffered rather than streamed: a schema is small, its length is known, and a Content-Length is worth
         // more to a fetching client -- which is size-capping its read -- than not materialising a few kilobytes.
-        exchange.respondBytes(200, document);
+        context.respondBytes(200, document);
     }
 }
