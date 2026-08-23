@@ -354,6 +354,65 @@ documented in the resolver and behaves as specified.
 
 ---
 
+## 13. A template application cannot appear inside a choice
+
+**Hit:** describing an operation's responses. `response => <T, S> { status: status_code = S  body: T }` is the
+natural shape, and `(response<order, 201> | response<problem, 400>)` is the natural use of it:
+
+```
+UnsupportedOperationException: a container sugar form must be lifted to an entry before resolution (§5.3);
+this one was not, which means either the desugar phase was skipped or a position inside it is an application,
+which has no entry to name until it is materialised: Choice
+```
+
+The message diagnoses itself. An application works as a plain field type and inside an array; only `choice`
+lacks the lift.
+
+**Workaround in place:** name each application as an entry, then choose over the names —
+`order_created => response<order, 201>`, then `(order_created | order_invalid | …)`. Each response is still one
+line rather than a record declaration, so this costs a name, not a shape.
+
+**Priority: low.** It is an ergonomic edge with a one-line workaround, and `UnsupportedOperationException`
+already says it is a gap rather than an author error. Pinned by
+`SketchTest.anApplicationInsideAChoiceIsNotImplemented`.
+
+---
+
+## 14. A value parameter filling a FIXED field loses its fixedness
+
+**Hit:** the same template. `status: status_code = S` applied as `<order, 201>` produces a field that carries
+201 and does not enforce it:
+
+| declaration | data with a wrong status |
+|---|---|
+| `status: int32 = 201` — a literal | **rejected**, `FIELD_FIXED` |
+| `status: int32 = S`, applied `<order, 201>` | **accepted** |
+
+So `!created { status: 999  body: … }` validates against a type whose schema says the status is 201.
+
+**Where it goes wrong is the declaration, not the substitution.** The template's own field resolves as
+`state=REQUIRED, value=empty, valueParam=Optional[S]` — never `REQUIRED_FIXED`, where the literal form is.
+Materialisation then substitutes correctly, producing `state=REQUIRED, value=Optional[201]`: the right value on
+a field whose state no longer says it is fixed. So `= S` is being read as "a value routed by a parameter"
+without the "and it is fixed" half that `=` means for a literal.
+
+**Why it matters more than #13.** It is silent. A schema author writes a constraint, the schema loads clean,
+and the constraint is not there — the same shape of hazard as #10's dropped field, and in the same place a
+server would rely on it. A status is exactly the sort of thing an API description fixes and a validator is
+then trusted to enforce.
+
+**Change:** carry the FIXED state through a value-parameter binding, so a materialised
+`status: status_code = S` is `REQUIRED_FIXED` with the substituted value, as the literal form already is.
+
+**Workaround:** none that keeps the template. Fixing the status literally means a record declaration per
+response, which is what the template exists to remove. `sketch/orders-api-3.tn` keeps the template and says so
+in its own `@doc`, because the shape is right and the gap is upstream.
+
+**Pinned by** `SketchTest.aValueParameterFixedFieldDoesNotYetConstrain`, which asserts the current behaviour so
+a fix makes it fail.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off.

@@ -20,6 +20,26 @@
   status_code => !integer ^ { min: 100  max: 599 }
 
   @doc:"""
+    One response: a status and a body. A template, so the shape is declared once and every response
+    in every service is an application of it rather than another record that has to match by hand.
+
+    S is a VALUE parameter filling a FIXED field -- `status: status_code = S` -- which is what makes
+    this work at all. Without value parameters a status would have to be fixed per declaration, and
+    each response would be a record again.
+
+    An application cannot appear directly inside a choice (UPSTREAM.md #13), so an operation names
+    its responses as entries first and chooses over the names. Each is still one line.
+    """
+  response => <T, S> { status: status_code = S  body: T }
+
+  @doc:"""
+    A page of results. The envelope pattern OpenAPI hand-rolls with allOf or repeats per endpoint,
+    written once and applied -- `page<order>` is a real instantiation with structural identity
+    (§8.2), deduped schema-wide.
+    """
+  page => <T> { items: [T]  next: uri?  total: int32 }
+
+  @doc:"""
     Every operation composes this, so an operation is found in resolved output by its supertype
     rather than by a naming convention, and the resolver checks it has a method and a path.
 

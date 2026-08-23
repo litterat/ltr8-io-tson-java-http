@@ -136,10 +136,104 @@ class SketchTest {
                 fields.get("response").type().name());
     }
 
+    /**
+     * The response shape is a template applied per response, so it is declared once and cannot drift.
+     * {@code S} is a <em>value</em> parameter filling a FIXED field, which is what makes it possible at all —
+     * without it a status would have to be fixed per declaration and every response would be a record again.
+     */
+    @Test
+    void aTemplateCarriesTheResponseShape() throws Exception {
+        var entries = Tson.builder().schemaSource(ordersLibrary()::get).build()
+                .resolve(sketch("orders-api-3.tn")).schema().entries();
+
+        // Each response is a one-line application, so its entry is a reference to the materialised
+        // instantiation -- which is the shape the template declared, with S substituted.
+        Map<String, RecordField> created = fieldsOf(entries, "order_created");
+        assertEquals("201", created.get("status").value().orElseThrow().text());
+        assertEquals("order", created.get("body").type().name());
+
+        // And it nests: response<page<order>, 200>.
+        Map<String, RecordField> paged = fieldsOf(entries, "order_page");
+        assertEquals("200", paged.get("status").value().orElseThrow().text());
+        assertTrue(paged.get("body").type().name().contains("page"), paged.get("body").type().name());
+    }
+
+    /**
+     * An entry's fields, following one hop through the reference a template application resolves to.
+     */
+    private static Map<String, RecordField> fieldsOf(Map<String, TypeDefinition> entries, String name) {
+        TypeDefinition entry = entries.get(name);
+        // An application resolves to a Reference at the author's name, pointing at the materialised
+        // instantiation entry, which is auto-named after the template and its arguments.
+        if (entry.body() instanceof io.ltr8.tson.schema.meta.Reference reference) {
+            entry = entries.get(reference.target().name());
+        }
+        Map<String, RecordField> fields = new LinkedHashMap<>();
+        ((RecordBody) entry.body()).fields().forEach(f -> fields.put(f.name(), f));
+        return fields;
+    }
+
+    /**
+     * <b>The template documents the status; it does not yet enforce it</b> ({@code UPSTREAM.md} #14). A value
+     * parameter filling a FIXED field materialises with the value but not the FIXED state, so a document may
+     * send any status. The literal form does enforce it, which is what makes this a gap rather than a rule.
+     *
+     * <p>Asserted as it currently behaves, so a fix upstream makes this fail and the sketch's caveat can go.
+     */
+    @Test
+    void aValueParameterFixedFieldDoesNotYetConstrain() {
+        String schema = """
+                !!id:"https://s.example.com/2026/32/p-1.tn"
+                !!meta:"https://tson.io/2026/32/m/meta.tn"
+                !!import:"https://tson.io/2026/32/m/core.tn"
+                {
+                    order => { sku: text }
+                    by_param   => <T, S> { status: int32 = S  body: T }
+                    by_literal => { status: int32 = 201  body: order }
+                    created    => by_param<order, 201>
+                }""";
+        Tson tson = Tson.builder().schemaSource(u -> schema).build();
+        tson.resolve(schema);
+        String header = "!!schema:\"https://s.example.com/2026/32/p-1.tn\"\n";
+
+        assertTrue(tson.validate(header + "!by_literal { status: 999  body: !order { sku: \"a\" } }").stream()
+                        .anyMatch(d -> d.code() == io.ltr8.tson.compiler.Diagnostic.Code.FIELD_FIXED),
+                "a literal FIXED field rejects another value");
+
+        assertEquals(List.of(),
+                tson.validate(header + "!created { status: 999  body: !order { sku: \"a\" } }"),
+                "and a parameter-filled one does not -- which is UPSTREAM #14, not intended behaviour");
+    }
+
+    /**
+     * The gap that shapes the sketch: a template application cannot appear directly inside a choice, so each
+     * response is named as an entry first. {@code UnsupportedOperationException} is the not-implemented
+     * classification, so when this lands the sketch can inline them and this test should fail.
+     */
+    @Test
+    void anApplicationInsideAChoiceIsNotImplemented() {
+        String schema = """
+                !!id:"https://s.example.com/2026/32/p-1.tn"
+                !!meta:"https://tson.io/2026/32/m/meta.tn"
+                !!import:"https://tson.io/2026/32/m/core.tn"
+                {
+                    order => { sku: text }
+                    problem => { title: text }
+                    resp => <T, S> { status: int32 = S  body: T }
+                    op => { response: (resp<order, 201> | resp<problem, 400>) }
+                }""";
+
+        UnsupportedOperationException gap = org.junit.jupiter.api.Assertions.assertThrows(
+                UnsupportedOperationException.class,
+                () -> Tson.builder().schemaSource(u -> null).build().validateSchema(schema));
+        assertTrue(gap.getMessage().contains("must be lifted to an entry"), gap.getMessage());
+    }
+
     /** And the same property: a payload type that does not exist is refused. */
     @Test
     void anOrdinarySchemaStillChecksItsPayloadTypes() throws Exception {
-        String broken = sketch("orders-api-3.tn").replace("body: sku_not_found", "body: sku_not_fund");
+        String broken = sketch("orders-api-3.tn")
+                .replace("response<sku_not_found, 404>", "response<sku_not_fund, 404>");
         var problems = Tson.builder().schemaSource(ordersLibrary()::get).build().validateSchema(broken);
         assertTrue(problems.stream().anyMatch(d -> d.message().contains("sku_not_fund")),
                 () -> "expected an unresolved-reference error, got " + problems);

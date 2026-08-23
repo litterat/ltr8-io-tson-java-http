@@ -28,14 +28,25 @@
   exchange: { method: POST  path: "/orders"  request: <an order>  response: !order_created { ... } }
   is one request and its reply. The same declaration is the contract and the shape of a trace.
 
-  WHAT IT COSTS. Every response needs a named wrapper type -- five of them below -- whose only job
-  is to pair a status with a body. In a meta layer those would be values, not declarations. That is
-  the trade sketch/README.md sets out.
+  HOW THE BOILERPLATE GOES AWAY. `response` is a TEMPLATE in http-api-1.tn, taking the body type and
+  the status as a VALUE parameter that fills a FIXED field. So a response is a one-line application
+  -- `response<order, 201>` -- rather than another record declaration, and the shape lives once
+  where it cannot drift. Nesting works too: `response<page<order>, 200>`.
+
+  It still needs a name per response, because an application cannot appear directly inside a choice
+  (UPSTREAM.md #13). One line each rather than one record each is most of the win.
+
+  ONE CAVEAT, AND IT IS NOT SMALL. A value parameter filling a FIXED field does not currently
+  constrain it (UPSTREAM.md #14): response<order, 201> carries 201 and a document may still send
+  999. The literal form -- `{ status: status_code = 201  body: order }` -- does enforce it. So today
+  the template documents the status where the record enforced it. The template is kept because the
+  shape is right and the gap is upstream, but a service relying on the status being validated wants
+  the literal form until #14 lands.
   """
 {
-  order_created  => { status: status_code = 201  body: order }
-  order_invalid  => { status: status_code = 400  body: problem }
-  order_sku_gone => { status: status_code = 404  body: sku_not_found }
+  order_created  => response<order, 201>
+  order_invalid  => response<problem, 400>
+  order_sku_gone => response<sku_not_found, 404>
 
   @doc:"Accept an order and confirm it."
   create_order => operation & {
@@ -45,13 +56,30 @@
     response: (order_created | order_invalid | order_sku_gone)
   }
 
-  schema_served  => { status: status_code = 200 }
-  schema_missing => { status: status_code = 404  body: problem }
+  order_page     => response<page<order>, 200>
+  schema_served  => response<void, 200>
+  schema_missing => response<problem, 404>
+
+  @doc:"""
+    A page of orders. `response<page<order>, 200>` is a nested application, resolved and deduped by
+    structural identity -- the envelope pattern OpenAPI repeats per endpoint or fakes with allOf.
+
+    One response, so no choice: §5.4 needs at least two variants, and an operation with a single
+    outcome names it directly.
+    """
+  list_orders => operation & {
+    method:   http_method = GET
+    path:     text = "/orders"
+    response: order_page
+  }
 
   @doc:"A record at a type position is not permitted (§5.2), so a parameter set is a named type."
   get_schema_parameters => { schema_path: non_empty_text }
 
-  @doc:"Fetch a published schema. A schema document is not a TSON value, so schema_served has no body."
+  @doc:"""
+    Fetch a published schema. A schema document is not a TSON value, so schema_served's body is
+    `void` -- which says "no body" in the type system rather than by omitting a field.
+    """
   get_schema => operation & {
     method:     http_method = GET
     path:       text = "/schemas/{schema_path}"

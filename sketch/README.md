@@ -55,6 +55,37 @@ nothing *could*. That is `$ref: "#/components/schemas/Order"` in TSON's clothing
 `TsonApiConformanceTest` exists at all: it hand-checks coherence a resolver should establish by construction,
 and the reason it had to be hand-checked is structural, not an oversight.
 
+## Templates: what they do and do not carry
+
+I cited `page<order>` as "envelope templates work today" for several rounds before putting one in a design.
+Doing it changed two conclusions.
+
+**A value parameter can fill a FIXED field**, which is the thing that makes templates useful here:
+
+```tson
+response => <T, S> { status: status_code = S  body: T }
+```
+
+So a response is `response<order, 201>` — one line — rather than a record declaration. That is most of the
+wrapper-type cost I had called the meta layer's biggest win, removed **at the schema level**. The shape now
+lives once, in the template, where it cannot drift between responses. It nests, too:
+`response<page<order>, 200>` resolves and is deduped by structural identity (§8.2).
+
+**Two gaps shape how it is written.**
+
+- An application cannot appear directly inside a `choice` (`UPSTREAM.md` #13), so each response is named as an
+  entry and the choice is over the names. That costs a name per response, not a shape.
+- **A value parameter filling a FIXED field does not currently constrain it** (`UPSTREAM.md` #14).
+  `response<order, 201>` carries 201 and a document may still send 999; the literal
+  `{ status: status_code = 201 … }` rejects it. So today the template **documents** the status where the
+  record **enforced** it. That is silent under-validation, and it is the one thing that would stop me
+  recommending the template form for a service that relies on the status being checked.
+
+**What this does to the meta-layer argument below.** Point 1 — wrapper types becoming values — is now mostly
+answered without a meta layer, so the case for moving up rests on the remaining three: shape checking,
+recognisability by construction, and templated *operations*. Those are still real, and the last of them is
+itself waiting on `template_argument`'s deferred collection case.
+
 ## What belongs in the meta layer, and what it would unlock
 
 The sharpest way to put it: **`type_ref` is the meta layer's ability to talk *about* types. Without it a schema
@@ -70,7 +101,8 @@ records, and the enums. `meta-http-1.tn` is that, and it resolves; only applying
 
 ### What that unlocks, concretely
 
-**1. Wrapper types become values.** This is the biggest and least obvious win. `orders-api-3.tn` declares five
+**1. Wrapper types become values.** *Mostly answered by templates now — see above.* Still worth stating,
+because the meta form needs no name per response and no `choice` workaround. `orders-api-3.tn` declares five
 types — `order_created`, `order_invalid`, `order_sku_gone`, `schema_served`, `schema_missing` — whose entire
 job is to pair a status with a body. They exist because a status must be a FIXED *field*, which needs a
 *record*, which needs a *declaration*. In the meta layer the same thing is a value:
