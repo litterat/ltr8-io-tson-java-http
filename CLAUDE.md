@@ -227,8 +227,11 @@ collecting** (`UPSTREAM.md` #10). So `route` refuses a document naming a version
 and refuses one naming none. Do not add a fallback that guesses; that is the failure it exists to prevent.
 `defaultVersion` exists for an older unversioned client and is off by default for the same reason.
 
-**Two ways to model the Java side**, both tested: a class per version, switching on `Routed.schemaId()`; or one
-class with a field for everything any version has, nullable for what is not in all of them.
+**One way to model the Java side today: a class per version**, switching on `Routed.schemaId()`. The other —
+one class with a field for everything any version has — is **refused by strict binding**, because the extra
+component would arrive `null` on every document of the version that lacks it. Neither `@Unbound` nor
+`lenientBinding()` fits; it needs constructor selection by schema field set (`UPSTREAM.md` #10, remaining
+part).
 
 **Multiple constructors do not select a version.** This is the tempting model and it does not work: binding
 always uses the canonical constructor — the sole public one, or the `@Record`-annotated one — and passes `null`
@@ -367,6 +370,13 @@ Each cost a debugging cycle here and is pinned by a test.
   type-ref of its own, so `!!schema` alone yields a document whose reader cannot select a type. The tree form
   takes one argument, because a tree node already carries a type-ref. `TsonHttpCodec.write(value, schemaUri,
   rootTypeName)` and `writeTree(value, schemaUri)` mirror that asymmetry deliberately.
+- **Binding is strict, and a mismatch is a startup failure if you let it be.** A schema field with no
+  component, or a component no field fills, is a `TsonBindMismatchException` when the schema compiles in bind
+  mode. `TsonHttpCodec.prepareToRead(schemaId)` forces that at startup and `TsonSchemaVersions` calls it —
+  without it the same mistake is a 500 on the first request that reads one. `@Unbound` marks a component that
+  is the class's own; `TsonConfig.lenientBinding()` is the deliberate versioned-evolution position. **A
+  mismatch reaching the diagnostics channel is still reported as `SCHEMA_ERROR` and so becomes a 400**
+  (`UPSTREAM.md` #19) — routing and `prepareToRead` are what keep it unreachable.
 - **`prepareToWrite` is a warm-up, not a correctness measure** — it was one, before `UPSTREAM.md` #8 was fixed
   upstream. Keep calling it at startup to move first-write descriptor resolution off the request thread; do not
   treat it as load-bearing for concurrency any more.

@@ -252,7 +252,33 @@ writers just gained (#7), which names the same two directives from the other end
 
 ---
 
-## 10. Binding drops a schema field the target class has no component for, silently
+## 10. ~~Binding drops a schema field the target class has no component for, silently~~ — MOSTLY DONE (`4d02eab`, `83b8524`)
+
+**Strict binding landed, and it is better than what was asked for.** Both directions now refuse rather than
+drop: a schema field with no component, and a component no field fills. The message names both sides and the
+remedy — *"'order' and OrderV1 do not agree: no component for field 'currency'. Bind the class the schema
+describes, or read leniently (TsonConfig.lenientBinding) if dropping this is deliberate."* Three things I had
+not thought of and that make it right: the FIXED exemption, `@Unbound` for a component that is genuinely the
+class's own, and `lenientBinding()` as the place a deliberate versioned-evolution intention gets written
+down rather than defaulted into.
+
+The meta-layer reverse case recorded above is fixed with it: a `Data` body whose Java record has a component
+the meta does not declare is now a `TsonBindMismatchException` naming both sides, where it was an NPE thrown
+out of `Tson.resolve`.
+
+**What is left is the multi-version case this item was reported from.** One class serving every version —
+a component for everything any version has, absent for what a version lacks — is now refused, and neither
+escape fits: `@Unbound` says a component is never the wire's business and this one *is* (v2 binds it), while
+`lenientBinding` covers the other direction. It needs constructor selection by schema field set, deferred
+upstream until strictness landed. Pinned here by
+`TsonSchemaVersionsTest.oneClassAcrossVersionsIsRefusedUntilConstructorSelectionLands`, which should fail and
+become two ordinary reads when it arrives.
+
+**Adopted here:** `TsonHttpCodec.prepareToRead(String…)` compiles a schema in bind mode at startup, and
+`TsonSchemaVersions` calls it for every version it serves — so a class registered against a schema it
+disagrees with is a startup failure rather than a 500 on the first request that reads one. That is the whole
+value of the check being static, and it needed a door on this side to reach it.
+
 
 **Hit:** the multi-version case, which is where it matters. Given `order-2.tn` adding a `currency` field, a
 codec whose binder maps `order` to a v1 class reads a v2 document and returns `OrderV1[sku=A, quantity=1]`. The
@@ -708,6 +734,39 @@ error that governed schemas cannot see any of it. That the vocabulary must go in
 imported normally, is a real design constraint of the `data` base kind and is currently undocumented. Note a
 meta layer also cannot simply be `!!import`ed by an ordinary schema: `void` is declared by both it and
 `core.tn`, so the import collides.
+
+## 19. A bind mismatch has no code of its own, so a server cannot tell it from an invalid document
+
+**Hit:** mapping the new strictness to a status. `TsonBindMismatchException`'s own Javadoc draws exactly the
+right line — *"the schema is not wrong and no library invariant broke; the schema is fine, the class is fine,
+and they have been pointed at each other by mistake"* — and this project's status policy needs that line,
+because it decides between 4xx and 5xx. A misconfiguration is 500: the client's document may be perfectly
+valid, and the message names a server class, which is not a client's business.
+
+**Where it is thrown, that works.** `TsonHttpException.from` classifies `TsonBindMismatchException` to 500,
+and `prepareToRead` at startup means a genuine misconfiguration is caught before a request exists.
+
+**Where it arrives as a diagnostic, it does not.** Reading a v2 document through a codec whose binder maps
+`order` to a v1 class yields:
+
+```
+Diagnostic[..., code=SCHEMA_ERROR, message='order' and …OrderV1 do not agree: no component for
+field 'currency'. Bind the class the schema describes, or read leniently …]
+```
+
+`SCHEMA_ERROR` is the code for *"your schema is wrong"*, and a collected list of those is a 400. So the one
+distinction the exception type exists to draw is erased in the diagnostics channel, and a client gets *"the
+request body has 1 problem"* about a document that has nothing wrong with it — plus a server class name.
+
+**Change:** a `Diagnostic.Code.BIND_MISMATCH`, exactly as `NOT_IMPLEMENTED` was added for the same reason one
+commit earlier (`f381010`). That precedent is the argument: a gap is not a verdict on the author's document
+either, and the fix was to let the code carry the distinction the channel could not. This is the same shape —
+*"could not be checked"* versus *"is wrong"* — one step further out, and the CLI would want it too, since a
+bind mismatch is no more an exit-1 than a gap is.
+
+**Workaround here, which is not a fix:** routing prevents the crossing, and `prepareToRead` catches the static
+case at startup, so the diagnostic path is reachable only by a server that bypasses its own guard. Matching on
+message text would close it and is not worth the fragility.
 
 ## Spec feedback to file
 

@@ -1,6 +1,7 @@
 package io.ltr8.tson.http;
 
 import io.ltr8.tson.compiler.Diagnostic;
+import io.ltr8.tson.compiler.TsonBindMismatchException;
 import io.ltr8.tson.compiler.TsonReadException;
 import io.ltr8.tson.schema.TsonSchemaValidationException;
 
@@ -190,6 +191,12 @@ public final class TsonHttpException extends RuntimeException {
                 case TRANSPORT, TOO_LARGE -> new TsonHttpException(BAD_GATEWAY, TYPES + "schema-origin-failed",
                         "Schema origin failed", fetch.getMessage(), List.of(), fetch);
             };
+            // A misconfiguration of this server, not a fault in the request: the schema is fine and the class
+            // is fine, and they have been pointed at each other by mistake. The client's document may be
+            // perfectly valid, so 400 would send them to fix something that is not wrong -- and the message
+            // names a server class, which is not a client's business. 5xx carries no detail for that reason.
+            case TsonBindMismatchException mismatch -> new TsonHttpException(INTERNAL_SERVER_ERROR,
+                    TYPES + "internal-error", "Internal server error", null, List.of(), mismatch);
             case TsonReadException read -> new TsonHttpException(BAD_REQUEST, TYPES + "invalid-document",
                     "Invalid TSON document", read.getMessage(), List.of(read.diagnostic()), read);
             case TsonSchemaValidationException schema -> new TsonHttpException(BAD_REQUEST,

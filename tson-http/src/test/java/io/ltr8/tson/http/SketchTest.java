@@ -7,6 +7,7 @@ import io.ltr8.bind.DataBindException;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.compiler.Diagnostic;
+import io.ltr8.tson.compiler.TsonBindMismatchException;
 import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
 import io.ltr8.tson.compiler.config.TsonAtomContext;
 import io.ltr8.tson.http.apimeta.HttpMethod;
@@ -578,12 +579,13 @@ class SketchTest {
     }
 
     /**
-     * <b>{@code UPSTREAM.md} #10, its reverse case at the meta layer.</b> A Java component the meta
-     * declaration does not declare arrives {@code null}, and {@code Data.references()} runs inside schema
-     * resolution — so it surfaces as an NPE out of {@code resolve}, not as a diagnostic naming the mismatch.
+     * <b>{@code UPSTREAM.md} #10's reverse case at the meta layer — reported, since strict binding.</b> It
+     * used to be an NPE out of {@code resolve}: the component arrived {@code null} and
+     * {@code Data.references()} dereferenced it inside resolution, so a consumer's own wiring mistake read as
+     * a library fault. It is now a {@code TsonBindMismatchException} naming both sides.
      */
     @Test
-    void aJavaComponentTheMetaDoesNotDeclareIsAnNpeFromInsideResolution() {
+    void aJavaComponentTheMetaDoesNotDeclareIsReported() {
         String id = "https://schemas.example.com/2026/32/app/x-1.tn";
         String doc = """
                 !!id:"%s"
@@ -596,7 +598,8 @@ class SketchTest {
         Map<String, String> lib = new LinkedHashMap<>();
 
         // apimeta.Operation has `parameters` and `request`; this meta declares neither.
-        NullPointerException npe = org.junit.jupiter.api.Assertions.assertThrows(NullPointerException.class,
+        TsonBindMismatchException npe = org.junit.jupiter.api.Assertions.assertThrows(
+                TsonBindMismatchException.class,
                 () -> Tson.builder().schemaSource(lib::get)
                         .metaNameBinder(new DataNameBinder.DefaultDataNameBinder(
                                 Set.of("io.ltr8.tson.http.apimeta"), Map.of()))

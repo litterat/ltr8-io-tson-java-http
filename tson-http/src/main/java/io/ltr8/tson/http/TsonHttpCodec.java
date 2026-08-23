@@ -94,6 +94,29 @@ public final class TsonHttpCodec {
     }
 
     /**
+     * Compiles {@code schemaIds} in bind mode now, rather than on the first request that reads one -- so a
+     * schema and the class bound to it that disagree about a type's fields is a startup failure rather than a
+     * request-time one.
+     *
+     * <p><b>This one is a correctness measure, unlike {@link #prepareToWrite}.</b> Both halves of the
+     * agreement are fixed before any document exists, so the mistake is knowable at startup; found there it
+     * is a wiring error fixed in minutes, and found at a read it is a 500 on a request that had nothing wrong
+     * with it. Call it at startup for every schema this server reads against.
+     *
+     * @throws IllegalStateException wrapping the mismatch, naming the schema that could not be prepared
+     */
+    public void prepareToRead(String... schemaIds) {
+        for (String schemaId : schemaIds) {
+            try {
+                tson.bindRegistry().get(schemaId);
+            } catch (RuntimeException e) {
+                throw new IllegalStateException("cannot prepare '" + schemaId + "' for reading: "
+                        + e.getMessage(), e);
+            }
+        }
+    }
+
+    /**
      * Reads a request body into a queryable tree, validating it against whatever schema applies -- the
      * {@code !!schema} the document names, or none, in which case it is checked against base syntax and the
      * built-in type vocabulary alone.

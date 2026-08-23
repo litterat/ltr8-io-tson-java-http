@@ -120,21 +120,23 @@ class TsonSchemaVersionsTest {
     }
 
     /**
-     * <b>The reason routing exists.</b> A v1 codec handed a v2 document reads it against v2's schema and binds
-     * it to a class with no {@code currency} component -- returning {@code OrderV1[sku=A, quantity=1]} with the
-     * field gone, no exception and no diagnostic ({@code UPSTREAM.md} #10). For an order that is the wrong
-     * currency rather than a rejected request.
+     * <b>The reason routing exists, and it is no longer silent.</b> A v1 codec handed a v2 document used to
+     * bind it to a class with no {@code currency} component and return {@code OrderV1[sku=A, quantity=1]}
+     * with the field gone — no exception, no diagnostic ({@code UPSTREAM.md} #10). For an order that is the
+     * wrong currency rather than a rejected request.
      *
-     * <p>Pinned as the hazard it is, so that if upstream starts reporting it this test fails and says so.
+     * <p>Strict binding refuses it instead. Routing is still the guard — this codec should never have seen
+     * this document — but the library no longer quietly does the wrong thing when the guard is bypassed.
      */
     @Test
-    void aCodecFromTheWrongVersionSilentlyDropsFieldsItsClassLacks() {
+    void aCodecFromTheWrongVersionIsRefusedRatherThanDroppingFieldsSilently() {
         TsonHttpCodec v1Only = versions.codecFor(V1_ID);
 
-        OrderV1 read = v1Only.readObject(body(order(V2_ID, "{ sku: \"A\" quantity: 1 currency: \"AUD\" }")),
-                "application/tson", OrderV1.class);
+        TsonHttpException refused = assertThrows(TsonHttpException.class,
+                () -> v1Only.readObject(body(order(V2_ID, "{ sku: \"A\" quantity: 1 currency: \"AUD\" }")),
+                        "application/tson", OrderV1.class));
 
-        assertEquals(new OrderV1("A", 1), read, "the currency is gone, and nothing said so");
+        assertTrue(refused.getMessage().contains("problem"), refused.getMessage());
     }
 
     /** And the guard: routing refuses before that can happen. */
@@ -185,39 +187,46 @@ class TsonSchemaVersionsTest {
         assertEquals(versions.codecFor(V1_ID), httpScheme.codec());
     }
 
-    /** One class across versions: a field the governing schema does not declare arrives null. */
+    /**
+     * <b>The one-class-across-versions model is blocked, and this is where it will unblock.</b>
+     * {@link AnyOrder} carries a {@code currency} component that v1's schema does not declare, which strict
+     * binding refuses: the component would reach the constructor as {@code null} on every v1 document.
+     *
+     * <p>Neither escape fits. {@code @Unbound} says a component is never the wire's business, and this one
+     * <em>is</em> — v2 binds it. {@code TsonConfig.lenientBinding} covers the other direction, a class holding
+     * fewer fields than the schema declares. What this needs is constructor selection by schema field set,
+     * deferred upstream until strictness landed. <b>When it lands, this test fails and should become the
+     * two reads it used to make.</b>
+     */
     @Test
-    void oneClassCanServeEveryVersionWithNullForWhatAVersionLacks() {
-        TsonSchemaVersions shared = TsonSchemaVersions.builder()
-                .version(V1_ID, V1, SOURCE, Map.of("order", AnyOrder.class))
-                .version(V2_ID, V2, SOURCE, Map.of("order", AnyOrder.class))
-                .build();
+    void oneClassAcrossVersionsIsRefusedUntilConstructorSelectionLands() {
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> TsonSchemaVersions.builder()
+                        .version(V1_ID, V1, SOURCE, Map.of("order", AnyOrder.class))
+                        .version(V2_ID, V2, SOURCE, Map.of("order", AnyOrder.class))
+                        .build());
 
-        var v1 = shared.route(body(order(V1_ID, "{ sku: \"A\" quantity: 1 }")));
-        AnyOrder fromV1 = v1.codec().readObject(v1.body(), "application/tson", AnyOrder.class);
-        assertEquals("A", fromV1.sku());
-        assertNull(fromV1.currency(), "v1 declares no currency, so it binds absent");
-
-        var v2 = shared.route(body(order(V2_ID, "{ sku: \"B\" quantity: 2 currency: \"AUD\" }")));
-        assertEquals("AUD", v2.codec().readObject(v2.body(), "application/tson", AnyOrder.class).currency());
+        assertTrue(refused.getMessage().contains("currency"), refused.getMessage());
+        assertTrue(refused.getMessage().contains(V1_ID),
+                "and it names the version that disagrees: " + refused.getMessage());
     }
 
     /**
-     * The tempting model that does not work: a constructor per version, expecting the binder to choose.
-     * Binding always uses the canonical one -- the sole public constructor, or the {@code @Record} one -- and
-     * passes null for a field the schema does not declare. The marker the two-argument constructor stamps never
-     * appears, which is the proof it is never called.
+     * <b>Multiple constructors still do not select a version</b>, measured against the version whose shape
+     * {@link AnyOrder} does match. Binding always uses the canonical constructor — the sole public one, or
+     * the {@code @Record}-annotated one — so the marker the two-argument constructor stamps never appears.
+     * A second constructor is for your own code and is invisible to binding.
      */
     @Test
     void bindingNeverSelectsAVersionSpecificConstructor() {
         TsonSchemaVersions shared = TsonSchemaVersions.builder()
-                .version(V1_ID, V1, SOURCE, Map.of("order", AnyOrder.class))
+                .version(V2_ID, V2, SOURCE, Map.of("order", AnyOrder.class))
                 .build();
 
-        var routed = shared.route(body(order(V1_ID, "{ sku: \"A\" quantity: 1 }")));
+        var routed = shared.route(body(order(V2_ID, "{ sku: \"A\" quantity: 1 currency: \"AUD\" }")));
         AnyOrder read = routed.codec().readObject(routed.body(), "application/tson", AnyOrder.class);
 
-        assertNull(read.currency(), "the canonical constructor ran with null, not the two-argument one");
+        assertEquals("AUD", read.currency(), "the canonical constructor ran, not the two-argument one");
     }
 
     /**
@@ -260,8 +269,10 @@ class TsonSchemaVersionsTest {
                 OrderV2.class));
         assertEquals(TsonHttpException.BAD_REQUEST, failed.status());
         // The clash is reported, not silently resolved -- which is the saving grace of this configuration.
-        assertTrue(failed.diagnostics().stream()
-                        .anyMatch(d -> d.message().contains("not assignable")),
-                "expected a not-assignable diagnostic, got: " + failed.diagnostics());
+        // The clash is reported, not silently resolved. Strict binding names both sides and what to do:
+        // "'order' and OrderV1 do not agree: no component for field 'currency'."
+        assertTrue(failed.diagnostics().stream().anyMatch(d -> d.message().contains("do not agree")
+                        && d.message().contains("currency")),
+                "expected a bind-disagreement diagnostic, got: " + failed.diagnostics());
     }
 }

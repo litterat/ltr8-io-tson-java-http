@@ -218,6 +218,9 @@ public final class TsonSchemaVersions {
             tson.resolve(schemaText);
             TsonHttpCodec codec = new TsonHttpCodec(tson);
             copy.values().forEach(target -> codec.prepareToWrite(target));
+            // Bind-mode compile now: a class that disagrees with the schema it is registered against is a
+            // startup failure here, not a 500 on the first request that happens to read one.
+            codec.prepareToRead(schemaId);
             return version(schemaId, codec);
         }
 
