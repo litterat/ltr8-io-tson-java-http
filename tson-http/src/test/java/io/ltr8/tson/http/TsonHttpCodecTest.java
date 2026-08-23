@@ -314,4 +314,47 @@ class TsonHttpCodecTest {
                 "a 5xx carries no detail: " + thrown.getMessage());
     }
 
+    private static Diagnostic aBindMismatch() {
+        return Diagnostic.ofSchemaError("s.example.com/x-1.tn", "order",
+                "'order' and com.example.OrderV1 do not agree: no component for field 'currency'",
+                Optional.empty());
+    }
+
+    /**
+     * <b>A bind mismatch is a 500 and outranks a gap.</b> It is neither a verdict on the document nor a gap
+     * in the library — a schema and the class bound to it disagree, which is this server's own wiring. It is
+     * checked first because it is the one an operator has to fix, and the only one whose message names a
+     * server type.
+     */
+    @Test
+    void aBindMismatchDiagnosticIsAServerFaultAndOutranksAGap() {
+        TsonHttpException thrown = TsonHttpException.invalidDocument(
+                List.of(anOrdinaryProblem(), aGap(), withCode(aBindMismatch(), Diagnostic.Code.BIND_MISMATCH)));
+
+        assertEquals(TsonHttpException.INTERNAL_SERVER_ERROR, thrown.status());
+    }
+
+    /**
+     * <b>And the class name never reaches the wire.</b> The detail exists to be logged; the adapter boundary
+     * drops both it and the diagnostics from any 5xx body, which is the leak this whole classification was
+     * asked for. Asserted against the body the boundary would actually send.
+     */
+    @Test
+    void aFiveHundredBodyCarriesNeitherTheDetailNorTheDiagnostics() {
+        TsonHttpException thrown = TsonHttpException.invalidDocument(
+                List.of(withCode(aBindMismatch(), Diagnostic.Code.BIND_MISMATCH)));
+
+        assertTrue(thrown.getMessage().contains("OrderV1"), "the log gets it: " + thrown.getMessage());
+
+        TsonProblem sent = TsonProblem.of(thrown.type(), thrown.status(), thrown.title(), null, List.of());
+        assertEquals(Optional.empty(), sent.detail());
+        assertEquals(List.of(), sent.errors());
+    }
+
+    /** Rebuilds a diagnostic under {@code code} -- the factories fix theirs, and this needs BIND_MISMATCH. */
+    private static Diagnostic withCode(Diagnostic d, Diagnostic.Code code) {
+        return new Diagnostic(d.path(), d.schemaPointer(), d.schemaId(), code, d.message(), d.expected(),
+                d.actual(), d.dataPosition(), d.schemaPosition());
+    }
+
 }

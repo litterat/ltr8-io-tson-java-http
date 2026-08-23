@@ -745,7 +745,38 @@ imported normally, is a real design constraint of the `data` base kind and is cu
 meta layer also cannot simply be `!!import`ed by an ordinary schema: `void` is declared by both it and
 `core.tn`, so the import collides.
 
-## 19. A bind mismatch has no code of its own, so a server cannot tell it from an invalid document
+## 19. ~~A bind mismatch has no code of its own, so a server cannot tell it from an invalid document~~ — DONE (`e2daff3`)
+
+**Landed as `Diagnostic.Code.BIND_MISMATCH`, and wider than reported.** `SchemaFailure` classifies every way a
+read can fail to get a compiled schema, so the three-way split is made once rather than at each call site:
+`TsonBindMismatchException` (including the missing-binding subclass) → `BIND_MISMATCH`, the reading
+application's wiring; `UnsupportedOperationException` → `NOT_IMPLEMENTED`, the library's; anything else →
+`SCHEMA_ERROR`, the schema author's. `Diagnostic.Code`'s own doc now names the two members that are not a
+verdict on the document, which is the distinction this project's status policy is built on.
+
+**One branch of the plan was dropped, correctly.** Rethrowing library faults so they propagate as themselves
+is not possible at that boundary: `TsonSchemaSource.fetch` mandates no exception type, so a source may signal
+an unfetchable schema with any `RuntimeException`. Reserving `IllegalStateException` would turn a missing
+schema into a crash for any source that spells it that way — and this project's own
+`TsonHttpSchemaSource` would have been in scope. The residual is a fetch-contract gap rather than a
+classification one and is now upstream backlog.
+
+**Adopted here:**
+
+- `invalidDocument` is a three-way. `BIND_MISMATCH` outranks `NOT_IMPLEMENTED` and is a **500**, because it is
+  the one an operator must fix and the only one whose message names a server type; `NOT_IMPLEMENTED` stays
+  501; everything else is the 400 it always was.
+- **The leak is closed by the status, not by filtering.** The adapter boundary already drops detail *and*
+  diagnostics from any 5xx body, so routing the status was all that was needed — the class name reaching the
+  wire was a consequence of a bind mismatch landing in the 400 branch, where a body carries every diagnostic
+  by design. The detail is still populated, because that is what gets logged.
+- `problem-4.tn` declares `BIND_MISMATCH`; §10 again, and `TsonProblemSchemaTest` caught the missing member
+  before I did, for the second bump running.
+
+**Also fixed while here:** the three demo servers no longer hardcode the problem schema's version in their own
+schema text — they interpolate `TsonProblemSchema.ID`. Three bumps in a week each touched sixteen files, and
+most of that was demos restating a constant.
+
 
 **Hit:** mapping the new strictness to a status. `TsonBindMismatchException`'s own Javadoc draws exactly the
 right line — *"the schema is not wrong and no library invariant broke; the schema is fine, the class is fine,

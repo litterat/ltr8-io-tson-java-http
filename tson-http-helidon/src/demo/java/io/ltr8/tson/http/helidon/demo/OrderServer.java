@@ -52,7 +52,7 @@ public final class OrderServer {
      * — which is what RFC 9457 does with an open JSON object, made explicit.
      *
      * <p>Both imports are named, which is the clearer spelling. {@code text} would arrive through
-     * {@code problem-3.tn}'s own import of {@code core.tn} either way — imports are transitive — but a schema
+     * the problem schema's own import of {@code core.tn} either way — imports are transitive — but a schema
      * that uses a name should say where it comes from. Naming both was rejected until {@code UPSTREAM.md} #11
      * was fixed.
      */
@@ -60,11 +60,11 @@ public final class OrderServer {
             !!id:"https://schemas.example.com/2026/32/app/orders-errors-1.tn"
             !!meta:"https://tson.io/2026/32/m/meta.tn"
             !!import:"https://tson.io/2026/32/m/core.tn"
-            !!import:"https://tson.io/2026/32/ltr8/http/problem-3.tn"
+            !!import:"%s"
             @doc:"Business errors: the request was schema-valid, and the domain still said no."
             {
                 sku_not_found => problem & { sku: text }
-            }""";
+            }""".formatted(TsonProblemSchema.ID);
 
     /** A description of this service, governed by api-1.tn -- published, and checked by a conformance test. */
     public static final String API_ID = "https://schemas.example.com/2026/32/app/orders-api-4.tn";

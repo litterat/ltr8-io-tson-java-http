@@ -115,7 +115,9 @@ no TSON knowledge of its own; what it *does* own is the error boundary, and that
 3. **Never overwrite a committed response.** Status and headers go out together, so after a handler has
    answered, a later failure cannot become a 500 — attempting it throws inside the boundary and loses the
    original. Log it and close instead. `TsonExchange.committed()` is how the boundary knows.
-4. **A 5xx body carries status and title and no detail.** An internal message can name a class, a path, an
+4. **A 5xx body carries status and title and no detail** — and no diagnostics either, which is what keeps a
+   bind mismatch's message (it names a bound Java class) off the wire. Routing the status is therefore the
+   whole of that fix; no filtering is needed. An internal message can name a class, a path, an
    internal host or a query, and a client is not the audience. The exception goes to a `System.Logger` — which
    keeps this module dependency-free, since it may not take a logging dependency. A 4xx is the opposite: its
    detail and diagnostics are the entire point.

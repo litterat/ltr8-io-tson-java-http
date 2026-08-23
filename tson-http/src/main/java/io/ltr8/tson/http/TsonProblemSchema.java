@@ -16,7 +16,7 @@ import java.util.Map;
  * server can serve, and as a compiled schema bound to {@link TsonProblem}/{@link TsonProblemDiagnostic}.
  *
  * <p><b>{@link #source} exists because the {@code !!id} in an error body has to resolve.</b> A problem body
- * declares {@code !!schema:"…/problem-3.tn"}, and a client that wants to validate what it received needs that
+ * declares {@code !!schema:"…/problem-4.tn"}, and a client that wants to validate what it received needs that
  * document. Serving it from this constant is what makes the URL in the body true rather than decorative.
  *
  * <p><b>This is tson-http's own schema.</b> It began as a copy of {@code tson-cli}'s {@code diagnostics.tn} and
@@ -33,18 +33,18 @@ import java.util.Map;
 public final class TsonProblemSchema {
 
     /** The current error-body schema's identity -- the {@code !!id} it declares and the URL it is served at. */
-    public static final String ID = "https://tson.io/2026/32/ltr8/http/problem-3.tn";
+    public static final String ID = "https://tson.io/2026/32/ltr8/http/problem-4.tn";
 
     /**
      * Every version of this schema that is still published, current first.
      *
-     * <p>§10 makes a published schema immutable: {@code problem-1.tn} and {@code problem-2.tn} are superseded by {@code problem-3.tn},
+     * <p>§10 makes a published schema immutable: {@code problem-1.tn}, {@code problem-2.tn} and {@code problem-3.tn} are superseded by {@code problem-4.tn},
      * which adds RFC 9457's {@code type} and {@code instance}, but a document that named the old one must go on
      * resolving — so it stays served. Nothing new is written against it. Hand this to
      * {@link TsonSchemaCatalog#of(java.util.Collection)} and a server publishes the whole history.
      */
     public static List<String> publishedSources() {
-        return List.of(SOURCE, SUPERSEDED_2, SUPERSEDED_1);
+        return List.of(SOURCE, SUPERSEDED_3, SUPERSEDED_2, SUPERSEDED_1);
     }
 
     /**
@@ -57,7 +57,7 @@ public final class TsonProblemSchema {
      * way from the map that was wrong.
      */
     public static Map<String, String> publishedById() {
-        return Map.of(ID, SOURCE, ID_2, SUPERSEDED_2, ID_1, SUPERSEDED_1);
+        return Map.of(ID, SOURCE, ID_3, SUPERSEDED_3, ID_2, SUPERSEDED_2, ID_1, SUPERSEDED_1);
     }
 
     private static final Map<String, Class<?>> BINDINGS = Map.of(
@@ -65,13 +65,19 @@ public final class TsonProblemSchema {
             "diagnostic", TsonProblemDiagnostic.class,
             "diagnostic_code", Diagnostic.Code.class);
 
-    private static final String SOURCE = readResource("/problem-3.tn");
+    private static final String SOURCE = readResource("/problem-4.tn");
+
+    /** Superseded, still published. See {@link #publishedSources()}. */
+    public static final String ID_3 = "https://tson.io/2026/32/ltr8/http/problem-3.tn";
 
     /** Superseded, still published. See {@link #publishedSources()}. */
     public static final String ID_2 = "https://tson.io/2026/32/ltr8/http/problem-2.tn";
 
     /** Superseded, still published. See {@link #publishedSources()}. */
     public static final String ID_1 = "https://tson.io/2026/32/ltr8/http/problem-1.tn";
+
+    /** Superseded, still published. See {@link #publishedSources()}. */
+    private static final String SUPERSEDED_3 = readResource("/problem-3.tn");
 
     /** Superseded, still published. See {@link #publishedSources()}. */
     private static final String SUPERSEDED_2 = readResource("/problem-2.tn");

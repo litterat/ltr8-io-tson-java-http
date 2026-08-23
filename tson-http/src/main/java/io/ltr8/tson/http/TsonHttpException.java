@@ -146,8 +146,23 @@ public final class TsonHttpException extends RuntimeException {
      * and are still carried in the body, but something in the document went unchecked, so <em>"your request
      * was invalid"</em> is not a verdict this server is entitled to give. Telling a client 400 would have
      * them fix a request that may be perfectly good.
+     *
+     * <p><b>{@code BIND_MISMATCH} outranks both</b>, and is a 500. It is neither a verdict on the document
+     * nor a gap in the library: a schema and the Java class bound to it disagree, which is this server's own
+     * wiring and nothing the client can act on. It is checked first because it is the one an operator has to
+     * fix, and the only one whose message names a server type -- which is why 5xx drops the body's detail.
      */
     public static TsonHttpException invalidDocument(List<Diagnostic> diagnostics) {
+        // This server's own wiring, and the most serious of the three for whoever runs it. Its message names
+        // a server class, so the detail here exists to be logged: the adapter boundary drops both detail and
+        // diagnostics from any 5xx body, which is what keeps it off the wire.
+        List<Diagnostic> mismatches = diagnostics.stream()
+                .filter(d -> d.code() == Diagnostic.Code.BIND_MISMATCH).toList();
+        if (!mismatches.isEmpty()) {
+            return new TsonHttpException(INTERNAL_SERVER_ERROR, TYPES + "internal-error",
+                    "Internal server error", "a schema and the class bound to it disagree: " + mismatches
+                            .stream().map(Diagnostic::message).toList(), diagnostics, null);
+        }
         long gaps = diagnostics.stream().filter(d -> d.code() == Diagnostic.Code.NOT_IMPLEMENTED).count();
         if (gaps > 0) {
             return new TsonHttpException(NOT_IMPLEMENTED, TYPES + "not-implemented", "Not implemented",

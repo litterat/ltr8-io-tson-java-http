@@ -142,7 +142,13 @@ class TsonSchemaVersionsTest {
                 () -> v1Only.readObject(body(order(V2_ID, "{ sku: \"A\" quantity: 1 currency: \"AUD\" }")),
                         "application/tson", OrderV1.class));
 
-        assertTrue(refused.getMessage().contains("problem"), refused.getMessage());
+        // 500, not 400: the document is valid v2 and this codec should never have seen it, so the fault is
+        // this server's. The adapter boundary drops the detail and the diagnostics from any 5xx body, which
+        // is what keeps the class name off the wire -- it is here for the log.
+        assertEquals(TsonHttpException.INTERNAL_SERVER_ERROR, refused.status());
+        assertTrue(refused.diagnostics().stream()
+                        .anyMatch(d -> d.code() == io.ltr8.tson.compiler.Diagnostic.Code.BIND_MISMATCH),
+                () -> "expected a BIND_MISMATCH diagnostic, got " + refused.diagnostics());
     }
 
     /** And the guard: routing refuses before that can happen. */
@@ -310,7 +316,8 @@ class TsonSchemaVersionsTest {
         TsonHttpException failed = assertThrows(TsonHttpException.class, () -> codec.readObject(
                 body(order(V2_ID, "{ sku: \"B\" quantity: 2 currency: \"AUD\" }")), "application/tson",
                 OrderV2.class));
-        assertEquals(TsonHttpException.BAD_REQUEST, failed.status());
+        // A misconfiguration of this server, so 5xx -- the client's v2 document is entirely valid.
+        assertEquals(TsonHttpException.INTERNAL_SERVER_ERROR, failed.status());
         // The clash is reported, not silently resolved -- which is the saving grace of this configuration.
         // The clash is reported, not silently resolved. Strict binding names both sides and what to do:
         // "'order' and OrderV1 do not agree: no component for field 'currency'."
