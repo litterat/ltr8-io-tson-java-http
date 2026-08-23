@@ -36,3 +36,12 @@ tasks.register<JavaExec>("runDemo") {
     mainClass.set("io.ltr8.tson.http.jdk.demo.OrderServer")
     args = listOf(project.findProperty("port")?.toString() ?: "8080")
 }
+
+// ReadmeTest executes the README's own examples, so the README is an input to this task. Without this,
+// Gradle sees no change when it is edited, keeps the task UP-TO-DATE, and a stale claim ships with a green
+// build -- which is the exact failure the test exists to prevent.
+tasks.named<Test>("test") {
+    inputs.file(rootProject.file("README.md"))
+        .withPropertyName("readme")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}

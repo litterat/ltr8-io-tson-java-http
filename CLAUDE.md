@@ -11,14 +11,20 @@ violations into HTTP error responses, and serving/fetching schema documents over
 It is a **consumer** of the TSON library, not part of it. The library lives in the sibling repo
 [ltr8-io-tson-java](https://github.com/litterat/ltr8-io-tson-java), checked out at `../ltr8-io-tson-java`
 and consumed as a Gradle **included build** (see "Consuming tson-java" below). Destination remote:
-`https://github.com/litterat/` — not yet pushed.
+`https://github.com/litterat/`.
 
-**Status.** All four modules are built and tested (168 tests), each adapter with a runnable demo server and a
-concurrency suite driving it under load. Responses are self-describing in both directions: an error body names
-`problem-1.tn`, a demo's order reply names the schema governing it, and this server publishes both documents so
-those URLs resolve. Every adapter proves the full loop: a schema
-served at its identity path, fetched back by `TsonHttpSchemaSource`, and used to validate a document. The
-project does what it set out to do; what remains is polish and the open questions below.
+**Status.** All four modules are built and tested, each adapter with a runnable demo server and a concurrency
+suite driving it under load. Responses are self-describing in both directions: an error body names
+`problem-1.tn`, a demo's order reply names the schema governing it, and the server publishes both so those
+URLs resolve. Every adapter proves the full loop: a schema served at its identity path, fetched back by
+`TsonHttpSchemaSource`, and used to validate a document. A service also publishes a description of itself
+(`meta-http-1.tn`), from which it derives what to publish and what to warm.
+
+**Don't state a count of anything here.** Test counts and file counts go stale within a day and nothing
+maintains them; `ReadmeTest` enforces that rule for the README and it applies equally to this file. Say what
+is covered, not how much.
+
+The project does what it set out to do; what remains is polish and the open questions below.
 
 **`TSON-Schema` header — built.** `SCHEMA-HEADER.md` carries the rules and the reasoning; `TsonSchemaHeader` is
 the implementation. An RFC 9651 sf-string (quoted, always — an unquoted URI parses as an sf-token right up
