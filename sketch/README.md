@@ -115,6 +115,33 @@ type-ref stops the reader seeing the type-ref (`UPSTREAM.md` #16) — so a schem
 document itself. Every other file here explains itself in a `@doc`; this one has to be explained from outside.
 That asymmetry is not a stylistic choice, and it is worth noticing when weighing the designs.
 
+### A schema is a data document with a defined structure — so what happens if you put other data in it?
+
+The framing that makes the rest of this directory make sense. `schema => {type_name => type_definition}` and
+`type_definition.body: top`: a schema document *is* data, and its body slot accepts anything. So putting an
+`operation` in a schema needs no change to the meta-schema at all. The only question is how much the compiler
+does with it.
+
+**The answer splits cleanly, and both halves are already built.**
+
+- **The operation's own shape** is checked by the constructor's reader — enums, refinements, record closure —
+  exactly as a `!record { … }` body is. Nothing new.
+- **The references inside it** are resolved by `DefinitionResolver.takesATypeRef`, which decides **by the
+  slot's declared type**, not by hardcoded knowledge of the bundled meta records. It follows aliases, and the
+  reason given is *"a meta layer may name the kernel's own `type_ref` something of its own"* — written
+  anticipating precisely this.
+- **Application semantics** — is this path a valid template, does this operation make sense — stay with the
+  reader, which is where they belong.
+
+So the reader does not have to load the schema and traverse entries hunting for its own data: the compiler
+resolves the names, because it is the only thing that owns the namespace, and hands back a body already bound
+to the consumer's own Java record.
+
+**One caveat that decides which sketch to prefer.** `takesATypeRef` tests for `type_ref`. There is no generic
+counterpart for `type_name`, which is resolved only where the resolver has specific handling (`supertypes`).
+So `meta-http-1.tn`'s `request: type_ref` should be checked and `meta-http-3.tn`'s leaner `request: type_name`
+most likely is not — the opposite of what their relative simplicity suggests. **Use `type_ref`.**
+
 ### Who checks what — the question all four designs answer differently
 
 The one that matters when choosing, and the answer inverts the obvious reading.

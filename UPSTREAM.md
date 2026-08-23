@@ -460,13 +460,22 @@ entry to look up, an instantiation `Reference` to follow, and a branch because a
 a multi-response one have structurally different resolved forms. All of it becomes
 `body() instanceof Operation op` and `op.responses()`.
 
-**One question this turns on, and it is open.** Is a `type_name` carried in a *constructor payload* resolved
-and checked? The resolver checks a `type_name` in `supertypes` and a `type_ref` in a field type — both of which
-it has specific handling for. Whether it walks an arbitrary constructor's payload for references is untested:
-`extern`'s `types` are unchecked, but §7.8 says those name a schema deliberately not loaded, so it is not a
-fair witness. **If the answer is no, `request: type_name` is `api-1.tn`'s `type: text` in better clothing**, and
-the reason for putting an API in the schema layer goes with it. `sketch/meta-http-3.tn` is the leaner
-declaration this matters for.
+**The question of whether references in a constructor payload get resolved is already answered — for
+`type_ref`.** `DefinitionResolver.takesATypeRef` decides it **by the slot's declared type**, not by hardcoded
+knowledge of which meta records have reference slots, and follows aliases with this reason given:
+
+> *Aliases are followed, since a meta layer may name the kernel's own `type_ref` something of its own.*
+
+So the mechanism is generic and was written anticipating exactly this case. A user-declared
+`operation.request: type_ref` should ride the same reference channel `array.element_type` does. Nothing about
+it is special-cased to the bundled meta.
+
+**But `type_name` has no such path.** It is resolved where the resolver has specific handling — `supertypes` —
+and there is no generic "resolve `type_name` slots" counterpart. So the two sketches differ where their
+simplicity suggests the opposite: `meta-http-1.tn`'s `request: type_ref` should be checked, and
+`meta-http-3.tn`'s leaner `request: type_name` most likely is not. **Use `type_ref`.**
+
+This makes #15 the only thing between the design and checked references — the resolution half is built.
 
 ---
 

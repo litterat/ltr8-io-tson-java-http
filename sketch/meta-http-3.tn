@@ -19,13 +19,20 @@
   response type, so a consumer that wants statuses still walks the choice and its variants. It does
   not remove that walk; it removes it from the OPERATION.
 
-  OPEN, AND IT DECIDES WHETHER ANY OF THIS IS WORTH IT: is a type_name carried in a constructor
-  payload resolved and checked? The resolver checks a type_name in `supertypes` and a type_ref in a
-  field type, both of which it has specific handling for. Whether it walks an arbitrary constructor's
-  payload looking for references to resolve is untested -- `extern`'s `types` are unchecked, but
-  §7.8 says those name a schema deliberately not loaded, so it is not a fair witness. If the answer
-  is no, `request: type_name` is api-1.tn's `type: text` in better clothing, and the whole reason for
-  putting an API in the schema layer is lost.
+  AND THIS IS PROBABLY THE WRONG CHOICE, for a reason that only shows up in the resolver.
+
+  A reference in a constructor payload is resolved by DefinitionResolver.takesATypeRef, which decides
+  by the SLOT'S DECLARED TYPE -- is this field a `type_ref`? -- rather than by knowing which meta
+  records have reference slots. It follows aliases, and says why: "a meta layer may name the kernel's
+  own type_ref something of its own". So the mechanism is generic and was written for exactly this.
+
+  It tests for `type_ref`. There is no counterpart for `type_name`, which is resolved only where the
+  resolver has specific handling, as in `supertypes`. So meta-http-1.tn's `request: type_ref` should
+  be checked and this file's `request: type_name` most likely is not -- which would make it
+  api-1.tn's `type: text` in better clothing.
+
+  Kept because the shape is worth comparing, but prefer meta-http-1.tn. Untestable either way until
+  UPSTREAM.md #15 lets a user-defined constructor be applied at all.
   """
 {
   operation => ~top & {
