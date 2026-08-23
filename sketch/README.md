@@ -21,8 +21,21 @@ what this file claims, so a fix upstream shows up as a failing test rather than 
 | `orders-api-2.tn` | a custom meta layer for annotation *types* | annotations | works |
 | `orders-api-1.tn` | a custom meta layer with an `operation` constructor | constructor fields | blocked on one gap |
 
-**`orders-api-3.tn` is the one to read.** It needs no meta layer, no kernel import, no `top`, and no
-annotations — an ordinary schema, which means any TSON toolchain can already read it.
+**`orders-api-3.tn` is the one to read** — but the reason has changed, and the two designs are closer than the
+table suggests.
+
+*Not* because it is the most compact: `orders-api-2.tn` is, with **zero** extra declarations per response
+(each is a field carrying a `@status` annotation), where `orders-api-3.tn` needs one named entry per response
+because #13 forbids an application inside a choice.
+
+The durable reason is that **only `orders-api-3.tn`'s metadata is in the type system, and therefore checkable**.
+A FIXED status is *meant* to constrain the value — it does for a literal, and will for a template-supplied one
+once `UPSTREAM.md` #14 lands. An annotation never will: it is metadata by design, and `@status:201` documents
+the status without any prospect of validating it. That is the trade, and it is worth stating plainly because
+today, with #14 outstanding, *neither* design actually constrains a template-supplied status.
+
+Its other advantage is real but smaller: an ordinary header, so any TSON toolchain reads it without fetching a
+custom meta-schema.
 
 **Since `UPSTREAM.md` #11 was fixed it is also a library rather than a single file.** A schema can now reference
 types from several others, so the vocabulary (`http-api-1.tn`), the domain types (`order-1.tn`), the errors
@@ -277,11 +290,11 @@ data value — nobody can write `!create_order { … }` and mean anything. This 
 1. **Annotations before a declaration's name annotate the map *key*, and are not hoisted to the value.** They
    must come *after* the `=>`. `DefinitionResolver` says so explicitly, citing §6. So it is
    `op => @method:POST top & { … }`, never `@method:POST` on the line above.
-2. **An annotation's value is bound through the governing meta-schema's namespace, and is silently dropped
-   otherwise.** Declare `method => @annotation http_method` beside the operation and `@method:POST` resolves
-   with `value=Optional.empty` — no diagnostic. `@doc` keeps its value only because `doc` is meta-kernel's.
-   **This is the whole reason `meta-http-2.tn` exists**: it holds the annotation *types* and nothing else.
-   Filed as `UPSTREAM.md` #12.
+2. **An annotation's type must be in the governing meta-schema's namespace.** Declaring
+   `method => @annotation http_method` beside the operation and writing `@method:POST` is now an error saying
+   so — it used to resolve clean and discard the value (`UPSTREAM.md` #12, fixed). `@doc` works only because
+   `doc` is meta-kernel's. **This is the whole reason `meta-http-2.tn` exists**: it holds the annotation
+   *types* and nothing else.
 3. **A schema is a meta-schema only if its own `!!meta` is the meta-kernel.** There is no three-level chain: a
    layer above `meta.tn` is refused with *"is named as the `!!meta` of another schema but is not a
    meta-schema"*. So `meta-http-2.tn` is a **sibling** of `meta.tn`, not a layer on it.
