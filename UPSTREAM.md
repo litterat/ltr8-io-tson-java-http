@@ -600,7 +600,15 @@ This makes #15 the only thing between the design and checked references — the 
 
 ---
 
-## 16. An annotation before a root type-ref hides it, so a data document cannot be documented
+## 16. ~~An annotation before a root type-ref hides it~~ — DONE (`1d49b27`)
+
+**Fixed** — the root type-ref lookup now looks past the annotations preceding it, so
+`@doc:"…" !api { … }` reads. The reader stack always handled it; what could not was the lookup that finds the
+type-ref to *select a reader with*, which saw one event and concluded a type-ref that was there was missing.
+
+Nothing here needed unblocking by the time it landed: the document that wanted it was the data-shaped API
+description, retired when the schema-shaped one was picked. Verified working all the same.
+
 
 **Hit:** writing the API description in `sketch/orders-api-4.tn` with a `@doc` explaining itself, as every
 schema in that directory does.
@@ -811,50 +819,32 @@ bind mismatch is no more an exit-1 than a gap is.
 case at startup, so the diagnostic path is reachable only by a server that bypasses its own guard. Matching on
 message text would close it and is not worth the fragility.
 
-## 20. `@doc` on a schema entry is dropped from resolved output
+## 20. ~~`@doc` on a schema entry is dropped from resolved output~~ — WITHDRAWN, the report was wrong
 
-**Hit:** an operation's long-form description. An operation declared by a meta layer *is* a schema entry, so
-`@doc` is exactly where its description belongs — and a consumer reading the description back cannot see it.
+**There is no gap. A schema entry has two annotation positions and they land in different places**, and I
+checked only one of them:
 
-```tson
-@doc:"Accept an order and confirm it."
-create_order => !operation { … }
-```
+| written | read back from |
+|---|---|
+| `@doc:"…" thing => { … }` — annotates the **entry** | `entries.getAnnotations("thing")` |
+| `thing => @doc:"…" { … }` — annotates the **definition** | `entries.get("thing").annotations()` |
 
-```java
-entries.get("create_order").annotations().values()   // []
-```
+Both are retained. Every "empty" in the original report was a first-position annotation read through the
+second position's accessor, which looks exactly like the annotation being dropped — including the row about
+this project's own `problem-1.tn`, which documents its entries in the first position and reads them back fine.
+`SchemaAnnotationScopeTest` upstream asserts both, and would have told me had I looked before filing.
 
-**Not specific to the `data` kind, and not specific to a custom meta layer.** Measured three ways, all empty:
+**What it cost**, since that is the useful part: a wrongly-filed item, and a redundant `description` field
+added to `operation` in `meta-http-1.tn` to work around a problem that did not exist. Both undone —
+`TsonApiDescription.doc(name)` reads the entry annotation, which was the original design.
 
-| entry | governing meta | `annotations()` |
-|---|---|---|
-| `create_order => !operation { … }` | `meta-http-1.tn` | `[]` |
-| `plain => { a: text }`, same schema | `meta-http-1.tn` | `[]` |
-| `thing => { a: text }` | the bundled `meta.tn` | `[]` |
-| `problem` in this project's own `problem-1.tn` | the bundled `meta.tn` | `[]` |
+**What would have caught it:** checking the accessor upstream's own tests use before concluding a library is
+wrong. The tell was there in the report itself — I wrote that *locally declared annotations do survive*, and
+did not ask why `@method` would be kept where `@doc` was not. Two accessors, not two policies.
 
-The last row is the one that makes it worth reporting: a shipping schema documents its own entries with `@doc`
-and nothing can read that documentation back.
+Pinned by `UpstreamGapsTest.anEntrysTwoAnnotationPositionsLandInDifferentPlaces`, which stays even though
+nothing is broken: the shape of the mistake is worth having written down.
 
-**The mechanism is there and works for other annotations.** `TypeDefinition` has `annotations()` and
-`withAnnotations(…)`, and a *locally declared* annotation survives — `SketchTest`'s
-`theApiModelIsReadableFromTheResolvedSchema` reads `@method`/`@path` off resolved entries, declared by
-`meta-http-2.tn`. So `@doc` is not falling foul of a rule that annotations are authoring-time; it is being
-dropped where its neighbours are not.
-
-**Which of two things this is, I cannot tell from here** — worth deciding explicitly either way:
-
-1. **A gap.** `doc` reaches an entry the same way any annotation does and should be retained. Then this is a
-   bug and the fix is wherever the kernel-declared annotations are being filtered.
-2. **A rule.** `@doc` is deliberately authoring-time, the substitute for the comment syntax TSON does not
-   have, and never intended to be machine-readable. Then it should say so — and the consequence is that
-   **anything wanting a readable description must declare a field**, which is a real design constraint on
-   every schema-shaped description and is currently undocumented.
-
-**Worked around here** rather than waited on: `meta-http-1.tn`'s `operation` carries `description: text?`
-alongside `summary`. If (1), that field becomes redundant and the annotation is the better shape; if (2), the
-field is correct and the note in `TsonApiDescription` explaining why should stay.
 
 ## Spec feedback to file
 

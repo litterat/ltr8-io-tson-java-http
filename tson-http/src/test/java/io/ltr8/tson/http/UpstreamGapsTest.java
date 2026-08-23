@@ -222,35 +222,58 @@ class UpstreamGapsTest {
         assertTrue(message.contains("not permitted in an instance template binding"), message);
     }
 
-    // ── #20: @doc on a schema entry is dropped from resolved output ──────────────────────────────
+    // ── not a gap: an entry's two annotation positions ──────────────────────────────────────────
 
     /**
-     * <b>Not specific to the {@code data} kind, nor to a custom meta layer.</b> An ordinary record in an
-     * ordinary schema loses its {@code @doc} too — as does this project's own {@code problem-1.tn}, which
-     * documents its entries and cannot read them back. A <em>locally declared</em> annotation does survive,
-     * which is what makes this a gap rather than a rule about annotations.
+     * <b>Filed as {@code UPSTREAM.md} #20 and withdrawn — the report was wrong.</b> A schema entry has two
+     * annotation positions and they land in different places: before the name annotates the <em>entry</em>
+     * and is read from the entries map, after the arrow annotates the <em>definition</em> and is read from
+     * the {@code TypeDefinition}. Checking only the second for an annotation written in the first position
+     * looks exactly like the annotation being dropped.
+     *
+     * <p>Kept as a test because the shape of that mistake is worth having pinned: it cost a wrongly-filed
+     * upstream item and a redundant {@code description} field on {@code operation}, both since undone.
      */
     @Test
-    void docOnASchemaEntryIsDroppedFromResolvedOutput() {
+    void anEntrysTwoAnnotationPositionsLandInDifferentPlaces() {
         String schema = """
                 !!id:"https://s.example.com/2026/32/p-1.tn"
                 !!meta:"https://tson.io/2026/32/m/meta.tn"
                 !!import:"https://tson.io/2026/32/m/core.tn"
                 {
-                  @doc:"a documented record"
-                  thing => { a: text }
+                  @doc:"on the entry"
+                  before => { a: text }
+                  after  => @doc:"on the definition" { a: text }
                 }""";
         Tson tson = Tson.builder().schemaSource(u -> schema).build();
         tson.resolve(schema);
-        TypeDefinition thing = tson.schemaRegistry().get("https://s.example.com/2026/32/p-1.tn")
-                .orElseThrow().schema().entries().get("thing");
+        var entries = tson.schemaRegistry().get("https://s.example.com/2026/32/p-1.tn")
+                .orElseThrow().schema().entries();
 
-        assertEquals(List.of(), thing.annotations().values(),
-                "when #20 is answered, either this carries the doc or the rule is written down");
+        assertEquals(java.util.Optional.of("on the entry"),
+                entries.getAnnotations("before").value("doc", String.class));
+        assertEquals(List.of(), entries.get("before").annotations().values(),
+                "not here -- looking only here is the mistake");
 
-        // And the shipping schema, which documents its own entries for readers that cannot see it.
-        assertEquals(List.of(), TsonProblemSchema.compiled().schema().entries().get("problem")
-                .annotations().values());
+        assertEquals(java.util.Optional.of("on the definition"),
+                entries.get("after").annotations().value("doc", String.class));
+    }
+
+    /** And an annotation naming no type is refused, wherever it is written. */
+    @Test
+    void anUnknownAnnotationOnAnEntryIsRefused() {
+        String schema = """
+                !!id:"https://s.example.com/2026/32/p-1.tn"
+                !!meta:"https://tson.io/2026/32/m/meta.tn"
+                !!import:"https://tson.io/2026/32/m/core.tn"
+                {
+                  @nosuchtype:"x"
+                  thing => { a: text }
+                }""";
+
+        assertTrue(assertThrows(RuntimeException.class,
+                () -> Tson.builder().schemaSource(u -> schema).build().resolve(schema))
+                .getMessage().contains("does not name a type"));
     }
 
     // ── the `data` kind's own guarantee, which nothing else asserts here ─────────────────────────

@@ -25,12 +25,13 @@ import java.util.Set;
  * does not resolve, so an instance of this class cannot exist for an unsound description. What is left is a
  * read model.
  *
- * <h2>Why an operation's description is a field and not its {@code @doc}</h2>
+ * <h2>An entry has two annotation positions, and they land in different places</h2>
  *
- * <p>An operation is a schema entry, so {@code @doc} is where its long-form description belongs. It does not
- * survive into resolved output ({@code UPSTREAM.md} #20) — measured, and true of an ordinary record and of
- * this project's own {@code problem-1.tn} as well — so {@link Operation#description()} carries it as an
- * ordinary field. When that gap closes, reading the annotation here is the better shape.
+ * <p>{@code @doc:"…" create_order => !operation { … }} annotates the <b>entry</b> and is read from the
+ * entries map's own annotations; {@code create_order => @doc:"…" !operation { … }} annotates the
+ * <b>definition</b> and is read from the {@code TypeDefinition}. Both are retained. Reading only the second
+ * and concluding {@code @doc} was dropped is a mistake that cost a wrongly-filed upstream item and a
+ * redundant {@code description} field on {@code operation}, since removed.
  *
  * <h2>The entry name is the operationId</h2>
  *
@@ -49,24 +50,37 @@ public final class TsonApiDescription {
     private final String schemaId;
     private final Map<String, Operation> operations;
 
-    private TsonApiDescription(Tson tson, String schemaId, Map<String, Operation> operations) {
+    private final Map<String, String> docs;
+
+    private TsonApiDescription(Tson tson, String schemaId, Map<String, Operation> operations,
+                               Map<String, String> docs) {
         this.tson = tson;
         this.schemaId = schemaId;
         this.operations = Map.copyOf(operations);
+        this.docs = Map.copyOf(docs);
+    }
+
+    /** An operation's {@code @doc} -- its long-form description. {@code summary} is the short one. */
+    public Optional<String> doc(String operationName) {
+        return Optional.ofNullable(docs.get(operationName));
     }
 
     static TsonApiDescription of(Tson tson, String schemaId) {
         var compiled = tson.schemaRegistry().get(schemaId).orElseThrow(() -> new IllegalArgumentException(
                 "'" + schemaId + "' is not resolved -- resolve the description before reading it"));
         Map<String, Operation> found = new LinkedHashMap<>();
-        compiled.schema().entries().forEach((name, definition) -> {
+        Map<String, String> docs = new LinkedHashMap<>();
+        var entries = compiled.schema().entries();
+        entries.forEach((name, definition) -> {
             // An operation is found by what its body IS, not by a naming convention -- the `data` base kind
             // is what lets an entry say it is not a type, and this is the payoff.
             if (definition.body() instanceof Operation operation) {
                 found.put(name, operation);
+                entries.getAnnotations(name).value("doc", String.class)
+                        .ifPresent(text -> docs.put(name, text));
             }
         });
-        return new TsonApiDescription(tson, schemaId, found);
+        return new TsonApiDescription(tson, schemaId, found, docs);
     }
 
     /** The description schema's identity. */

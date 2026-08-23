@@ -16,17 +16,13 @@ import java.util.Optional;
  * so naming a type nothing declares is an author error at schema load — the one thing a description written
  * as data cannot have, since a data document can name a schema but cannot hold a reference to a type.
  *
- * <p><b>{@code description} is a component even though an operation is a schema entry</b>, where {@code @doc}
- * would be the natural home. {@code @doc} is dropped from resolved output — measured, and true of an ordinary
- * record and of this project's own {@code problem-1.tn} too ({@code UPSTREAM.md} #20) — so a consumer reading
- * a description back cannot see it. Locally declared annotations do survive, which is what makes that a gap
- * rather than a rule.
+ * <p>There is no {@code description} component: an operation is a schema <em>entry</em>, so {@code @doc}
+ * carries its long form and {@link TsonApiDescription#doc} reads it back from the entry's annotations.
  */
 @Typename(name = "operation")
 public record Operation(HttpMethod method, String path, Optional<String> summary,
-                        Optional<String> description, Optional<Boolean> deprecated,
-                        List<Parameter> parameters, Optional<TypeRef> request,
-                        List<Response> responses) implements Data {
+                        Optional<Boolean> deprecated, List<Parameter> parameters,
+                        Optional<TypeRef> request, List<Response> responses) implements Data {
 
     @Override
     public List<TypeRef> references() {

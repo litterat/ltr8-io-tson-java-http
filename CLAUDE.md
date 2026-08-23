@@ -202,10 +202,15 @@ that every declared operation has a handler and every payload type a binding. Th
 that needs a per-adapter seam, because path syntax differs: the description says `/{schemaPath}` and Javalin
 needs `/<path>`, an identity path having slashes that only the angle form matches across.
 
-**An operation's `description` is a field, not its `@doc`.** That is a workaround: an operation *is* a schema
-entry, so `@doc` is where it belongs, but `@doc` does not survive into resolved output (`UPSTREAM.md` #20).
-A response and a parameter carry the field for a different and permanent reason — they are values inside a
-payload, with nothing for an annotation to attach to.
+**An operation's long description is its `@doc`**, read back with `TsonApiDescription.doc(name)`; `summary` is
+the short form. A response and a parameter carry a `description` *field* instead, for a permanent reason —
+they are values inside a payload, with nothing for an annotation to attach to.
+
+**A schema entry has two annotation positions and they land in different places.** `@doc:"…" op => …`
+annotates the **entry**, read from `entries.getAnnotations(name)`; `op => @doc:"…" { … }` annotates the
+**definition**, read from `TypeDefinition.annotations()`. Both are retained. Reading only the second and
+concluding `@doc` is dropped cost a wrongly-filed upstream item and a redundant field here (`UPSTREAM.md`
+#20, withdrawn).
 
 **Parameters are where TSON's document-orientation does not reach.** A URL segment cannot carry a record, so
 `parameter.type` names a scalar and nothing enforces that. Stating the limit beats papering over it.

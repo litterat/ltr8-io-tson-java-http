@@ -62,12 +62,15 @@
     grow members beyond its body, and a map-typed slot cannot hold a template parameter, which would
     foreclose templated operations before they are tried.
 
-    `description` is a field even though an operation IS a schema entry and @doc attaches to entries.
-    That was the intended design and it does not work: @doc is dropped from resolved output, so a
-    consumer reading the description back cannot see it -- measured, and true of an ordinary record and
-    of this project's own problem-1.tn as well (UPSTREAM.md #20). Locally declared annotations DO
-    survive, which is what makes it a gap rather than a rule. `summary` is the short form OpenAPI keeps
+    There is no `description` field: an operation IS a schema entry, so @doc carries its long form and
+    a reader gets it back from the entry's annotations. `summary` is the short form OpenAPI keeps
     beside the long one.
+
+    Worth knowing, because it cost a wrongly-filed upstream item: a schema entry has TWO annotation
+    positions and they land in different places. `@doc:"..." op => ...` annotates the ENTRY and is read
+    from the entries map's own annotations; `op => @doc:"..." { ... }` annotates the DEFINITION and is
+    read from the TypeDefinition. Both are retained. Looking only at the second and concluding @doc was
+    dropped is the mistake.
 
     The entry's NAME is the operationId, and unlike OpenAPI's it lives in a namespace with a collision
     rule, so two operations cannot quietly share one.
@@ -80,7 +83,6 @@
     method:      http_method
     path:        text
     summary:     text?
-    description: text?
     deprecated:  boolean?
     parameters:  [parameter]
     request:     type_ref?

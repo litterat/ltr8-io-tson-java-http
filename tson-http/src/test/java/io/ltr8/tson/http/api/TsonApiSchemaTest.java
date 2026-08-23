@@ -37,11 +37,11 @@ class TsonApiSchemaTest {
             !!import:"https://tson.io/2026/32/ltr8/http/problem-1.tn"
             !!import:"https://tson.io/2026/32/m/core.tn"
             {
+              @doc:"Accept an order and confirm it, with the quantity doubled."
               create_order => !operation {
                 method:     POST
                 path:       "/orders"
-                summary:     "Place an order"
-                description: "Accept an order and confirm it, with the quantity doubled."
+                summary:    "Place an order"
                 parameters: []
                 request:    order
                 responses:  [
@@ -86,8 +86,8 @@ class TsonApiSchemaTest {
         assertEquals("/orders", create.path());
         assertEquals(Optional.of("Place an order"), create.summary());
         assertEquals(Optional.of("Accept an order and confirm it, with the quantity doubled."),
-                create.description(),
-                "a field rather than @doc, which does not survive resolution -- UPSTREAM.md #20");
+                api.doc("create_order"),
+                "@doc on the entry is the long form; summary is the short one");
         assertEquals("order", create.request().orElseThrow().name());
         assertEquals(Optional.of("The confirmed order"), create.responseFor(201).orElseThrow().description());
         assertEquals("problem", create.responseFor(400).orElseThrow().body().orElseThrow().name());
