@@ -453,8 +453,20 @@ established way to map a schema type name to a Java class — `TsonProblemSchema
 requirement stops the run before that is exercised.
 
 **What it unlocks** is in `sketch/README.md`: shape checking, recognisability by construction, templated
-operations, and no need for FIXED fields (so #14 cannot arise). `sketch/meta-http-1.tn` is the declaration
-waiting on it.
+operations, no need for FIXED fields (so #14 cannot arise), and — the one that matters most to a consumer —
+**the type names land directly in the Java record** instead of being recovered by walking resolved type
+structure. `ApiModelExtractionTest` measures that walk on the ordinary-schema design: a synthetic `choice_…`
+entry to look up, an instantiation `Reference` to follow, and a branch because a single-response operation and
+a multi-response one have structurally different resolved forms. All of it becomes
+`body() instanceof Operation op` and `op.responses()`.
+
+**One question this turns on, and it is open.** Is a `type_name` carried in a *constructor payload* resolved
+and checked? The resolver checks a `type_name` in `supertypes` and a `type_ref` in a field type — both of which
+it has specific handling for. Whether it walks an arbitrary constructor's payload for references is untested:
+`extern`'s `types` are unchecked, but §7.8 says those name a schema deliberately not loaded, so it is not a
+fair witness. **If the answer is no, `request: type_name` is `api-1.tn`'s `type: text` in better clothing**, and
+the reason for putting an API in the schema layer goes with it. `sketch/meta-http-3.tn` is the leaner
+declaration this matters for.
 
 ---
 

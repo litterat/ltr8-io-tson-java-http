@@ -10,6 +10,7 @@
 | `orders-errors-1.tn` | Business errors, composing `problem` from the shipping `problem-2.tn`. |
 | `orders-api-2.tn` + `meta-http-2.tn` | The annotation design: operations as `top &`, metadata on annotations. |
 | `orders-api-1.tn` + `meta-http-1.tn` | The constructor design. Blocked; see below. |
+| `meta-http-3.tn` | A leaner `operation` — four fields, `type_name`, one response. Resolves; same blocker. |
 
 
 **Three designs, in increasing order of how little they need.** Nothing here ships. `SketchTest` holds each to
@@ -179,7 +180,17 @@ satisfy.
 **4. The schema's namespace stays domain-only** — order, problem, sku_not_found, and the operations. No
 bookkeeping.
 
-**5. Templated operations become possible.** `crud => <T> !operation { … }` is D9's `instance-template`
+**5. The model lands in the Java record.** The largest win for a *consumer*, and the one this project measured
+last. `ApiModelExtractionTest` reads the API out of `orders-api-3.tn`'s resolved form, which takes: find
+entries by supertype, read FIXED field values, follow the `response` field to a synthetic `choice_…` entry,
+walk its variants, follow each to an instantiation `Reference`, look up the materialised record, read `status`
+and `body` — **and branch**, because an operation with one response has a direct reference where one with
+several has a choice. Two structurally different resolved forms for the same idea. With an `operation`
+constructor all of it is `body() instanceof Operation op` and `op.responses()`, because the type names sit in
+the record as written rather than being recovered from the shapes they produced. Every consumer of such a
+description would otherwise reimplement that traversal.
+
+**6. Templated operations become possible.** `crud => <T> !operation { … }` is D9's `instance-template`
 production — an API *pattern* as a checked, reusable type, which is the thing OpenAPI reaches for `allOf` and
 codegen to fake. It needs `template_argument` to grow the collection case the structure-templates CR defers.
 

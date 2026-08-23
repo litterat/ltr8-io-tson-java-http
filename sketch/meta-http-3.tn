@@ -1,0 +1,37 @@
+!!id:"https://tson.io/2026/32/ltr8/http/meta-http-3.tn"
+!!meta:"https://tson.io/2026/32/m/meta-kernel.tn"
+!!import:"https://tson.io/2026/32/m/meta-kernel.tn"
+@doc:"""
+  The leaner operation: four fields, no enums, no nested records, no lists. Resolves as written;
+  applying it is blocked on UPSTREAM.md #15, like meta-http-1.tn.
+
+  Compared with meta-http-1.tn this trades away three things and is smaller for it.
+
+    - `method: text` rather than an http_method enum. Any string is a method; the enum bought
+      validation of a closed set, which a description arguably does not need.
+    - `type_name` rather than `type_ref`. A name, with no generic arguments -- so an operation names
+      `order_page`, and what `order_page` is (an application of page<order>) is that entry's business.
+    - ONE `response`, not a list of status-and-body pairs. Multi-status becomes a named choice type
+      in the schema, which is what it is semantically. The operation stays a 4-tuple.
+
+  The last of those is the real trade. The operation becomes trivially readable -- path, method,
+  request, response, four fields, no traversal -- but the status-to-body mapping moves down into the
+  response type, so a consumer that wants statuses still walks the choice and its variants. It does
+  not remove that walk; it removes it from the OPERATION.
+
+  OPEN, AND IT DECIDES WHETHER ANY OF THIS IS WORTH IT: is a type_name carried in a constructor
+  payload resolved and checked? The resolver checks a type_name in `supertypes` and a type_ref in a
+  field type, both of which it has specific handling for. Whether it walks an arbitrary constructor's
+  payload looking for references to resolve is untested -- `extern`'s `types` are unchecked, but
+  §7.8 says those name a schema deliberately not loaded, so it is not a fair witness. If the answer
+  is no, `request: type_name` is api-1.tn's `type: text` in better clothing, and the whole reason for
+  putting an API in the schema layer is lost.
+  """
+{
+  operation => ~top & {
+    path:     text
+    method:   text
+    request:  type_name
+    response: type_name
+  }
+}
