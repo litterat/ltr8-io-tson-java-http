@@ -235,6 +235,42 @@ class SketchTest {
 
     // ── the design that is blocked: an `operation` type constructor in a meta layer ──
 
+    /**
+     * Why {@code meta-http-1.tn} declares {@code operation} with {@code ~} rather than as a plain record.
+     *
+     * <p><b>Governance does not put names into the type-name namespace.</b> A plain record in a meta layer
+     * cannot be composed by a schema that layer governs — the name is simply not in scope. It becomes usable
+     * only by <em>importing</em> the meta layer as well, at which point governance has contributed nothing and
+     * the same record in an ordinary imported schema would have done: which is what {@code http-api-1.tn} is.
+     *
+     * <p>So a meta layer earns its place only through what governance actually supplies — the structure
+     * namespace ({@code !C} application, gated on {@code constructor: true}) and annotation types whose values
+     * bind. A plain record uses neither.
+     */
+    @Test
+    void aPlainRecordInAMetaLayerIsNotReachableByGovernanceAlone() throws Exception {
+        String meta = """
+                !!id:"https://s.example.com/2026/32/m-1.tn"
+                !!meta:"https://tson.io/2026/32/m/meta-kernel.tn"
+                !!import:"https://tson.io/2026/32/m/meta-kernel.tn"
+                { plain_operation => { path: text } }""";
+        Map<String, String> lib = Map.of("https://s.example.com/2026/32/m-1.tn", meta);
+        String governed = """
+                !!id:"https://s.example.com/2026/32/p-1.tn"
+                !!meta:"https://s.example.com/2026/32/m-1.tn"
+                !!import:"https://tson.io/2026/32/m/meta-kernel.tn"
+                %s{ op => plain_operation & { a: text } }""";
+
+        var withoutImport = Tson.builder().schemaSource(lib::get).build()
+                .validateSchema(governed.formatted(""));
+        assertTrue(withoutImport.stream().anyMatch(d -> d.message().contains("names no type")),
+                () -> "governance alone must not bring the name into scope, got " + withoutImport);
+
+        var withImport = Tson.builder().schemaSource(lib::get).build().validateSchema(
+                governed.formatted("!!import:\"https://s.example.com/2026/32/m-1.tn\"\n"));
+        assertEquals(List.of(), withImport, "importing it works -- which is the point: that is just an import");
+    }
+
     /** meta-http-1.tn resolves: the constructor itself is expressible today. */
     @Test
     void theConstructorMetaLayerResolves() throws Exception {

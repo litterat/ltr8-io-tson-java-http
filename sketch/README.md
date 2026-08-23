@@ -115,6 +115,28 @@ consequence of describing-by-using, and it comes with a bill.
 **What would move up:** the `operation` constructor with `type_ref` slots, the `response` and `parameter`
 records, and the enums. `meta-http-1.tn` is that, and it resolves; only applying it is unimplemented.
 
+### It has to be a constructor. A plain record in a meta layer buys nothing.
+
+Worth stating because it is the obvious thing to try first. **Governance does not put names into the type-name
+namespace.** A plain record declared in a meta layer cannot be composed by a schema that layer governs — the
+name is not in scope:
+
+```
+'op': supertype 'plain_operation' names no type this schema declares or imports
+```
+
+It becomes usable only by *importing* the meta layer as well — and at that point governance has contributed
+nothing, and the same record in an ordinary imported schema would have served. Which is exactly what
+`http-api-1.tn` already is.
+
+Governance supplies two things and only two: **the structure namespace** (`!C` application, gated on
+`constructor: true`) and **annotation types whose values bind** (`UPSTREAM.md` #12). A plain record uses
+neither, so a meta layer holding one is `http-api-1.tn` with extra steps.
+
+That also explains why all three surviving points below flow from *applicability*: shape checking comes from
+binding through the constructor's own reader, recognisability needs `!operation` on the wire of the schema, and
+a templated operation is an `instance-template` over a **constructor**. No application, none of the three.
+
 ### What that unlocks, concretely
 
 **1. Wrapper types become values.** *Mostly answered by templates now — see above.* Still worth stating,
