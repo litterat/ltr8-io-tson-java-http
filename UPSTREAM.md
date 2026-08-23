@@ -552,7 +552,22 @@ that is present as missing.
 
 ---
 
-## 17. `Tson.builder()` cannot reach a consumer's own meta-layer constructor
+## 17. ~~`Tson.builder()` cannot reach a consumer's own meta-layer constructor~~ — DONE (`8c3245a`)
+
+**Landed as `TsonConfig.metaNameBinder(DataNameBinder)`**, in the shape suggested and with the reasoning
+sharpened: what `build()` fixes is the object-binding **mode**, and adding names does not touch it. The
+composition is shared rather than hand-rolled — `SchemaMetaNameBinder.extendedWith` /
+`contextExtendedWith` — so the kernel's vocabulary always answers first and a consumer's binder only for a
+name it does not declare. Nothing can shadow `record`/`enum` or drop `TsonAtomContext`'s registrations.
+
+Kept separate from `dataBindContext`, for the reason given here: one binds the *data* a schema describes,
+the other a governing meta's own *vocabulary*, and one namespace holding both would collide the first time a
+schema type and a meta-layer constructor shared a name.
+
+Adopted here: `SketchTest` builds an ordinary `Tson` again and keeps the reader, writer and registries.
+**With #15 and #17 both in, the in-schema design has no remaining blocker** — the open question is now a
+design one, recorded in `sketch/README.md`.
+
 
 **Blocks #15's feature from the public API.** `TsonConfig.build()` is:
 

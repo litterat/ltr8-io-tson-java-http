@@ -14,7 +14,7 @@ strings and checks them itself.
 | `order-1.tn` | schema | The domain types. Versions independently of the API that exposes them. |
 | `orders-errors-1.tn` | schema | Business errors, composing `problem` from the shipping `problem-2.tn`. |
 | `orders-api-2.tn` + `meta-http-2.tn` | schema | The annotation design: operations as `top &`, metadata on annotations. |
-| `orders-api-1.tn` + `meta-http-1.tn` | schema | The constructor design. **Now works**; blocked only on `UPSTREAM.md` #17. |
+| `orders-api-1.tn` + `meta-http-1.tn` | schema | The constructor design. **Works, unblocked.** The recommended one, on a condition. |
 | `meta-http-3.tn` | schema | A leaner `operation` — four fields, `type_name`, one response. Superseded: `type_name` has no path to the linker, `type_ref` does. |
 
 `orders-api-4.tn`'s governing schema is `tson-http/src/main/resources/api-2.tn`, not copied here — it ships,
@@ -28,7 +28,7 @@ what this file claims, so a fix upstream shows up as a failing test rather than 
 |---|---|---|---|
 | `orders-api-3.tn` | `meta.tn` + `core.tn` — **the ordinary one** | FIXED fields | **works** |
 | `orders-api-2.tn` | a custom meta layer for annotation *types* | annotations | works |
-| `orders-api-1.tn` | a custom meta layer with an `operation` constructor | constructor fields | **works**; not reachable through `Tson` (#17) |
+| `orders-api-1.tn` | a custom meta layer with an `operation` constructor | constructor fields | **works** |
 
 **`orders-api-3.tn` is the one to read** — but the reason has changed, and the two designs are closer than the
 table suggests.
@@ -491,14 +491,77 @@ The middle row is the one to notice. A body declares which of its slots are refe
 them. That is the forty lines of `TsonApi.validate` — the ones that reimplemented `UPSTREAM.md` #11's bug —
 deleted and answered by the compiler instead.
 
-**What still stands in the way of shipping it: `UPSTREAM.md` #17.** `Tson.builder()` takes a
-`dataBindContext` but hands the compiler `SchemaMetaNameBinder.defaultContext()` unconditionally, so a
-consumer's meta layer is invisible through the facade. `SketchTest` builds a `TsonCompiledMetaRegistry`
-directly to get round it, which means giving up `Tson`'s reader, writer and registries. That is why
-`orders-api-4.tn` is still the one that ships.
+**Nothing now blocks it.** `UPSTREAM.md` #17 added `TsonConfig.metaNameBinder`, so this is reached through
+an ordinary `Tson.builder()` — a separate seam from `dataBindContext`, because that binds the *data* a schema
+describes and this binds a governing meta's own *vocabulary*. `orders-api-4.tn` still ships, but the reason
+is now a design choice rather than a missing feature; see below.
 
 ~~A schema could reference types from only one other schema~~ — `UPSTREAM.md` #11, **fixed and merged**. This
 schema now gets past it, and `SketchTest` drives the real file rather than a trimmed stand-in.
+
+## Which to adopt
+
+Both blockers are gone (`UPSTREAM.md` #15 and #17), so this is now a design choice rather than a wait.
+`orders-api-4.tn` ships today; **`orders-api-1.tn` is the better design**, on one condition.
+
+**The condition: `meta-http.tn` is specified and ships with the library**, the way `core.tn` does. Everything
+below assumes that. Without it the in-schema design is a private extension, and a private extension to the
+type system is a poor thing to publish an API description in.
+
+**The argument that does *not* decide it**, though it looks like it should: that a consumer needs a Java
+`Operation` class to read an in-schema description, while a data description reads in tree mode with no
+classes at all. True — measured, and upstream's `UnregisteredMetaConstructorTest` fixes it as correct
+behaviour rather than a gap. But TSON has one implementation today, and if `meta-http.tn` is standard then
+TypeScript and Python ship their own `Operation` the way they will ship `RecordBody`. Writing that class is
+minutes. It is a one-time cost per implementation, and so is `TsonApi.validate` — the two are symmetric and
+neither settles anything.
+
+**What actually differs, once both are standardised:**
+
+1. **The check is unskippable in one and opt-in in the other.** `TsonApi.read()` does not call `validate()`,
+   and every call site of `validate` in this repo is a test. A consumer who reads a description and forgets
+   the second call gets one whose references were never checked, and nothing says so — the same shape as the
+   `TsonHandler.install` trap in the Helidon adapter. In-schema there is no unchecked state to be in: the
+   references resolve during resolution or the document does not load.
+
+2. **The namespace rule is implemented once, or re-derived per implementation.** This is the one that
+   matters for a multi-language future, and it inverts the portability argument rather than being symmetric
+   with it. A data description carries its own import list and *prose* says how names resolve against it, so
+   every implementation re-derives transitive imports plus collision-by-declaring-identity. The evidence
+   that this is hard is unusually direct: upstream got it wrong (#11); it was reimplemented here
+   independently, the same occurrence-counting bug, minutes after that fix was summarised; and the obvious
+   repair — comparing `TypeDefinition`s — was *also* wrong, because linking credits each route's own
+   `subtypes`. Three wrong answers to one rule. In-schema that rule is the resolver's own, which every
+   implementation must get right anyway for `!!import`. Duplicated semantics drift silently between
+   implementations; a description that validates in Java and fails in Python is what a spec exists to
+   prevent.
+
+**What the data design still wins**, honestly:
+
+- **Manipulability.** It is data, so it can be generated, diffed, templated, POSTed to a registry.
+- **Tooling weight.** Reading it needs a document reader and one schema; reading the schema form needs the
+  full resolver. Every implementation ships a resolver anyway, so this is load-time work rather than a new
+  dependency, but it is not nothing for a gateway or a docs site.
+
+The first is recoverable and the reverse is not: the schema form carries strictly more information, so
+emitting a data description *from* it is mechanical, while going data → schema needs exactly the checking
+that was skipped. Two gaps in that emit path today, both fixable and neither structural:
+`orders-api-1.tn` drops `title`/`version` (arguing `!!id` and `@doc` cover them), and `meta-http-1.tn`'s
+`response` has no `description` field where `api-2.tn`'s does.
+
+**The reframe that makes this make sense.** It is not schema-versus-data. A `data`-kinded entry *is* data —
+that is what the kind is for. The only question is whether the data sits where the resolver can see its
+references. `orders-api-4.tn` is the same data placed where the resolver cannot help it.
+
+**If it is standardised, three things want spec answers:**
+
+- **Where `meta-http.tn` sits.** `core.tn` is universal; `GET`/`POST` is emphatically not. Standard but
+  optional looks right — an implementation conforms without it, and if it implements it, does so identically.
+- **Operations share `entries()` with types**, so a description cannot have an operation named `order` if it
+  imports `order`, and enumerating them means filtering by `instanceof Data`. Worth deciding rather than
+  inheriting by accident.
+- **A parameter's type** still names a scalar with no way to require scalar-ness — see below.
+
 
 ## Open questions
 

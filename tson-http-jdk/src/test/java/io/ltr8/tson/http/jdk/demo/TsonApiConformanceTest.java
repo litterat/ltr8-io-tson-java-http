@@ -72,7 +72,6 @@ class TsonApiConformanceTest {
                 !order { sku: "%s"  quantity: %d }""".formatted(OrderServer.SCHEMA_ID, sku, quantity);
     }
 
-    /** The description resolves against api-1.tn and says what it should — it is a validated document. */
     /**
      * The description's own type names resolve against its own imports — the check the resolver will not do,
      * done by {@link TsonApi#validate}. A server publishing a description whose names do not resolve is
