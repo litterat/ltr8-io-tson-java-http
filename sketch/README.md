@@ -546,11 +546,21 @@ declaration is not in the governed schema's type namespace, and a meta layer can
 alongside `core.tn` either — `void` is declared by both it and the kernel. So the templates go in a third
 ordinary schema, and the description imports it.
 
-**What kills it is `UPSTREAM.md` #14.** The only thing `status: status_code = S` says that `status: 201` as
-data does not is that the status is *fixed*. The materialised field comes back `REQUIRED` carrying 201, not
-`REQUIRED_FIXED` — so nothing enforces it. Meanwhile the data spelling is checked today: `status: 42`
-violates `status_code`'s refinement with a position. **The template form is currently the less-checked of the
-two**, which inverts the entire reason to want it.
+**What killed it was `UPSTREAM.md` #14 — and #14 is now fixed.** The materialised field comes back
+`REQUIRED_FIXED` carrying 201, so the status is genuinely enforced and the template form is no longer the
+less-checked of the two. **The disqualifier is gone, and this section is weaker than it was.** What remains
+is a preference rather than a verdict:
+
+- The data spelling is checked too — `status: 42` violates `status_code`'s refinement, with a position — so
+  the template buys *fixedness on the wire type*, which matters to something binding that type and not to a
+  description.
+- One entry per (body, status) pair. Three responses on an operation means three named entries, against
+  three inline records.
+- A response cannot then grow a `description` or `headers` without becoming a different type.
+
+Weighed against the one thing it gains — a real materialised type per response, deduped by §8.2 — this is
+close enough that it should be revisited if anything ever needs to *bind* a response rather than describe
+one.
 
 **And the payoff that would have justified it is not available.** The real prize would be a templated
 *operation* — `list => <T> !operation { … }`, one declaration standing for every paged-list endpoint. That

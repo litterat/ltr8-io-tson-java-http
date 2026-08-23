@@ -95,7 +95,7 @@ each other.
   writes bodies, and gates on `Content-Type` and `Accept`.
 - `TsonHttpException` — status plus diagnostics. **`from(RuntimeException)` is the entire status policy**;
   put nothing status-shaped anywhere else.
-- `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem-2.tn` — the error body, its schema,
+- `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem-3.tn` — the error body, its schema,
   and the reader that proves the two agree. **This project's own schema, maintained here** — it began as a copy
   of `tson-cli`'s `diagnostics.tn` and has diverged on purpose (`UPSTREAM.md` #5): a CLI reports on files and a
   server reports on requests. `problem` follows **RFC 9457**; `diagnostic` stays close to what a TSON read
@@ -338,7 +338,7 @@ Each cost a debugging cycle here and is pinned by a test.
   three base-syntax exception types — two of which live in an unexported package, so no caller here could
   `catch` them — and **rethrows anything else**, which is what stops an unexpected fault becoming a false
   verdict about the request. Do not delete it for being unreachable.
-- **`problem-2.tn`'s `diagnostic_code` is a hand-written copy of `Diagnostic.Code`.** Nothing but
+- **`problem-3.tn`'s `diagnostic_code` is a hand-written copy of `Diagnostic.Code`.** Nothing but
   `TsonProblemSchemaTest` checks it is current, and an error body emitting a code its own schema rejects would
   not otherwise be caught, since no fixture produces a code that is new. The Java enum is the source of truth —
   never check this schema against tson-cli's, which would only prove they drifted together.
@@ -398,10 +398,14 @@ handler can classify from the opening bytes without a full parse.
 **Use the `.tn` extension, not `.tn1`**, matching tson-java: `.tn1` is a stability claim §7.1 reserves for
 a frozen "TSON version 1" that hasn't happened (tson-java's `SPEC-FEEDBACK.md` #20).
 
-**Superseded schemas stay published.** §10 makes a published schema immutable, so `problem-1.tn` is still
-served alongside `problem-2.tn` — a document that named the old one must go on resolving, even though nothing
-new is written against it. `TsonProblemSchema.publishedSources()` returns the whole history, and the demos
-publish all of it. When bumping a schema here, add the new version and keep serving the old, never edit.
+**Superseded schemas stay published.** §10 makes a published schema immutable, so `problem-1.tn` and
+`problem-2.tn` are still served alongside `problem-3.tn` — a document that named the old one must go on resolving, even though nothing
+new is written against it. `TsonProblemSchema.publishedSources()` returns the whole history and the demos
+publish all of it; `publishedById()` is the same history keyed by identity, for a test or a caller wiring a
+schema source by hand. When bumping a schema here, add the new version and keep serving the old, never edit —
+and remember that **a hand-wired source serving the current text at a superseded URI fails as an "identity
+mismatch" from the loader**, a long way from the map that was wrong. Adding an enum member is a shape change:
+`NOT_IMPLEMENTED` is why `problem-3.tn` exists.
 
 **Project-owned schema `!!id`** follows tson-java's convention with this repo's own group:
 `https://tson.io/2026/32/ltr8/http/<name>-<version>.tn` — `/2026/32` the spec revision, `ltr8` the

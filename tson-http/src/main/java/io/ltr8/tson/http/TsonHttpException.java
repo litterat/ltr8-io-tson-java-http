@@ -131,8 +131,30 @@ public final class TsonHttpException extends RuntimeException {
         return TsonProblem.of(type, status, title, getMessage(), diagnostics);
     }
 
-    /** A document that read but did not validate -- the diagnostics say what was wrong with it. */
+    /**
+     * A document that read but did not validate -- the diagnostics say what was wrong with it.
+     *
+     * <p><b>Unless one of them is a library gap, in which case this is a 501 and not a 400.</b> A gap now
+     * travels as {@link Diagnostic.Code#NOT_IMPLEMENTED} in the same list as ordinary problems rather than
+     * only as an exception, so that one unimplemented construct no longer costs the author every other
+     * declaration's verdict. That is a better design and it moves a decision here: a list this method is
+     * handed may be mixed.
+     *
+     * <p>A mixed list is a gap, deliberately, and this is the HTTP wearing of the rule the CLI rides its exit
+     * codes on -- any {@code NOT_IMPLEMENTED} makes a run 70 rather than 1. The ordinary problems are real
+     * and are still carried in the body, but something in the document went unchecked, so <em>"your request
+     * was invalid"</em> is not a verdict this server is entitled to give. Telling a client 400 would have
+     * them fix a request that may be perfectly good.
+     */
     public static TsonHttpException invalidDocument(List<Diagnostic> diagnostics) {
+        long gaps = diagnostics.stream().filter(d -> d.code() == Diagnostic.Code.NOT_IMPLEMENTED).count();
+        if (gaps > 0) {
+            return new TsonHttpException(NOT_IMPLEMENTED, TYPES + "not-implemented", "Not implemented",
+                    "this server's TSON library has not implemented a construct the request body uses, so the "
+                            + "body could not be checked" + (gaps == diagnostics.size() ? ""
+                            : "; the other " + (diagnostics.size() - gaps) + " problem(s) reported are real"),
+                    diagnostics, null);
+        }
         return new TsonHttpException(BAD_REQUEST, TYPES + "invalid-document", "Invalid TSON document",
                 diagnostics.size() == 1 ? "the request body has 1 problem"
                         : "the request body has " + diagnostics.size() + " problems",

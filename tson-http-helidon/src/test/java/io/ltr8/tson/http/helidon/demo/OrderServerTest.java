@@ -95,6 +95,11 @@ class OrderServerTest {
     @Test
     void publishesBothSchemasAtTheirIdentityPaths() throws Exception {
         assertEquals(OrderServer.SCHEMA, get("/2026/32/app/order-1.tn").body());
-        assertEquals(TsonProblemSchema.source(), get("/2026/32/ltr8/http/problem-2.tn").body());
+        assertEquals(TsonProblemSchema.source(), get("/2026/32/ltr8/http/problem-3.tn").body());
+
+        // §10: a superseded version stays published, because a document that named it must go on
+        // resolving. Serving the current text at the old path would be the silent way to break that.
+        assertEquals(TsonProblemSchema.publishedById().get(TsonProblemSchema.ID_2),
+                get("/2026/32/ltr8/http/problem-2.tn").body());
     }
 }

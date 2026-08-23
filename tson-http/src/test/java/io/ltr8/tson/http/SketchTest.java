@@ -115,7 +115,8 @@ class SketchTest {
     private static Map<String, String> ordersLibrary() throws Exception {
         return Map.of(
                 "https://tson.io/2026/32/ltr8/http/http-api-1.tn", sketch("http-api-1.tn"),
-                "https://tson.io/2026/32/ltr8/http/problem-2.tn", TsonProblemSchema.source(),
+                TsonProblemSchema.ID, TsonProblemSchema.source(),
+                TsonProblemSchema.ID_2, TsonProblemSchema.publishedById().get(TsonProblemSchema.ID_2),
                 "https://schemas.example.com/2026/32/app/order-1.tn", sketch("order-1.tn"),
                 "https://schemas.example.com/2026/32/app/orders-errors-1.tn", sketch("orders-errors-1.tn"));
     }
@@ -187,7 +188,7 @@ class SketchTest {
      * <p>Asserted as it currently behaves, so a fix upstream makes this fail and the sketch's caveat can go.
      */
     @Test
-    void aValueParameterFixedFieldDoesNotYetConstrain() {
+    void aValueParameterFixedFieldConstrains() {
         String schema = """
                 !!id:"https://s.example.com/2026/32/p-1.tn"
                 !!meta:"https://tson.io/2026/32/m/meta.tn"
@@ -206,18 +207,24 @@ class SketchTest {
                         .anyMatch(d -> d.code() == io.ltr8.tson.compiler.Diagnostic.Code.FIELD_FIXED),
                 "a literal FIXED field rejects another value");
 
-        assertEquals(List.of(),
-                tson.validate(header + "!created { status: 999  body: !order { sku: \"a\" } }"),
-                "and a parameter-filled one does not -- which is UPSTREAM #14, not intended behaviour");
+        assertTrue(tson.validate(header + "!created { status: 999  body: !order { sku: \"a\" } }").stream()
+                        .anyMatch(d -> d.code() == io.ltr8.tson.compiler.Diagnostic.Code.FIELD_FIXED),
+                "and a parameter-filled one does too, since UPSTREAM #14 -- the whole point of `= S`");
     }
 
     /**
-     * The gap that shapes the sketch: a template application cannot appear directly inside a choice, so each
-     * response is named as an entry first. {@code UnsupportedOperationException} is the not-implemented
-     * classification, so when this lands the sketch can inline them and this test should fail.
+     * <b>{@code UPSTREAM.md} #13 is still open, and now reports differently.</b> A template application
+     * inside a choice is still not implemented; what changed is the channel. A gap used to abort the pass as
+     * an {@code UnsupportedOperationException} and now travels as a {@link
+     * io.ltr8.tson.compiler.Diagnostic.Code#NOT_IMPLEMENTED} diagnostic beside the ordinary problems, so one
+     * unimplemented construct no longer costs every other declaration its verdict.
+     *
+     * <p><b>Worth writing down because it nearly read as a fix.</b> The old test asserted that resolving
+     * <em>throws</em>; it stopped throwing, which looks exactly like the feature landing. It had not. A test
+     * that pins a gap must pin the gap, not the way it was delivered — which is why this asserts the code.
      */
     @Test
-    void anApplicationInsideAChoiceIsNotImplemented() {
+    void anApplicationInsideAChoiceIsStillNotImplemented() {
         String schema = """
                 !!id:"https://s.example.com/2026/32/p-1.tn"
                 !!meta:"https://tson.io/2026/32/m/meta.tn"
@@ -229,10 +236,11 @@ class SketchTest {
                     op => { response: (resp<order, 201> | resp<problem, 400>) }
                 }""";
 
-        UnsupportedOperationException gap = org.junit.jupiter.api.Assertions.assertThrows(
-                UnsupportedOperationException.class,
-                () -> Tson.builder().schemaSource(u -> null).build().validateSchema(schema));
-        assertTrue(gap.getMessage().contains("must be lifted to an entry"), gap.getMessage());
+        List<Diagnostic> problems = Tson.builder().schemaSource(u -> null).build().validateSchema(schema);
+
+        assertTrue(problems.stream().anyMatch(d -> d.code() == Diagnostic.Code.NOT_IMPLEMENTED
+                        && d.message().contains("must be lifted to an entry")),
+                () -> "expected a NOT_IMPLEMENTED diagnostic, got " + problems);
     }
 
     /** And the same property: a payload type that does not exist is refused. */
@@ -398,7 +406,7 @@ class SketchTest {
     private static Map<String, String> apiLib(String api) throws Exception {
         Map<String, String> lib = new LinkedHashMap<>();
         lib.put("https://tson.io/2026/32/ltr8/http/meta-http-1.tn", sketch("meta-http-1.tn"));
-        lib.put("https://tson.io/2026/32/ltr8/http/problem-2.tn", TsonProblemSchema.source());
+        lib.putAll(TsonProblemSchema.publishedById());
         lib.put("https://schemas.example.com/2026/32/app/order-1.tn", sketch("order-1.tn"));
         lib.put("https://schemas.example.com/2026/32/app/orders-errors-1.tn", sketch("orders-errors-1.tn"));
         lib.put(API_ID, api);
@@ -664,7 +672,7 @@ class SketchTest {
      * two.
      */
     @Test
-    void theTemplatedResponseFormResolvesButItsFixedStatusIsNot() throws Exception {
+    void theTemplatedResponseFormResolvesAndItsStatusIsFixed() throws Exception {
         Map<String, String> lib = new LinkedHashMap<>();
         lib.put("https://tson.io/2026/32/ltr8/http/meta-probe.tn", ALT_META);
         lib.put("https://tson.io/2026/32/ltr8/http/resp-1.tn", ALT_RESPONSES);
@@ -691,15 +699,15 @@ class SketchTest {
         assertEquals("response", applied.name());
         assertEquals(2, applied.arguments().size(), "one type argument and one value argument");
 
-        // But the status field carries 201 without being fixed to it -- UPSTREAM.md #14, reproduced in the
-        // design that would have been the reason to adopt this shape.
+        // And since UPSTREAM.md #14 the substituted status is genuinely fixed, not merely carried -- which
+        // removes the disqualifier this design was rejected on. See sketch/README.md for what still stands.
         RecordBody body = (RecordBody) entries.get(materialised).body();
         RecordField status = body.fields().stream().filter(f -> f.name().equals("status"))
                 .findFirst().orElseThrow();
         assertTrue(status.value().orElseThrow().toString().contains("201"),
                 "the substituted value is right: " + status.value());
-        assertEquals(FieldState.REQUIRED, status.state(),
-                "and its state is not REQUIRED_FIXED -- so nothing enforces it (UPSTREAM.md #14)");
+        assertEquals(FieldState.REQUIRED_FIXED, status.state(),
+                "the substituted status is fixed, so a document sending another value is rejected");
     }
 
     private static Tson altTson(Map<String, String> lib) {

@@ -30,7 +30,7 @@ class TsonApiTest {
             !!id:"https://schemas.example.com/2026/32/app/orders-errors-1.tn"
             !!meta:"https://tson.io/2026/32/m/meta.tn"
             !!import:"https://tson.io/2026/32/m/core.tn"
-            !!import:"https://tson.io/2026/32/ltr8/http/problem-2.tn"
+            !!import:"https://tson.io/2026/32/ltr8/http/problem-3.tn"
             { sku_not_found => problem & { missing_sku: non_empty_text } }""";
 
     /** A second schema that also declares `order`, for the ambiguity case. */
@@ -44,7 +44,7 @@ class TsonApiTest {
             "https://schemas.example.com/2026/32/app/order-1.tn", ORDER,
             "https://schemas.example.com/2026/32/app/orders-errors-1.tn", ERRORS,
             "https://schemas.example.com/2026/32/app/other-1.tn", OTHER,
-            "https://tson.io/2026/32/ltr8/http/problem-2.tn", TsonProblemSchema.source());
+            TsonProblemSchema.ID, TsonProblemSchema.source());
 
     private static String description(String imports, String request, String errorBody) {
         return """

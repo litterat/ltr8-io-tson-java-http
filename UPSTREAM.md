@@ -362,7 +362,17 @@ the annotation design safe to recommend, and re-opens a point this project had s
 
 ---
 
-## 13. A template application cannot appear inside a choice
+## 13. A template application cannot appear inside a choice — still open, now reported as a diagnostic
+
+**Still not implemented; only the channel changed** (`f381010`). It used to abort the pass as an
+`UnsupportedOperationException` and now arrives as `Diagnostic.Code.NOT_IMPLEMENTED` beside the ordinary
+problems, so one unimplemented construct no longer costs every other declaration its verdict.
+
+**Worth recording because it nearly read as a fix here.** The pinning test asserted that resolution *throws*;
+it stopped throwing, which is indistinguishable from the feature landing if the test is not looking at the
+code. It had not landed. A test that pins a gap must pin the gap, not the delivery mechanism — corrected in
+`SketchTest.anApplicationInsideAChoiceIsStillNotImplemented`.
+
 
 **Hit:** describing an operation's responses. `response => <T, S> { status: status_code = S  body: T }` is the
 natural shape, and `(response<order, 201> | response<problem, 400>)` is the natural use of it:
@@ -386,7 +396,17 @@ already says it is a gap rather than an author error. Pinned by
 
 ---
 
-## 14. A value parameter filling a FIXED field loses its fixedness
+## 14. ~~A value parameter filling a FIXED field loses its fixedness~~ — DONE (`f583901`)
+
+**Fixed where it was wrong** — the declaration, not the substitution. A materialised `status: status_code = S`
+is now `REQUIRED_FIXED` carrying the substituted value, so `!created { status: 999 … }` is `FIELD_FIXED`
+rather than accepted. Both this project's reproductions flipped: `SketchTest.aValueParameterFixedFieldConstrains`
+and `theTemplatedResponseFormResolvesAndItsStatusIsFixed`.
+
+**Consequence here beyond the fix:** this was the disqualifier the `response<T, S>` shape was rejected on in
+`sketch/README.md`, and it is gone. The rejection now rests on the two remaining legs, which is a weaker case —
+recorded honestly there rather than left standing on a reason that has expired.
+
 
 **Hit:** the same template. `status: status_code = S` applied as `<order, 201>` produces a field that carries
 201 and does not enforce it:

@@ -15,6 +15,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -228,4 +229,56 @@ class TsonHttpCodecTest {
                 Order.class);
         assertEquals(new Order("ABC-1", 3), read);
     }
+    // ── a library gap inside a diagnostics list ──
+
+    private static Diagnostic aGap() {
+        return Diagnostic.ofSchemaGap("s.example.com/x-1.tn", "op",
+                "a container sugar form must be lifted to an entry before resolution", Optional.empty());
+    }
+
+    private static Diagnostic anOrdinaryProblem() {
+        return Diagnostic.ofSchemaError("s.example.com/x-1.tn", "y", "unresolved reference 'q'",
+                Optional.empty());
+    }
+
+    /**
+     * <b>A gap is a 501 even when it arrives as a diagnostic rather than an exception.</b> A gap now travels
+     * in the same list as ordinary problems -- so that one unimplemented construct does not cost every other
+     * declaration its verdict -- which means a list reaching the status policy may contain one. Answering 400
+     * would tell a client its request was invalid when the truth is that this server could not check it.
+     */
+    @Test
+    void aNotImplementedDiagnosticIsAGapNotABadRequest() {
+        TsonHttpException thrown = TsonHttpException.invalidDocument(List.of(aGap()));
+
+        assertEquals(TsonHttpException.NOT_IMPLEMENTED, thrown.status());
+        assertTrue(thrown.type().endsWith("not-implemented"), thrown.type());
+    }
+
+    /**
+     * <b>And a mixed list is a gap too</b>, deliberately -- the HTTP wearing of the rule the CLI rides its
+     * exit codes on, where any {@code NOT_IMPLEMENTED} makes a run 70 rather than 1. The ordinary problems
+     * are real and still travel in the body, but something went unchecked, so "invalid" is not a verdict this
+     * server is entitled to give.
+     */
+    @Test
+    void aMixedListIsAGapAndStillCarriesTheOrdinaryProblems() {
+        TsonHttpException thrown =
+                TsonHttpException.invalidDocument(List.of(anOrdinaryProblem(), aGap(), anOrdinaryProblem()));
+
+        assertEquals(TsonHttpException.NOT_IMPLEMENTED, thrown.status());
+        assertEquals(3, thrown.diagnostics().size(), "the real problems are still reported");
+        assertTrue(thrown.getMessage().contains("2 problem(s) reported are real"), thrown.getMessage());
+    }
+
+    /** Ordinary problems alone stay a 400 -- the common case is unchanged. */
+    @Test
+    void ordinaryProblemsAreStillABadRequest() {
+        TsonHttpException thrown =
+                TsonHttpException.invalidDocument(List.of(anOrdinaryProblem(), anOrdinaryProblem()));
+
+        assertEquals(TsonHttpException.BAD_REQUEST, thrown.status());
+        assertTrue(thrown.getMessage().contains("2 problems"), thrown.getMessage());
+    }
+
 }
