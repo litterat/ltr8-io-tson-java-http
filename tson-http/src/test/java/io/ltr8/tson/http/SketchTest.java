@@ -523,6 +523,87 @@ class SketchTest {
         assertTrue(message.contains("list_orders"), "the inline form names the operation: " + message);
     }
 
+    // ── two gaps found while weighing that design, pinned so a fix shows up here ──
+
+    private static Tson metaLayerTson(String metaBody, String docBody, String id, Map<String, String> lib) {
+        lib.put("https://tson.io/2026/32/ltr8/http/meta-probe.tn", """
+                !!id:"https://tson.io/2026/32/ltr8/http/meta-probe.tn"
+                !!meta:"https://tson.io/2026/32/m/meta-kernel.tn"
+                !!import:"https://tson.io/2026/32/m/meta.tn"
+                {
+                %s
+                }""".formatted(metaBody));
+        lib.put(id, docBody);
+        return altTson(lib);
+    }
+
+    /**
+     * <b>{@code UPSTREAM.md} #18.</b> A meta-layer declaration is not in the governed schema's type namespace,
+     * and every reference form says so plainly — except an <em>application</em>, which claims the arguments
+     * are missing when they are right there. Two lookup paths disagreeing about scope, with an inaccurate
+     * message as the symptom.
+     */
+    @Test
+    void applyingAMetaLayerTemplateMisreportsItsArguments() {
+        String meta = "  status_code => !integer ^ { min: 100  max: 599 }\n  tmpl => <T> { v: T }";
+        String id = "https://schemas.example.com/2026/32/app/x-1.tn";
+        String header = """
+                !!id:"%s"
+                !!meta:"https://tson.io/2026/32/ltr8/http/meta-probe.tn"
+                !!import:"https://tson.io/2026/32/m/core.tn"
+                {
+                %s
+                }""";
+
+        // A plain reference to a meta-layer name is refused correctly.
+        String plain = header.formatted(id, "  x => { s: status_code }");
+        assertTrue(org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> metaLayerTson(meta, plain, id, new LinkedHashMap<>()).resolve(plain))
+                .getMessage().contains("unresolved reference 'status_code'"));
+
+        // Applying one is refused for the wrong stated reason -- the arguments ARE written.
+        String applied = header.formatted(id, "  x => tmpl<text>");
+        String message = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> metaLayerTson(meta, applied, id, new LinkedHashMap<>()).resolve(applied)).getMessage();
+        assertTrue(message.contains("is a template taking 1 type argument"),
+                "when #18 is fixed this should say `unresolved reference 'tmpl'`: " + message);
+    }
+
+    /**
+     * <b>{@code UPSTREAM.md} #10, its reverse case at the meta layer.</b> A Java component the meta
+     * declaration does not declare arrives {@code null}, and {@code Data.references()} runs inside schema
+     * resolution — so it surfaces as an NPE out of {@code resolve}, not as a diagnostic naming the mismatch.
+     */
+    @Test
+    void aJavaComponentTheMetaDoesNotDeclareIsAnNpeFromInsideResolution() {
+        String id = "https://schemas.example.com/2026/32/app/x-1.tn";
+        String doc = """
+                !!id:"%s"
+                !!meta:"https://tson.io/2026/32/ltr8/http/meta-probe.tn"
+                !!import:"https://tson.io/2026/32/m/core.tn"
+                {
+                  y  => { a: text }
+                  op => !operation { method: "GET"  path: "/x"  responses: [ y ] }
+                }""".formatted(id);
+        Map<String, String> lib = new LinkedHashMap<>();
+
+        // apimeta.Operation has `parameters` and `request`; this meta declares neither.
+        NullPointerException npe = org.junit.jupiter.api.Assertions.assertThrows(NullPointerException.class,
+                () -> Tson.builder().schemaSource(lib::get)
+                        .metaNameBinder(new DataNameBinder.DefaultDataNameBinder(
+                                Set.of("io.ltr8.tson.http.apimeta"), Map.of()))
+                        .build()
+                        .resolve(metaLayerDoc(lib, id, doc)));
+
+        assertTrue(npe.getMessage().contains("parameters"), npe.getMessage());
+    }
+
+    private static String metaLayerDoc(Map<String, String> lib, String id, String doc) {
+        lib.put("https://tson.io/2026/32/ltr8/http/meta-probe.tn", ALT_META);
+        lib.put(id, doc);
+        return doc;
+    }
+
     // ── the `response<T, S>` alternative, weighed and not adopted ──
 
     private static final String ALT_META = """

@@ -262,6 +262,32 @@ is the bind that discards the field.
 
 The reverse is silent too: a class with a component the schema does not declare gets `null` for it.
 
+**The reverse case is worse at the meta layer, and that is new.** A `Data` body's `references()` runs *inside
+schema resolution*, so a component the meta declaration does not declare arrives `null` and the consumer's own
+method dereferences it there:
+
+```
+NullPointerException: Cannot invoke "java.util.List.forEach(java.util.function.Consumer)"
+                     because "this.parameters" is null
+```
+
+thrown out of `Tson.resolve`. Measured: a Java record of `(method, path, parameters, request, responses)`
+against a meta declaring `operation => ~data & { method: text  path: text  responses: [type_ref] }`. Three
+things make this sting more than the data-side version:
+
+- **It is an NPE from inside the resolver**, not a diagnostic, so it reads as a library fault. The status
+  policy here would classify it 500 — *"a fault in this server"* — when the truth is a consumer's meta
+  declaration and Java class disagreeing.
+- **The author has both files open.** The declaration and the record are the two halves of one registration
+  (`UPSTREAM.md` #15), written together, and nothing checks them against each other. A missing field is the
+  likeliest mistake in the whole mechanism.
+- **`Data.references()` is library-invoked**, so the null is dereferenced by consumer code the consumer did
+  not choose to run at that moment.
+
+A diagnostic naming the component and the constructor — *"`operation` declares no `parameters`, which
+`io.…Operation` requires"* — would be caught at registration rather than at first use. Consistent with the
+main item: the field-count mismatch is worth a diagnostic in **both** directions.
+
 **Why it is worth reporting rather than shrugging at.** Ignoring unknown fields is a reasonable evolution
 policy — it is what most wire formats do. Doing it *invisibly* is the problem, because the caller cannot tell a
 deliberate leniency from a misconfiguration. In a server the misconfiguration is realistic and the consequence
@@ -615,6 +641,53 @@ schema type and a meta-layer constructor shared a name.
 
 **Cost of not fixing it:** every consumer of the `data` kind drops to `TsonCompiledMetaRegistry`, and so
 gives up `Tson`'s reader, writer and registries, or wires both and keeps them consistent by hand.
+
+## 18. Applying a meta-layer template reports the arguments as missing, when they are present
+
+**Hit:** weighing a `responses: [type_ref]` shape for meta-http (`sketch/README.md`). A meta layer declares a
+template, and the schema it governs applies it:
+
+```tson
+tmpl => <T> { v: T }          // in the meta layer
+x    => tmpl<text>            // in the governed schema
+```
+
+```
+'x' source: 'tmpl' is a template taking 1 type argument [T], and a template is not a type
+until it is applied -- write 'tmpl<...>' with its arguments (§5.10)
+```
+
+**The argument is right there.** The message asks for exactly what was written, so the author's first move is
+to check the arguments they already supplied.
+
+**The actual rule is a different one, and it is enforced correctly everywhere else.** A meta-layer declaration
+is not in the governed schema's type namespace, and every other reference form says so plainly. Measured, all
+against the same meta layer:
+
+| the governed schema writes | result |
+|---|---|
+| `x => { s: status_code }` — a meta-layer atom | `'x' field 's' has an unresolved reference 'status_code'` |
+| `x => { s: plain }` — a meta-layer record | `'x' field 's' has an unresolved reference 'plain'` |
+| `x => { s: tmpl }` — the template, unapplied | `'x' field 's' has an unresolved reference 'tmpl'` |
+| `x => tmpl<text>` — the template, **applied** | *"is a template taking 1 type argument"* ← wrong |
+| `local => <T> { v: T }` then `x => local<text>` | resolves — control |
+
+**So two lookup paths disagree about what is in scope.** The reference path correctly does not see the meta
+layer; the *application* path does see it, finds the template, and then fails for an unrelated reason it
+reports inaccurately. The consistent answer is the one the other three rows give:
+`unresolved reference 'tmpl'`.
+
+**Change:** resolve an application's head through the same namespace the reference path uses, so a meta-layer
+name is unresolved in a governed schema whether or not it is applied. If there is a reason the application
+path should reach further, then the message is the thing to fix — it must not claim missing arguments that
+are present.
+
+**Worth deciding either way, because the rule itself is worth stating.** A consumer's first instinct with a
+meta layer is to put shared vocabulary in it — `status_code`, an envelope template — and discover only by
+error that governed schemas cannot see any of it. That the vocabulary must go in a *third* ordinary schema,
+imported normally, is a real design constraint of the `data` base kind and is currently undocumented. Note a
+meta layer also cannot simply be `!!import`ed by an ordinary schema: `void` is declared by both it and
+`core.tn`, so the import collides.
 
 ## Spec feedback to file
 
