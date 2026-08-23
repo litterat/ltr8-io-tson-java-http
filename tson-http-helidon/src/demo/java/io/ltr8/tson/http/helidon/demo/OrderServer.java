@@ -5,6 +5,8 @@ import io.helidon.webserver.WebServer;
 import io.ltr8.annotation.Typename;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.http.TsonHttpCodec;
+import io.ltr8.tson.http.api.Operation;
+import io.ltr8.tson.http.api.TsonApiCoverage;
 import io.ltr8.tson.http.api.TsonApiDescription;
 import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.http.TsonHttpException;
@@ -144,6 +146,11 @@ public final class OrderServer {
         // a class races (UPSTREAM.md #8).
         codec.prepareToWrite(described.boundClasses(bindings).toArray(Class<?>[]::new));
 
+        // The description is a contract, so hold this server to it before it accepts anything. `serving`
+        // hands back the operation, which is where the path below comes from -- and refuses a name the
+        // description does not declare, so a renamed operation fails at the handler that outlived it.
+        TsonApiCoverage coverage = TsonApiCoverage.of(described);
+
         return WebServer.builder()
                 .port(port)
                 .mediaContext(MediaContext.builder()
@@ -162,7 +169,7 @@ public final class OrderServer {
                     // configuring the media support per type, which is its own design question. The honest
                     // demonstration is that the native seam costs this, and that a route wanting a
                     // self-describing reply writes through the codec directly, as the other two demos do.
-                    routing.post("/orders", (request, response) -> {
+                    routing.post(coverage.serving("create_order").path(), (request, response) -> {
                         Order order = request.content().as(Order.class);
                         if (UNSTOCKED_SKU.equals(order.sku())) {
                             // Written, not thrown: a business error composes problem and carries fields no
@@ -176,11 +183,13 @@ public final class OrderServer {
                     });
 
                     // Publishing at the identity path is what makes a !!schema URL dereferenceable. any(),
-                    // because the paths served are the schemas' own, not routes Helidon knows about.
-                    // The API description is a schema too, so the catalog serves it like everything else --
-                    // no route of its own, which the data-shaped predecessor needed.
+                    // because the paths served are the schemas' own, not routes Helidon knows about -- and
+                    // not the declared `{schemaPath}` either, which is why coverage is claimed by name.
+                    // The API description is a schema too, so the catalog serves it like everything else.
+                    coverage.serving("get_schema");
                     routing.any(TsonHandler.asHandler(codec,
                             TsonSchemaHandler.of(catalog(described, schemas))));
+                    coverage.requireComplete();
                 })
                 .build()
                 .start();

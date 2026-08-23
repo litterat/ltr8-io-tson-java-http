@@ -203,10 +203,21 @@ on. And because it is a schema, the catalog serves it like any other — no besp
   description never gets warmed: nothing connects the two lists, and the omission costs only latency, so
   nothing reports it.
 
-More is derivable and not yet built — the route table (method, path, declared statuses), and startup checks
-that every declared operation has a handler and every payload type a binding. The route table is the piece
-that needs a per-adapter seam, because path syntax differs: the description says `/{schemaPath}` and Javalin
-needs `/<path>`, an identity path having slashes that only the angle form matches across.
+**`TsonApiCoverage` holds a server to that contract at startup.** `serving(name)` claims a declared operation
+and hands it back — so the path comes from the description wherever the framework can take it — and
+`requireComplete()` fails if anything declared went unclaimed. Both directions are caught: an operation the
+description does not declare is refused where the handler is written, and a declared one with no handler
+fails startup rather than 404ing for a client that read the contract and believed it.
+
+**It checks coverage, not path equality, and that is what keeps it framework-agnostic.** The registered path
+and the declared path may differ and often must — the JDK demo serves `/{schemaPath}` from a
+`createContext("/")` prefix, Javalin needs `/<path>` because an identity path has slashes that only the angle
+form matches across, and Helidon uses `any()`. Comparing paths would need a translation table per framework,
+and a wrong entry there is a route that silently never matches: a worse failure than the one being prevented.
+Claiming by name sidesteps it entirely.
+
+Still not built: the route table proper (registering from the description rather than claiming against it),
+which is where that per-adapter path seam would finally have to exist.
 
 **An operation's long description is its `@doc`**, read back with `TsonApiDescription.doc(name)`; `summary` is
 the short form. A response and a parameter carry a `description` *field* instead, for a permanent reason —

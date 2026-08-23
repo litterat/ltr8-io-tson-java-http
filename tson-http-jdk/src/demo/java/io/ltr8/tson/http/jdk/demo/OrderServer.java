@@ -4,6 +4,8 @@ import com.sun.net.httpserver.HttpServer;
 import io.ltr8.annotation.Typename;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.http.TsonHttpCodec;
+import io.ltr8.tson.http.api.Operation;
+import io.ltr8.tson.http.api.TsonApiCoverage;
 import io.ltr8.tson.http.api.TsonApiDescription;
 import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.http.TsonHttpException;
@@ -147,10 +149,16 @@ public final class OrderServer {
 
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
 
+        // The description is a contract, so hold this server to it before it accepts anything. `serving`
+        // hands back the operation, which is where the path below comes from -- and refuses a name the
+        // description does not declare, so a renamed operation fails at the handler that outlived it.
+        TsonApiCoverage coverage = TsonApiCoverage.of(described);
+
         // The handler never mentions validation. Reading is what validates: a body that breaks the schema
         // never reaches this code, and the client gets a 400 carrying every diagnostic at once.
-        server.createContext("/orders", TsonHandler.asHttpHandler(codec, exchange -> {
-            exchange.requireMethod("POST");
+        Operation create = coverage.serving("create_order");
+        server.createContext(create.path(), TsonHandler.asHttpHandler(codec, exchange -> {
+            exchange.requireMethod(create.method().name());
             Order order = exchange.readObject(Order.class);
             if (UNSTOCKED_SKU.equals(order.sku())) {
                 // A business error is written, not thrown: it composes problem and carries fields no problem
@@ -169,9 +177,15 @@ public final class OrderServer {
         // Publishing the schemas at their own identity paths is what makes the URL in a !!schema directive --
         // and the one in an error body -- something a client can actually dereference. The API description is
         // a schema too, so it needs no route of its own: the catalog serves it like everything else.
+        // A prefix, not the declared `/{schemaPath}`: an identity path has slashes and this framework matches
+        // a prefix rather than a pattern. Coverage is claimed by name for exactly this reason -- checking the
+        // paths were equal would need a translation table per framework, and a wrong entry there is a route
+        // that silently never matches.
+        coverage.serving("get_schema");
         server.createContext("/", TsonHandler.asHttpHandler(codec,
                 TsonSchemaHandler.of(catalog(described, schemas))));
 
+        coverage.requireComplete();
         server.start();
         return server;
     }

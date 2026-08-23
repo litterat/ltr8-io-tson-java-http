@@ -252,4 +252,59 @@ class TsonApiSchemaTest {
                 "only what the bindings map names -- problem and text are nobody's to bind here");
     }
 
+    // ── holding a server to its own description ──
+
+    /**
+     * <b>An operation declared and served by nobody is a promise the server does not keep</b>, and it fails
+     * for the client that read the contract and believed it. Both halves are known before a request exists,
+     * so this is a startup failure.
+     */
+    @Test
+    void anUnservedOperationIsRefusedAtStartup() {
+        TsonApiCoverage coverage = TsonApiCoverage.of(TsonApiSchema.describedBy(resolved(API), API_ID));
+        coverage.serving("create_order");
+
+        assertEquals(Set.of("get_schema"), coverage.unserved());
+        IllegalStateException thrown = assertThrows(IllegalStateException.class, coverage::requireComplete);
+        assertTrue(thrown.getMessage().contains("get_schema"), thrown.getMessage());
+    }
+
+    /** And claiming everything passes -- the shape a demo's startup ends with. */
+    @Test
+    void aFullyServedDescriptionIsComplete() {
+        TsonApiCoverage coverage = TsonApiCoverage.of(TsonApiSchema.describedBy(resolved(API), API_ID));
+
+        assertEquals("/orders", coverage.serving("create_order").path(),
+                "serving hands back the operation, so the path is not written twice");
+        coverage.serving("get_schema");
+
+        assertEquals(Set.of(), coverage.unserved());
+        coverage.requireComplete();
+    }
+
+    /**
+     * <b>Drift the other way.</b> A handler naming an operation the description does not declare is a route
+     * renamed in one place and not the other, and it fails where it is written rather than as a mystery
+     * 404 later.
+     */
+    @Test
+    void servingAnOperationTheDescriptionDoesNotDeclareIsRefused() {
+        TsonApiCoverage coverage = TsonApiCoverage.of(TsonApiSchema.describedBy(resolved(API), API_ID));
+
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
+                () -> coverage.serving("create_ordr"));
+        assertTrue(thrown.getMessage().contains("create_ordr"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("create_order"), "and says what it does declare");
+    }
+
+    /** Two handlers for one operation is a bug: only one of them can ever be reached. */
+    @Test
+    void claimingOneOperationTwiceIsRefused() {
+        TsonApiCoverage coverage = TsonApiCoverage.of(TsonApiSchema.describedBy(resolved(API), API_ID));
+        coverage.serving("create_order");
+
+        assertTrue(assertThrows(IllegalStateException.class, () -> coverage.serving("create_order"))
+                .getMessage().contains("already served"));
+    }
+
 }

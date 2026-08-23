@@ -4,6 +4,8 @@ import io.javalin.Javalin;
 import io.ltr8.annotation.Typename;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.http.TsonHttpCodec;
+import io.ltr8.tson.http.api.Operation;
+import io.ltr8.tson.http.api.TsonApiCoverage;
 import io.ltr8.tson.http.api.TsonApiDescription;
 import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.http.TsonHttpException;
@@ -149,7 +151,13 @@ public final class OrderServer {
 
         // The handler never mentions validation. Reading is what validates: a body that breaks the schema
         // never reaches this code, and the client gets a 400 carrying every diagnostic at once.
-        app.post("/orders", TsonHandler.asHandler(codec, tsonContext -> {
+        // The description is a contract, so hold this server to it before it accepts anything. `serving`
+        // hands back the operation, which is where the path below comes from -- and refuses a name the
+        // description does not declare, so a renamed operation fails at the handler that outlived it.
+        TsonApiCoverage coverage = TsonApiCoverage.of(described);
+
+        Operation create = coverage.serving("create_order");
+        app.post(create.path(), TsonHandler.asHandler(codec, tsonContext -> {
             Order order = tsonContext.readObject(Order.class);
             if (UNSTOCKED_SKU.equals(order.sku())) {
                 // A business error is written, not thrown: it composes problem and carries fields no problem
@@ -165,13 +173,15 @@ public final class OrderServer {
                     .write(new Order(order.sku(), order.quantity() * 2), SCHEMA_ID, "order"));
         }));
 
-        // `<path>` rather than `{path}`: an identity path has slashes in it, and only the angle form matches
-        // across them. Publishing at the identity path is what makes a !!schema URL dereferenceable.
-        // The API description is a schema too, so the catalog serves it like everything else -- no route
-        // of its own, which the data-shaped predecessor needed.
+        // `<path>` rather than the declared `{schemaPath}`: an identity path has slashes in it, and only the
+        // angle form matches across them -- which is exactly why coverage is claimed by name rather than by
+        // comparing paths. Publishing at the identity path is what makes a !!schema URL dereferenceable, and
+        // the API description is a schema too, so the catalog serves it like everything else.
+        coverage.serving("get_schema");
         app.get("/<path>", TsonHandler.asHandler(codec,
                 TsonSchemaHandler.of(catalog(described, schemas))));
 
+        coverage.requireComplete();
         return app;
     }
 
