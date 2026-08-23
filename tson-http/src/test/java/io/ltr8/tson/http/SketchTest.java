@@ -96,22 +96,16 @@ class SketchTest {
      * {@code core.tn} imported. Metadata is carried by FIXED fields, which survive into resolver output with
      * their values, where a locally declared annotation's value would have been dropped (#12).
      */
-    /** The four schemas orders-api-3.tn now imports -- a library, which is what #11's fix bought. */
+    /**
+     * The schemas {@code orders-api-3.tn} imports — a library, which is what #11's fix bought. Every one is a
+     * real file in {@code sketch/}, so the whole set is readable without going through this test.
+     */
     private static Map<String, String> ordersLibrary() throws Exception {
         return Map.of(
                 "https://tson.io/2026/32/ltr8/http/http-api-1.tn", sketch("http-api-1.tn"),
                 "https://tson.io/2026/32/ltr8/http/problem-2.tn", TsonProblemSchema.source(),
-                "https://schemas.example.com/2026/32/app/order-1.tn", """
-                        !!id:"https://schemas.example.com/2026/32/app/order-1.tn"
-                        !!meta:"https://tson.io/2026/32/m/meta.tn"
-                        !!import:"https://tson.io/2026/32/m/core.tn"
-                        { order => { sku: non_empty_text  quantity: int32 } }""",
-                "https://schemas.example.com/2026/32/app/orders-errors-1.tn", """
-                        !!id:"https://schemas.example.com/2026/32/app/orders-errors-1.tn"
-                        !!meta:"https://tson.io/2026/32/m/meta.tn"
-                        !!import:"https://tson.io/2026/32/m/core.tn"
-                        !!import:"https://tson.io/2026/32/ltr8/http/problem-2.tn"
-                        { sku_not_found => problem & { missing_sku: non_empty_text } }""");
+                "https://schemas.example.com/2026/32/app/order-1.tn", sketch("order-1.tn"),
+                "https://schemas.example.com/2026/32/app/orders-errors-1.tn", sketch("orders-errors-1.tn"));
     }
 
     @Test
@@ -260,17 +254,8 @@ class SketchTest {
         Map<String, String> lib = Map.of(
                 "https://tson.io/2026/32/ltr8/http/meta-http-1.tn", sketch("meta-http-1.tn"),
                 "https://tson.io/2026/32/ltr8/http/problem-2.tn", TsonProblemSchema.source(),
-                "https://schemas.example.com/2026/32/app/order-1.tn", """
-                        !!id:"https://schemas.example.com/2026/32/app/order-1.tn"
-                        !!meta:"https://tson.io/2026/32/m/meta.tn"
-                        !!import:"https://tson.io/2026/32/m/core.tn"
-                        { order => { sku: text  quantity: int32 } }""",
-                "https://schemas.example.com/2026/32/app/orders-errors-1.tn", """
-                        !!id:"https://schemas.example.com/2026/32/app/orders-errors-1.tn"
-                        !!meta:"https://tson.io/2026/32/m/meta.tn"
-                        !!import:"https://tson.io/2026/32/m/core.tn"
-                        !!import:"https://tson.io/2026/32/ltr8/http/problem-2.tn"
-                        { sku_not_found => problem & { sku: text } }""");
+                "https://schemas.example.com/2026/32/app/order-1.tn", sketch("order-1.tn"),
+                "https://schemas.example.com/2026/32/app/orders-errors-1.tn", sketch("orders-errors-1.tn"));
 
         UnsupportedOperationException gap = org.junit.jupiter.api.Assertions.assertThrows(
                 UnsupportedOperationException.class,

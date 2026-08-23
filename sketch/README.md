@@ -1,5 +1,17 @@
 # Sketch: an API description made of types, not data about types
 
+## The files
+
+| File | What |
+|---|---|
+| `orders-api-3.tn` | **Read this first.** The API, in an ordinary schema. Imports the four below. |
+| `http-api-1.tn` | Reusable vocabulary: the enums, the `response`/`page` templates, the `operation` base. |
+| `order-1.tn` | The domain types. Versions independently of the API that exposes them. |
+| `orders-errors-1.tn` | Business errors, composing `problem` from the shipping `problem-2.tn`. |
+| `orders-api-2.tn` + `meta-http-2.tn` | The annotation design: operations as `top &`, metadata on annotations. |
+| `orders-api-1.tn` + `meta-http-1.tn` | The constructor design. Blocked; see below. |
+
+
 **Three designs, in increasing order of how little they need.** Nothing here ships. `SketchTest` holds each to
 what this file claims, so a fix upstream shows up as a failing test rather than as nothing happening.
 
@@ -82,9 +94,13 @@ lives once, in the template, where it cannot drift between responses. It nests, 
   recommending the template form for a service that relies on the status being checked.
 
 **What this does to the meta-layer argument below.** Point 1 — wrapper types becoming values — is now mostly
-answered without a meta layer, so the case for moving up rests on the remaining three: shape checking,
-recognisability by construction, and templated *operations*. Those are still real, and the last of them is
-itself waiting on `template_argument`'s deferred collection case.
+answered without a meta layer, and point 4 with it, since both were about declarations existing only to pair a
+status with a body. What survives is **shape checking**, **recognisability by construction**, and **templated
+operations** — and the template work has just added a fourth, which may now be the strongest of them:
+**the meta form does not need FIXED fields at all**, so `UPSTREAM.md` #14 cannot arise in it. There, `status`
+is an ordinary field of a `response` record and `!response { status: 201  body: order }` supplies 201 as a
+value. Only the schema-level design has to *fix a field* to say what is really just a value, and that is
+exactly where #14 bites.
 
 ## What belongs in the meta layer, and what it would unlock
 
