@@ -30,13 +30,7 @@ public final class OrderServer {
     /** The schema this server governs orders by. Its identity names a host; where it is served is separate. */
     public static final String SCHEMA_ID = "https://schemas.example.com/2026/32/app/order-1.tn";
 
-    public static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/32/app/order-1.tn"
-            !!meta:"https://tson.io/2026/32/m/meta.tn"
-            !!import:"https://tson.io/2026/32/m/core.tn"
-            {
-                order => { sku: text  quantity: int32 }
-            }""";
+    public static final String SCHEMA = schema("order-1.tn");
 
     /** The identity of this service's business-error schema. */
     public static final String ERRORS_ID = "https://schemas.example.com/2026/32/app/orders-errors-1.tn";
@@ -53,15 +47,7 @@ public final class OrderServer {
      * that uses a name should say where it comes from. Naming both was rejected until {@code UPSTREAM.md} #11
      * was fixed.
      */
-    public static final String ERRORS = """
-            !!id:"https://schemas.example.com/2026/32/app/orders-errors-1.tn"
-            !!meta:"https://tson.io/2026/32/m/meta.tn"
-            !!import:"https://tson.io/2026/32/m/core.tn"
-            !!import:"%s"
-            @doc:"Business errors: the request was schema-valid, and the domain still said no."
-            {
-                sku_not_found => problem & { sku: text }
-            }""".formatted(TsonProblemSchema.ID);
+    public static final String ERRORS = schema("orders-errors-1.tn");
 
     /**
      * A description of this service, as a schema governed by {@code meta-http-1.tn} -- published, resolved at
@@ -74,47 +60,7 @@ public final class OrderServer {
      */
     public static final String API_ID = "https://schemas.example.com/2026/32/app/orders-api-1.tn";
 
-    public static final String API = """
-            !!id:"https://schemas.example.com/2026/32/app/orders-api-1.tn"
-            !!meta:"%s"
-            !!import:"%s"
-            !!import:"%s"
-            !!import:"%s"
-            !!import:"https://tson.io/2026/32/m/core.tn"
-            {
-              create_order => !operation {
-                method:      POST
-                path:        "/orders"
-                summary:     "Place an order"
-                description: "Accept an order and confirm it with the quantity doubled."
-                parameters:  []
-                request:     order
-                responses:   [
-                  !response { status: 201  body: order
-                              description: "The confirmed order" }
-                  !response { status: 400  body: problem
-                              description: "The body is not a valid order" }
-                  !response { status: 404  body: sku_not_found
-                              description: "The order names a SKU this service does not stock" }
-                ]
-              }
-
-              get_schema => !operation {
-                method:      GET
-                path:        "/{schemaPath}"
-                summary:     "Fetch a published schema"
-                description: "Every schema this service names is served at its own identity's path."
-                parameters:  [
-                  !parameter { name: "schemaPath"  in: PATH  type: text  required: true
-                               description: "The path component of the schema's own !!id" }
-                ]
-                responses:   [
-                  !response { status: 200  description: "The schema document, served as bytes" }
-                  !response { status: 404  body: problem
-                              description: "No schema is published there" }
-                ]
-              }
-            }""".formatted(TsonApiSchema.ID, SCHEMA_ID, ERRORS_ID, TsonProblemSchema.ID);
+    public static final String API = schema("orders-api-1.tn");
 
     /** The one SKU this demo does not stock, so the business-error path is reachable by hand. */
     public static final String UNSTOCKED_SKU = "GONE-1";
@@ -137,6 +83,26 @@ public final class OrderServer {
     /** A bound order. Public because binding only ever touches public constructors and methods. */
     @Typename(name = "order")
     public record Order(String sku, int quantity) {
+    }
+
+
+    /**
+     * A demo schema, from {@code demo/schemas} on the classpath.
+     *
+     * <p><b>Real {@code .tn} files rather than Java text blocks</b>, shared by all three adapters' demos so a
+     * change cannot land in one and not the others. They name their imports literally, as a published
+     * document must -- {@link #identitiesMatchTheConstants} is what holds those literals to the constants
+     * this class exposes.
+     */
+    private static String schema(String name) {
+        try (java.io.InputStream in = OrderServer.class.getResourceAsStream("/" + name)) {
+            if (in == null) {
+                throw new IllegalStateException(name + " is not on the demo classpath");
+            }
+            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
     }
 
     private OrderServer() {

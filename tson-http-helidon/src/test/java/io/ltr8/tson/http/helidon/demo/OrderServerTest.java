@@ -6,6 +6,7 @@ import io.ltr8.tson.http.TsonProblem;
 import io.ltr8.tson.http.TsonProblemSchema;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import io.ltr8.tson.http.api.TsonApiSchema;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -97,4 +98,25 @@ class OrderServerTest {
         assertEquals(OrderServer.SCHEMA, get("/2026/32/app/order-1.tn").body());
         assertEquals(TsonProblemSchema.source(), get("/2026/32/ltr8/http/problem-1.tn").body());
     }
+    /**
+     * <b>The schemas name their identities literally, so something has to hold them to the constants.</b>
+     * They were Java text blocks interpolating {@code TsonProblemSchema.ID}; as real {@code .tn} files they
+     * cannot, and a published document naming its imports literally is correct anyway. This is what the
+     * interpolation used to guarantee for free.
+     */
+    @Test
+    void identitiesMatchTheConstants() {
+        assertTrue(OrderServer.SCHEMA.startsWith("!!id:\"" + OrderServer.SCHEMA_ID + "\""),
+                OrderServer.SCHEMA.lines().findFirst().orElse(""));
+        assertTrue(OrderServer.ERRORS.startsWith("!!id:\"" + OrderServer.ERRORS_ID + "\""),
+                OrderServer.ERRORS.lines().findFirst().orElse(""));
+        assertTrue(OrderServer.API.startsWith("!!id:\"" + OrderServer.API_ID + "\""),
+                OrderServer.API.lines().findFirst().orElse(""));
+
+        assertTrue(OrderServer.ERRORS.contains("!!import:\"" + TsonProblemSchema.ID + "\""),
+                "the error schema composes the CURRENT problem schema");
+        assertTrue(OrderServer.API.contains("!!meta:\"" + TsonApiSchema.ID + "\""),
+                "the description is governed by the CURRENT meta layer");
+    }
+
 }

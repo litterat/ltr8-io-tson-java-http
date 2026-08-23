@@ -11,11 +11,12 @@ import java.util.Optional;
  *
  * <h2>There is no {@code validate}, and that is the point</h2>
  *
- * <p>{@code TsonApi} — the same model over a description written as <em>data</em> — carries forty lines that
- * resolve each payload's type name against the description's own import list, because a data document holds
- * bare names that nothing resolves. Those lines reimplemented an upstream namespace bug twice before they
- * were right: once by counting how many imports surface a name, and once by comparing whole
- * {@code TypeDefinition}s, which differ per route because linking credits each route's own subtypes.
+ * <p>The same model over a description written as <em>data</em> needs about forty lines resolving each
+ * payload's type name against the description's own import list, because a data document holds bare names
+ * that nothing resolves. This project had those lines and deleted them with the design; they reimplemented an
+ * upstream namespace bug twice before they were right — once by counting how many imports surface a name, and
+ * once by comparing whole {@code TypeDefinition}s, which differ per route because linking credits each
+ * route's own subtypes.
  *
  * <p>Here the compiler has already done it. A description whose {@code body} names a type nothing declares
  * does not resolve, so an instance of this class cannot exist for an unsound description. What is left is a

@@ -1,0 +1,40 @@
+!!id:"https://schemas.example.com/2026/32/app/orders-api-1.tn"
+!!meta:"https://tson.io/2026/32/ltr8/http/meta-http-1.tn"
+!!import:"https://schemas.example.com/2026/32/app/order-1.tn"
+!!import:"https://schemas.example.com/2026/32/app/orders-errors-1.tn"
+!!import:"https://tson.io/2026/32/ltr8/http/problem-1.tn"
+!!import:"https://tson.io/2026/32/m/core.tn"
+{
+  create_order => !operation {
+    method:      POST
+    path:        "/orders"
+    summary:     "Place an order"
+    description: "Accept an order and confirm it with the quantity doubled."
+    parameters:  []
+    request:     order
+    responses:   [
+      !response { status: 201  body: order
+                  description: "The confirmed order" }
+      !response { status: 400  body: problem
+                  description: "The body is not a valid order" }
+      !response { status: 404  body: sku_not_found
+                  description: "The order names a SKU this service does not stock" }
+    ]
+  }
+
+  get_schema => !operation {
+    method:      GET
+    path:        "/{schemaPath}"
+    summary:     "Fetch a published schema"
+    description: "Every schema this service names is served at its own identity's path."
+    parameters:  [
+      !parameter { name: "schemaPath"  in: PATH  type: text  required: true
+                   description: "The path component of the schema's own !!id" }
+    ]
+    responses:   [
+      !response { status: 200  description: "The schema document, served as bytes" }
+      !response { status: 404  body: problem
+                  description: "No schema is published there" }
+    ]
+  }
+}

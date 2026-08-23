@@ -33,8 +33,7 @@ import java.util.Set;
  * <p><b>{@code order} there is a type reference, not a string.</b> The compiler resolves it through the
  * imports and refuses a name nothing declares — which is the whole reason to describe an API at the schema
  * layer. A description written as data can name a schema but cannot hold a reference to a type, so it carries
- * bare names and needs its own resolver; {@code TsonApi} is that resolver, and it exists only because the
- * data shape forces it.
+ * bare names and every consumer needs its own resolver for them — in every language that reads it.
  *
  * <h2>Wiring</h2>
  *

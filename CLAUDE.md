@@ -519,6 +519,11 @@ request exercises that.
 
 - `UPSTREAM.md` — changes wanted in `ltr8-io-tson-java`, plus spec feedback staged for its
   `SPEC-FEEDBACK.md`. **The only place upstream changes are recorded** while that repo is hands-off.
+- `demo/schemas/` — the three schemas the demo servers publish (`order-1.tn`, `orders-errors-1.tn`,
+  `orders-api-1.tn`), as real `.tn` files on the demo source sets' shared resource path rather than Java text
+  blocks. One copy for three adapters, so a change cannot land in one demo and not the others. They name
+  their imports **literally**, as a published document must, and each `OrderServerTest.identitiesMatchTheConstants`
+  holds those literals to the constants — which is what the old string interpolation gave for free.
 - `tson-http/src/main/resources/meta-http-1.tn` — the meta layer an API description names. Four designs were
   explored side by side (three as schemas, one as data); this is the one picked, and the others are gone
   along with the `sketch/` directory that held them. The comparison is in git history if it is ever wanted

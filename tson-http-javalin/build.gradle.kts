@@ -15,6 +15,10 @@ dependencies {
 val demo = sourceSets.create("demo") {
     compileClasspath += sourceSets["main"].output
     runtimeClasspath += sourceSets["main"].output
+    // The three demos are one server. Their schemas are shared rather than copied per adapter, so a change
+    // to the order schema cannot land in one and not the others -- and they are real .tn files rather than
+    // Java text blocks, which is how every other schema in this repo lives.
+    resources.srcDir(rootProject.file("demo/schemas"))
 }
 
 configurations["demoImplementation"].extendsFrom(configurations["api"], configurations["implementation"])
