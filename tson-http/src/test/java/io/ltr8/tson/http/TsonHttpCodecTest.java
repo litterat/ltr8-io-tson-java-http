@@ -15,6 +15,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -279,6 +280,38 @@ class TsonHttpCodecTest {
 
         assertEquals(TsonHttpException.BAD_REQUEST, thrown.status());
         assertTrue(thrown.getMessage().contains("2 problems"), thrown.getMessage());
+    }
+
+    /**
+     * <b>A type nothing binds is this server's misconfiguration, not a library gap.</b> It used to surface as
+     * {@code UnsupportedOperationException: no usable compiled reader}, which the status policy faithfully
+     * called 501 — telling a client the library could not do something, when a line of configuration was
+     * simply missing. It is now a {@code TsonMissingBindingException}, and 500 is the honest answer.
+     *
+     * <p>Deferred to the read of that specific type, deliberately: a schema legitimately declares types a
+     * given consumer never binds — core.tn's forty of them — so failing the compile would make bind mode
+     * unusable.
+     */
+    @Test
+    void aTypeNothingBindsIsAServerFaultNotALibraryGap() {
+        String schema = """
+                !!id:"https://example.test/thing-1.tn"
+                !!meta:"https://tson.io/2026/32/m/meta.tn"
+                !!import:"https://tson.io/2026/32/m/core.tn"
+                { thing => { a: text } }""";
+        Tson tson = Tson.builder().schemaSource(uri -> schema).bindings(Map.of()).build();
+        tson.resolve(schema);
+        TsonHttpCodec bare = new TsonHttpCodec(tson);
+        InputStream body = new ByteArrayInputStream(
+                ("!!schema:\"https://example.test/thing-1.tn\"\n!thing { a: \"x\" }")
+                        .getBytes(StandardCharsets.UTF_8));
+
+        TsonHttpException thrown = org.junit.jupiter.api.Assertions.assertThrows(TsonHttpException.class,
+                () -> bare.readObject(body, "application/tson", Object.class));
+
+        assertEquals(TsonHttpException.INTERNAL_SERVER_ERROR, thrown.status());
+        assertTrue(thrown.getMessage() == null || !thrown.getMessage().contains("thing"),
+                "a 5xx carries no detail: " + thrown.getMessage());
     }
 
 }

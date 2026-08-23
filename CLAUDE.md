@@ -356,11 +356,17 @@ Each cost a debugging cycle here and is pinned by a test.
 - **A bound class must be public.** tson-java declares no `opens` and binding only ever touches public
   constructors and methods, so a package-private record fails analysis with a bare `DataBindException:
   Failed to resolve` that names nothing useful.
-- **Object binding needs a `DataNameBinder` on the `DataBindContext`.** The class passed to `readObject` is
-  the expected *result*, not the mapping; without a binder the schema compiles and then throws
-  `UnsupportedOperationException: no bound Java class for '<type>'` — which the status policy correctly
-  reports as 501, so it looks like a library gap rather than missing configuration. Chain to
-  `SchemaMetaNameBinder.INSTANCE` for everything you do not map yourself.
+- **Object binding needs bindings.** The class passed to `readObject` is the expected *result*, not the
+  mapping. Use `Tson.builder().bindings(Map.of("order", Order.class))`, which builds the whole context — the
+  map as a name binder, chained over the kernel's vocabulary rather than replacing it, with the atom
+  registrations applied. Do **not** hand-roll `DataBindContext.builder()` for this: two of those three steps
+  are invisible, and missing either fails a long way from the cause. `bindings`/`profile` are mutually
+  exclusive with `dataBindContext` — a context is built or given, not both.
+- **A type nothing binds is a 500, not a 501.** It is a `TsonMissingBindingException` naming the map, deferred
+  to the first read of that specific type (a schema legitimately declares types a consumer never binds). It
+  used to present as `UnsupportedOperationException: no usable compiled reader`, which this project mapped to
+  501 — reporting a missing line of its own configuration as "this library cannot do that". Pinned by
+  `TsonHttpCodecTest.aTypeNothingBindsIsAServerFaultNotALibraryGap`.
 - **A JSON body names neither its schema nor its root type**, and cannot — directive syntax is not JSON. So the
   schema comes from the `TSON-Schema` header and the root type from the route, which means reading one is
   `readObjectAs`/`readTreeAs`, never the bare `read`. Same two-part requirement as `describing()`, same reason.

@@ -1,11 +1,8 @@
 package io.ltr8.tson.http;
 
-import io.ltr8.bind.DataBindContext;
-import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.TsonConfig;
 import io.ltr8.tson.compiler.TsonSchemaSource;
-import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
-import io.ltr8.tson.compiler.config.TsonAtomContext;
 import io.ltr8.tson.schema.TsonCanonicalIdentity;
 
 import java.io.InputStream;
@@ -201,8 +198,8 @@ public final class TsonSchemaVersions {
         }
 
         /**
-         * Serves {@code schemaText}, building the {@code Tson} and its own {@code DataBindContext} from
-         * {@code bindings} -- the per-version wiring, which is the same handful of lines every time.
+         * Serves {@code schemaText}, building the {@code Tson} and its own bind context from {@code bindings}
+         * -- the per-version wiring, which {@code TsonConfig.bindings} reduced to one call.
          *
          * @param schemaId the schema's identity, as documents will name it
          * @param source   where this version's schema and its imports come from
@@ -233,16 +230,11 @@ public final class TsonSchemaVersions {
         public Builder version(String schemaId, String schemaText, TsonSchemaSource source,
                                Map<String, Class<?>> bindings, String profile) {
             Map<String, Class<?>> copy = Map.copyOf(bindings);
-            DataNameBinder binder = name -> {
-                Class<?> bound = copy.get(name);
-                return bound != null ? bound : SchemaMetaNameBinder.INSTANCE.resolve(name);
-            };
-            DataBindContext.Builder contextBuilder = DataBindContext.builder().nameBinder(binder);
+            TsonConfig config = Tson.builder().schemaSource(source).bindings(copy);
             if (profile != null) {
-                contextBuilder.profile(profile);
+                config.profile(profile);
             }
-            DataBindContext context = TsonAtomContext.registerDefaults(contextBuilder.build());
-            Tson tson = Tson.builder().schemaSource(source).dataBindContext(context).build();
+            Tson tson = config.build();
             tson.resolve(schemaText);
             TsonHttpCodec codec = new TsonHttpCodec(tson);
             copy.values().forEach(target -> codec.prepareToWrite(target));

@@ -1,13 +1,9 @@
 package io.ltr8.tson.http;
 
 import io.ltr8.annotation.Typename;
-import io.ltr8.bind.DataBindContext;
-import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.compiler.Diagnostic;
 import io.ltr8.tson.compiler.TsonSchemaSource;
-import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
-import io.ltr8.tson.compiler.config.TsonAtomContext;
 import io.ltr8.tson.schema.meta.TypeDefinition;
 
 import java.io.IOException;
@@ -92,15 +88,13 @@ public final class TsonApi {
                       List<Operation> operations) {
     }
 
-    private static final DataNameBinder BINDER = name -> switch (name) {
-        case "api" -> Api.class;
-        case "operation" -> Operation.class;
-        case "response" -> Response.class;
-        case "parameter" -> Parameter.class;
-        case "parameter_location" -> ParameterLocation.class;
-        case "http_method" -> HttpMethod.class;
-        default -> SchemaMetaNameBinder.INSTANCE.resolve(name);
-    };
+    private static final Map<String, Class<?>> BINDINGS = Map.of(
+            "api", Api.class,
+            "operation", Operation.class,
+            "response", Response.class,
+            "parameter", Parameter.class,
+            "parameter_location", ParameterLocation.class,
+            "http_method", HttpMethod.class);
 
     /** The current schema's own source text, for a server that publishes the schemas it uses. */
     public static String schemaSource() {
@@ -122,13 +116,11 @@ public final class TsonApi {
      * @throws TsonHttpException 400 if it is not a valid description
      */
     public static TsonApi read(String description) {
-        DataBindContext bind =
-                TsonAtomContext.registerDefaults(DataBindContext.builder().nameBinder(BINDER).build());
         // Serves both published versions, so a description naming the superseded one still reads (§10).
         TsonSchemaSource source = uri -> uri.contains("api-2.tn") ? SOURCE
                 : uri.contains("api-1.tn") ? SUPERSEDED_1
                 : TsonSchemaSource.registeredOnly().fetch(uri);
-        Tson tson = Tson.builder().schemaSource(source).dataBindContext(bind).build();
+        Tson tson = Tson.builder().schemaSource(source).bindings(BINDINGS).build();
         TsonHttpCodec codec = new TsonHttpCodec(tson);
         return new TsonApi(codec.readObject(
                 new java.io.ByteArrayInputStream(description.getBytes(StandardCharsets.UTF_8)),

@@ -2,11 +2,7 @@ package io.ltr8.tson.http.jdk.demo;
 
 import com.sun.net.httpserver.HttpServer;
 import io.ltr8.annotation.Typename;
-import io.ltr8.bind.DataBindContext;
-import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
-import io.ltr8.tson.compiler.config.TsonAtomContext;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonApi;
 import io.ltr8.tson.http.TsonHttpException;
@@ -149,13 +145,9 @@ public final class OrderServer {
      */
     public static HttpServer start(int port) throws IOException {
         Map<String, Class<?>> bindings = Map.of("order", Order.class, "sku_not_found", SkuNotFound.class);
-        DataNameBinder binder = name -> bindings.getOrDefault(name, null) != null
-                ? bindings.get(name) : SchemaMetaNameBinder.INSTANCE.resolve(name);
-        DataBindContext bind =
-                TsonAtomContext.registerDefaults(DataBindContext.builder().nameBinder(binder).build());
         Map<String, String> schemas = Map.of(SCHEMA_ID, SCHEMA, ERRORS_ID, ERRORS,
                 TsonProblemSchema.ID, TsonProblemSchema.source());
-        Tson tson = Tson.builder().schemaSource(schemas::get).dataBindContext(bind).build();
+        Tson tson = Tson.builder().schemaSource(schemas::get).bindings(bindings).build();
         tson.resolve(SCHEMA);
         tson.resolve(ERRORS);
         TsonHttpCodec codec = new TsonHttpCodec(tson);

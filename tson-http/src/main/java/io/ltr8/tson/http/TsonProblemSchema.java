@@ -1,12 +1,8 @@
 package io.ltr8.tson.http;
 
-import io.ltr8.bind.DataBindContext;
-import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.compiler.Diagnostic;
 import io.ltr8.tson.compiler.TsonCompiledSchema;
-import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
-import io.ltr8.tson.compiler.config.TsonAtomContext;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -64,12 +60,10 @@ public final class TsonProblemSchema {
         return Map.of(ID, SOURCE, ID_2, SUPERSEDED_2, ID_1, SUPERSEDED_1);
     }
 
-    private static final DataNameBinder BINDER = name -> switch (name) {
-        case "problem" -> TsonProblem.class;
-        case "diagnostic" -> TsonProblemDiagnostic.class;
-        case "diagnostic_code" -> Diagnostic.Code.class;
-        default -> SchemaMetaNameBinder.INSTANCE.resolve(name);
-    };
+    private static final Map<String, Class<?>> BINDINGS = Map.of(
+            "problem", TsonProblem.class,
+            "diagnostic", TsonProblemDiagnostic.class,
+            "diagnostic_code", Diagnostic.Code.class);
 
     private static final String SOURCE = readResource("/problem-3.tn");
 
@@ -98,9 +92,7 @@ public final class TsonProblemSchema {
      * {@link TsonProblemDiagnostic} -- what a client reads an error body back through.
      */
     public static Tson tson() {
-        DataBindContext context =
-                TsonAtomContext.registerDefaults(DataBindContext.builder().nameBinder(BINDER).build());
-        Tson tson = Tson.builder().schemaSource(uri -> SOURCE).dataBindContext(context).build();
+        Tson tson = Tson.builder().schemaSource(uri -> SOURCE).bindings(BINDINGS).build();
         tson.resolve(SOURCE);
         return tson;
     }
