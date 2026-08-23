@@ -115,6 +115,69 @@ type-ref stops the reader seeing the type-ref (`UPSTREAM.md` #16) — so a schem
 document itself. Every other file here explains itself in a `@doc`; this one has to be explained from outside.
 That asymmetry is not a stylistic choice, and it is worth noticing when weighing the designs.
 
+### Who checks what — the question all four designs answer differently
+
+The one that matters when choosing, and the answer inverts the obvious reading.
+
+| Design | The description's own shape | Its type references |
+|---|---|---|
+| `api-1.tn` — data, `$ref`-style | compiler | **nobody** |
+| `orders-api-4.tn` — data, imports | **compiler** | this project, ~40 lines |
+| `orders-api-3.tn` — ordinary schema | **almost nobody** | compiler |
+| `orders-api-1.tn` — `~operation` | compiler | compiler |
+
+Measured, not assumed — `SketchTest.theDataDesignIsStructurallyCheckedAndTheSchemaDesignIsNot`:
+
+- **Data design.** `methd` instead of `method` → `UNRECOGNIZED_FIELD`, listing the fields that exist.
+  `status: 42` → `ATOM_CONSTRAINT_VIOLATION`, below the minimum of 100. `method: POZT` →
+  `ATOM_CONSTRAINT_VIOLATION`, listing the seven that are methods. All from the compiler, with positions.
+- **Schema design.** The same misspelling is **accepted**. So is an operation with no response at all.
+
+**Why the inversion.** A data description is validated against `api-2.tn`, which describes it completely. A
+schema description *is* a schema, and **nothing describes what an operation must look like** — the meta-schema
+says what a *schema* is in general. Composition with an `operation` base requires `method` and `path` to exist
+and stops there; it cannot say that `response` is a choice of *this* operation's variants, so it does not
+require `response` at all.
+
+So neither shipping design gets both, and each gets the half the other lacks. **That is the sharpest argument
+for `UPSTREAM.md` #15**: a `~operation` constructor is exactly what supplies the missing description of an
+operation's shape, which is why it is the only row with the compiler in both columns.
+
+Worth weighing honestly: **the re-implementation the data design asks for is small and bounded** — resolve a
+name against an import list, about forty lines. The schema design's gap is not something a consumer can fill at
+all, because there is nowhere to state what an operation must be.
+
+### Prior art: this is XSD's shape, and `api-1.tn` was JSON Schema's
+
+The two shipping designs landed on opposite sides of a well-trodden divide.
+
+**`api-1.tn` was JSON Schema's model.** JSON Schema has `$id`, `$ref`, `$defs` and **no import statement**:
+every reference carries its own URI at the point of use — `{"$ref": "https://example.com/order.json"}` — and
+resolution is per-reference URI resolution against a base. `api-1.tn`'s `{ schema: uri  type: text }` at every
+payload is a `$ref` with the fragment spelled as a separate field.
+
+**`orders-api-4.tn` is XSD's model.** XSD declares dependencies up front —
+`<xs:import namespace="…" schemaLocation="…"/>` — then references types by *name*. That is `imports: [ … ]`
+plus bare `"order"`.
+
+**Two things XSD has that this does not.** Its processor is *specified*: an unresolved QName is a schema error
+by the standard, where `TsonApi.validate` runs only if a consumer calls it. And it has **namespace prefixes**,
+so a reference binds explicitly at the use site (`tns:Order`) — bare names cannot, which is why ambiguity had
+to become a rule enforced here. An alias-prefixed form would delete that rule, at the cost of noise at every
+use. (XSD's `schemaLocation` being a *hint* rather than a binding is also the identity-is-not-location split
+§2.2.1 draws, arrived at independently.)
+
+**OpenAPI mostly avoids the problem.** `components/schemas` holds the payload schemas *inside* the API
+document, and references are JSON Pointers into the same file — `$ref: "#/components/schemas/Order"`. External
+references are the historically patchy part of the toolchain; bundling into one self-contained document is the
+norm, and resolution is each tool's business.
+
+**That trick is not available here, and the reason is the interesting part.** OpenAPI can inline its schemas
+because JSON Schema *is* JSON — schema language and data language are the same, so a schema is just more of the
+document. TSON's schema language is TSON too, but a schema document and a data document are different *kinds*
+of document, so a data-document description cannot carry its schemas inside it. The import list is not a
+stylistic choice.
+
 ## The problem with `api-1.tn`, which does ship
 
 ```tson

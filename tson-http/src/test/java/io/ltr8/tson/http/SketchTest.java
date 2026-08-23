@@ -3,6 +3,7 @@ package io.ltr8.tson.http;
 import io.ltr8.annotation.Annotation;
 import io.ltr8.annotation.Annotations;
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.compiler.Diagnostic;
 import io.ltr8.tson.schema.meta.FieldState;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.RecordField;
@@ -266,6 +267,50 @@ class SketchTest {
         assertTrue(problems.getFirst().message().contains("sku_not_fund"), problems.getFirst().message());
         assertTrue(problems.getFirst().message().contains("POST /orders response 404"),
                 () -> "and says where: " + problems.getFirst().message());
+    }
+
+    /**
+     * <b>Who checks the description's own shape.</b> The answer inverts the obvious reading: the <em>data</em>
+     * design gets far more help from the compiler than the schema design does.
+     *
+     * <p>A data description is validated against {@code api-2.tn}, which fully describes it — so a misspelled
+     * field, an out-of-range status and a bogus method are all caught, with diagnostics. A schema description
+     * <em>is</em> a schema, and nothing describes what an operation must look like: the meta-schema says what a
+     * schema is in general. Composition with an {@code operation} base requires {@code method} and {@code path}
+     * to exist, and stops there.
+     *
+     * <p>This is the sharpest argument for {@code UPSTREAM.md} #15: a {@code ~operation} constructor is what
+     * would let the schema design have both.
+     */
+    @Test
+    void theDataDesignIsStructurallyCheckedAndTheSchemaDesignIsNot() throws Exception {
+        // Schema design: a typo in a field the operation base declares, and a missing response. Neither
+        // is caught -- any record composing `operation` is an operation.
+        String typo = sketch("orders-api-3.tn")
+                .replace("    method:   http_method = POST", "    methd:    http_method = POST");
+        assertEquals(List.of(), Tson.builder().schemaSource(ordersLibrary()::get).build().validateSchema(typo),
+                "nothing describes an operation's shape, so nothing catches this");
+
+        String noResponse = sketch("orders-api-3.tn")
+                .replace("    response: (order_created | order_invalid | order_sku_gone)\n", "");
+        assertEquals(List.of(),
+                Tson.builder().schemaSource(ordersLibrary()::get).build().validateSchema(noResponse),
+                "and an operation with no response at all is equally fine");
+
+        // Data design: the same class of mistake, caught by the reader with a real diagnostic.
+        assertRejected("a misspelled field", sketch("orders-api-4.tn")
+                .replace("method:     POST", "methd:      POST"), Diagnostic.Code.UNRECOGNIZED_FIELD);
+        assertRejected("a status outside 100..599", sketch("orders-api-4.tn")
+                .replace("status: 201", "status: 42"), Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION);
+        assertRejected("a method that is not one", sketch("orders-api-4.tn")
+                .replace("method:     POST", "method:     POZT"), Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION);
+    }
+
+    private static void assertRejected(String what, String description, Diagnostic.Code expected) {
+        TsonHttpException rejected = org.junit.jupiter.api.Assertions.assertThrows(TsonHttpException.class,
+                () -> TsonApi.read(description), what);
+        assertEquals(expected, rejected.diagnostics().getFirst().code(),
+                () -> what + " -> " + rejected.diagnostics());
     }
 
     // ── the design that is blocked: an `operation` type constructor in a meta layer ──
