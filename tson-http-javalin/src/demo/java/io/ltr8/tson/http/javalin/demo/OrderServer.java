@@ -4,7 +4,7 @@ import io.javalin.Javalin;
 import io.ltr8.annotation.Typename;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.http.TsonHttpCodec;
-import io.ltr8.tson.http.TsonApi;
+import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonProblemDiagnostic;
 import io.ltr8.tson.http.TsonSchemaHeader;
@@ -63,48 +63,58 @@ public final class OrderServer {
                 sku_not_found => problem & { sku: text }
             }""".formatted(TsonProblemSchema.ID);
 
-    /** A description of this service, governed by api-1.tn -- published, and checked by a conformance test. */
-    public static final String API_ID = "https://schemas.example.com/2026/32/app/orders-api-4.tn";
+    /**
+     * A description of this service, as a schema governed by {@code meta-http-1.tn} -- published, resolved at
+     * startup, and checked by a conformance test.
+     *
+     * <p><b>The payload types are references, not strings.</b> {@code request: order} is resolved through the
+     * imports above when this schema loads, so a description naming a type nothing declares does not start
+     * this server. The data-shaped predecessor spelled the same thing as {@code "order"} and needed forty
+     * lines of its own to notice.
+     */
+    public static final String API_ID = "https://schemas.example.com/2026/32/app/orders-api-1.tn";
 
     public static final String API = """
-            !!id:"https://schemas.example.com/2026/32/app/orders-api-4.tn"
-            !!schema:"%s"
-            !api {
-                title: "Orders"
-                version: "1"
-                imports: [ "%s"  "%s"  "%s" ]
-                operations: [
-                    !operation {
-                        method: POST
-                        path: "/orders"
-                        summary: "Accept an order and confirm it with the quantity doubled"
-                        parameters: []
-                        request: "order"
-                        responses: [
-                            !response { status: 201  body: "order"
-                                        description: "The confirmed order" }
-                            !response { status: 400  body: "problem"
-                                        description: "The body is not a valid order" }
-                            !response { status: 404  body: "sku_not_found"
-                                        description: "The order names a SKU this service does not stock" }
-                        ]
-                    }
-                    !operation {
-                        method: GET
-                        path: "/{schemaPath}"
-                        summary: "Fetch a schema this service publishes, at its own identity path"
-                        parameters: [
-                            !parameter { name: "schemaPath"  in: PATH  type: "text"  required: true
-                                         description: "The path component of the schema's own !!id" }
-                        ]
-                        responses: [
-                            !response { status: 200  description: "The schema document, served as bytes" }
-                            !response { status: 404  body: "problem"
-                                        description: "No schema is published there" }
-                        ]
-                    }
+            !!id:"https://schemas.example.com/2026/32/app/orders-api-1.tn"
+            !!meta:"%s"
+            !!import:"%s"
+            !!import:"%s"
+            !!import:"%s"
+            !!import:"https://tson.io/2026/32/m/core.tn"
+            {
+              create_order => !operation {
+                method:      POST
+                path:        "/orders"
+                summary:     "Place an order"
+                description: "Accept an order and confirm it with the quantity doubled."
+                parameters:  []
+                request:     order
+                responses:   [
+                  !response { status: 201  body: order
+                              description: "The confirmed order" }
+                  !response { status: 400  body: problem
+                              description: "The body is not a valid order" }
+                  !response { status: 404  body: sku_not_found
+                              description: "The order names a SKU this service does not stock" }
                 ]
-            }""".formatted(TsonApi.SCHEMA_ID, SCHEMA_ID, ERRORS_ID, TsonProblemSchema.ID);
+              }
+
+              get_schema => !operation {
+                method:      GET
+                path:        "/{schemaPath}"
+                summary:     "Fetch a published schema"
+                description: "Every schema this service names is served at its own identity's path."
+                parameters:  [
+                  !parameter { name: "schemaPath"  in: PATH  type: text  required: true
+                               description: "The path component of the schema's own !!id" }
+                ]
+                responses:   [
+                  !response { status: 200  description: "The schema document, served as bytes" }
+                  !response { status: 404  body: problem
+                              description: "No schema is published there" }
+                ]
+              }
+            }""".formatted(TsonApiSchema.ID, SCHEMA_ID, ERRORS_ID, TsonProblemSchema.ID);
 
     /** The one SKU this demo does not stock, so the business-error path is reachable by hand. */
     public static final String UNSTOCKED_SKU = "GONE-1";
@@ -142,10 +152,17 @@ public final class OrderServer {
     public static Javalin start(int port) {
         Map<String, Class<?>> bindings = Map.of("order", Order.class, "sku_not_found", SkuNotFound.class);
         Map<String, String> schemas = Map.of(SCHEMA_ID, SCHEMA, ERRORS_ID, ERRORS,
-                TsonProblemSchema.ID, TsonProblemSchema.source());
-        Tson tson = Tson.builder().schemaSource(schemas::get).bindings(bindings).build();
+                TsonProblemSchema.ID, TsonProblemSchema.source(),
+                TsonApiSchema.ID, TsonApiSchema.source(), API_ID, API);
+        // metaNameBinder, not bindings: one binds the data a schema describes, the other a governing meta's
+        // own vocabulary. Without it the API schema below declares `operation` and nothing can build one.
+        Tson tson = Tson.builder().schemaSource(schemas::get).bindings(bindings)
+                .metaNameBinder(TsonApiSchema.metaNameBinder()).build();
         tson.resolve(SCHEMA);
         tson.resolve(ERRORS);
+        // Resolving the description is what checks it: a payload type nothing declares fails startup here,
+        // rather than being published as a contract no client can act on.
+        tson.resolve(API);
         TsonHttpCodec codec = new TsonHttpCodec(tson);
         // Every type this server writes, resolved now rather than on a request thread. Descriptor resolution
         // is lazy and its check-then-act is not atomic, so a concurrent first write of a class races
@@ -178,11 +195,8 @@ public final class OrderServer {
 
         // `<path>` rather than `{path}`: an identity path has slashes in it, and only the angle form matches
         // across them. Publishing at the identity path is what makes a !!schema URL dereferenceable.
-        // The description is a data document, not a schema, so it is served on its own route rather than
-        // through the schema catalog -- at its identity's path, like everything else here.
-        app.get("/2026/32/app/orders-api-4.tn", TsonHandler.asHandler(codec, tsonContext ->
-                tsonContext.respondBytes(200, API.getBytes(java.nio.charset.StandardCharsets.UTF_8))));
-
+        // The API description is a schema too, so the catalog serves it like everything else -- no route
+        // of its own, which the data-shaped predecessor needed.
         app.get("/<path>", TsonHandler.asHandler(codec,
                 TsonSchemaHandler.of(catalog())));
 
@@ -199,7 +213,8 @@ public final class OrderServer {
         published.add(SCHEMA);
         published.add(ERRORS);
         published.addAll(TsonProblemSchema.publishedSources());
-        published.addAll(TsonApi.publishedSources());
+        published.addAll(TsonApiSchema.publishedSources());
+        published.add(API);
         return TsonSchemaCatalog.of(published);
     }
 

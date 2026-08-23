@@ -156,43 +156,54 @@ the sanctioned cross-schema mechanism carries a **value** with a visible scope s
 Two consequences:
 
 - **Anything whose job is to relate types must be a schema**, not a data document governed by one. That is why
-  `sketch/orders-api-3.tn` is a schema and why `api-1.tn` — which describes an API as *data* — cannot check
-  anything it says.
+  the API description is a **schema** governed by `meta-http-1.tn`, and why a description written as *data*
+  cannot check anything it says.
 - **The recurring `(schema identity, root type name)` pair is the data layer's workaround for this.**
   `describing(…)`, `readObjectAs(…)`, the `TSON-Schema` header plus a route-supplied type: two strings
   reassembled at every call site, because the thing they name cannot be referenced.
 
-### Describing an API (`api-2.tn`, `TsonApi`)
+### Describing an API (`meta-http-1.tn`, `io.ltr8.tson.http.api`)
 
 An OpenAPI-shaped description of an HTTP API whose payloads are TSON — minus the part OpenAPI mostly is.
-OpenAPI embeds a schema language because JSON has none; TSON already has published, identity-addressed schemas,
-so an operation **references** one by `!!id` and names a root type in it.
+OpenAPI embeds a schema language because JSON has none; TSON already has published, identity-addressed
+schemas, so an operation **references** one.
 
-**A description carries an import list and bare type names, and `TsonApi.validate` resolves them.** That is
-work the resolver will not do: a data document cannot hold a reference to a type, so a description written as
-data brings its own namespace rule and a consumer enforces it. `api-1.tn` spelled every reference as
-`{ schema: uri  type: text }` — the pair repeated at every payload, and never checked; `api-2.tn` carries the
-schema list once and checks the names.
+**The description is a schema, not a document governed by one.** `meta-http-1.tn` is a meta layer declaring
+`operation => ~data & { … }`, and a service's description is a schema governed by it whose entries are
+operations. That is what makes `request: order` a *reference the compiler resolves* rather than a string —
+the property no data-shaped design can have, because a data document can name a schema but cannot hold a
+reference to a type.
 
-**The ambiguity rule is the part to get right.** Imports are transitive, so a schema's `entries()` is its whole
-merged namespace, and one declaration is reached by several routes. Judging ambiguity by *how many imports
-surface a name* is exactly the bug `UPSTREAM.md` #11 fixed upstream — and just as wrong here. Nor can the
-`TypeDefinition`s be compared directly: linking credits each route's own `subtypes`, so `problem` seen through
-`orders-errors-1.tn` carries `sku_not_found` where the direct route carries none. Compare the **authored
-declaration** — kind and body — and leave out what linking derived.
+**The wiring is three things**: this schema reachable from the `schemaSource`, the bound classes in
+`io.ltr8.tson.http.api`, and `TsonApiSchema.metaNameBinder()` on the config — **not** `bindings`, which binds
+the data a schema describes. A meta layer's vocabulary is a separate namespace on purpose.
 
-**The description is checked, not just written.** `TsonApiConformanceTest` fetches it **from the running
-server**, reads it as a TSON document governed by `api-1.tn`, and holds the server to it: every referenced
-schema must be published, and every response's status and its body's own `!!schema`/type-ref must be what the
-description declares. Verified to fail when the description lies. A description nothing executes is
-documentation that quietly stops being true — the same lesson as the demo servers.
+**`TsonApiDescription` has no `validate`, and that is the entire argument for the design.** Its data-shaped
+predecessor carried forty lines resolving bare names against an import list, and those lines reimplemented an
+upstream namespace bug twice — once by counting how many imports surface a name (`UPSTREAM.md` #11's bug), and
+once by comparing whole `TypeDefinition`s, which differ per route because linking credits each route's own
+subtypes. Here an unsound description does not resolve, so the model cannot exist for one.
+
+**Resolving the description is a startup check**, which is why each demo calls `tson.resolve(API)`: a payload
+type nothing declares fails the server's startup rather than being published as a contract no client can act
+on. And because it is a schema, the catalog serves it like any other — no bespoke route.
+
+**An operation's `description` is a field, not its `@doc`.** That is a workaround: an operation *is* a schema
+entry, so `@doc` is where it belongs, but `@doc` does not survive into resolved output (`UPSTREAM.md` #20).
+A response and a parameter carry the field for a different and permanent reason — they are values inside a
+payload, with nothing for an annotation to attach to.
 
 **Parameters are where TSON's document-orientation does not reach.** A URL segment cannot carry a record, so
-`parameter.type` names a scalar type as `text` rather than being a full `(schema, type)` reference. Stating
-that limit beats papering over it with expressiveness nothing can honour.
+`parameter.type` names a scalar and nothing enforces that. Stating the limit beats papering over it.
 
-**Deliberately absent** from `api-1.tn`: security schemes, headers beyond parameters, callbacks, links,
-examples, multi-media-type negotiation. Adding one is a new version under a new name (§10), never an edit.
+**Deliberately absent**, each a decision: security schemes, response headers, links, callbacks, examples,
+tags, servers, and multi-media-type negotiation. `security` is the one that would disqualify this for a real
+service. Adding any is `meta-http-2.tn` once published, never an edit.
+
+**The description is checked, not just written.** `TsonApiConformanceTest` fetches it **from the running
+server**, resolves it through a schema source that fetches from that same server — which proves in one step
+that every referenced schema is published and every payload type exists — and then holds the server to what
+no compiler can know: that its real responses carry the status and the type the description declares.
 
 ### Business errors compose `problem`
 
@@ -508,14 +519,13 @@ request exercises that.
 
 - `UPSTREAM.md` — changes wanted in `ltr8-io-tson-java`, plus spec feedback staged for its
   `SPEC-FEEDBACK.md`. **The only place upstream changes are recorded** while that repo is hands-off.
-- `sketch/` — four API descriptions side by side: three as **types** (schemas) and `orders-api-4.tn` as
-  **data**, which is the one that ships. Now a small schema library
-  (`http-api-1.tn` + domain + errors + the API), which #11's fix made possible. Three designs; the best needs
-  only the **ordinary header** (`orders-api-3.tn`: FIXED fields carry method and path, a `choice` carries the
-  responses, composition enforces the shape, every payload is a resolved `TypeRef`). The other two need a custom
-  meta layer, and the `~operation` one is blocked on `UPSTREAM.md` #11 and on user meta-schema constructors not
-  being applicable. Nothing here ships. `SketchTest` holds each to what `sketch/README.md` claims, so a fix
-  upstream shows up as a failing test. **Read `sketch/README.md` before `api-1.tn`**, which is the shipping
-  data-shaped version and knows what is wrong with it.
+- `tson-http/src/main/resources/meta-http-1.tn` — the meta layer an API description names. Four designs were
+  explored side by side (three as schemas, one as data); this is the one picked, and the others are gone
+  along with the `sketch/` directory that held them. The comparison is in git history if it is ever wanted
+  again — the short version is in "Describing an API" above.
+- `UpstreamGapsTest` — every gap and constraint in the library that this project depends on knowing about,
+  each named to its `UPSTREAM.md` number, so a change upstream fails a test here rather than passing
+  unnoticed. **Pin the gap, not the way it is delivered**: one of these once asserted that resolution
+  *throws*, stopped throwing when gaps became diagnostics, and read exactly like the feature landing.
 - `SCHEMA-HEADER.md` — the proposal for naming a governing schema in an HTTP header. A design document for the
   spec author, not a description of anything built.

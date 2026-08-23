@@ -136,4 +136,85 @@ class TsonApiSchemaTest {
                 TsonApiSchema.source().lines().findFirst().orElse(""));
         assertEquals(List.of(TsonApiSchema.source()), TsonApiSchema.publishedSources());
     }
+    // ── templates, in the shipping design ──
+
+    private static final String PAGED = """
+            !!id:"https://schemas.example.com/2026/32/app/orders-api-1.tn"
+            !!meta:"https://tson.io/2026/32/ltr8/http/meta-http-1.tn"
+            !!import:"https://schemas.example.com/2026/32/app/order-1.tn"
+            !!import:"https://tson.io/2026/32/m/core.tn"
+            {
+              page       => <T> { items: [T]  next: uri?  total: int32 }
+              order_page => page<order>
+
+              list_orders => !operation {
+                method:     GET
+                path:       "/orders"
+                parameters: []
+                responses:  [ !response { status: 200  body: %s } ]
+              }
+            }""";
+
+    /**
+     * <b>Templates work, and an operation references an application by name.</b> {@code page<order>} is
+     * written once and applied, where OpenAPI hand-rolls the envelope per endpoint or bolts it on with
+     * {@code allOf}. The application is a real entry with structural identity (§8.2), so two endpoints
+     * returning a page of orders share one.
+     */
+    @Test
+    void anOperationReferencesATemplateApplication() {
+        Tson tson = resolved(PAGED.formatted("order_page"));
+        TsonApiDescription api = TsonApiSchema.describedBy(tson, API_ID);
+
+        Operation list = api.operations().get("list_orders");
+        assertEquals("order_page", list.responseFor(200).orElseThrow().body().orElseThrow().name());
+
+        var entries = tson.schemaRegistry().get(API_ID).orElseThrow().schema().entries();
+        String materialised = entries.get("order_page").source().orElseThrow().name();
+        assertEquals("page", entries.get(materialised).source().orElseThrow().name(),
+                "§8.2 records the application that built it");
+    }
+
+    /**
+     * <b>Applying one inline needs the braced form, and that is by design.</b> {@code page<order>} is
+     * <em>schema</em> syntax and an {@code !operation} payload is <em>data</em>, where a {@code type_ref}
+     * slot takes §5.6's positional form: a bare token without arguments, a braced record with. The kernel
+     * says so — <em>"a braced record is the explicit form, canonical only when `arguments` is present"</em>.
+     */
+    @Test
+    void aTemplateAppliedInlineNeedsTheBracedForm() {
+        Tson tson = resolved(PAGED.formatted("{ name: page  arguments: [ { name: order } ] }"));
+        Operation list = TsonApiSchema.describedBy(tson, API_ID).operations().get("list_orders");
+
+        var body = list.responseFor(200).orElseThrow().body().orElseThrow();
+        assertEquals("page", body.name());
+        assertEquals(1, body.arguments().size(), "the argument survives into the bound record");
+
+        // The sugar in the same position is a PARSE error, before resolution is reached.
+        assertTrue(assertThrows(RuntimeException.class, () -> resolved(PAGED.formatted("page<order>")))
+                .getMessage().contains("adjacent values must be separated"));
+    }
+
+    /** A bad argument is caught either way, and the inline spelling names the operation. */
+    @Test
+    void aBadTemplateArgumentIsCaughtInBothSpellings() {
+        assertTrue(assertThrows(RuntimeException.class,
+                () -> resolved(PAGED.formatted("order_page").replace("page<order>", "page<no_such>")))
+                .getMessage().contains("unresolved reference 'no_such'"));
+
+        String message = assertThrows(RuntimeException.class,
+                () -> resolved(PAGED.formatted("{ name: page  arguments: [ { name: no_such } ] }")))
+                .getMessage();
+        assertTrue(message.contains("unresolved reference 'no_such'"), message);
+        assertTrue(message.contains("list_orders"), "the inline form names the operation: " + message);
+    }
+
+    /** And the payload's own shape is checked against the constructor's declaration, field by field. */
+    @Test
+    void aMisspeltOperationFieldIsRefused() {
+        assertTrue(assertThrows(RuntimeException.class,
+                () -> resolved(API.replace("method:     POST", "methd:     POST")))
+                .getMessage().contains("methd"));
+    }
+
 }
