@@ -48,15 +48,18 @@ import java.util.Set;
  * <ul>
  *   <li><b>A class per version</b> ({@code OrderV1}, {@code OrderV2}), switching on {@link Routed#schemaId()}.
  *       Explicit, and each class exactly matches its schema.</li>
- *   <li><b>One class across versions</b>, with a field for everything any version has, nullable for the ones
- *       that are not in all of them. A field the governing schema does not declare arrives {@code null}.</li>
+ *   <li><b>One class across versions</b>, holding the union of every version's fields with a
+ *       {@code @Profile}-annotated constructor per version, served by
+ *       {@link Builder#version(String, String, TsonSchemaSource, Map, String)}. Each constructor supplies the
+ *       default for the field its own version does not carry, so the class is complete whichever document
+ *       built it. This needs the profile: without one, strict binding refuses the class outright, because the
+ *       union is a shape no version's schema declares.</li>
  * </ul>
  *
- * <p><b>Multiple constructors do not select a version.</b> It is tempting to give a record a constructor per
- * version and expect the binder to pick; it does not. Binding always uses the canonical constructor -- the sole
- * public one, or the {@code @Record}-annotated one -- and passes {@code null} for a field the schema does not
- * declare. A second constructor is for your own code and is invisible to binding. Measured, not assumed: a
- * two-argument constructor that stamped a marker was never called.
+ * <p><b>A constructor is selected by profile, and by nothing else.</b> An unannotated second constructor is
+ * invisible to binding -- the canonical one is always used, so a record with two shapes and no {@code @Profile}
+ * binds through the wrong one or not at all. Naming the profile is what makes the choice, and it is matched by
+ * equality against the context's own.
  *
  * <h2>Major versions across separate servers</h2>
  *
@@ -207,13 +210,38 @@ public final class TsonSchemaVersions {
          */
         public Builder version(String schemaId, String schemaText, TsonSchemaSource source,
                                Map<String, Class<?>> bindings) {
+            return version(schemaId, schemaText, source, bindings, null);
+        }
+
+        /**
+         * The same, under a <b>binding profile</b> -- which is what lets one Java class serve several
+         * versions, with a constructor per version marked {@code @Profile}.
+         *
+         * <p>The profile is a label the caller chose and is matched by equality; nothing in the binder knows
+         * what schema it stands for. Prefer a stable one ({@code "api-1"}) to a schema identity, because an
+         * identity changes with the version and the annotation should not have to. A class with no
+         * constructor for this profile falls back to its canonical (or {@code @Record}) one, which is how a
+         * version whose shape is the class's own needs no annotation at all.
+         *
+         * <p><b>Selection does not replace the agreement check.</b> The profile picks a constructor and
+         * strict binding then verifies that constructor against this version's schema, so a profile pointed
+         * at the wrong version fails here rather than binding the other version's shape -- which is why
+         * {@link TsonHttpCodec#prepareToRead} is called below and this is a startup failure.
+         *
+         * @param profile the binding profile for this version, or {@code null} for none
+         */
+        public Builder version(String schemaId, String schemaText, TsonSchemaSource source,
+                               Map<String, Class<?>> bindings, String profile) {
             Map<String, Class<?>> copy = Map.copyOf(bindings);
             DataNameBinder binder = name -> {
                 Class<?> bound = copy.get(name);
                 return bound != null ? bound : SchemaMetaNameBinder.INSTANCE.resolve(name);
             };
-            DataBindContext context =
-                    TsonAtomContext.registerDefaults(DataBindContext.builder().nameBinder(binder).build());
+            DataBindContext.Builder contextBuilder = DataBindContext.builder().nameBinder(binder);
+            if (profile != null) {
+                contextBuilder.profile(profile);
+            }
+            DataBindContext context = TsonAtomContext.registerDefaults(contextBuilder.build());
             Tson tson = Tson.builder().schemaSource(source).dataBindContext(context).build();
             tson.resolve(schemaText);
             TsonHttpCodec codec = new TsonHttpCodec(tson);

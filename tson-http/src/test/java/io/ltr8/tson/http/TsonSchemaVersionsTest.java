@@ -1,6 +1,6 @@
 package io.ltr8.tson.http;
 
-import io.ltr8.annotation.Record;
+import io.ltr8.annotation.Profile;
 import io.ltr8.annotation.Typename;
 import io.ltr8.bind.DataBindContext;
 import io.ltr8.bind.DataNameBinder;
@@ -44,6 +44,9 @@ class TsonSchemaVersionsTest {
             !!import:"https://tson.io/2026/32/m/core.tn"
             { order => { sku: text  quantity: int32  currency: text } }""";
 
+    private static final String V1_PROFILE = "orders-1";
+    private static final String V2_PROFILE = "orders-2";
+
     private static final Map<String, String> SCHEMAS = Map.of(V1_ID, V1, V2_ID, V2);
     private static final TsonSchemaSource SOURCE = SCHEMAS::get;
 
@@ -58,19 +61,22 @@ class TsonSchemaVersionsTest {
     }
 
     /**
-     * One class for both versions: a field for everything any version has, nullable for what is not in all of
-     * them. The second constructor is here to demonstrate that binding ignores it -- see
-     * {@link #bindingNeverSelectsAVersionSpecificConstructor}.
+     * One class for both versions, holding the union of their fields with a constructor per version.
+     *
+     * <p>The v1 constructor supplies the default for {@code currency}, which v1 does not carry, so the class
+     * is complete whichever document built it. <b>{@code fields} is required here</b>: a secondary
+     * constructor's parameter names are {@code arg0}/{@code arg1} in the class file unless compiled with
+     * {@code -parameters}, and this is how to supply them without that flag.
+     *
+     * <p>v2 needs no annotation at all — its shape <em>is</em> this class's canonical constructor, and a
+     * profile with no constructor of its own falls back to that one.
      */
     @Typename(name = "order")
     public record AnyOrder(String sku, int quantity, String currency) {
-        @Record
-        public AnyOrder {
-        }
 
-        /** The v1 shape. Stamps a marker so a test can see whether binding ever picks it. */
+        @Profile(value = V1_PROFILE, fields = {"sku", "quantity"})
         public AnyOrder(String sku, int quantity) {
-            this(sku, quantity, "PICKED-BY-CONSTRUCTOR");
+            this(sku, quantity, "AUD");
         }
     }
 
@@ -188,27 +194,64 @@ class TsonSchemaVersionsTest {
     }
 
     /**
-     * <b>The one-class-across-versions model is blocked, and this is where it will unblock.</b>
-     * {@link AnyOrder} carries a {@code currency} component that v1's schema does not declare, which strict
-     * binding refuses: the component would reach the constructor as {@code null} on every v1 document.
-     *
-     * <p>Neither escape fits. {@code @Unbound} says a component is never the wire's business, and this one
-     * <em>is</em> — v2 binds it. {@code TsonConfig.lenientBinding} covers the other direction, a class holding
-     * fewer fields than the schema declares. What this needs is constructor selection by schema field set,
-     * deferred upstream until strictness landed. <b>When it lands, this test fails and should become the
-     * two reads it used to make.</b>
+     * <b>One class serving every version, which binding profiles unblocked.</b> {@link AnyOrder} holds the
+     * union of both versions' fields; the profile on each version's {@code DataBindContext} picks the
+     * constructor that matches that version's schema, and strict binding then checks the one it picked. The
+     * two mechanisms have to hold together: selection without checking binds whatever it chose, and checking
+     * without selection has only one shape to check.
      */
     @Test
-    void oneClassAcrossVersionsIsRefusedUntilConstructorSelectionLands() {
+    void oneClassServesEveryVersionThroughABindingProfile() {
+        TsonSchemaVersions shared = TsonSchemaVersions.builder()
+                .version(V1_ID, V1, SOURCE, Map.of("order", AnyOrder.class), V1_PROFILE)
+                .version(V2_ID, V2, SOURCE, Map.of("order", AnyOrder.class), V2_PROFILE)
+                .build();
+
+        var v1 = shared.route(body(order(V1_ID, "{ sku: \"A\" quantity: 1 }")));
+        assertEquals(new AnyOrder("A", 1, "AUD"),
+                v1.codec().readObject(v1.body(), "application/tson", AnyOrder.class),
+                "v1's constructor ran and supplied the default for the field its version lacks");
+
+        var v2 = shared.route(body(order(V2_ID, "{ sku: \"B\" quantity: 2 currency: \"NZD\" }")));
+        assertEquals(new AnyOrder("B", 2, "NZD"),
+                v2.codec().readObject(v2.body(), "application/tson", AnyOrder.class),
+                "v2's shape is the canonical constructor, which serves a profile that names none");
+
+        assertEquals(new AnyOrder("A", 1, "AUD"),
+                v1.codec().readObject(body(order(V1_ID, "{ sku: \"A\" quantity: 1 }")),
+                        "application/tson", AnyOrder.class),
+                "and the older reader is unchanged by the newer one having run");
+    }
+
+    /**
+     * <b>Without a profile the same class is refused, which is the safety half.</b> The union is a shape no
+     * version's schema declares, so strict binding rejects it at startup rather than half-filling it. That
+     * refusal is what makes the profile a decision rather than a default.
+     */
+    @Test
+    void theSameClassWithoutAProfileIsRefusedAtStartup() {
         IllegalStateException refused = assertThrows(IllegalStateException.class,
                 () -> TsonSchemaVersions.builder()
                         .version(V1_ID, V1, SOURCE, Map.of("order", AnyOrder.class))
-                        .version(V2_ID, V2, SOURCE, Map.of("order", AnyOrder.class))
                         .build());
 
         assertTrue(refused.getMessage().contains("currency"), refused.getMessage());
-        assertTrue(refused.getMessage().contains(V1_ID),
-                "and it names the version that disagrees: " + refused.getMessage());
+        assertTrue(refused.getMessage().contains(V1_ID), refused.getMessage());
+    }
+
+    /**
+     * <b>And a profile pointed at the wrong version fails rather than binding the other one's constructor.</b>
+     * Were another profile's constructor eligible, this would have found v1's, matched it against v2's schema
+     * and bound a v1 shape under a v2 profile with nothing to say about it.
+     */
+    @Test
+    void aProfilePointedAtTheWrongVersionFails() {
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> TsonSchemaVersions.builder()
+                        .version(V2_ID, V2, SOURCE, Map.of("order", AnyOrder.class), V1_PROFILE)
+                        .build());
+
+        assertTrue(refused.getMessage().contains("currency"), refused.getMessage());
     }
 
     /**

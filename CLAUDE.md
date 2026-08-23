@@ -227,11 +227,13 @@ collecting** (`UPSTREAM.md` #10). So `route` refuses a document naming a version
 and refuses one naming none. Do not add a fallback that guesses; that is the failure it exists to prevent.
 `defaultVersion` exists for an older unversioned client and is off by default for the same reason.
 
-**One way to model the Java side today: a class per version**, switching on `Routed.schemaId()`. The other —
-one class with a field for everything any version has — is **refused by strict binding**, because the extra
-component would arrive `null` on every document of the version that lacks it. Neither `@Unbound` nor
-`lenientBinding()` fits; it needs constructor selection by schema field set (`UPSTREAM.md` #10, remaining
-part).
+**Two ways to model the Java side**, both tested: a class per version, switching on `Routed.schemaId()`; or
+one class holding the union of every version's fields, with a `@Profile`-annotated constructor per version and
+`version(…, profile)` naming it. The second **requires** the profile — without one, strict binding refuses the
+class, because the union is a shape no version's schema declares, and that refusal is what makes the profile a
+decision rather than a default. Two traps: a profile naming no constructor falls back to the canonical one (so
+the version whose shape *is* the class needs no annotation), and `@Profile`'s `fields` is effectively required,
+since a secondary constructor's parameter names are `arg0`/`arg1` without `-parameters`.
 
 **Multiple constructors do not select a version.** This is the tempting model and it does not work: binding
 always uses the canonical constructor — the sole public one, or the `@Record`-annotated one — and passes `null`

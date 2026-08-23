@@ -252,7 +252,7 @@ writers just gained (#7), which names the same two directives from the other end
 
 ---
 
-## 10. ~~Binding drops a schema field the target class has no component for, silently~~ — MOSTLY DONE (`4d02eab`, `83b8524`)
+## 10. ~~Binding drops a schema field the target class has no component for, silently~~ — DONE (`4d02eab`, `83b8524`, `1acf7c2`)
 
 **Strict binding landed, and it is better than what was asked for.** Both directions now refuse rather than
 drop: a schema field with no component, and a component no field fills. The message names both sides and the
@@ -266,15 +266,25 @@ The meta-layer reverse case recorded above is fixed with it: a `Data` body whose
 the meta does not declare is now a `TsonBindMismatchException` naming both sides, where it was an NPE thrown
 out of `Tson.resolve`.
 
-**What is left is the multi-version case this item was reported from.** One class serving every version —
-a component for everything any version has, absent for what a version lacks — is now refused, and neither
-escape fits: `@Unbound` says a component is never the wire's business and this one *is* (v2 binds it), while
-`lenientBinding` covers the other direction. It needs constructor selection by schema field set, deferred
-upstream until strictness landed. Pinned here by
-`TsonSchemaVersionsTest.oneClassAcrossVersionsIsRefusedUntilConstructorSelectionLands`, which should fail and
-become two ordinary reads when it arrives.
+**And the multi-version case this item was reported from is closed too** (`1acf7c2`), by binding profiles
+rather than the field-set matching the backlog deferred. `@Profile("api-1", fields = {…})` marks a
+constructor, `DataBindContext.Builder.profile` names the one a context wants, and the two are matched by
+label — the binder never learns that schemas exist, which is the right place to have drawn that line.
 
-**Adopted here:** `TsonHttpCodec.prepareToRead(String…)` compiles a schema in bind mode at startup, and
+**Two details worth having read before using it.** A profile that names no constructor of its own falls back
+to the canonical one, so the version whose shape *is* the class needs no annotation. And `fields` is not
+optional in practice: a secondary constructor's parameter names are `arg0`/`arg1` in the class file unless
+the build passes `-parameters`.
+
+**Selection and checking hold together, which is the part that makes it safe.** The profile picks a
+constructor and strict binding then verifies *that* constructor against *that* version's schema, so a profile
+pointed at the wrong version fails rather than binding the other version's shape. Both halves are pinned
+here.
+
+**Adopted here:** `TsonSchemaVersions.Builder.version(…, profile)` sets the profile on that version's
+context, so one class serves every version — `TsonSchemaVersionsTest.oneClassServesEveryVersionThroughABindingProfile`,
+with the no-profile refusal and the wrong-profile refusal beside it.
+`TsonHttpCodec.prepareToRead(String…)` compiles a schema in bind mode at startup, and
 `TsonSchemaVersions` calls it for every version it serves — so a class registered against a schema it
 disagrees with is a startup failure rather than a 500 on the first request that reads one. That is the whole
 value of the check being static, and it needed a door on this side to reach it.
