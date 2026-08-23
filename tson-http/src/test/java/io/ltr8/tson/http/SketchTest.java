@@ -523,6 +523,111 @@ class SketchTest {
         assertTrue(message.contains("list_orders"), "the inline form names the operation: " + message);
     }
 
+    // ── the `response<T, S>` alternative, weighed and not adopted ──
+
+    private static final String ALT_META = """
+            !!id:"https://tson.io/2026/32/ltr8/http/meta-probe.tn"
+            !!meta:"https://tson.io/2026/32/m/meta-kernel.tn"
+            !!import:"https://tson.io/2026/32/m/meta.tn"
+            {
+              operation => ~data & { method: text  path: text  responses: [type_ref] }
+            }""";
+
+    private static final String ALT_RESPONSES = """
+            !!id:"https://tson.io/2026/32/ltr8/http/resp-1.tn"
+            !!meta:"https://tson.io/2026/32/m/meta.tn"
+            !!import:"https://tson.io/2026/32/m/core.tn"
+            {
+              status_code => !integer ^ { min: 100  max: 599 }
+              response => <T, S> { status: status_code = S  body: T }
+            }""";
+
+    /**
+     * <b>A templated operation is refused, so the CRUD-family payoff is not available.</b> Writing
+     * {@code list => <T> !operation { … }} — one declaration standing for every paged list endpoint — is a
+     * parse error: §12.1 permits a type name, an application or a literal in an instance template binding,
+     * and an {@code !operation { … }} payload is a container form. This is the shape that would have made
+     * templating the meta layer worth doing.
+     */
+    @Test
+    void aDataConstructorCannotItselfBeTemplated() throws Exception {
+        Map<String, String> lib = new LinkedHashMap<>();
+        lib.put("https://tson.io/2026/32/ltr8/http/meta-probe.tn", ALT_META);
+        String doc = """
+                !!id:"%s"
+                !!meta:"https://tson.io/2026/32/ltr8/http/meta-probe.tn"
+                !!import:"https://tson.io/2026/32/m/core.tn"
+                {
+                  list => <T> !operation { method: "GET"  path: "/x"  responses: [] }
+                }""".formatted(API_ID);
+        lib.put(API_ID, doc);
+
+        String message = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> altTson(lib).resolve(doc)).getMessage();
+
+        assertTrue(message.contains("not permitted in an instance template binding"), message);
+    }
+
+    /**
+     * <b>The `response<T, S>` form does work, and buys less than it costs.</b> Responses become
+     * {@code [type_ref]} naming applications of an <em>ordinary</em> imported template — the template cannot
+     * live in the meta layer, which is neither in the governed schema's type namespace nor importable
+     * alongside {@code core.tn}. What it gains is a real materialised type per (body, status) with §8.2
+     * identity, deduped schema-wide.
+     *
+     * <p><b>What it loses is the reason to want it.</b> The one thing {@code status: status_code = S} says
+     * that {@code status: 201} as data does not is that the status is <em>fixed</em> — and the materialised
+     * field comes back {@code REQUIRED} carrying 201 rather than {@code REQUIRED_FIXED}
+     * ({@code UPSTREAM.md} #14). Meanwhile the data spelling is checked today: a status of 42 violates
+     * {@code status_code}'s refinement. So the template form is currently the <em>less</em> checked of the
+     * two.
+     */
+    @Test
+    void theTemplatedResponseFormResolvesButItsFixedStatusIsNot() throws Exception {
+        Map<String, String> lib = new LinkedHashMap<>();
+        lib.put("https://tson.io/2026/32/ltr8/http/meta-probe.tn", ALT_META);
+        lib.put("https://tson.io/2026/32/ltr8/http/resp-1.tn", ALT_RESPONSES);
+        lib.put("https://schemas.example.com/2026/32/app/order-1.tn", sketch("order-1.tn"));
+        String doc = """
+                !!id:"%s"
+                !!meta:"https://tson.io/2026/32/ltr8/http/meta-probe.tn"
+                !!import:"https://schemas.example.com/2026/32/app/order-1.tn"
+                !!import:"https://tson.io/2026/32/ltr8/http/resp-1.tn"
+                {
+                  ok_order => response<order, 201>
+                  create => !operation { method: "POST"  path: "/o"  responses: [ ok_order ] }
+                }""".formatted(API_ID);
+        lib.put(API_ID, doc);
+
+        Tson tson = altTson(lib);
+        tson.resolve(doc);
+        var entries = tson.schemaRegistry().get(API_ID).orElseThrow().schema().entries();
+
+        // The application materialised a real type, and §8.2 recorded what built it -- a reference argument
+        // and a value argument, structurally distinguished.
+        String materialised = entries.get("ok_order").source().orElseThrow().name();
+        TypeRef applied = entries.get(materialised).source().orElseThrow();
+        assertEquals("response", applied.name());
+        assertEquals(2, applied.arguments().size(), "one type argument and one value argument");
+
+        // But the status field carries 201 without being fixed to it -- UPSTREAM.md #14, reproduced in the
+        // design that would have been the reason to adopt this shape.
+        RecordBody body = (RecordBody) entries.get(materialised).body();
+        RecordField status = body.fields().stream().filter(f -> f.name().equals("status"))
+                .findFirst().orElseThrow();
+        assertTrue(status.value().orElseThrow().toString().contains("201"),
+                "the substituted value is right: " + status.value());
+        assertEquals(FieldState.REQUIRED, status.state(),
+                "and its state is not REQUIRED_FIXED -- so nothing enforces it (UPSTREAM.md #14)");
+    }
+
+    private static Tson altTson(Map<String, String> lib) {
+        return Tson.builder().schemaSource(lib::get)
+                .metaNameBinder(new DataNameBinder.DefaultDataNameBinder(
+                        Set.of("io.ltr8.tson.http.probe"), Map.of()))
+                .build();
+    }
+
     /**
      * <b>And an operation cannot be used where a type belongs.</b> That is what the {@code data} kind buys
      * beyond registration: against a kernel without it the misuse links, and fails only when some document

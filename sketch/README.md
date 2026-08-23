@@ -528,6 +528,45 @@ Neither is wrong. The named form reads better, gives the application an identity
 against a schema-native design is exactly one line per distinct application, and that it is by design rather
 than a gap — see the spec-feedback note in `UPSTREAM.md` on whether the sugar should reach data position.
 
+### Would a `response => <T, S>` template help in meta-http?
+
+`http-api-1.tn` has `response => <T, S> { status: status_code = S  body: T }`, and the question is whether
+meta-http should adopt the same shape. **Measured, and no** — with a principled reason and one concrete
+disqualifier. `SketchTest` pins both halves.
+
+**It cannot be a drop-in, because a template makes a type and meta-http's `response` is a value.**
+`!response { status: 201  body: order }` is data inside an operation payload; `response<order, 201>` is a
+type. So adopting it means changing `responses: [response]` to `responses: [type_ref]`, each naming an
+application. That design *does* work — `ok_order => response<order, 201>` materialises a real entry whose
+`source` records the application with a reference argument and a value argument, structurally distinguished
+exactly as the kernel describes, deduped schema-wide by §8.2.
+
+**Two things it needs that are worth knowing.** The template cannot live in the meta layer: a meta-layer
+declaration is not in the governed schema's type namespace, and a meta layer cannot be `!!import`ed
+alongside `core.tn` either — `void` is declared by both it and the kernel. So the templates go in a third
+ordinary schema, and the description imports it.
+
+**What kills it is `UPSTREAM.md` #14.** The only thing `status: status_code = S` says that `status: 201` as
+data does not is that the status is *fixed*. The materialised field comes back `REQUIRED` carrying 201, not
+`REQUIRED_FIXED` — so nothing enforces it. Meanwhile the data spelling is checked today: `status: 42`
+violates `status_code`'s refinement with a position. **The template form is currently the less-checked of the
+two**, which inverts the entire reason to want it.
+
+**And the payoff that would have justified it is not available.** The real prize would be a templated
+*operation* — `list => <T> !operation { … }`, one declaration standing for every paged-list endpoint. That
+is a parse error: §12.1 permits a type name, an application or a literal in an instance template binding,
+and an `!operation { … }` payload is a container form.
+
+**The principle underneath.** `response<T, S>` exists in `http-api-1.tn` because there a response *must* be a
+type — in an ordinary schema, manufacturing a type is the only way to say anything. The `data` base kind
+removed that constraint. Templating meta-http's response would re-import the workaround the design was built
+to eliminate: a template whose job is to fabricate types is not useful in the one place where description is
+allowed to just be data.
+
+**Where templates do earn their place here is the body**, not the response — `page<order>` above. That is a
+real type doing a real job on the wire, and it works.
+
+
 ## Does meta-http capture OpenAPI's capabilities?
 
 Its **core**, yes — and the part OpenAPI mostly *is*, it replaces rather than reproduces. Around the edges,

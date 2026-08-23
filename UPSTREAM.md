@@ -386,6 +386,14 @@ then trusted to enforce.
 **Change:** carry the FIXED state through a value-parameter binding, so a materialised
 `status: status_code = S` is `REQUIRED_FIXED` with the substituted value, as the literal form already is.
 
+**Reproduced again in a second design, which is what settles it.** Weighing a `responses: [type_ref]` shape
+for meta-http — an operation naming applications of `response<T, S>` rather than carrying data records — the
+materialised field is `state=REQUIRED, value=Optional[201]` there too. So the templated form of a response is
+*less* checked than writing `status: 201` as data against a refined `status_code`, which is checked today
+with a position. That inversion is the reason the shape was not adopted; see `sketch/README.md`. Pinned by
+`SketchTest.theTemplatedResponseFormResolvesButItsFixedStatusIsNot`.
+
+
 **Workaround:** none that keeps the template. Fixing the status literally means a record declaration per
 response, which is what the template exists to remove. `sketch/orders-api-3.tn` keeps the template and says so
 in its own `@doc`, because the shape is right and the gap is upstream.
