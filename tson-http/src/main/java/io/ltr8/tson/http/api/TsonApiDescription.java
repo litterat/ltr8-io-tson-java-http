@@ -3,8 +3,11 @@ package io.ltr8.tson.http.api;
 import io.ltr8.tson.Tson;
 
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * The API a schema describes, read back from that schema's resolved entries.
@@ -36,9 +39,18 @@ import java.util.Optional;
  */
 public final class TsonApiDescription {
 
+    /**
+     * The spec's own bundled meta directory. Every implementation has these; a service does not publish them,
+     * and a client resolving this description already has them.
+     */
+    private static final String BUNDLED = "https://tson.io/2026/32/m/";
+
+    private final Tson tson;
     private final String schemaId;
     private final Map<String, Operation> operations;
-    private TsonApiDescription(String schemaId, Map<String, Operation> operations) {
+
+    private TsonApiDescription(Tson tson, String schemaId, Map<String, Operation> operations) {
+        this.tson = tson;
         this.schemaId = schemaId;
         this.operations = Map.copyOf(operations);
     }
@@ -54,7 +66,7 @@ public final class TsonApiDescription {
                 found.put(name, operation);
             }
         });
-        return new TsonApiDescription(schemaId, found);
+        return new TsonApiDescription(tson, schemaId, found);
     }
 
     /** The description schema's identity. */
@@ -78,6 +90,61 @@ public final class TsonApiDescription {
         return operations.values().stream()
                 .filter(operation -> operation.method() == method && operation.path().equals(path))
                 .findFirst();
+    }
+
+    /**
+     * Every schema identity a client needs in order to resolve this description — itself, the meta layer that
+     * governs it, and its imports transitively, minus the bundled standard library.
+     *
+     * <p><b>This is the set a server must publish</b>, and deriving it is the point: a description that
+     * references a schema its own server does not serve is a contract nobody can act on, and hand-listing
+     * what to publish is how that happens. The conformance test asserted the two agreed; this makes them the
+     * same thing.
+     *
+     * <p>Ordered with this description first, then in resolution order.
+     */
+    public Set<String> referencedSchemas() {
+        Set<String> found = new LinkedHashSet<>();
+        collect(schemaId, found);
+        return found;
+    }
+
+    private void collect(String id, Set<String> found) {
+        if (id == null || id.startsWith(BUNDLED) || !found.add(id)) {
+            return;
+        }
+        var schema = tson.loader().resolveLinked(id).schema();
+        collect(schema.meta(), found);
+        schema.imports().forEach(imported -> collect(imported, found));
+    }
+
+    /**
+     * Every payload type this description's operations name — request bodies, response bodies and parameter
+     * types, in the order the operations declare them.
+     *
+     * <p>Not every one is a type the application binds: a parameter's {@code text}, or the {@code problem}
+     * this library writes itself, are named here and mapped by nobody. {@link #boundClasses} is the filtered
+     * form, which is what a warm-up wants.
+     */
+    public Set<String> payloadTypes() {
+        Set<String> types = new LinkedHashSet<>();
+        operations.values().forEach(operation ->
+                operation.references().forEach(reference -> types.add(reference.name())));
+        return types;
+    }
+
+    /**
+     * The Java classes {@code bindings} maps this description's payload types to — what to warm at startup,
+     * derived rather than listed.
+     *
+     * <p>Hand-listing them is how a response type added to a description never gets warmed: nothing connects
+     * the two lists, and the omission costs only latency, so nothing reports it. A type {@code bindings} does
+     * not map is skipped rather than refused — {@code text} and {@code problem} are named by descriptions and
+     * bound by nobody.
+     */
+    public List<Class<?>> boundClasses(Map<String, Class<?>> bindings) {
+        return payloadTypes().stream().map(bindings::get).filter(java.util.Objects::nonNull)
+                .distinct().toList();
     }
 
 }

@@ -4,6 +4,7 @@ import io.javalin.Javalin;
 import io.ltr8.annotation.Typename;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.http.TsonHttpCodec;
+import io.ltr8.tson.http.api.TsonApiDescription;
 import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonProblemDiagnostic;
@@ -130,10 +131,15 @@ public final class OrderServer {
         // rather than being published as a contract no client can act on.
         tson.resolve(API);
         TsonHttpCodec codec = new TsonHttpCodec(tson);
-        // Every type this server writes, resolved now rather than on a request thread. Descriptor resolution
-        // is lazy and its check-then-act is not atomic, so a concurrent first write of a class races
-        // (UPSTREAM.md #8). Reads happen to warm it here, but a route that only writes would not.
-        codec.prepareToWrite(Order.class, SkuNotFound.class);
+
+        // From here on the description is the source of truth for what this server publishes and warms.
+        TsonApiDescription described = TsonApiSchema.describedBy(tson, API_ID);
+
+        // Every type this server writes, warmed now rather than on a request thread -- derived from the
+        // description's payload types rather than listed, so a response type added there cannot be missed.
+        // Descriptor resolution is lazy and its check-then-act is not atomic, so a concurrent first write of
+        // a class races (UPSTREAM.md #8).
+        codec.prepareToWrite(described.boundClasses(bindings).toArray(Class<?>[]::new));
 
         Javalin app = Javalin.create(config -> config.showJavalinBanner = false).start(port);
 
@@ -164,23 +170,35 @@ public final class OrderServer {
         // The API description is a schema too, so the catalog serves it like everything else -- no route
         // of its own, which the data-shaped predecessor needed.
         app.get("/<path>", TsonHandler.asHandler(codec,
-                TsonSchemaHandler.of(catalog())));
+                TsonSchemaHandler.of(catalog(described, schemas))));
 
         return app;
     }
 
     /**
-     * This server's whole published schema history: the order schema, and every version of the error-body
-     * schema. §10 makes a published schema immutable, so a superseded one stays served -- a document that named
-     * it must go on resolving, even though nothing new is written against it.
+     * What this server publishes, <b>derived from its own description</b> rather than listed: the description,
+     * the meta layer governing it, and its imports transitively -- everything a client needs to resolve the
+     * contract it was given. The bundled standard library is excluded; a client already has it.
+     *
+     * <p>This used to be five {@code add} calls, and the conformance test asserted they matched what the
+     * description references. Deriving makes the two the same thing, so a schema referenced but not published
+     * is no longer possible rather than merely tested for.
+     *
+     * <p>§10 still applies to what goes in: when a published schema is superseded, both versions stay served,
+     * because a document that named the old one must go on resolving.
      */
-    private static TsonSchemaCatalog catalog() {
+    private static TsonSchemaCatalog catalog(TsonApiDescription described, Map<String, String> schemas) {
         List<String> published = new ArrayList<>();
-        published.add(SCHEMA);
-        published.add(ERRORS);
-        published.addAll(TsonProblemSchema.publishedSources());
-        published.addAll(TsonApiSchema.publishedSources());
-        published.add(API);
+        for (String id : described.referencedSchemas()) {
+            String source = schemas.get(id);
+            if (source == null) {
+                // Reachable only if a schema resolved from somewhere this map does not hold -- which would
+                // mean publishing a description a client cannot follow.
+                throw new IllegalStateException("the description references '" + id + "', which this server "
+                        + "has no source for");
+            }
+            published.add(source);
+        }
         return TsonSchemaCatalog.of(published);
     }
 

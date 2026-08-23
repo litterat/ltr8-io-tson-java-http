@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -215,6 +216,40 @@ class TsonApiSchemaTest {
         assertTrue(assertThrows(RuntimeException.class,
                 () -> resolved(API.replace("method:     POST", "methd:     POST")))
                 .getMessage().contains("methd"));
+    }
+
+    // ── what a server can derive from its description, instead of listing it ──
+
+    /**
+     * <b>Everything a client needs to resolve the contract</b>: the description, the meta layer governing it,
+     * and its imports transitively. The bundled standard library is excluded -- every implementation has it,
+     * and a service publishing {@code core.tn} would be claiming ownership of something it does not own.
+     */
+    @Test
+    void aDescriptionKnowsWhatItsServerMustPublish() {
+        Set<String> published = TsonApiSchema.describedBy(resolved(API), API_ID).referencedSchemas();
+
+        assertTrue(published.contains(API_ID), "itself: a description a client cannot fetch is no contract");
+        assertTrue(published.contains(TsonApiSchema.ID), "the meta layer, or the description will not resolve");
+        assertTrue(published.contains(ORDER_ID));
+        assertTrue(published.contains(TsonProblemSchema.ID));
+        assertFalse(published.stream().anyMatch(id -> id.startsWith("https://tson.io/2026/32/m/")),
+                () -> "the bundled standard library is not a service's to publish: " + published);
+    }
+
+    /**
+     * <b>And which classes to warm.</b> Hand-listing them is how a response type added to a description never
+     * gets warmed — nothing connects the two lists, and the omission costs only latency, so nothing reports
+     * it. A payload type nobody binds is skipped rather than refused: {@code text} names a parameter's type
+     * and {@code problem} is written by the library itself.
+     */
+    @Test
+    void aDescriptionKnowsWhichClassesToWarm() {
+        TsonApiDescription api = TsonApiSchema.describedBy(resolved(API), API_ID);
+
+        assertEquals(Set.of("order", "problem", "text"), api.payloadTypes());
+        assertEquals(List.of(String.class), api.boundClasses(Map.of("order", String.class)),
+                "only what the bindings map names -- problem and text are nobody's to bind here");
     }
 
 }

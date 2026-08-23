@@ -188,6 +188,20 @@ subtypes. Here an unsound description does not resolve, so the model cannot exis
 type nothing declares fails the server's startup rather than being published as a contract no client can act
 on. And because it is a schema, the catalog serves it like any other — no bespoke route.
 
+**The description is the source of truth for what a server publishes and warms**, not a document beside it:
+
+- `referencedSchemas()` — itself, its meta layer, and its imports transitively, minus the bundled standard
+  library. That *is* the catalog. It used to be five hand-written `add` calls that a conformance test asserted
+  matched; deriving makes a referenced-but-unpublished schema impossible rather than merely tested for.
+- `boundClasses(bindings)` — what to `prepareToWrite`. Hand-listing is how a response type added to a
+  description never gets warmed: nothing connects the two lists, and the omission costs only latency, so
+  nothing reports it.
+
+More is derivable and not yet built — the route table (method, path, declared statuses), and startup checks
+that every declared operation has a handler and every payload type a binding. The route table is the piece
+that needs a per-adapter seam, because path syntax differs: the description says `/{schemaPath}` and Javalin
+needs `/<path>`, an identity path having slashes that only the angle form matches across.
+
 **An operation's `description` is a field, not its `@doc`.** That is a workaround: an operation *is* a schema
 entry, so `@doc` is where it belongs, but `@doc` does not survive into resolved output (`UPSTREAM.md` #20).
 A response and a parameter carry the field for a different and permanent reason — they are values inside a
