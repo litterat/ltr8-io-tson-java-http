@@ -1,0 +1,89 @@
+!!id:"https://tson.io/2026/32/ltr8/http/meta-http-1.tn"
+!!meta:"https://tson.io/2026/32/m/meta-kernel.tn"
+!!import:"https://tson.io/2026/32/m/meta.tn"
+@doc:"""
+  A meta layer adding HTTP operations to the type system: a schema governed by this one describes an
+  HTTP API, and its request and response payloads are type references the compiler resolves.
+
+  This is the design picked out of four (sketch/README.md compares them). What it has that a data
+  document cannot is the reference: `body: order` is checked when the description loads, where a data
+  description spells "order" as a string and needs its own resolver -- forty lines that reimplemented
+  an upstream namespace bug twice before they were right.
+
+  `~data &` is the base kind for an entry that is not a type: an operation describes an endpoint,
+  and no data value ever has one as its type. Before that kind existed this said `~top &`, which
+  resolved but could not be registered, because registering a constructor demanded a value-reader
+  factory -- a reader for data of that type, which an operation can never have.
+
+  `~` is still required, and the reason is worth stating: it is the permission for a SCHEMA to write
+  `!operation { ... }` (§3.3.1/§5.6), not a claim that the thing is a type. Without it the
+  declaration resolves and a schema applying it is told the name does not resolve to a constructor.
+
+  request/response are `type_ref`, not `type_name` or text, and that is what makes the references
+  real: a Data body hands its references to the linker, so a name that resolves to nothing is an
+  author error at schema load. `type_name` has no such path.
+
+  Governed directly by the meta-kernel, which is not a style choice: declaring a constructor is
+  permitted only in a schema whose own !!meta is the kernel. So this is a SIBLING of meta.tn, and
+  imports it for the vocabulary its own declarations use.
+  """
+{
+  http_method => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
+
+  @doc:"Refined, so 42 is not a status."
+  status_code => !integer ^ { min: 100  max: 599 }
+
+  parameter_location => !enum [PATH QUERY HEADER]
+
+  @doc:"""
+    A parameter carried outside the body. `type` names a scalar and nothing here enforces that -- a URL
+    segment cannot carry a record, and the type system has no way to say so.
+
+    `description` is a field rather than an @doc because a parameter is a VALUE inside an operation's
+    payload, not a schema entry, so there is nothing for an annotation to attach to. Same for response.
+    """
+  parameter => {
+    name:        text
+    in:          parameter_location
+    type:        type_ref
+    required:    boolean
+    description: text?
+  }
+
+  @doc:"One response. `body` is absent for a 204, or a document served as bytes."
+  response => {
+    status:      status_code
+    body:        type_ref?
+    description: text?
+  }
+
+  @doc:"""
+    One operation. A list of responses rather than a map keyed by status: a response is likely to
+    grow members beyond its body, and a map-typed slot cannot hold a template parameter, which would
+    foreclose templated operations before they are tried.
+
+    `description` is a field even though an operation IS a schema entry and @doc attaches to entries.
+    That was the intended design and it does not work: @doc is dropped from resolved output, so a
+    consumer reading the description back cannot see it -- measured, and true of an ordinary record and
+    of this project's own problem-1.tn as well (UPSTREAM.md #20). Locally declared annotations DO
+    survive, which is what makes it a gap rather than a rule. `summary` is the short form OpenAPI keeps
+    beside the long one.
+
+    The entry's NAME is the operationId, and unlike OpenAPI's it lives in a namespace with a collision
+    rule, so two operations cannot quietly share one.
+
+    Deliberately absent, each a decision rather than an oversight: security schemes, response headers,
+    links, callbacks, examples, tags, servers, and multi-media-type content negotiation. Adding one is
+    meta-http-2.tn under §10 once this is published, never an edit.
+    """
+  operation => ~data & {
+    method:      http_method
+    path:        text
+    summary:     text?
+    description: text?
+    deprecated:  boolean?
+    parameters:  [parameter]
+    request:     type_ref?
+    responses:   [response]
+  }
+}

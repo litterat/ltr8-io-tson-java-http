@@ -4,6 +4,7 @@
  */
 module io.ltr8.tson.http {
     exports io.ltr8.tson.http;
+    exports io.ltr8.tson.http.api;
 
     requires transitive io.ltr8.tson;
     // transitive: Builder.httpClient(HttpClient) is public API, so a consumer naming it needs this module.

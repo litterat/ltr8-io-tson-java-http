@@ -811,6 +811,51 @@ bind mismatch is no more an exit-1 than a gap is.
 case at startup, so the diagnostic path is reachable only by a server that bypasses its own guard. Matching on
 message text would close it and is not worth the fragility.
 
+## 20. `@doc` on a schema entry is dropped from resolved output
+
+**Hit:** an operation's long-form description. An operation declared by a meta layer *is* a schema entry, so
+`@doc` is exactly where its description belongs — and a consumer reading the description back cannot see it.
+
+```tson
+@doc:"Accept an order and confirm it."
+create_order => !operation { … }
+```
+
+```java
+entries.get("create_order").annotations().values()   // []
+```
+
+**Not specific to the `data` kind, and not specific to a custom meta layer.** Measured three ways, all empty:
+
+| entry | governing meta | `annotations()` |
+|---|---|---|
+| `create_order => !operation { … }` | `meta-http-1.tn` | `[]` |
+| `plain => { a: text }`, same schema | `meta-http-1.tn` | `[]` |
+| `thing => { a: text }` | the bundled `meta.tn` | `[]` |
+| `problem` in this project's own `problem-1.tn` | the bundled `meta.tn` | `[]` |
+
+The last row is the one that makes it worth reporting: a shipping schema documents its own entries with `@doc`
+and nothing can read that documentation back.
+
+**The mechanism is there and works for other annotations.** `TypeDefinition` has `annotations()` and
+`withAnnotations(…)`, and a *locally declared* annotation survives — `SketchTest`'s
+`theApiModelIsReadableFromTheResolvedSchema` reads `@method`/`@path` off resolved entries, declared by
+`meta-http-2.tn`. So `@doc` is not falling foul of a rule that annotations are authoring-time; it is being
+dropped where its neighbours are not.
+
+**Which of two things this is, I cannot tell from here** — worth deciding explicitly either way:
+
+1. **A gap.** `doc` reaches an entry the same way any annotation does and should be retained. Then this is a
+   bug and the fix is wherever the kernel-declared annotations are being filtered.
+2. **A rule.** `@doc` is deliberately authoring-time, the substitute for the comment syntax TSON does not
+   have, and never intended to be machine-readable. Then it should say so — and the consequence is that
+   **anything wanting a readable description must declare a field**, which is a real design constraint on
+   every schema-shaped description and is currently undocumented.
+
+**Worked around here** rather than waited on: `meta-http-1.tn`'s `operation` carries `description: text?`
+alongside `summary`. If (1), that field becomes redundant and the annotation is the better shape; if (2), the
+field is correct and the note in `TsonApiDescription` explaining why should stay.
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off.
