@@ -463,7 +463,8 @@ request exercises that.
 
 - `UPSTREAM.md` — changes wanted in `ltr8-io-tson-java`, plus spec feedback staged for its
   `SPEC-FEEDBACK.md`. **The only place upstream changes are recorded** while that repo is hands-off.
-- `sketch/` — an API description made of **types** rather than data about types. Three designs; the best needs
+- `sketch/` — an API description made of **types** rather than data about types. Now a small schema library
+  (`http-api-1.tn` + domain + errors + the API), which #11's fix made possible. Three designs; the best needs
   only the **ordinary header** (`orders-api-3.tn`: FIXED fields carry method and path, a `choice` carries the
   responses, composition enforces the shape, every payload is a resolved `TypeRef`). The other two need a custom
   meta layer, and the `~operation` one is blocked on `UPSTREAM.md` #11 and on user meta-schema constructors not

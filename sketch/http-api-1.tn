@@ -1,0 +1,31 @@
+!!id:"https://tson.io/2026/32/ltr8/http/http-api-1.tn"
+!!meta:"https://tson.io/2026/32/m/meta.tn"
+!!import:"https://tson.io/2026/32/m/core.tn"
+@doc:"""
+  The vocabulary for describing an HTTP API in an ordinary schema: the enums, and the base record
+  every operation composes.
+
+  A separate schema only because imports now allow it (UPSTREAM.md #11). Before that fix a service
+  could reference types from exactly one other schema, so an API description had to carry its own
+  vocabulary, its own domain types and its own errors in one file. Splitting them is what a schema
+  library looks like, and it is what the fix bought.
+
+  Everything here would move a layer up if a meta-schema could declare an `operation` constructor;
+  see sketch/README.md for what that changes.
+  """
+{
+  http_method => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
+
+  @doc:"Refined, so 42 is not a status."
+  status_code => !integer ^ { min: 100  max: 599 }
+
+  @doc:"""
+    Every operation composes this, so an operation is found in resolved output by its supertype
+    rather than by a naming convention, and the resolver checks it has a method and a path.
+
+    Composition narrows: an operation inherits `method` and re-declares it FIXED to its own verb.
+    What this cannot state is that an operation has a response -- each operation's choice has
+    different variants, so the base has nothing to name.
+    """
+  operation => { method: http_method  path: text }
+}

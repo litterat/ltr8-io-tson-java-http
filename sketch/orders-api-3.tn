@@ -1,57 +1,38 @@
 !!id:"https://schemas.example.com/2026/32/app/orders-api-3.tn"
 !!meta:"https://tson.io/2026/32/m/meta.tn"
 !!import:"https://tson.io/2026/32/m/core.tn"
+!!import:"https://tson.io/2026/32/ltr8/http/http-api-1.tn"
+!!import:"https://schemas.example.com/2026/32/app/order-1.tn"
+!!import:"https://schemas.example.com/2026/32/app/orders-errors-1.tn"
 @doc:"""
-  The orders service described as types, in one ordinary schema.
+  The orders service, described as types in an ordinary schema.
 
-  The whole header is the ordinary one -- meta.tn governing, core.tn imported -- so this needs no
-  meta layer, no kernel import, no `top`, and no annotations. Everything below is a plain type.
+  FOUR IMPORTS, which is the shape of the thing: the API vocabulary, the domain types, the errors,
+  and core. Until UPSTREAM.md #11 was fixed this had to be one file carrying all of it, because a
+  schema could reference types from exactly one other schema. The split is what the fix bought, and
+  it is the ordinary one -- domain types are reusable independent of the API that exposes them, and
+  a second version of this API would import the same order-1.tn.
 
   HOW THE METADATA IS CARRIED. A FIXED field (§5.2's `= value`) puts a value in the type where an
   annotation would have put it beside the type. `method: http_method = POST` is checked by the
-  resolver, survives into resolver output, and cannot drift from what the operation is -- where an
-  annotation's value would have been silently dropped unless its type lived in the governing
-  meta-schema.
+  resolver and survives into resolver output with its value, where a locally declared annotation's
+  value is silently dropped (UPSTREAM.md #12).
 
   HOW A RESPONSE IS CARRIED. A response is one of several, which is what `choice` is for. Each
-  variant fixes its own status, so a reader of the schema can see which status carries which body.
+  variant fixes its own status, so a reader can see which status carries which body. The variants
+  are NOT proved disjoint and need not be: §5.4 requires distinct variant types, not disjoint value
+  sets, and record-set disjointness is a case a resolver may leave unproven. So a response value
+  carries its tag -- !order_created { ... } -- which names the response rather than inferring it.
 
-  The variants are NOT proved disjoint, and need not be: §5.4 requires distinct variant types, not
-  disjoint value sets, and record-set disjointness is a case a resolver may leave unproven. So a
-  response value carries its variant tag -- `!order_created { ... }` -- which is the honest outcome
-  rather than a wrinkle: the tag names the response, and nothing has to be inferred from structure.
+  WHAT AN OPERATION VALUE IS. Because an operation is an ordinary record, a value of one is an
+  exchange: { method: POST  path: "/orders"  request: <an order>  response: !order_created { ... } }
+  is one request and its reply. The same declaration is the contract and the shape of a trace.
 
-  WHAT AN OPERATION VALUE IS. Because an operation is an ordinary record, a value of one is a real
-  thing: an exchange. { method: POST  path: "/orders"  request: <an order>  response: <a response> }
-  is one request and its reply. The same declaration serves as the contract and as the shape of a
-  trace or an access log, which no data-shaped description can do.
-
-  HOW THE SHAPE IS ENFORCED. `operation` is a base record every operation composes (§5.8), so the
-  resolver checks each one has a method and a path, and an operation is recognisable in resolved
-  output by its supertype rather than by a naming convention. Composition narrows: an operation
-  inherits `method` and re-declares it FIXED to its own verb.
-
-  What the base cannot state is that a response is one -- each operation's choice has different
-  variants -- so `response` is still convention. A type constructor would close that last gap; see
-  sketch/README.md.
+  WHAT IT COSTS. Every response needs a named wrapper type -- five of them below -- whose only job
+  is to pair a status with a body. In a meta layer those would be values, not declarations. That is
+  the trade sketch/README.md sets out.
   """
 {
-  http_method => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
-
-  @doc:"Refined, so 42 is not a status."
-  status_code => !integer ^ { min: 100  max: 599 }
-
-  order => { sku: non_empty_text  quantity: int32 }
-
-  @doc:"Abbreviated; the shipping one is problem-2.tn, which follows RFC 9457."
-  problem => { type: uri?  title: text  status: status_code  detail: text? }
-
-  @doc:"A business error: schema-valid, and the domain still said no. Composes problem (§5.8)."
-  sku_not_found => problem & { missing_sku: non_empty_text }
-
-  @doc:"Every operation composes this, so an operation is found by its supertype, not by its name."
-  operation => { method: http_method  path: text }
-
   order_created  => { status: status_code = 201  body: order }
   order_invalid  => { status: status_code = 400  body: problem }
   order_sku_gone => { status: status_code = 404  body: sku_not_found }
@@ -67,10 +48,10 @@
   schema_served  => { status: status_code = 200 }
   schema_missing => { status: status_code = 404  body: problem }
 
-  @doc:"Fetch a published schema. A schema document is not a TSON value, so schema_served has no body."
   @doc:"A record at a type position is not permitted (§5.2), so a parameter set is a named type."
   get_schema_parameters => { schema_path: non_empty_text }
 
+  @doc:"Fetch a published schema. A schema document is not a TSON value, so schema_served has no body."
   get_schema => operation & {
     method:     http_method = GET
     path:       text = "/schemas/{schema_path}"

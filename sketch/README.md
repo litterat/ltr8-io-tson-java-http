@@ -12,6 +12,12 @@ what this file claims, so a fix upstream shows up as a failing test rather than 
 **`orders-api-3.tn` is the one to read.** It needs no meta layer, no kernel import, no `top`, and no
 annotations — an ordinary schema, which means any TSON toolchain can already read it.
 
+**Since `UPSTREAM.md` #11 was fixed it is also a library rather than a single file.** A schema can now reference
+types from several others, so the vocabulary (`http-api-1.tn`), the domain types (`order-1.tn`), the errors
+(`orders-errors-1.tn`) and the API each live where they belong, and a second version of the API imports the same
+domain schema. Before the fix all of it had to be one file — which is what "a chain, not a library" cost in
+practice.
+
 ## Why an API description has to be a schema
 
 Not a preference. A consequence of how TSON layers data and types.
@@ -48,6 +54,61 @@ A schema URI and a type name, both carried as **data**. Nothing resolves either 
 nothing *could*. That is `$ref: "#/components/schemas/Order"` in TSON's clothing, and it is why
 `TsonApiConformanceTest` exists at all: it hand-checks coherence a resolver should establish by construction,
 and the reason it had to be hand-checked is structural, not an oversight.
+
+## What belongs in the meta layer, and what it would unlock
+
+The sharpest way to put it: **`type_ref` is the meta layer's ability to talk *about* types. Without it a schema
+can only *use* types.** Everything else follows from that one line.
+
+`orders-api-3.tn` describes by *using*: a payload appears in a field-type position, because that is the only
+position where a type name resolves. So an operation ends up **containing** its payloads rather than **naming**
+them. The much-admired property that an operation value is an exchange is not a design choice — it is a
+consequence of describing-by-using, and it comes with a bill.
+
+**What would move up:** the `operation` constructor with `type_ref` slots, the `response` and `parameter`
+records, and the enums. `meta-http-1.tn` is that, and it resolves; only applying it is unimplemented.
+
+### What that unlocks, concretely
+
+**1. Wrapper types become values.** This is the biggest and least obvious win. `orders-api-3.tn` declares five
+types — `order_created`, `order_invalid`, `order_sku_gone`, `schema_served`, `schema_missing` — whose entire
+job is to pair a status with a body. They exist because a status must be a FIXED *field*, which needs a
+*record*, which needs a *declaration*. In the meta layer the same thing is a value:
+
+```tson
+responses: [ !response { status: 201  body: order }
+             !response { status: 400  body: problem } ]
+```
+
+Five bookkeeping entries in the schema's namespace become zero. An API of thirty operations is the difference
+between thirty declarations and a hundred and thirty.
+
+**2. The resolver checks the operation's shape.** `!operation { … }` binds through the constructor's own
+reader, so §7.2's closure rule catches a missing `method`, a misspelled `responses`, a `status` that is not a
+status. Today nothing does: any record composing `operation` is an operation, and "a field annotated with a
+status is a response" is prose in a `@doc`. This is the one gap the ordinary-schema design cannot close, and
+composition gets only part-way — a base can require `method` and `path`, but not that `response` is a choice of
+responses, because each operation's variants differ.
+
+**3. An operation is recognisable by construction**, not by a supertype convention a stray record could also
+satisfy.
+
+**4. The schema's namespace stays domain-only** — order, problem, sku_not_found, and the operations. No
+bookkeeping.
+
+**5. Templated operations become possible.** `crud => <T> !operation { … }` is D9's `instance-template`
+production — an API *pattern* as a checked, reusable type, which is the thing OpenAPI reaches for `allOf` and
+codegen to fake. It needs `template_argument` to grow the collection case the structure-templates CR defers.
+
+### What it costs
+
+**The exchange property.** A `~top &` entry has no values, so the meta version describes and nothing more.
+Today's version doubles as the shape of a trace or an access log for free. That is a real loss, and the honest
+answer is that it was never free — it was the visible face of describing-by-using, and it is paid for in the
+five wrapper types.
+
+If both are wanted they are two declarations, which is the correct number: a contract and a log format are
+different things that happen to mention the same types.
 
 ## The plainest design, and the best of the three
 

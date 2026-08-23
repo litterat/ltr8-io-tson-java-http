@@ -96,9 +96,27 @@ class SketchTest {
      * {@code core.tn} imported. Metadata is carried by FIXED fields, which survive into resolver output with
      * their values, where a locally declared annotation's value would have been dropped (#12).
      */
+    /** The four schemas orders-api-3.tn now imports -- a library, which is what #11's fix bought. */
+    private static Map<String, String> ordersLibrary() throws Exception {
+        return Map.of(
+                "https://tson.io/2026/32/ltr8/http/http-api-1.tn", sketch("http-api-1.tn"),
+                "https://tson.io/2026/32/ltr8/http/problem-2.tn", TsonProblemSchema.source(),
+                "https://schemas.example.com/2026/32/app/order-1.tn", """
+                        !!id:"https://schemas.example.com/2026/32/app/order-1.tn"
+                        !!meta:"https://tson.io/2026/32/m/meta.tn"
+                        !!import:"https://tson.io/2026/32/m/core.tn"
+                        { order => { sku: non_empty_text  quantity: int32 } }""",
+                "https://schemas.example.com/2026/32/app/orders-errors-1.tn", """
+                        !!id:"https://schemas.example.com/2026/32/app/orders-errors-1.tn"
+                        !!meta:"https://tson.io/2026/32/m/meta.tn"
+                        !!import:"https://tson.io/2026/32/m/core.tn"
+                        !!import:"https://tson.io/2026/32/ltr8/http/problem-2.tn"
+                        { sku_not_found => problem & { missing_sku: non_empty_text } }""");
+    }
+
     @Test
     void fixedFieldsCarryTheMetadataInAnOrdinarySchema() throws Exception {
-        Tson tson = Tson.builder().schemaSource(u -> null).build();
+        Tson tson = Tson.builder().schemaSource(ordersLibrary()::get).build();
         var entries = tson.resolve(sketch("orders-api-3.tn")).schema().entries();
 
         TypeDefinition create = entries.get("create_order");
@@ -122,7 +140,7 @@ class SketchTest {
     @Test
     void anOrdinarySchemaStillChecksItsPayloadTypes() throws Exception {
         String broken = sketch("orders-api-3.tn").replace("body: sku_not_found", "body: sku_not_fund");
-        var problems = Tson.builder().schemaSource(u -> null).build().validateSchema(broken);
+        var problems = Tson.builder().schemaSource(ordersLibrary()::get).build().validateSchema(broken);
         assertTrue(problems.stream().anyMatch(d -> d.message().contains("sku_not_fund")),
                 () -> "expected an unresolved-reference error, got " + problems);
     }
