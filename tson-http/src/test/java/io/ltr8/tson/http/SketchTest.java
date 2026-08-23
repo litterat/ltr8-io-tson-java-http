@@ -2,12 +2,23 @@ package io.ltr8.tson.http;
 
 import io.ltr8.annotation.Annotation;
 import io.ltr8.annotation.Annotations;
+import io.ltr8.bind.DataBindContext;
+import io.ltr8.bind.DataBindException;
+import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.compiler.Diagnostic;
+import io.ltr8.tson.compiler.TsonCompiledMetaRegistry;
+import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
+import io.ltr8.tson.compiler.config.TsonAtomContext;
+import io.ltr8.tson.http.apimeta.HttpMethod;
+import io.ltr8.tson.http.apimeta.Operation;
+import io.ltr8.tson.http.apimeta.Response;
 import io.ltr8.tson.schema.meta.FieldState;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.RecordField;
 import io.ltr8.tson.schema.meta.TypeDefinition;
+import io.ltr8.tson.schema.meta.TypeKind;
+import io.ltr8.tson.schema.meta.TypeRef;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
@@ -17,8 +28,10 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -357,26 +370,129 @@ class SketchTest {
         assertEquals(List.of(), Tson.builder().build().validateSchema(sketch("meta-http-1.tn")));
     }
 
+    // ── the design that was blocked, and now works: a meta-layer `operation` constructor ──
+
+    private static final String API_ID = "https://schemas.example.com/2026/32/app/orders-api-1.tn";
+
     /**
-     * But a schema governed by it cannot apply the constructor. {@code UnsupportedOperationException} is this
-     * project's classification for <em>not implemented</em>, which is what makes this a gap rather than a
-     * defect in the sketch. When it lands, this test fails and the README needs updating.
+     * <b>An operation declared by a meta layer, bound to this project's own Java record.</b> This was the
+     * first sketch and it was blocked for two upstream revisions: {@code ~top &} resolved but could not be
+     * registered, because registering a constructor demanded a value-reader factory, and an operation is
+     * never the type of a value. The {@code data} base kind ({@code UPSTREAM.md} #15) is the answer, and the
+     * wiring is three things -- {@code meta-http-1.tn}, {@link Operation} carrying {@code @Typename}, and a
+     * binder that can find it.
      *
-     * <p>This drives the real {@code orders-api-1.tn}, which it could not until {@code UPSTREAM.md} #11 was
-     * fixed — before that it stopped at the two-import collision, one wall earlier.
+     * <p><b>Note what this does not use: {@link Tson}.</b> {@code Tson.builder()} takes a
+     * {@code dataBindContext} but hands the compiler {@code SchemaMetaNameBinder.defaultContext()}
+     * unconditionally, so a consumer's own meta-layer constructor is invisible through the facade
+     * ({@code UPSTREAM.md} #17). Going one layer down to the registry is the whole workaround.
      */
-    @Test
-    void applyingAUserDefinedConstructorIsNotImplemented() throws Exception {
+    private static TsonCompiledMetaRegistry registry() throws Exception {
         Map<String, String> lib = Map.of(
                 "https://tson.io/2026/32/ltr8/http/meta-http-1.tn", sketch("meta-http-1.tn"),
                 "https://tson.io/2026/32/ltr8/http/problem-2.tn", TsonProblemSchema.source(),
                 "https://schemas.example.com/2026/32/app/order-1.tn", sketch("order-1.tn"),
-                "https://schemas.example.com/2026/32/app/orders-errors-1.tn", sketch("orders-errors-1.tn"));
-
-        UnsupportedOperationException gap = org.junit.jupiter.api.Assertions.assertThrows(
-                UnsupportedOperationException.class,
-                () -> Tson.builder().schemaSource(lib::get).build().validateSchema(sketch("orders-api-1.tn")));
-
-        assertTrue(gap.getMessage().contains("is not a constructor"), gap.getMessage());
+                "https://schemas.example.com/2026/32/app/orders-errors-1.tn", sketch("orders-errors-1.tn"),
+                API_ID, sketch("orders-api-1.tn"));
+        return registryOver(lib);
     }
+
+    /**
+     * The consumer's binder, composed rather than copied: the library's own vocabulary first, this
+     * project's {@code apimeta} package second. {@link DataNameBinder} has one method, so there is no table
+     * to keep in sync as the kernel's vocabulary grows.
+     */
+    private static TsonCompiledMetaRegistry registryOver(Map<String, String> lib) {
+        DataNameBinder apiNames =
+                new DataNameBinder.DefaultDataNameBinder(Set.of("io.ltr8.tson.http.apimeta"), Map.of());
+        DataNameBinder binder = name -> {
+            try {
+                return SchemaMetaNameBinder.INSTANCE.resolve(name);
+            } catch (DataBindException notKernelVocabulary) {
+                return apiNames.resolve(name);
+            }
+        };
+        DataBindContext context =
+                TsonAtomContext.registerDefaults(DataBindContext.builder().nameBinder(binder).build());
+        return TsonCompiledMetaRegistry.withStandardLibrary(context, lib::get);
+    }
+
+    /**
+     * The claim the whole sketch was for: the description is addressable as Java objects, and every payload
+     * type in it is a reference the linker has already resolved -- not a string this code has to look up.
+     */
+    @Test
+    void anOperationIsReadBackAsThisProjectsOwnJavaRecord() throws Exception {
+        TypeDefinition entry = registry().resolveLinked(API_ID).schema().entries().get("create_order");
+
+        assertEquals(TypeKind.DATA, entry.kind(), "an operation is not a type");
+        assertEquals(Optional.of(TypeRef.of("operation")), entry.source(), "§8.2 records what built it");
+
+        Operation create = assertInstanceOf(Operation.class, entry.body());
+        assertEquals(HttpMethod.POST, create.method());
+        assertEquals("/orders", create.path());
+        assertEquals(Optional.of(TypeRef.of("order")), create.request());
+        assertEquals(List.of(201, 400, 404), create.responses().stream().map(Response::status).toList());
+        assertEquals(Optional.of(TypeRef.of("sku_not_found")),
+                create.responseFor(404).orElseThrow().body());
+    }
+
+    /**
+     * <b>The reference is checked, and that is the difference from every data-shaped design here.</b>
+     * {@code orders-api-4.tn} spells the same body as the string {@code "sku_not_found"} and nothing
+     * resolves it -- {@link TsonApi#validate} had to be written to do that by hand, and reimplemented an
+     * upstream bug doing it. Here {@code Data.references()} reaches the linker, so the compiler answers.
+     */
+    @Test
+    void aPayloadTypeThatDoesNotExistIsRefusedByTheCompiler() throws Exception {
+        Map<String, String> lib = new LinkedHashMap<>(Map.of(
+                "https://tson.io/2026/32/ltr8/http/meta-http-1.tn", sketch("meta-http-1.tn"),
+                "https://tson.io/2026/32/ltr8/http/problem-2.tn", TsonProblemSchema.source(),
+                "https://schemas.example.com/2026/32/app/order-1.tn", sketch("order-1.tn"),
+                "https://schemas.example.com/2026/32/app/orders-errors-1.tn", sketch("orders-errors-1.tn")));
+        lib.put(API_ID, sketch("orders-api-1.tn").replace("body: sku_not_found", "body: sku_not_fnud"));
+
+        RuntimeException thrown = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> registryOver(lib).resolveLinked(API_ID));
+
+        assertTrue(thrown.getMessage().contains("sku_not_fnud"), thrown.getMessage());
+    }
+
+    /** And the payload's own shape is checked against the constructor's declaration, field by field. */
+    @Test
+    void aMisspeltOperationFieldIsRefusedByTheCompiler() throws Exception {
+        Map<String, String> lib = new LinkedHashMap<>(Map.of(
+                "https://tson.io/2026/32/ltr8/http/meta-http-1.tn", sketch("meta-http-1.tn"),
+                "https://tson.io/2026/32/ltr8/http/problem-2.tn", TsonProblemSchema.source(),
+                "https://schemas.example.com/2026/32/app/order-1.tn", sketch("order-1.tn"),
+                "https://schemas.example.com/2026/32/app/orders-errors-1.tn", sketch("orders-errors-1.tn")));
+        lib.put(API_ID, sketch("orders-api-1.tn").replace("method:     POST", "methd:     POST"));
+
+        RuntimeException thrown = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> registryOver(lib).resolveLinked(API_ID));
+
+        assertTrue(thrown.getMessage().contains("methd"), thrown.getMessage());
+    }
+
+    /**
+     * <b>And an operation cannot be used where a type belongs.</b> That is what the {@code data} kind buys
+     * beyond registration: against a kernel without it the misuse links, and fails only when some document
+     * is read against the schema.
+     */
+    @Test
+    void namingAnOperationWhereATypeBelongsIsRefused() throws Exception {
+        Map<String, String> lib = new LinkedHashMap<>(Map.of(
+                "https://tson.io/2026/32/ltr8/http/meta-http-1.tn", sketch("meta-http-1.tn"),
+                "https://tson.io/2026/32/ltr8/http/problem-2.tn", TsonProblemSchema.source(),
+                "https://schemas.example.com/2026/32/app/order-1.tn", sketch("order-1.tn"),
+                "https://schemas.example.com/2026/32/app/orders-errors-1.tn", sketch("orders-errors-1.tn")));
+        lib.put(API_ID, sketch("orders-api-1.tn").replace("\n}", "\n  holder => { op: create_order }\n}"));
+
+        RuntimeException thrown = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> registryOver(lib).resolveLinked(API_ID));
+
+        assertTrue(thrown.getMessage().contains("describes something other than a data value"),
+                thrown.getMessage());
+    }
+
 }

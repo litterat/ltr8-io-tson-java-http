@@ -395,7 +395,37 @@ a fix makes it fail.
 
 ---
 
-## 15. A constructor whose instances are never data cannot be registered
+## 15. ~~A constructor whose instances are never data cannot be registered~~ — DONE (`892d210`)
+
+**Resolved by option 2, and better than proposed.** `type_kind` gained `DATA`, `data` was declared in the
+kernel as a base kind alongside `atom`/`product`/`sum`, and a Java body implements the new
+`io.ltr8.tson.schema.meta.Data`. So the test is on a real kind rather than on the supertype chain, which was
+the ugly part of what I suggested. `MetaLayerDataConstructorTest` and `consumer/Operation.java` are the
+worked example. Registration is three things and nothing else: the meta schema declaring
+`operation => ~data & { … }`, a Java class with `@Typename` implementing `Data`, and a `DataNameBinder` that
+finds it. **No reader family and no factory registration** — the ordinary record reader binds the payload.
+
+**Two things it does that I had not asked for, and both matter more than the registration:**
+
+- **`Data.references()` reaches the linker.** A body declares which of its slots are references, and a name
+  that resolves to nothing is an author error at schema load. This is the entire difference between
+  `sketch/orders-api-1.tn` and `sketch/orders-api-4.tn`: the data-shaped description spells a payload as the
+  string `"sku_not_found"` and nothing checks it, so `TsonApi.validate` had to do it by hand — and
+  reimplemented #11's bug in the process. Declaring references on the body, rather than inferring them from
+  slots spelled `type_ref`, also means a consumer keeps the choice.
+- **An operation cannot be used where a type belongs.** Field, variant, element and map-value positions are
+  all refused at link time, with *"describes something other than a data value"*. Against a kernel without the
+  kind, the misuse resolves, links, compiles, and fails only when some document is read against the schema.
+
+**One correction to my own framing.** I read `~` as "this is a type constructor". It is not: `~` is the
+permission for a **schema** to write `!C …` (§3.3.1/§5.6), and says nothing about type-ness. So it is still
+required on `operation` even though an operation is not a type — which is why `~data &` reads oddly at first
+and is right.
+
+Adopted here: `sketch/meta-http-1.tn` now says `~data &`, `sketch/orders-api-1.tn` resolves, and
+`tson-http/src/test/java/io/ltr8/tson/http/apimeta/` holds the Java side. See #17 for what still stands in
+the way of using it through the public API.
+
 
 **The shape wanted:** `operation` declared in a meta layer and written by a schema author as
 `create_order => !operation { method: POST  path: "/orders"  request: order  … }`. The resolver binds the
@@ -521,6 +551,47 @@ minimum say what is actually wrong — an annotation here is not supported — r
 that is present as missing.
 
 ---
+
+## 17. `Tson.builder()` cannot reach a consumer's own meta-layer constructor
+
+**Blocks #15's feature from the public API.** `TsonConfig.build()` is:
+
+```java
+TsonCompiledMetaRegistry core =
+        TsonCompiledMetaRegistry.withStandardLibrary(SchemaMetaNameBinder.defaultContext(), schemaSource);
+return new Tson(core, dataBindContext);
+```
+
+The configured `dataBindContext` goes to the reader and writer; the compiler always gets
+`SchemaMetaNameBinder.defaultContext()`. So a schema that applies a consumer's own constructor fails with
+*"'operation' has no usable compiled reader … no bound Java class for 'operation'"* however the caller
+configures their `Tson`. Everything #15 landed works — it just is not reachable through `Tson`, and
+`SketchTest` has to build a `TsonCompiledMetaRegistry` directly to exercise it.
+
+**The stated reason does not cover this case.** `TsonConfig`'s own Javadoc says the internal context is
+*"fixed, not configurable"*, and `Tson`'s explains why: the standard library must be compiled in
+object-binding mode, because a DOM reader cannot resolve the `!enum`/`!integer` instances a meta-schema
+declares. That argument is about the **mode**, not about **which names the binder knows**. The composition
+the upstream test itself recommends —
+
+```java
+DataNameBinder binder = name -> {
+    try { return SchemaMetaNameBinder.INSTANCE.resolve(name); }
+    catch (DataBindException notKernelVocabulary) { return consumerNames.resolve(name); }
+};
+```
+
+— keeps the mode entirely and only adds names, so nothing the fixed context protects is given up.
+
+**Suggested shape:** a `TsonConfig.metaNameBinder(DataNameBinder)` (or `schemaBindContext`) that defaults to
+today's behaviour, is composed over `SchemaMetaNameBinder.INSTANCE` rather than replacing it, and is
+documented as *"names your meta layer adds"* rather than as a general escape hatch. Reusing
+`dataBindContext` for both would be the smaller change but the wrong one — a consumer's data bindings
+(`order` → `Order`) have no business in the compiler's namespace, and the two would collide the first time a
+schema type and a meta-layer constructor shared a name.
+
+**Cost of not fixing it:** every consumer of the `data` kind drops to `TsonCompiledMetaRegistry`, and so
+gives up `Tson`'s reader, writer and registries, or wires both and keeps them consistent by hand.
 
 ## Spec feedback to file
 

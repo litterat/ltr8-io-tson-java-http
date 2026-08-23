@@ -14,8 +14,8 @@ strings and checks them itself.
 | `order-1.tn` | schema | The domain types. Versions independently of the API that exposes them. |
 | `orders-errors-1.tn` | schema | Business errors, composing `problem` from the shipping `problem-2.tn`. |
 | `orders-api-2.tn` + `meta-http-2.tn` | schema | The annotation design: operations as `top &`, metadata on annotations. |
-| `orders-api-1.tn` + `meta-http-1.tn` | schema | The constructor design. Blocked; see below. |
-| `meta-http-3.tn` | schema | A leaner `operation` — four fields, `type_name`, one response. Resolves; same blocker. |
+| `orders-api-1.tn` + `meta-http-1.tn` | schema | The constructor design. **Now works**; blocked only on `UPSTREAM.md` #17. |
+| `meta-http-3.tn` | schema | A leaner `operation` — four fields, `type_name`, one response. Superseded: `type_name` has no path to the linker, `type_ref` does. |
 
 `orders-api-4.tn`'s governing schema is `tson-http/src/main/resources/api-2.tn`, not copied here — it ships,
 and a copy would drift.
@@ -28,7 +28,7 @@ what this file claims, so a fix upstream shows up as a failing test rather than 
 |---|---|---|---|
 | `orders-api-3.tn` | `meta.tn` + `core.tn` — **the ordinary one** | FIXED fields | **works** |
 | `orders-api-2.tn` | a custom meta layer for annotation *types* | annotations | works |
-| `orders-api-1.tn` | a custom meta layer with an `operation` constructor | constructor fields | blocked on one gap |
+| `orders-api-1.tn` | a custom meta layer with an `operation` constructor | constructor fields | **works**; not reachable through `Tson` (#17) |
 
 **`orders-api-3.tn` is the one to read** — but the reason has changed, and the two designs are closer than the
 table suggests.
@@ -151,7 +151,7 @@ The one that matters when choosing, and the answer inverts the obvious reading.
 | `api-1.tn` — data, `$ref`-style | compiler | **nobody** |
 | `orders-api-4.tn` — data, imports | **compiler** | this project, ~40 lines |
 | `orders-api-3.tn` — ordinary schema | **almost nobody** | compiler |
-| `orders-api-1.tn` — `~operation` | compiler | compiler |
+| `orders-api-1.tn` — `~data & operation` | compiler | compiler |
 
 Measured, not assumed — `SketchTest.theDataDesignIsStructurallyCheckedAndTheSchemaDesignIsNot`:
 
@@ -166,9 +166,11 @@ says what a *schema* is in general. Composition with an `operation` base require
 and stops there; it cannot say that `response` is a choice of *this* operation's variants, so it does not
 require `response` at all.
 
-So neither shipping design gets both, and each gets the half the other lacks. **That is the sharpest argument
-for `UPSTREAM.md` #15**: a `~operation` constructor is exactly what supplies the missing description of an
-operation's shape, which is why it is the only row with the compiler in both columns.
+So neither *data-or-schema* design gets both, and each gets the half the other lacks. That was the sharpest
+argument for `UPSTREAM.md` #15, and **#15 has since landed**: a `~data &` `operation` supplies the missing
+description of an operation's shape, and `Data.references()` supplies the reference checking, which is why it
+is the only row with the compiler in both columns — and now the only row that is also true. The last column
+is no longer a prediction; `SketchTest` asserts every cell of it.
 
 Worth weighing honestly: **the re-implementation the data design asks for is small and bounded** — resolve a
 name against an import list, about forty lines. The schema design's gap is not something a consumer can fill at
@@ -454,26 +456,47 @@ data value — nobody can write `!create_order { … }` and mean anything. This 
 "a `@status` field is a response" rule is prose in a `@doc`. A `~operation` constructor would have the resolver
 check that an operation has a method and a path — which is exactly what the other design buys, and cannot spend.
 
-## The constructor design, blocked
+## The constructor design, which now works
 
-`meta-http-1.tn` declares `operation` as a real type constructor:
+`meta-http-1.tn` declares `operation` as a constructor whose instances are not types:
 
 ```tson
-operation => ~top & {
+operation => ~data & {
   method: http_method   path: text
   parameters: [parameter]   request: type_ref?   responses: [response]
 }
 ```
 
-**It resolves.** One wall now stops `orders-api-1.tn` using it:
+It said `~top &` and was blocked for two upstream revisions. The `data` base kind (`UPSTREAM.md` #15) is what
+opened it, and **the wiring is three things and nothing else**: this schema, a Java record carrying
+`@Typename(name = "operation")` and implementing `Data`, and a `DataNameBinder` that can find it. No reader
+family, no factory registration — the ordinary record reader binds the payload. The Java side is
+`tson-http/src/test/java/io/ltr8/tson/http/apimeta/`, five small files, and `SketchTest` drives the real
+`orders-api-1.tn`.
 
-1. **A constructor whose instances are never data cannot be registered** (`UPSTREAM.md` #15).
-   `UnsupportedOperationException: … 'operation' is not a constructor '…/meta-http-1.tn' declares` — which
-   reads as *undeclared* when the truth is *declared, and dropped for want of a value-reader factory it does
-   not need*. Registering a constructor requires both an instance reader (ordinary record binding, which is all
-   an operation wants) and a factory that builds readers for **data** of that type — and no data value is ever
-   an operation. `type_definition.body` is typed `top`, so the meta-schema already permits an operation body;
-   what is missing is the category *author-writable, no data instances*.
+**`~` does not mean "this is a type."** It is the permission for a *schema* to write `!operation { … }`
+(§3.3.1/§5.6). So it is still required on something that is expressly not a type, which is why `~data &`
+reads oddly and is right. Drop it and the schema applying it is told the name does not resolve to a
+constructor.
+
+**What it buys, all of it checked by the compiler:**
+
+| | |
+|---|---|
+| `methd:` instead of `method:` | *unknown field* — the description's own shape is checked, which `orders-api-3.tn` cannot do |
+| `body: sku_not_fnud` | *unresolved reference* — `Data.references()` reaches the linker, which `orders-api-4.tn` cannot do |
+| `holder => { op: create_order }` | *describes something other than a data value* — an operation cannot be used where a type belongs |
+
+The middle row is the one to notice. A body declares which of its slots are references; the linker follows
+them. That is the forty lines of `TsonApi.validate` — the ones that reimplemented `UPSTREAM.md` #11's bug —
+deleted and answered by the compiler instead.
+
+**What still stands in the way of shipping it: `UPSTREAM.md` #17.** `Tson.builder()` takes a
+`dataBindContext` but hands the compiler `SchemaMetaNameBinder.defaultContext()` unconditionally, so a
+consumer's meta layer is invisible through the facade. `SketchTest` builds a `TsonCompiledMetaRegistry`
+directly to get round it, which means giving up `Tson`'s reader, writer and registries. That is why
+`orders-api-4.tn` is still the one that ships.
+
 ~~A schema could reference types from only one other schema~~ — `UPSTREAM.md` #11, **fixed and merged**. This
 schema now gets past it, and `SketchTest` drives the real file rather than a trimmed stand-in.
 

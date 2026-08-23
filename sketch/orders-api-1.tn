@@ -5,7 +5,7 @@
 @doc:"""
   The orders service, described as types rather than as data about types.
 
-  SKETCH -- blocked on UPSTREAM.md #11. See sketch/README.md.
+  WORKS -- see sketch/README.md. Was blocked until the `data` base kind (UPSTREAM.md #15).
 
   Compare the data version this replaces (a !api document governed by api-1.tn): there, a body was
   { schema: uri  type: text } and nothing resolved either string. Here order, problem and
