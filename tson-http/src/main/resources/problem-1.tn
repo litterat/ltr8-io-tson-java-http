@@ -2,26 +2,44 @@
 !!meta:"https://tson.io/2026/32/m/meta.tn"
 !!import:"https://tson.io/2026/32/m/core.tn"
 @doc:"""
-  The error body this project writes when a request cannot be fulfilled -- an HTTP status, a short
-  title, and the diagnostics that produced it.
+  The error body this project writes when a request cannot be fulfilled.
 
-  !!id convention (tson-java's CLAUDE.md, "Project-owned schema !!id convention"): /2026/32 is the
-  spec revision this is written against, ltr8 the publishing org, http this project's schema group,
-  and the trailing -1 this schema's own version. Per that convention's "bump it under a new name"
-  rule, never edit a published schema's content in place -- a shape change becomes problem-2.tn.
+  This is tson-http's own schema, maintained here. It began as a copy of tson-cli's diagnostics.tn
+  and has since diverged, which is the right outcome rather than drift: a CLI reports on files and a
+  server reports on requests, and holding one shape across both would have meant neither fitting.
 
-  SUPERSEDED by problem-2.tn, which follows RFC 9457. Still published, and still valid: §10 makes a
-  published schema immutable, so a document that named this one must go on resolving. Nothing new is
-  written against it.
+  problem follows RFC 9457 (Problem Details for HTTP APIs, obsoleting 7807) so that ordinary HTTP
+  tooling recognises the body: type, title, status, detail and instance are its five members, and
+  errors is an extension member of exactly the shape §3.1 of that RFC uses for its own
+  multiple-validation-errors example.
 
-  diagnostic_code and diagnostic began as a copy of tson-cli's diagnostics.tn. They are no longer
-  held to it: a CLI reports on files and a server reports on requests, and the two shapes are free to
-  diverge where that difference matters.
+  diagnostic stays close to what a TSON read produces, because that is what it reports. It is not
+  RFC 9457's per-error shape -- that RFC suggests detail and pointer, which would throw away the
+  code vocabulary, the two-ended location model and the source positions §8.1 requires.
+
+  Versioning, per §10: a shape change to a PUBLISHED schema is a new name, never an edit, because a
+  document that named the old one must go on resolving. Nothing here is published yet, so this file
+  is edited in place and stays -1. When that changes, adding so much as an enum member below becomes
+  problem-2.tn, and this document keeps being served alongside it.
   """
 {
+  @doc:"""
+    A hand-written copy of io.ltr8.tson.compiler.Diagnostic.Code, which is the source of truth;
+    TsonProblemSchemaTest is the only thing that checks the two agree.
+
+    Two members are not a verdict on the request, and both are answered 5xx rather than 400.
+    NOT_IMPLEMENTED says the library could not check a construct the body uses -- the same split the
+    CLI rides its exit codes on (70, not 1). BIND_MISMATCH says a schema and the Java class bound to
+    it disagree, which is this server's own wiring; its message names a server class, so it is a 500
+    and the boundary drops it from the body entirely.
+
+    They are declared here even though a client should never see either, because this enum copies
+    Diagnostic.Code rather than the subset one server happens to emit.
+    """
   diagnostic_code => !enum [
     FIELD_REQUIRED FIELD_FIXED TYPE_MISMATCH WRONG_ARITY UNKNOWN_TYPE_REF ATOM_CONSTRAINT_VIOLATION
     UNRECOGNIZED_FIELD DUPLICATE_MAP_KEY DUPLICATE_FIELD SCHEMA_ERROR UNKNOWN_TYPE VALIDATION_ERROR
+    NOT_IMPLEMENTED BIND_MISMATCH
   ]
   @doc:"""
     One problem, located at up to two ends: the value in the data (path, data_position) and the rule
@@ -29,7 +47,7 @@
     found in a schema has no data, and a schemaless read has no schema.
 
     A position is "line:column:byte_offset", all three 1-based except byte_offset, which counts
-    UTF-8 bytes from 0 ([TSON-DATA] §8.1).
+    UTF-8 bytes from 0 ([TSON-DATA] §8.1). The offsets are into the request body as sent.
     """
   diagnostic => {
     path: text?
@@ -43,17 +61,25 @@
     schema_position: text?
   }
   @doc:"""
-    status is the HTTP status code the response carries, restated in the body so a stored or
-    forwarded problem stays self-describing. title is a short, stable phrase for the class of
-    failure; detail is free prose about this one occurrence, absent when the title says it all.
+    RFC 9457's five members, plus errors.
 
-    errors is empty for a failure that produced no diagnostic at all -- an unsupported media type,
-    an unacceptable Accept -- which is why it is a list rather than a required single value.
+    type identifies the class of failure and is the member to match on: it is stable where title is
+    prose, and it dereferences. Absent means RFC 9457's "about:blank" -- no semantics beyond the
+    status code. title summarises the type; detail describes this one occurrence. instance
+    identifies this occurrence, and may be relative, per that RFC.
+
+    status is restated here so a problem that is stored, logged or forwarded stays self-describing
+    once separated from its response.
+
+    errors is empty for a failure that produced no diagnostic at all -- an unsupported media type, an
+    unacceptable Accept -- which is why it is a list rather than a required single value.
     """
   problem => {
-    status: int32
+    type: uri?
     title: text
+    status: int32
     detail: text?
+    instance: uri?
     errors: [diagnostic]
   }
 }

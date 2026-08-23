@@ -12,7 +12,7 @@ strings and checks them itself.
 | `orders-api-4.tn` | **data** | The same API as a data document, governed by `api-2.tn`. **The only one that ships.** |
 | `http-api-1.tn` | schema | Reusable vocabulary: the enums, the `response`/`page` templates, the `operation` base. |
 | `order-1.tn` | schema | The domain types. Versions independently of the API that exposes them. |
-| `orders-errors-1.tn` | schema | Business errors, composing `problem` from the shipping `problem-2.tn`. |
+| `orders-errors-1.tn` | schema | Business errors, composing `problem` from the shipping `problem-1.tn`. |
 | `orders-api-2.tn` + `meta-http-2.tn` | schema | The annotation design: operations as `top &`, metadata on annotations. |
 | `orders-api-1.tn` + `meta-http-1.tn` | schema | The constructor design. **Works, unblocked.** The recommended one, on a condition. |
 | `meta-http-3.tn` | schema | A leaner `operation` — four fields, `type_name`, one response. Superseded: `type_name` has no path to the linker, `type_ref` does. |
@@ -86,7 +86,7 @@ four that ships.
 
 ```tson
 !api {
-  imports: [ ".../order-1.tn"  ".../orders-errors-1.tn"  ".../problem-2.tn" ]
+  imports: [ ".../order-1.tn"  ".../orders-errors-1.tn"  ".../problem-1.tn" ]
   operations: [
     !operation { method: POST  path: "/orders"  request: "order"
                  responses: [ !response { status: 201  body: "order" }

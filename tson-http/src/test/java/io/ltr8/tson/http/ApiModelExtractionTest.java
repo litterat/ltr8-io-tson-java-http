@@ -47,7 +47,6 @@ class ApiModelExtractionTest {
         Map<String, String> lib = Map.of(
                 "https://tson.io/2026/32/ltr8/http/http-api-1.tn", sketch("http-api-1.tn"),
                 TsonProblemSchema.ID, TsonProblemSchema.source(),
-                TsonProblemSchema.ID_2, TsonProblemSchema.publishedById().get(TsonProblemSchema.ID_2),
                 "https://schemas.example.com/2026/32/app/order-1.tn", sketch("order-1.tn"),
                 "https://schemas.example.com/2026/32/app/orders-errors-1.tn", sketch("orders-errors-1.tn"));
         return Tson.builder().schemaSource(lib::get).build()

@@ -144,9 +144,10 @@ what an HTTP error body should be:
   RFC 9457's suggested per-error shape (`detail` + `pointer`), which would throw away the code vocabulary, the
   two-ended location model and the source positions §8.1 requires.
 
-**Versioned rather than edited**, which is §10 demonstrated rather than described: `problem-1.tn` is superseded
-by `problem-2.tn` and is **still published**, because a document that named it must go on resolving. The demos
-serve the whole history via `TsonProblemSchema.publishedSources()`.
+**Versioned rather than edited** — which was §10 applied too eagerly, and has since been undone. Immutability
+protects a document someone may already have pinned; nothing here is published, so the versions were collapsed
+back to one `problem-1.tn` that is edited in place. `TsonProblemSchema.publishedSources()` still exists and the
+demos still serve what it returns, so the shape is ready for a real release.
 
 **What stays true from the original finding:** `tson-cli` exports nothing and publishes no schema, so a
 consumer cannot reach its shapes. That is now simply not this project's problem.
@@ -181,7 +182,7 @@ source. `TsonProblemDiagnostic` now goes through them instead of repeating it in
 That commit also added `DiagnosticsSchemaTest` upstream, checking `diagnostics.tn`'s `diagnostic_code` against
 `Diagnostic.Code` — and its note anticipates this project exactly: *"Any consumer rendering diagnostics — this
 CLI, an HTTP error body, anything else — declares the vocabulary again in its own wire schema, and each copy has
-to be checked against the enum."* `TsonProblemSchemaTest` now does that for `problem-2.tn`, reading the members
+to be checked against the enum."* `TsonProblemSchemaTest` now does that for `problem-1.tn`, reading the members
 through the compiled schema rather than by matching text, and verified to fail when a code is removed.
 
 ---
@@ -371,7 +372,7 @@ reaching two revisions of `core.tn` is now rejected at namespace construction ra
 field conflict between two identically-spelled types.
 
 **Adopted.** `orders-errors-1.tn` in all three demos now names both imports. `text` would arrive through
-`problem-2.tn`'s own import either way — transitivity is retained — but a schema that uses a name should say
+`problem-1.tn`'s own import either way — transitivity is retained — but a schema that uses a name should say
 where it comes from, and that spelling was rejected until this landed. `CLAUDE.md`'s "import the derived schema
 only" trap is gone rather than corrected: it described a workaround, and there is nothing left to work around.
 
@@ -770,8 +771,9 @@ classification one and is now upstream backlog.
   diagnostics from any 5xx body, so routing the status was all that was needed — the class name reaching the
   wire was a consequence of a bind mismatch landing in the 400 branch, where a body carries every diagnostic
   by design. The detail is still populated, because that is what gets logged.
-- `problem-4.tn` declares `BIND_MISMATCH`; §10 again, and `TsonProblemSchemaTest` caught the missing member
-  before I did, for the second bump running.
+- `problem-1.tn` declares `BIND_MISMATCH`, and `TsonProblemSchemaTest` caught the missing member before I did.
+  It went out as `problem-4.tn` at the time — §10 applied reflexively to an unpublished schema, since collapsed
+  back to one version. Immutability binds at release, not during development.
 
 **Also fixed while here:** the three demo servers no longer hardcode the problem schema's version in their own
 schema text — they interpolate `TsonProblemSchema.ID`. Three bumps in a week each touched sixteen files, and

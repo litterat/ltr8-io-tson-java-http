@@ -7,7 +7,7 @@
     imports: [
         "https://schemas.example.com/2026/32/app/order-1.tn"
         "https://schemas.example.com/2026/32/app/orders-errors-1.tn"
-        "https://tson.io/2026/32/ltr8/http/problem-4.tn"
+        "https://tson.io/2026/32/ltr8/http/problem-1.tn"
     ]
 
     operations: [

@@ -176,7 +176,7 @@ public final class TsonApi {
      *
      * <p>The rule mirrors a schema's own, <b>including the part that is easy to get wrong</b>: ambiguity is
      * judged by the <em>declaration</em>, not by how many imports surface the name. Imports are transitive, so
-     * a schema's entries are its whole merged namespace — importing both {@code problem-2.tn} and something
+     * a schema's entries are its whole merged namespace — importing both {@code problem-1.tn} and something
      * that imports it surfaces {@code problem} twice from one declaration, which is not a conflict. Counting
      * occurrences instead is precisely the bug {@code UPSTREAM.md} #11 fixed upstream, and it is just as wrong
      * here. Two imports declaring genuinely different types under one name is the real conflict.
@@ -225,7 +225,7 @@ public final class TsonApi {
      * <p><b>The whole {@code TypeDefinition} will not do</b>, and finding out cost a debugging cycle. Imports
      * are transitive, so one declaration is reached by several routes — and the copies are not equal, because
      * linking credits each route's own {@code subtypes}. {@code problem} seen through {@code orders-errors-1.tn}
-     * has {@code sku_not_found} among its subtypes; seen directly through {@code problem-2.tn} it has none.
+     * has {@code sku_not_found} among its subtypes; seen directly through {@code problem-1.tn} it has none.
      * Comparing the definitions would call that a conflict, which is the occurrence-counting mistake in a new
      * costume.
      *

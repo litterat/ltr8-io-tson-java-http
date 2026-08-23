@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * The body of an error response, written as {@code application/tson} against {@code problem-2.tn}.
+ * The body of an error response, written as {@code application/tson} against {@code problem-1.tn}.
  *
  * <p><b>RFC 9457 (Problem Details for HTTP APIs), plus {@code errors}.</b> Following the standard means
  * ordinary HTTP tooling recognises the body, and {@code errors} is not an invention either -- §3.1 of that RFC

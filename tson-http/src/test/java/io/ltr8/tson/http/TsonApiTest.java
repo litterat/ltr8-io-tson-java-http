@@ -30,7 +30,7 @@ class TsonApiTest {
             !!id:"https://schemas.example.com/2026/32/app/orders-errors-1.tn"
             !!meta:"https://tson.io/2026/32/m/meta.tn"
             !!import:"https://tson.io/2026/32/m/core.tn"
-            !!import:"https://tson.io/2026/32/ltr8/http/problem-4.tn"
+            !!import:"https://tson.io/2026/32/ltr8/http/problem-1.tn"
             { sku_not_found => problem & { missing_sku: non_empty_text } }""";
 
     /** A second schema that also declares `order`, for the ambiguity case. */

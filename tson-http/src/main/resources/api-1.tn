@@ -18,7 +18,7 @@
   Three things follow from schema references being real identities, which OpenAPI cannot do cleanly.
   Versioning falls out: an operation names order-1.tn or order-2.tn, rather than naming a component
   whose name encodes a version. An operation MAY pin the exact bytes of its contract with a
-  ?sha256= reference (§2.2.1). And an error response references a type composed on problem-2.tn
+  ?sha256= reference (§2.2.1). And an error response references a type composed on problem-1.tn
   (§5.8), where OpenAPI needs allOf.
 
   A description is itself a TSON document governed by a TSON schema, so it is served, validated and

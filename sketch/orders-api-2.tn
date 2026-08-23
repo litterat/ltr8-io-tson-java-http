@@ -25,7 +25,7 @@
 {
   order => { sku: text  quantity: integer }
 
-  @doc:"Abbreviated; the shipping one is problem-2.tn, which follows RFC 9457."
+  @doc:"Abbreviated; the shipping one is problem-1.tn, which follows RFC 9457."
   problem => { type: uri?  title: text  status: integer  detail: text? }
 
   @doc:"A business error: schema-valid, and the domain still said no. Composes problem (§5.8)."

@@ -95,7 +95,7 @@ each other.
   writes bodies, and gates on `Content-Type` and `Accept`.
 - `TsonHttpException` — status plus diagnostics. **`from(RuntimeException)` is the entire status policy**;
   put nothing status-shaped anywhere else.
-- `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem-3.tn` — the error body, its schema,
+- `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem-1.tn` — the error body, its schema,
   and the reader that proves the two agree. **This project's own schema, maintained here** — it began as a copy
   of `tson-cli`'s `diagnostics.tn` and has diverged on purpose (`UPSTREAM.md` #5): a CLI reports on files and a
   server reports on requests. `problem` follows **RFC 9457**; `diagnostic` stays close to what a TSON read
@@ -201,11 +201,11 @@ thrown**. It composes `problem` (§5.8) so it carries RFC 9457's members and add
 boundary cannot produce it: the boundary only knows how to render a `problem`, and a `sku_not_found` has a field
 `problem` does not.
 
-These types belong in the **application's** schema, importing `problem-2.tn` — `tson-http` owns the transport
+These types belong in the **application's** schema, importing `problem-1.tn` — `tson-http` owns the transport
 envelope, the service owns "SKU not found". One rule that costs time otherwise:
 
 - **Imports are transitive, but name what you use anyway.** A name reaches you through what you import, so
-  `orders-errors-1.tn` would get `text` through `problem-2.tn` without saying so. Name `core.tn` too: a
+  `orders-errors-1.tn` would get `text` through `problem-1.tn` without saying so. Name `core.tn` too: a
   collision is judged by the *declaring schema's identity* now, not by how many routes reach it
   (`UPSTREAM.md` #11), so naming a shared dependency twice is redundant rather than an error.
 - **`errors` stays data-level.** A business failure carries `errors: []` and its own fields. They never
@@ -345,7 +345,7 @@ Each cost a debugging cycle here and is pinned by a test.
   three base-syntax exception types — two of which live in an unexported package, so no caller here could
   `catch` them — and **rethrows anything else**, which is what stops an unexpected fault becoming a false
   verdict about the request. Do not delete it for being unreachable.
-- **`problem-3.tn`'s `diagnostic_code` is a hand-written copy of `Diagnostic.Code`.** Nothing but
+- **`problem-1.tn`'s `diagnostic_code` is a hand-written copy of `Diagnostic.Code`.** Nothing but
   `TsonProblemSchemaTest` checks it is current, and an error body emitting a code its own schema rejects would
   not otherwise be caught, since no fixture produces a code that is new. The Java enum is the source of truth —
   never check this schema against tson-cli's, which would only prove they drifted together.
@@ -419,28 +419,27 @@ handler can classify from the opening bytes without a full parse.
 a frozen "TSON version 1" that hasn't happened (tson-java's `SPEC-FEEDBACK.md` #20).
 
 **Immutability binds a *published* schema, and nothing here is published yet.** §10 makes a schema immutable
-once it is available for someone else to pin — that is what the rule protects: a document that named it must
-go on resolving. Until this project is released, **edit the file in place and do not bump the version.** There
-is no consumer holding `problem-3.tn` and no document in the wild naming it; a new version under those
-conditions buys nothing and costs a sweep of every import, demo and test that names it.
+once it is available for someone else to pin — that is what the rule protects: a document that named it must go
+on resolving. Until this project is released, **edit the file in place and do not bump the version.**
 
-This was learned the expensive way: `problem-1.tn` through `problem-4.tn` exist because each new
-`Diagnostic.Code` member was treated as a §10 shape change. It is a shape change — but the rule only starts
-applying at release. Once this **is** published, the rule is the real one: a shape change is a new name, never
-an in-place edit, and the superseded document stays served.
+This was learned the expensive way. `problem-1.tn` was bumped to `-2`, `-3` and `-4` because each new
+`Diagnostic.Code` member is a shape change — which it is, but the rule only starts applying at release. Three
+bumps, sixteen files each, for a document nothing outside this repo had ever seen. They have since been
+collapsed back to a single `problem-1.tn`.
 
-**When that time comes**, the machinery is already here. `TsonProblemSchema.publishedSources()` returns the
-whole history and the demos publish all of it; `publishedById()` is the same history keyed by identity, for a
-test or a caller wiring a schema source by hand. Two traps that bit during the bumps above:
+**Once this *is* published**, the rule is the real one and the machinery is already here:
+`TsonProblemSchema.publishedSources()` returns the whole history (one entry today) and the demos publish all of
+it; `publishedById()` is the same keyed by identity, for a caller wiring a schema source by hand. Two traps
+worth keeping from the bumps:
 
 - **A hand-wired source serving the current text at a superseded URI fails as an "identity mismatch"** from
-  the loader — a long way from the map that was actually wrong. Use `publishedById()`.
+  the loader — a long way from the map that was actually wrong. Use `publishedById()` even at one version.
 - **Don't restate the current version in a document that could interpolate it.** The demos' own error schemas
-  now build their `!!import` from `TsonProblemSchema.ID`, because three bumps each touched sixteen files and
-  most of that was demos hardcoding a constant.
+  build their `!!import` from `TsonProblemSchema.ID`; most of those sixteen files were demos hardcoding a
+  constant.
 
-**`TsonProblemSchemaTest` is what catches a stale `diagnostic_code`**, and it has now caught two additions
-before anyone noticed them. Keep it.
+**`TsonProblemSchemaTest` is what catches a stale `diagnostic_code`**, and it caught two additions before
+anyone noticed them. Keep it.
 
 **Project-owned schema `!!id`** follows tson-java's convention with this repo's own group:
 `https://tson.io/2026/32/ltr8/http/<name>-<version>.tn` — `/2026/32` the spec revision, `ltr8` the
