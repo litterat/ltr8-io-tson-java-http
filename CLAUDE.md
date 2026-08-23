@@ -160,17 +160,24 @@ Two consequences:
   `describing(…)`, `readObjectAs(…)`, the `TSON-Schema` header plus a route-supplied type: two strings
   reassembled at every call site, because the thing they name cannot be referenced.
 
-### Describing an API (`api-1.tn`, `TsonApi`)
+### Describing an API (`api-2.tn`, `TsonApi`)
 
 An OpenAPI-shaped description of an HTTP API whose payloads are TSON — minus the part OpenAPI mostly is.
 OpenAPI embeds a schema language because JSON has none; TSON already has published, identity-addressed schemas,
 so an operation **references** one by `!!id` and names a root type in it.
 
-**That pair is the contract unit, and it was not invented here.** `describing(schemaUri, rootTypeName)`,
-`readObjectAs(schemaUri, typeName, class)`, the `TSON-Schema` header plus a route-supplied type — everything
-handling a TSON payload independently needs both, for the same reason: a schema alone does not say which of its
-types a document is, and a bound record writes no type-ref of its own. An API description is just *per
-operation, which pair goes in and which pairs come out*.
+**A description carries an import list and bare type names, and `TsonApi.validate` resolves them.** That is
+work the resolver will not do: a data document cannot hold a reference to a type, so a description written as
+data brings its own namespace rule and a consumer enforces it. `api-1.tn` spelled every reference as
+`{ schema: uri  type: text }` — the pair repeated at every payload, and never checked; `api-2.tn` carries the
+schema list once and checks the names.
+
+**The ambiguity rule is the part to get right.** Imports are transitive, so a schema's `entries()` is its whole
+merged namespace, and one declaration is reached by several routes. Judging ambiguity by *how many imports
+surface a name* is exactly the bug `UPSTREAM.md` #11 fixed upstream — and just as wrong here. Nor can the
+`TypeDefinition`s be compared directly: linking credits each route's own `subtypes`, so `problem` seen through
+`orders-errors-1.tn` carries `sku_not_found` where the direct route carries none. Compare the **authored
+declaration** — kind and body — and leave out what linking derived.
 
 **The description is checked, not just written.** `TsonApiConformanceTest` fetches it **from the running
 server**, reads it as a TSON document governed by `api-1.tn`, and holds the server to it: every referenced

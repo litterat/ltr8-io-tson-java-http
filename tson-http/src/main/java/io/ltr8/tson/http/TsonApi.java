@@ -4,14 +4,19 @@ import io.ltr8.annotation.Typename;
 import io.ltr8.bind.DataBindContext;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.compiler.Diagnostic;
 import io.ltr8.tson.compiler.TsonSchemaSource;
 import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
 import io.ltr8.tson.compiler.config.TsonAtomContext;
+import io.ltr8.tson.schema.meta.TypeDefinition;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -37,10 +42,13 @@ import java.util.Set;
  */
 public final class TsonApi {
 
-    /** {@code api-1.tn}'s canonical identity. */
-    public static final String SCHEMA_ID = "https://tson.io/2026/32/ltr8/http/api-1.tn";
+    /** The current API-description schema's canonical identity. */
+    public static final String SCHEMA_ID = "https://tson.io/2026/32/ltr8/http/api-2.tn";
 
-    private static final String SOURCE = readResource("/api-1.tn");
+    private static final String SOURCE = readResource("/api-2.tn");
+
+    /** Superseded, still published. {@code api-1.tn} spelled every reference as a (schema, type) pair. */
+    private static final String SUPERSEDED_1 = readResource("/api-1.tn");
 
     private final Api api;
 
@@ -65,28 +73,13 @@ public final class TsonApi {
                             Optional<String> description) {
     }
 
-    /**
-     * One TSON payload: the schema that governs it and the root type within that schema. Both are required for
-     * the reason they are required everywhere else — a schema alone does not say which of its types a document
-     * is, and a bound record writes no type-ref of its own.
-     */
-    @Typename(name = "body")
-    public record Body(String schema, String type, @io.ltr8.annotation.Field("media_type")
-                       Optional<String> mediaType) {
-
-        /** The media type this body is carried as; {@code application/tson} unless stated otherwise. */
-        public String effectiveMediaType() {
-            return mediaType.orElse(TsonMediaType.APPLICATION_TSON.toString());
-        }
-    }
-
     @Typename(name = "response")
-    public record Response(int status, Optional<Body> body, Optional<String> description) {
+    public record Response(int status, Optional<String> body, Optional<String> description) {
     }
 
     @Typename(name = "operation")
     public record Operation(HttpMethod method, String path, Optional<String> summary, List<Parameter> parameters,
-                            Optional<Body> request, List<Response> responses) {
+                            Optional<String> request, List<Response> responses) {
 
         /** This operation's declared response for {@code status}, or empty if it declares none. */
         public Optional<Response> responseFor(int status) {
@@ -95,23 +88,31 @@ public final class TsonApi {
     }
 
     @Typename(name = "api")
-    public record Api(String title, String version, Optional<String> base, List<Operation> operations) {
+    public record Api(String title, String version, Optional<URI> base, List<URI> imports,
+                      List<Operation> operations) {
     }
 
     private static final DataNameBinder BINDER = name -> switch (name) {
         case "api" -> Api.class;
         case "operation" -> Operation.class;
         case "response" -> Response.class;
-        case "body" -> Body.class;
         case "parameter" -> Parameter.class;
         case "parameter_location" -> ParameterLocation.class;
         case "http_method" -> HttpMethod.class;
         default -> SchemaMetaNameBinder.INSTANCE.resolve(name);
     };
 
-    /** {@code api-1.tn}'s own source text, for a server that publishes the schemas it uses. */
+    /** The current schema's own source text, for a server that publishes the schemas it uses. */
     public static String schemaSource() {
         return SOURCE;
+    }
+
+    /**
+     * Every version of the description schema still published, current first. §10 makes a published schema
+     * immutable, so {@code api-1.tn} stays served — a document that named it must go on resolving.
+     */
+    public static List<String> publishedSources() {
+        return List.of(SOURCE, SUPERSEDED_1);
     }
 
     /**
@@ -123,7 +124,9 @@ public final class TsonApi {
     public static TsonApi read(String description) {
         DataBindContext bind =
                 TsonAtomContext.registerDefaults(DataBindContext.builder().nameBinder(BINDER).build());
-        TsonSchemaSource source = uri -> uri.contains("api-1.tn") ? SOURCE
+        // Serves both published versions, so a description naming the superseded one still reads (§10).
+        TsonSchemaSource source = uri -> uri.contains("api-2.tn") ? SOURCE
+                : uri.contains("api-1.tn") ? SUPERSEDED_1
                 : TsonSchemaSource.registeredOnly().fetch(uri);
         Tson tson = Tson.builder().schemaSource(source).dataBindContext(bind).build();
         TsonHttpCodec codec = new TsonHttpCodec(tson);
@@ -149,22 +152,98 @@ public final class TsonApi {
                 .findFirst();
     }
 
-    /**
-     * Every schema identity this description references, from every request and response body, in declaration
-     * order.
-     *
-     * <p>The check worth running against a server: it must publish all of them. A description referencing a
-     * schema its own server does not serve is a contract a client cannot obtain.
-     */
+    /** The schemas this description imports — its whole namespace, and what a server must publish. */
     public Set<String> referencedSchemas() {
-        Set<String> schemas = new LinkedHashSet<>();
+        return api.imports().stream().map(URI::toString)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /** Every type name this description uses, in declaration order, with where it was written. */
+    private Map<String, String> referencedTypes() {
+        Map<String, String> where = new LinkedHashMap<>();
         for (Operation operation : api.operations()) {
-            operation.request().ifPresent(body -> schemas.add(body.schema()));
+            String at = operation.method() + " " + operation.path();
+            operation.request().ifPresent(type -> where.putIfAbsent(type, at + " request"));
+            operation.parameters().forEach(p -> where.putIfAbsent(p.type(), at + " parameter '" + p.name() + "'"));
             for (Response response : operation.responses()) {
-                response.body().ifPresent(body -> schemas.add(body.schema()));
+                response.body().ifPresent(type -> where.putIfAbsent(type, at + " response " + response.status()));
             }
         }
-        return schemas;
+        return where;
+    }
+
+    /**
+     * Resolves every type name this description uses against its own {@code imports}, and reports what does not
+     * resolve.
+     *
+     * <p><b>This is the work the resolver will not do, done here instead.</b> A data document cannot hold a
+     * reference to a type — type names resolve at type-ref positions in a schema and nowhere else — so a
+     * description written as data carries its own import list and its own namespace rule, and a consumer
+     * enforces it. That is the trade: the description is an ordinary document needing nothing new from the type
+     * system, and in exchange the checking is application code.
+     *
+     * <p>The rule mirrors a schema's own, <b>including the part that is easy to get wrong</b>: ambiguity is
+     * judged by the <em>declaration</em>, not by how many imports surface the name. Imports are transitive, so
+     * a schema's entries are its whole merged namespace — importing both {@code problem-2.tn} and something
+     * that imports it surfaces {@code problem} twice from one declaration, which is not a conflict. Counting
+     * occurrences instead is precisely the bug {@code UPSTREAM.md} #11 fixed upstream, and it is just as wrong
+     * here. Two imports declaring genuinely different types under one name is the real conflict.
+     *
+     * @param tson resolves the imported schemas; each is fetched through its own schema source
+     * @return every problem found, empty meaning the description is sound
+     */
+    public List<Diagnostic> validate(Tson tson) {
+        List<Diagnostic> problems = new ArrayList<>();
+        // name -> the distinct declarations found for it, each with the import that surfaced it.
+        Map<String, Map<Declaration, String>> declaredBy = new LinkedHashMap<>();
+
+        for (URI importedUri : api.imports()) {
+            String imported = importedUri.toString();
+            try {
+                // resolveLinked fetches, resolves, links and registers if it is not already -- so an
+                // import is loaded through whatever schema source this Tson was built with, the same way a
+                // schema's own !!import would be.
+                tson.loader().resolveLinked(imported).schema().entries().forEach((name, definition) ->
+                        declaredBy.computeIfAbsent(name, k -> new LinkedHashMap<>())
+                                .putIfAbsent(Declaration.of(definition), imported));
+            } catch (RuntimeException unloadable) {
+                problems.add(Diagnostic.ofSchemaError(imported, "",
+                        "this description imports '" + imported + "', which cannot be loaded: "
+                                + unloadable.getMessage(), Optional.empty()));
+            }
+        }
+
+        referencedTypes().forEach((type, at) -> {
+            Map<Declaration, String> declarations = declaredBy.getOrDefault(type, Map.of());
+            if (declarations.isEmpty()) {
+                problems.add(Diagnostic.ofSchemaError(SCHEMA_ID, "", at + " names type '" + type
+                        + "', which none of this description's imports declares", Optional.empty()));
+            } else if (declarations.size() > 1) {
+                problems.add(Diagnostic.ofSchemaError(SCHEMA_ID, "", at + " names type '" + type
+                        + "', which more than one import declares differently: "
+                        + List.copyOf(declarations.values()), Optional.empty()));
+            }
+        });
+        return List.copyOf(problems);
+    }
+
+    /**
+     * What a name was <em>declared</em> as, for deciding whether two imports mean the same type.
+     *
+     * <p><b>The whole {@code TypeDefinition} will not do</b>, and finding out cost a debugging cycle. Imports
+     * are transitive, so one declaration is reached by several routes — and the copies are not equal, because
+     * linking credits each route's own {@code subtypes}. {@code problem} seen through {@code orders-errors-1.tn}
+     * has {@code sku_not_found} among its subtypes; seen directly through {@code problem-2.tn} it has none.
+     * Comparing the definitions would call that a conflict, which is the occurrence-counting mistake in a new
+     * costume.
+     *
+     * <p>So this compares the authored declaration and leaves out what linking derived.
+     */
+    private record Declaration(io.ltr8.tson.schema.meta.TypeKind kind, Object body) {
+
+        static Declaration of(TypeDefinition definition) {
+            return new Declaration(definition.kind(), definition.body());
+        }
     }
 
     private static String readResource(String path) {

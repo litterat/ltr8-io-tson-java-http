@@ -76,19 +76,20 @@ public final class OrderServer {
             !api {
                 title: "Orders"
                 version: "1"
+                imports: [ "%s"  "%s"  "%s" ]
                 operations: [
                     !operation {
                         method: POST
                         path: "/orders"
                         summary: "Accept an order and confirm it with the quantity doubled"
                         parameters: []
-                        request: !body { schema: "%s"  type: "order" }
+                        request: "order"
                         responses: [
-                            !response { status: 201  body: !body { schema: "%s"  type: "order" }
+                            !response { status: 201  body: "order"
                                         description: "The confirmed order" }
-                            !response { status: 400  body: !body { schema: "%s"  type: "problem" }
+                            !response { status: 400  body: "problem"
                                         description: "The body is not a valid order" }
-                            !response { status: 404  body: !body { schema: "%s"  type: "sku_not_found" }
+                            !response { status: 404  body: "sku_not_found"
                                         description: "The order names a SKU this service does not stock" }
                         ]
                     }
@@ -101,14 +102,13 @@ public final class OrderServer {
                                          description: "The path component of the schema's own !!id" }
                         ]
                         responses: [
-                            !response { status: 200  description: "The schema document" }
-                            !response { status: 404  body: !body { schema: "%s"  type: "problem" }
+                            !response { status: 200  description: "The schema document, served as bytes" }
+                            !response { status: 404  body: "problem"
                                         description: "No schema is published there" }
                         ]
                     }
                 ]
-            }""".formatted(TsonApi.SCHEMA_ID, SCHEMA_ID, SCHEMA_ID, TsonProblemSchema.ID, ERRORS_ID,
-                    TsonProblemSchema.ID);
+            }""".formatted(TsonApi.SCHEMA_ID, SCHEMA_ID, ERRORS_ID, TsonProblemSchema.ID);
 
     /** The one SKU this demo does not stock, so the business-error path is reachable by hand. */
     public static final String UNSTOCKED_SKU = "GONE-1";
@@ -207,7 +207,7 @@ public final class OrderServer {
         published.add(SCHEMA);
         published.add(ERRORS);
         published.addAll(TsonProblemSchema.publishedSources());
-        published.add(TsonApi.schemaSource());
+        published.addAll(TsonApi.publishedSources());
         return TsonSchemaCatalog.of(published);
     }
 

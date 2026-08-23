@@ -1,0 +1,91 @@
+!!id:"https://tson.io/2026/32/ltr8/http/api-2.tn"
+!!meta:"https://tson.io/2026/32/m/meta.tn"
+!!import:"https://tson.io/2026/32/m/core.tn"
+@doc:"""
+  A description of an HTTP API whose payloads are TSON documents. A DATA document governed by this
+  schema, not a schema of its own -- so a description is written, published and versioned like any
+  other document, and needs nothing of the type system that is not already there.
+
+  WHY THE TYPE NAMES ARE BARE, AND WHOSE JOB IT IS TO CHECK THEM.
+
+  A data document cannot hold a reference to a type. Type-name resolution happens at type-ref
+  positions in a SCHEMA document and nowhere else, so a name written here is an inert token as far
+  as the resolver is concerned -- see SCHEMA-HEADER.md and sketch/README.md for the long form. That
+  is not a defect to design around; it is the layering.
+
+  So this document carries its own import list and its own namespace rule, and TsonApi resolves type
+  names against it -- the same shape as a schema's !!import, one layer down and enforced by a
+  consumer instead of by the resolver:
+
+    - `imports` names the schemas whose types this API may reference.
+    - A type name is bare and is resolved against those imports, in the order given.
+    - A name declared by two different imports is ambiguous, and is an error naming both.
+    - A name no import declares is an error naming what the imports do declare.
+
+  api-1.tn spelled every reference as { schema: uri  type: text } -- the pair repeated at every
+  payload, and never checked. This carries the schema list once and checks the names. What it cannot
+  do is have the resolver check them, which is what sketch/ is about.
+  """
+{
+  http_method => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
+
+  parameter_location => !enum [PATH QUERY HEADER]
+
+  @doc:"Refined, so 42 is not a status."
+  status_code => !integer ^ { min: 100  max: 599 }
+
+  @doc:"""
+    A type this API references, named bare and resolved against the document's own `imports`.
+
+    Not a (schema, type) pair: carrying the schema at every use site is what api-1.tn did, and it
+    repeats information the import list already holds while still checking nothing.
+    """
+  type_name => !text ^ { min_length: 1 }
+
+  @doc:"""
+    A parameter carried outside the body. `type` names a scalar -- a URL segment cannot carry a
+    record -- which TsonApi checks along with everything else, since nothing else will.
+    """
+  parameter => {
+    name:        type_name
+    in:          parameter_location
+    type:        type_name
+    required:    boolean
+    description: text?
+  }
+
+  @doc:"`body` is absent for a response that carries none: a 204, or a document served as bytes."
+  response => {
+    status:      status_code
+    body:        type_name?
+    description: text?
+  }
+
+  @doc:"""
+    `path` is a template: a braced segment names a PATH parameter, as in /orders/{id}. A server may
+    route however it likes; this states the shape a client should expect.
+    """
+  operation => {
+    method:      http_method
+    path:        text
+    summary:     text?
+    parameters:  [parameter]
+    request:     type_name?
+    responses:   [response]
+  }
+
+  @doc:"""
+    `imports` is this document's own namespace, and the reason type names can be bare. It is a list
+    of schema identities, resolved in order, exactly as a schema's own !!import list is.
+
+    `base` is where the API is served, absent when that is not fixed -- a description is about a
+    contract, not a deployment.
+    """
+  api => {
+    title:      text
+    version:    text
+    base:       uri?
+    imports:    [uri]
+    operations: [operation]
+  }
+}

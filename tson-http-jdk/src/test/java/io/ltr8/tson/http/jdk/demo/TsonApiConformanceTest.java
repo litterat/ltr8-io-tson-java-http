@@ -73,22 +73,42 @@ class TsonApiConformanceTest {
     }
 
     /** The description resolves against api-1.tn and says what it should — it is a validated document. */
+    /**
+     * The description's own type names resolve against its own imports — the check the resolver will not do,
+     * done by {@link TsonApi#validate}. A server publishing a description whose names do not resolve is
+     * publishing a contract nobody can act on.
+     */
+    @Test
+    void theDescriptionsOwnTypeNamesResolve() throws Exception {
+        io.ltr8.tson.Tson tson = io.ltr8.tson.Tson.builder()
+                .schemaSource(uri -> {
+                    try {
+                        return get(java.net.URI.create(uri).getPath()).body();
+                    } catch (Exception e) {
+                        throw new IllegalStateException(uri, e);
+                    }
+                })
+                .build();
+        assertEquals(java.util.List.of(), api.validate(tson),
+                "the published description must resolve against the schemas the same server publishes");
+    }
+
     @Test
     void theServerPublishesADescriptionOfItself() {
         assertEquals("Orders", api.api().title());
         assertEquals(2, api.operations().size());
         TsonApi.Operation post = api.operation(TsonApi.HttpMethod.POST, "/orders").orElseThrow();
-        assertEquals(OrderServer.SCHEMA_ID, post.request().orElseThrow().schema());
-        assertEquals("order", post.request().orElseThrow().type());
+        assertEquals("order", post.request().orElseThrow());
+        assertTrue(api.referencedSchemas().contains(OrderServer.SCHEMA_ID), api.referencedSchemas().toString());
     }
 
     /**
-     * A description referencing a schema its own server does not publish is a contract a client cannot obtain.
-     * Derived entirely from the description, so a new operation is covered the moment it is declared.
+     * A description importing a schema its own server does not publish is a contract a client cannot obtain.
+     * Derived entirely from the description, so a new import is covered the moment it is declared.
      */
     @Test
     void everySchemaTheDescriptionReferencesIsPublished() throws Exception {
-        assertTrue(api.referencedSchemas().size() >= 3, "expected order, problem and the error schema");
+        assertTrue(api.referencedSchemas().size() >= 2, "expected the order and error schemas");
         for (String schema : api.referencedSchemas()) {
             String path = URI.create(schema).getPath();
             HttpResponse<String> response = get(path);
@@ -135,17 +155,20 @@ class TsonApiConformanceTest {
                 () -> new AssertionError(operation.method() + " " + operation.path() + " answered "
                         + response.statusCode() + ", which its description does not declare"));
 
-        Optional<TsonApi.Body> body = declared.body();
-        if (body.isEmpty()) {
+        Optional<String> type = declared.body();
+        if (type.isEmpty()) {
             return;
         }
+        // The declared body is a bare type name now, resolved against the description's imports -- so the
+        // response must carry that type-ref, and name a schema the description actually imports.
+        assertTrue(response.body().contains("!" + type.get() + " "),
+                () -> "the " + response.statusCode() + " body is not a " + type.get() + ": " + response.body());
+
         TsonDocumentPeek peek = TsonDocumentPeek.of(
                 new ByteArrayInputStream(response.body().getBytes(StandardCharsets.UTF_8)));
-        assertEquals(Optional.of(body.get().schema()), peek.schema(),
-                () -> "the " + response.statusCode() + " body names a different schema than declared: "
-                        + response.body());
-        assertTrue(response.body().contains("!" + body.get().type() + " "),
-                () -> "the " + response.statusCode() + " body is not a " + body.get().type() + ": "
-                        + response.body());
+        assertTrue(peek.schema().isPresent(), () -> "a self-describing body: " + response.body());
+        assertTrue(api.referencedSchemas().contains(peek.schema().get()),
+                () -> "the " + response.statusCode() + " body names " + peek.schema().get()
+                        + ", which the description does not import: " + api.referencedSchemas());
     }
 }
