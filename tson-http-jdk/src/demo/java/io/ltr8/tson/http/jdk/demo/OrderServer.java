@@ -71,10 +71,10 @@ public final class OrderServer {
             }""";
 
     /** A description of this service, governed by api-1.tn -- published, and checked by a conformance test. */
-    public static final String API_ID = "https://schemas.example.com/2026/32/app/orders-api-1.tn";
+    public static final String API_ID = "https://schemas.example.com/2026/32/app/orders-api-4.tn";
 
     public static final String API = """
-            !!id:"https://schemas.example.com/2026/32/app/orders-api-1.tn"
+            !!id:"https://schemas.example.com/2026/32/app/orders-api-4.tn"
             !!schema:"%s"
             !api {
                 title: "Orders"
@@ -189,7 +189,7 @@ public final class OrderServer {
         // and the one in an error body -- something a client can actually dereference.
         // The description is a data document, not a schema, so it is not in the schema catalog -- but it has
         // an identity like everything else here, and is served at that identity's path.
-        server.createContext("/2026/32/app/orders-api-1.tn", TsonHandler.asHttpHandler(codec, exchange -> {
+        server.createContext("/2026/32/app/orders-api-4.tn", TsonHandler.asHttpHandler(codec, exchange -> {
             exchange.requireMethod("GET", "HEAD");
             exchange.respondBytes(200, API.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         }));

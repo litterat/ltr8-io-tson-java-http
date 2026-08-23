@@ -233,6 +233,41 @@ class SketchTest {
                 () -> "expected an unresolved-reference error, got " + problems);
     }
 
+    // ── the fourth design: the API as a data document, with resolution done here ──
+
+    /**
+     * {@code orders-api-4.tn} is the only one of the four that ships — it is a <em>data</em> document, governed
+     * by {@code api-2.tn}, so it needs nothing of the type system the others need. This asserts both halves:
+     * that it reads (the schema accepts its shape) and that its bare type names resolve against its own
+     * {@code imports} (the check {@link TsonApi#validate} does, because the resolver will not).
+     */
+    @Test
+    void theDataDescriptionReadsAndItsNamesResolve() throws Exception {
+        TsonApi api = TsonApi.read(sketch("orders-api-4.tn"));
+
+        assertEquals("Orders", api.api().title());
+        assertEquals(2, api.operations().size());
+        assertEquals(3, api.referencedSchemas().size());
+
+        Tson tson = Tson.builder().schemaSource(ordersLibrary()::get).build();
+        assertEquals(List.of(), api.validate(tson),
+                "every type name must resolve against the description's own imports");
+    }
+
+    /** And the check has teeth: a name no import declares is reported, with where it was written. */
+    @Test
+    void aTypoInTheDataDescriptionIsReported() throws Exception {
+        TsonApi api = TsonApi.read(sketch("orders-api-4.tn").replace("body: \"sku_not_found\"",
+                "body: \"sku_not_fund\""));
+
+        var problems = api.validate(Tson.builder().schemaSource(ordersLibrary()::get).build());
+
+        assertEquals(1, problems.size(), problems::toString);
+        assertTrue(problems.getFirst().message().contains("sku_not_fund"), problems.getFirst().message());
+        assertTrue(problems.getFirst().message().contains("POST /orders response 404"),
+                () -> "and says where: " + problems.getFirst().message());
+    }
+
     // ── the design that is blocked: an `operation` type constructor in a meta layer ──
 
     /**

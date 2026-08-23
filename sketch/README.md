@@ -2,15 +2,23 @@
 
 ## The files
 
-| File | What |
-|---|---|
-| `orders-api-3.tn` | **Read this first.** The API, in an ordinary schema. Imports the four below. |
-| `http-api-1.tn` | Reusable vocabulary: the enums, the `response`/`page` templates, the `operation` base. |
-| `order-1.tn` | The domain types. Versions independently of the API that exposes them. |
-| `orders-errors-1.tn` | Business errors, composing `problem` from the shipping `problem-2.tn`. |
-| `orders-api-2.tn` + `meta-http-2.tn` | The annotation design: operations as `top &`, metadata on annotations. |
-| `orders-api-1.tn` + `meta-http-1.tn` | The constructor design. Blocked; see below. |
-| `meta-http-3.tn` | A leaner `operation` — four fields, `type_name`, one response. Resolves; same blocker. |
+**Three of the four are schemas; one is a data document.** That is the whole story in one line — a description
+that *references* types must be a schema, because only a schema can name a type. The data one names them as
+strings and checks them itself.
+
+| File | Kind | What |
+|---|---|---|
+| `orders-api-3.tn` | schema | **Read this first.** The API in an ordinary schema. Imports the four below. |
+| `orders-api-4.tn` | **data** | The same API as a data document, governed by `api-2.tn`. **The only one that ships.** |
+| `http-api-1.tn` | schema | Reusable vocabulary: the enums, the `response`/`page` templates, the `operation` base. |
+| `order-1.tn` | schema | The domain types. Versions independently of the API that exposes them. |
+| `orders-errors-1.tn` | schema | Business errors, composing `problem` from the shipping `problem-2.tn`. |
+| `orders-api-2.tn` + `meta-http-2.tn` | schema | The annotation design: operations as `top &`, metadata on annotations. |
+| `orders-api-1.tn` + `meta-http-1.tn` | schema | The constructor design. Blocked; see below. |
+| `meta-http-3.tn` | schema | A leaner `operation` — four fields, `type_name`, one response. Resolves; same blocker. |
+
+`orders-api-4.tn`'s governing schema is `tson-http/src/main/resources/api-2.tn`, not copied here — it ships,
+and a copy would drift.
 
 
 **Three designs, in increasing order of how little they need.** Nothing here ships. `SketchTest` holds each to
@@ -69,6 +77,43 @@ type, it needs a *(schema identity, root type name)* pair: `describing(schemaUri
 `readObjectAs(schemaUri, typeName, class)`, the `TSON-Schema` header plus a route-supplied type. That pair is
 not a design choice — it is the data layer's only way to point at a type, given it cannot reference one. Two
 strings, reassembled by hand at every call site, because the thing they name is out of reach.
+
+## The fourth design: the API as data, checking its own names
+
+`orders-api-4.tn`. A **data** document — `!!schema`, not `!!meta` — so it is written, published and versioned
+like any other document and needs nothing of the type system the other three need. It is the only one of the
+four that ships.
+
+```tson
+!api {
+  imports: [ ".../order-1.tn"  ".../orders-errors-1.tn"  ".../problem-2.tn" ]
+  operations: [
+    !operation { method: POST  path: "/orders"  request: "order"
+                 responses: [ !response { status: 201  body: "order" }
+                              !response { status: 404  body: "sku_not_found" } ] } ]
+}
+```
+
+**The names are strings, and no care taken in that file changes it.** A data document cannot hold a reference
+to a type. So the document carries its own `imports` list and its own namespace rule — the same shape as a
+schema's `!!import`, one layer down — and `TsonApi.validate` resolves the names against it, reporting a name no
+import declares, or one two imports declare *differently*, along with where it was written.
+
+**What it costs, plainly.** A typo is caught when someone calls `validate`. In `orders-api-3.tn` — the same
+service as a schema — a typo means the schema *fails to load*. Weaker, bought much more cheaply, and available
+today, which the other three are not.
+
+**Two traps in writing that namespace rule**, both of which this project fell into and both now in `CLAUDE.md`.
+Judging ambiguity by how many imports surface a name is `UPSTREAM.md` #11's occurrence-counting bug rewritten
+from scratch — imports are transitive, so one declaration arrives by several routes. And comparing the
+`TypeDefinition`s instead does not work either, because linking credits each route's own `subtypes`: `problem`
+seen through `orders-errors-1.tn` carries `sku_not_found` where the direct route carries none. Compare the
+authored declaration — kind and body — and leave out what linking derived.
+
+**Why the file carries no prose.** It cannot. TSON has no comment syntax, and an annotation before the root
+type-ref stops the reader seeing the type-ref (`UPSTREAM.md` #16) — so a schema-governed data document cannot
+document itself. Every other file here explains itself in a `@doc`; this one has to be explained from outside.
+That asymmetry is not a stylistic choice, and it is worth noticing when weighing the designs.
 
 ## The problem with `api-1.tn`, which does ship
 

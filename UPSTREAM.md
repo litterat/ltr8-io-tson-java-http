@@ -470,6 +470,49 @@ declaration this matters for.
 
 ---
 
+## 16. An annotation before a root type-ref hides it, so a data document cannot be documented
+
+**Hit:** writing the API description in `sketch/orders-api-4.tn` with a `@doc` explaining itself, as every
+schema in that directory does.
+
+```
+!!schema:"…/api-2.tn"
+@doc:"why this document exists"
+!api { … }
+```
+
+```
+data declares a !!schema but has no root type-ref (e.g. `!person`) to select a type
+```
+
+The type-ref is right there. The root-type-ref lookup does not look past annotations, single-line or
+multi-line, and the error blames the wrong thing — it reports the type-ref as absent rather than the annotation
+as unexpected, so the author's first instinct is to add a type-ref that is already present.
+
+§3.3 reads the other way: *"Directives precede annotations in the grammar; augmentation attaches to the value
+that follows it."* So `@doc:"…" !api { … }` is an annotation and a type annotation both attaching to the same
+value, and the root type-ref is `!api`.
+
+Putting it after the type-ref is a parse error, so there is no spelling that works:
+
+```
+!api @doc:"why" { … }    →    expected a value …, found '@'
+```
+
+**The consequence is larger than it looks.** TSON has no comment syntax (§2.4, deliberately), so an annotation
+is the *only* way to put prose in a document. A schema-governed data document therefore cannot be
+self-documenting at all — which is a real gap for exactly the documents most likely to want it: configuration,
+API descriptions, fixtures.
+
+**Workaround:** none in the document. `sketch/orders-api-4.tn` carries no prose and is explained in
+`sketch/README.md` instead, which is the thing this finding is about.
+
+**Change:** skip annotations when looking for the root type-ref, matching §3.3's own ordering. Failing that, at
+minimum say what is actually wrong — an annotation here is not supported — rather than reporting a type-ref
+that is present as missing.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off.

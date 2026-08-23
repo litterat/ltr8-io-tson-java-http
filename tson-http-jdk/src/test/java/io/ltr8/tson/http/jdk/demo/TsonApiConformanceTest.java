@@ -45,7 +45,7 @@ class TsonApiConformanceTest {
         base = "http://127.0.0.1:" + server.getAddress().getPort();
         client = HttpClient.newHttpClient();
         // Fetched over HTTP, not read from the constant: if it is not published, there is no description.
-        api = TsonApi.read(get("/2026/32/app/orders-api-1.tn").body());
+        api = TsonApi.read(get("/2026/32/app/orders-api-4.tn").body());
     }
 
     @AfterEach

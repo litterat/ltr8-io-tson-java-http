@@ -68,10 +68,10 @@ public final class OrderServer {
             }""";
 
     /** A description of this service, governed by api-1.tn -- published, and checked by a conformance test. */
-    public static final String API_ID = "https://schemas.example.com/2026/32/app/orders-api-1.tn";
+    public static final String API_ID = "https://schemas.example.com/2026/32/app/orders-api-4.tn";
 
     public static final String API = """
-            !!id:"https://schemas.example.com/2026/32/app/orders-api-1.tn"
+            !!id:"https://schemas.example.com/2026/32/app/orders-api-4.tn"
             !!schema:"%s"
             !api {
                 title: "Orders"
@@ -188,7 +188,7 @@ public final class OrderServer {
         // across them. Publishing at the identity path is what makes a !!schema URL dereferenceable.
         // The description is a data document, not a schema, so it is served on its own route rather than
         // through the schema catalog -- at its identity's path, like everything else here.
-        app.get("/2026/32/app/orders-api-1.tn", TsonHandler.asHandler(codec, tsonContext ->
+        app.get("/2026/32/app/orders-api-4.tn", TsonHandler.asHandler(codec, tsonContext ->
                 tsonContext.respondBytes(200, API.getBytes(java.nio.charset.StandardCharsets.UTF_8))));
 
         app.get("/<path>", TsonHandler.asHandler(codec,
