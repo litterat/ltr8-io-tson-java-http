@@ -499,6 +499,80 @@ is now a design choice rather than a missing feature; see below.
 ~~A schema could reference types from only one other schema~~ — `UPSTREAM.md` #11, **fixed and merged**. This
 schema now gets past it, and `SketchTest` drives the real file rather than a trimmed stand-in.
 
+## Do templates work in the schema model?
+
+**Yes, and the finding is sharper than expected.** `SketchTest` pins it.
+
+`orders-api-1.tn` now declares `page => <T> { items: [T]  next: uri?  total: int32 }` and an operation
+returns a page of orders. Resolved output shows the whole mechanism working: `order_page` is a REFERENCE to
+an entry the application materialised, and *that* entry carries `page<order>` in its `source` — which is what
+§8.2 makes structural identity out of, so two endpoints returning a page of orders share one entry. This is
+the envelope OpenAPI hand-rolls per endpoint or bolts on with `allOf`, written once.
+
+**The one wrinkle: an operation cannot apply a template with the `<...>` sugar.** `body: page<order>` inside
+an `!operation { … }` payload is a **parse** error — *"adjacent values must be separated by whitespace, a
+comma, or both"* — not a resolution error, and that distinction is the whole explanation. `page<order>` is
+*schema* syntax; an `!operation` payload is *data*, where a `type_ref` slot takes §5.6's positional form. The
+kernel says so in as many words: *"a bare name token fills `name` directly, and a braced record is the
+explicit form, canonical only when `arguments` is present."*
+
+So there are two spellings, both checked, and the sketch shows the first:
+
+| | Spelling | Diagnostic for a bad argument |
+|---|---|---|
+| **Named application** | `order_page => page<order>` then `body: order_page` | names the synthetic entry the template materialised — `'array_no_such_…' element_type has an unresolved reference 'no_such'` |
+| **Inline, explicit form** | `body: { name: page  arguments: [ { name: order } ] }` | names the operation — `'list_orders' (!operation) has an unresolved reference 'no_such'` |
+
+Neither is wrong. The named form reads better, gives the application an identity, and is what
+`orders-api-1.tn` uses; the inline form gives the better message. Worth knowing that the ergonomic loss
+against a schema-native design is exactly one line per distinct application, and that it is by design rather
+than a gap — see the spec-feedback note in `UPSTREAM.md` on whether the sugar should reach data position.
+
+## Does meta-http capture OpenAPI's capabilities?
+
+Its **core**, yes — and the part OpenAPI mostly *is*, it replaces rather than reproduces. Around the edges,
+no, and the omissions divide into three kinds that should not be confused.
+
+**Covered, or done better:**
+
+| OpenAPI | here |
+|---|---|
+| `paths` → `pathItem` → method | `path` and `method` as fields on one flat `operation`. Flat suits templating; nesting bought OpenAPI nothing |
+| `operationId` | **the entry name** — and unlike OpenAPI's free-form string it lives in a namespace with a collision rule, so two operations cannot quietly share one |
+| `components.schemas` (embedded JSON Schema) | **referenced by `!!id`, not embedded.** The whole thesis: TSON already has published, identity-addressed, immutable schemas |
+| `allOf`-style envelopes, repeated per endpoint | `page<T>`, applied — with structural identity and schema-wide dedup |
+| `requestBody.content.schema` | `request: type_ref?` |
+| `responses` | `[response]` of `status` + `body` |
+| `parameters` (name, in, required, schema) | `parameter`, minus `cookie` |
+| version and identity of the description itself | `!!id` plus §10 immutability — OpenAPI has `info.version` and no notion of a document identity |
+
+**Absent, but only because nobody added the field.** Probes confirm the meta layer accepts the shapes:
+optional scalars (`summary: text?`, `deprecated: boolean?`), map-typed slots (`content: {text => type_ref}`),
+and a `~data &` constructor nested inside another all declare cleanly. So `summary`, `description`,
+`deprecated`, `tags`, `externalDocs`, `servers`, response `headers`, and a request body's `required` are
+additions, not obstacles. Two are live regressions against the data design, which *does* carry them:
+`api-2.tn` has `summary` on an operation and `description` on a response, and `meta-http-1.tn` has neither.
+
+**Genuinely harder, and worth being honest about:**
+
+- **Media-type negotiation.** OpenAPI's `content: {mediaType: {schema}}` is its answer to one operation
+  serving JSON and XML. Everything here assumes one media type, which is TSON's premise, not an oversight —
+  but a description that cannot say "this endpoint also serves `image/png`" is not a general API description.
+  The slot declares fine; what to put in it when the payload is not TSON is the open question.
+- **Security schemes.** A whole sub-vocabulary — `apiKey`/`http`/`oauth2`/`openIdConnect` with flows and
+  scopes. Nothing blocks it; it is simply large, and it is the omission most likely to disqualify this for a
+  real service.
+- **Parameter serialisation** (`style`, `explode`, `allowReserved`) and **path/parameter agreement**. Nothing
+  checks that `/{schemaPath}` has a matching declared parameter — `api-2.tn` has the same gap, and it is not
+  a check the type system can express, since it compares a `text` field's *contents* against a list.
+- **`examples`** are an opportunity rather than a gap. An OpenAPI example is an untyped blob; here it would
+  be a real value of the referenced type, checkable against it. Nothing has tried this.
+
+**The honest summary:** meta-http covers what an API description is *for* — which endpoint, which method,
+which payload types — and replaces OpenAPI's largest component with a reference. What it does not yet cover
+is most of what makes OpenAPI a specification rather than a sketch, and `security` is the gap that matters.
+
+
 ## Which to adopt
 
 Both blockers are gone (`UPSTREAM.md` #15 and #17), so this is now a design choice rather than a wait.

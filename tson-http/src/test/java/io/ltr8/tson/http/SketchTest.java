@@ -453,6 +453,76 @@ class SketchTest {
         assertTrue(refused("method:     POST", "methd:     POST").contains("methd"));
     }
 
+    // ── templates, in the schema model ──
+
+    /**
+     * <b>Templates work, and an operation references an application by name.</b> `page<order>` is written
+     * once and applied, where OpenAPI hand-rolls the envelope per endpoint or bolts it on with `allOf`.
+     * The application is a real entry with structural identity (§8.2), so two endpoints returning a page of
+     * orders share one.
+     */
+    @Test
+    void anOperationReferencesATemplateApplication() throws Exception {
+        Tson tson = api(apiLib(sketch("orders-api-1.tn")));
+        tson.resolve(sketch("orders-api-1.tn"));
+        var entries = tson.schemaRegistry().get(API_ID).orElseThrow().schema().entries();
+
+        Operation list = assertInstanceOf(Operation.class, entries.get("list_orders").body());
+        assertEquals(Optional.of(TypeRef.of("order_page")), list.responseFor(200).orElseThrow().body());
+        // `order_page` is a REFERENCE to the entry the application materialised; that entry carries the
+        // applied form in its `source`, which is what §8.2 makes identity out of.
+        TypeDefinition alias = entries.get("order_page");
+        assertEquals(TypeKind.REFERENCE, alias.kind());
+        String materialised = alias.source().orElseThrow().name();
+        TypeRef applied = entries.get(materialised).source().orElseThrow();
+        assertEquals("page", applied.name());
+        assertEquals(1, applied.arguments().size(), "page<order> -- one argument, recorded structurally");
+    }
+
+    /**
+     * <b>Applying one inline needs the braced form, and that is by design rather than a gap.</b>
+     * {@code page<order>} is <em>schema</em> syntax and an {@code !operation} payload is <em>data</em>, where
+     * a {@code type_ref} slot takes §5.6's positional form: a bare token when there are no arguments, a
+     * braced record when there are. The kernel says so in as many words -- <em>"a braced record is the
+     * explicit form, canonical only when `arguments` is present"</em>. Writing the sugar in a payload is a
+     * parse error, not a resolution one.
+     */
+    @Test
+    void aTemplateAppliedInlineNeedsTheBracedFormAndIsStillChecked() throws Exception {
+        String inline = sketch("orders-api-1.tn").replace("body: order_page",
+                "body: { name: page  arguments: [ { name: order } ] }");
+        Map<String, String> lib = apiLib(inline);
+        Tson tson = api(lib);
+        tson.resolve(inline);
+
+        Operation list = assertInstanceOf(Operation.class, tson.schemaRegistry().get(API_ID).orElseThrow()
+                .schema().entries().get("list_orders").body());
+        TypeRef body = list.responseFor(200).orElseThrow().body().orElseThrow();
+        assertEquals("page", body.name());
+        assertEquals(1, body.arguments().size(), "the argument survives into the bound record");
+
+        // And the sugar in the same position is refused by the parser, before resolution is reached.
+        assertTrue(refused("body: order_page", "body: page<order>")
+                .contains("adjacent values must be separated"));
+    }
+
+    /**
+     * A bad template argument is caught either way, but the two spellings report it differently -- the
+     * inline one names the operation, the named application names the entry the template materialised.
+     */
+    @Test
+    void aBadTemplateArgumentIsCaughtInBothSpellings() throws Exception {
+        assertTrue(refused("page<order>", "page<no_such>").contains("unresolved reference 'no_such'"));
+
+        String inline = sketch("orders-api-1.tn").replace("body: order_page",
+                "body: { name: page  arguments: [ { name: no_such } ] }");
+        Map<String, String> lib = apiLib(inline);
+        String message = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> api(lib).resolve(inline)).getMessage();
+        assertTrue(message.contains("unresolved reference 'no_such'"), message);
+        assertTrue(message.contains("list_orders"), "the inline form names the operation: " + message);
+    }
+
     /**
      * <b>And an operation cannot be used where a type belongs.</b> That is what the {@code data} kind buys
      * beyond registration: against a kernel without it the misuse links, and fails only when some document

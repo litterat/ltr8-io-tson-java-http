@@ -637,6 +637,45 @@ a consumer that observes both MUST report an error rather than choosing between 
 naming different schemas is the same situation, and silent precedence is how a document gets validated against
 a schema nobody intended.
 
+### To file: no shorthand for a template application at a `type_ref` slot in data ([TSON-SCHEMA] §5.6, §8.1)
+
+The meta-kernel's `type_ref` is explicit and the implementation matches it: at a `type_ref`-typed slot, a bare
+token fills `name`, and *"a braced record is the explicit form, canonical only when `arguments` is present."*
+So a schema can write `page<order>`, but a **data** payload at a `type_ref` slot — an `!operation { … }`
+governed by a consumer's meta layer — must write
+
+```tson
+body: { name: page  arguments: [ { name: order } ] }
+```
+
+because `page<order>` in that position is a *parse* error (`adjacent values must be separated by whitespace,
+a comma, or both`), the `<` never being data syntax. Measured, and both spellings resolve and are checked;
+`SketchTest` pins them.
+
+**This is by design and the spec is not wrong.** What is worth raising is whether the design is intended to
+cost this much at the one place it now shows up. §5.6's positional form was written for the argument-free
+case, and the `data` base kind has since created a class of documents — data-in-a-schema, describing types —
+where the *with-arguments* case is routine rather than exotic. An API description applying `page<order>` at
+four endpoints writes the braced form four times, or names four aliases.
+
+Three ways it could go, in preference order:
+
+1. **Leave it, and say so.** Add a sentence to §8.1 noting that the sugar is schema-syntax only, so a
+   data-position reference with arguments uses the explicit record. Costs nothing and stops the next
+   implementer discovering it by parse error, which is how it was found here.
+2. **Recommend the alias.** `order_page => page<order>` is one line, reads better than either alternative,
+   and gives the application an identity. This is what the sketch does. If it is the intended answer, §8.2
+   is the place to say so.
+3. **Extend the sugar to data position.** Real ergonomics, and a real cost: `<` becomes meaningful in data,
+   at exactly one slot type, decided by the governing schema. Probably not worth it — noted for completeness
+   rather than recommended.
+
+One concrete diagnostic point regardless of which: a bad argument in the **alias** form is reported against
+the entry the template materialised (`'array_no_such_eb84587b' element_type has an unresolved reference
+'no_such'`), where the inline form names the operation. If (2) is the recommended spelling, that message is
+the one to improve — the author wrote `order_page => page<no_such>` and is shown a synthetic name they have
+never seen.
+
 ### Not to file
 
 §7.1's media-type prose is implemented (`TsonMediaType`, `TsonAcceptHeader`) and held up: `application/tson`,
