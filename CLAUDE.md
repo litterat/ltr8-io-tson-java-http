@@ -418,19 +418,34 @@ handler can classify from the opening bytes without a full parse.
 **Use the `.tn` extension, not `.tn1`**, matching tson-java: `.tn1` is a stability claim §7.1 reserves for
 a frozen "TSON version 1" that hasn't happened (tson-java's `SPEC-FEEDBACK.md` #20).
 
-**Superseded schemas stay published.** §10 makes a published schema immutable, so `problem-1.tn` and
-`problem-2.tn` are still served alongside `problem-3.tn` — a document that named the old one must go on resolving, even though nothing
-new is written against it. `TsonProblemSchema.publishedSources()` returns the whole history and the demos
-publish all of it; `publishedById()` is the same history keyed by identity, for a test or a caller wiring a
-schema source by hand. When bumping a schema here, add the new version and keep serving the old, never edit —
-and remember that **a hand-wired source serving the current text at a superseded URI fails as an "identity
-mismatch" from the loader**, a long way from the map that was wrong. Adding an enum member is a shape change:
-`NOT_IMPLEMENTED` is why `problem-3.tn` exists.
+**Immutability binds a *published* schema, and nothing here is published yet.** §10 makes a schema immutable
+once it is available for someone else to pin — that is what the rule protects: a document that named it must
+go on resolving. Until this project is released, **edit the file in place and do not bump the version.** There
+is no consumer holding `problem-3.tn` and no document in the wild naming it; a new version under those
+conditions buys nothing and costs a sweep of every import, demo and test that names it.
+
+This was learned the expensive way: `problem-1.tn` through `problem-4.tn` exist because each new
+`Diagnostic.Code` member was treated as a §10 shape change. It is a shape change — but the rule only starts
+applying at release. Once this **is** published, the rule is the real one: a shape change is a new name, never
+an in-place edit, and the superseded document stays served.
+
+**When that time comes**, the machinery is already here. `TsonProblemSchema.publishedSources()` returns the
+whole history and the demos publish all of it; `publishedById()` is the same history keyed by identity, for a
+test or a caller wiring a schema source by hand. Two traps that bit during the bumps above:
+
+- **A hand-wired source serving the current text at a superseded URI fails as an "identity mismatch"** from
+  the loader — a long way from the map that was actually wrong. Use `publishedById()`.
+- **Don't restate the current version in a document that could interpolate it.** The demos' own error schemas
+  now build their `!!import` from `TsonProblemSchema.ID`, because three bumps each touched sixteen files and
+  most of that was demos hardcoding a constant.
+
+**`TsonProblemSchemaTest` is what catches a stale `diagnostic_code`**, and it has now caught two additions
+before anyone noticed them. Keep it.
 
 **Project-owned schema `!!id`** follows tson-java's convention with this repo's own group:
 `https://tson.io/2026/32/ltr8/http/<name>-<version>.tn` — `/2026/32` the spec revision, `ltr8` the
-publishing org, `http` the subsystem. Per §10's immutability rule, a shape change bumps the version
-under a **new name** (`problem-2.tn`), never an in-place edit.
+publishing org, `http` the subsystem. The version in the name is real, but see above for when bumping it is
+required rather than reflexive.
 
 ## Conventions inherited from tson-java
 
