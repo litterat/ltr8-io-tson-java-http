@@ -395,6 +395,69 @@ a fix makes it fail.
 
 ---
 
+## 15. A constructor whose instances are never data cannot be registered
+
+**The shape wanted:** `operation` declared in a meta layer and written by a schema author as
+`create_order => !operation { method: POST  path: "/orders"  request: order  … }`. The resolver binds the
+payload to a Java `Operation` record and stores it as the entry's body. **No data value ever has an operation
+as its type**, so nothing needs to read data against one.
+
+**Two different readers, and only one of them is wanted.** `TsonCompiledMetaSchema.buildConstructors` pairs
+them:
+
+```java
+if (!entry.getValue().constructor()) continue;            // ~ required to be considered at all
+compiledSchema.find(name).ifPresent(instanceReader -> {
+    try {
+        constructors.put(name, new ReaderResolver(instanceReader, resolver.resolve(name)));
+    } catch (RuntimeException noFactory) { /* deliberately swallowed */ }
+});
+```
+
+- `instanceReader` reads `!operation { … }` **at schema-resolution time**, through the meta schema's own
+  compiled machinery. This is ordinary record binding, and it is all an operation needs.
+- `resolver.resolve(name)` is a `ValueReaderFactory` — what builds a reader so **data** can be validated
+  against a type this constructor produces. An operation has no data instances, so this is asking for something
+  that can never be used.
+
+Requiring both is what blocks it, and the failure is silent at the point it happens: the factory's absence is
+caught and swallowed, the constructor is never registered, and the error surfaces later as
+`'operation' is not a constructor '…/meta-http-1.tn' declares` — which reads as *undeclared* when the truth is
+*declared, and dropped for want of a factory it does not need*.
+
+**No meta-schema change is needed to hold one.** `type_definition.body` is typed `top`
+(`meta-kernel.tn:412`), which is how `RecordBody`, `ArrayBody`, `Reference` and `instance_template` already
+share the slot. An `operation` body is legal by that declaration today.
+
+**The missing category, stated plainly.** `~` means *author-writable, and demands a data reader*. No `~` means
+*no data reader, but resolver-produced only* — which is how `reference` and `instance_template` avoid the
+requirement, and why an author cannot write one. There is no **author-writable with no data instances**, which
+is exactly what an operation is.
+
+**Two ways to open it; the second looks cleaner.**
+
+1. Make `ValueReaderFactoryResolver` reachable so a consumer can register one. It is in the unexported
+   `io.ltr8.tson.compiler.reader` package today. This works, but has the author supply a factory for something
+   that will never read data.
+2. **Let the base kind decide.** An entry whose supertype is `top` rather than `atom`/`product`/`sum` cannot
+   have data instances — that is precisely how `reference` and `instance_template` are spelled, and the CR's own
+   argument for `top &` over `~product` is that `product` would oblige `access_pattern` and `size_type` as
+   meaningless filler. So `buildConstructors` could require a factory only for the value kinds, and register a
+   `~top &` constructor with its instance reader alone. Note `type_kind` is
+   `!enum [ATOM PRODUCT SUM REFERENCE]` with no member for this, so the test would be on the supertype chain
+   rather than on `kind` — or `type_kind` gains a member.
+
+**Not verified from this end:** whether the binding half is already sufficient. `DataNameBinder` is the
+established way to map a schema type name to a Java class — `TsonProblemSchema` and `tson-cli`'s
+`DiagnosticsSchema` both do it — so registering `Operation` looks like existing machinery, but the factory
+requirement stops the run before that is exercised.
+
+**What it unlocks** is in `sketch/README.md`: shape checking, recognisability by construction, templated
+operations, and no need for FIXED fields (so #14 cannot arise). `sketch/meta-http-1.tn` is the declaration
+waiting on it.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off.

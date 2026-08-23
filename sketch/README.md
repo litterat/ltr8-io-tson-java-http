@@ -321,10 +321,13 @@ operation => ~top & {
 
 **It resolves.** One wall now stops `orders-api-1.tn` using it:
 
-1. **A user-defined meta-schema's constructors cannot be applied.**
-   `UnsupportedOperationException: 'create': failed to bind 'operation' via the compiled meta-schema reader:
-   'operation' is not a constructor '…/meta-http-1.tn' declares`. That exception type is this project's
-   classification for *not implemented yet*, not for *your schema is wrong*.
+1. **A constructor whose instances are never data cannot be registered** (`UPSTREAM.md` #15).
+   `UnsupportedOperationException: … 'operation' is not a constructor '…/meta-http-1.tn' declares` — which
+   reads as *undeclared* when the truth is *declared, and dropped for want of a value-reader factory it does
+   not need*. Registering a constructor requires both an instance reader (ordinary record binding, which is all
+   an operation wants) and a factory that builds readers for **data** of that type — and no data value is ever
+   an operation. `type_definition.body` is typed `top`, so the meta-schema already permits an operation body;
+   what is missing is the category *author-writable, no data instances*.
 ~~A schema could reference types from only one other schema~~ — `UPSTREAM.md` #11, **fixed and merged**. This
 schema now gets past it, and `SketchTest` drives the real file rather than a trimmed stand-in.
 
