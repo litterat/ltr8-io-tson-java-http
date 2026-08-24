@@ -707,54 +707,37 @@ schema type and a meta-layer constructor shared a name.
 **Cost of not fixing it:** every consumer of the `data` kind drops to `TsonCompiledMetaRegistry`, and so
 gives up `Tson`'s reader, writer and registries, or wires both and keeps them consistent by hand.
 
-## 18. A meta-layer name in a governed schema is refused with the wrong message
+## 18. ~~A meta-layer name in a governed schema is refused with the wrong message~~ — DONE (`e4e71c5`)
 
-**Confirmed by design, and the defect is the message alone.** A meta layer is the schema *for the schema*: its
+**Confirmed by design, then fixed where it actually was.** A meta layer is the schema *for* the schema: its
 declarations are the vocabulary a schema is written **in**, not types that schema can reference. A governed
-schema may apply a meta's constructors as `!C { … }` and nothing else. Every refusal below is therefore
-correct; only one of them says so intelligibly.
+schema applies its constructors as `!C { … }` and nothing else, so every refusal was correct — the report was
+only ever about the words.
 
-Reproducer: `scratchpad/MetaLayerLookupTest.java`, self-contained, drops into `tson/src/test/java/io/ltr8/tson/`.
+**And the words were a symptom, not a string to edit.** The desugar pass collapsed an application to its bare
+head, so the `source` lookup found a template through the meta-structure fallback and faulted it for supplying
+no arguments the author had in fact written. Keeping the application whole is what lets the linker judge what
+was written; the fallback's own half no longer applies to an argument-bearing `source` at all, a §5.10 head
+being resolved in the type-name namespace only (§3.3.1). Both halves are in
+`docs/schema-resolution.md` and `docs/linking-and-compilation.md`.
 
-```tson
-!!id:"https://example.test/meta-x.tn"
-!!meta:"https://tson.io/2026/32/m/meta-kernel.tn"
-!!import:"https://tson.io/2026/32/m/meta.tn"
-{
-  scalar => !integer ^ { min: 100  max: 599 }
-  plain  => { a: text }
-  tmpl   => <T> { v: T }
-  ctor   => ~data & { a: text }
-}
-```
+All five forms now refuse in the same words — pinned by
+`UpstreamGapsTest.everyMetaLayerNameInAGovernedSchemaIsUnresolved`:
 
-| the governed schema writes | result | right? |
-|---|---|---|
-| `x => { s: scalar }` | `'x' field 's' has an unresolved reference 'scalar'` | yes |
-| `x => { s: plain }` | `'x' field 's' has an unresolved reference 'plain'` | yes |
-| `x => { s: ctor }` | `'x' field 's' has an unresolved reference 'ctor'` | yes |
-| `x => { s: tmpl }` | `'x' field 's' has an unresolved reference 'tmpl'` | yes |
-| **`x => tmpl<text>`** | `'x' source: 'tmpl' is a template taking 1 type argument [T] … write 'tmpl<...>' with its arguments (§5.10)` | **refusal yes, message no** |
+| the governed schema writes | result |
+|---|---|
+| `x => { s: scalar }` | `'x' field 's' has an unresolved reference 'scalar'` |
+| `x => { s: plain }` | `'x' field 's' has an unresolved reference 'plain'` |
+| `x => { s: ctor }` | `'x' field 's' has an unresolved reference 'ctor'` |
+| `x => { s: tmpl }` | `'x' field 's' has an unresolved reference 'tmpl'` |
+| `x => tmpl<text>` | `'x' source has an unresolved reference 'tmpl'` |
 
-**Why that one reads differently, and why it is not a lookup bug.** The failing case is in the entry-*source*
-position — the message says so (`'x' source:`) — and that position resolves against the meta namespace by the
-same rule that lets `search => !operation { … }` work at all. So the name is found there legitimately, turns
-out to be a template rather than an applicable constructor, and the refusal is then reported with a sentence
-about arguments.
-
-**The message asks for something that is already there**, which sends an author to fix what is not wrong. It
-should say what happened: that the name is declared by the governing meta-schema, which is the schema for this
-schema — its constructors may be applied as `!C { … }`, and its declarations are not types this schema can
-reference. The other four rows already say the last part, in the words a reader can act on.
-
-**Ranked higher than when filed.** A check that lies costs a reader the same afternoon whether that reader is
-a person or a model iterating against diagnostics — and a model has no instinct that something smells off. A
-missing check leaves you no worse off; a lying one sends you somewhere wrong.
-
-**A consequence of the layering worth stating, since the message does not.** Vocabulary a governed schema
-needs to *reference* cannot live in its meta layer — that was never the meta layer's job. It goes in an
-ordinary schema both import. Note also that an ordinary schema cannot `!!import` a meta layer to get at it:
-`void` is declared by both it and `core.tn`, so the import collides.
+**The expanded message was explored and rejected**, rightly. I had suggested the error carry the layering
+itself — *"declared by the governing meta-schema, which is the schema for this schema…"*. Every such message
+pays its cost on every occurrence, including the ones where the reader already knows; the explanation belongs
+in documentation and in whatever guidance a model is given, neither of which is written yet. What the message
+owes is the one thing that is true and actionable, in the same words as its four neighbours, and that is what
+it now says.
 
 
 ## 19. ~~A bind mismatch has no code of its own, so a server cannot tell it from an invalid document~~ — DONE (`e2daff3`)

@@ -157,29 +157,54 @@ class UpstreamGapsTest {
         assertEquals(FieldState.REQUIRED_FIXED, status.state());
     }
 
-    // ── #18: applying a meta-layer template misreports its arguments ─────────────────────────────
+    // ── #18, fixed: every meta-layer name in a governed schema refuses the same way ──────────────
 
     /**
-     * <b>{@code UPSTREAM.md} #18 — the refusal is right, the message is not.</b> A meta layer is the schema
-     * <em>for</em> the schema: its declarations are the vocabulary a schema is written in, not types that
-     * schema may reference. So every form below is correctly refused, including the application. What is
-     * wrong is that one of them asks for arguments that are present, sending an author to fix what is not
-     * broken, where the others say plainly that the name does not resolve.
+     * <b>A meta layer is the schema <em>for</em> the schema.</b> Its declarations are the vocabulary a schema
+     * is written in, not types that schema may reference — a governed schema applies its constructors as
+     * {@code !C { … }} and nothing else. So every form here is refused, and since {@code UPSTREAM.md} #18
+     * they are all refused in the same words.
+     *
+     * <p>The one that used to differ was the <em>application</em>, which claimed the arguments were missing
+     * when they were written. Not a lookup bug: the desugar pass collapsed the application to its bare head,
+     * so the {@code source} lookup found a template through the meta-structure fallback and faulted it for
+     * supplying no arguments. Keeping the application whole is what let the linker judge what was actually
+     * written.
      */
     @Test
-    void applyingAMetaLayerTemplateMisreportsItsArguments() {
-        String metaSource = meta("  status_code => !integer ^ { min: 100  max: 599 }\n  tmpl => <T> { v: T }");
+    void everyMetaLayerNameInAGovernedSchemaIsUnresolved() {
+        String metaSource = meta("""
+                  scalar => !integer ^ { min: 100  max: 599 }
+                  plain  => { a: text }
+                  tmpl   => <T> { v: T }
+                  ctor   => ~data & { a: text }""");
 
-        String plain = governed("  x => { s: status_code }");
-        assertTrue(assertThrows(RuntimeException.class, () -> tson(metaSource, plain).resolve(plain))
-                .getMessage().contains("unresolved reference 'status_code'"));
+        record Case(String label, String declaration, String name) {
+        }
+        List<Case> cases = List.of(
+                new Case("an atom", "  x => { s: scalar }", "scalar"),
+                new Case("a record", "  x => { s: plain }", "plain"),
+                new Case("a constructor as a type", "  x => { s: ctor }", "ctor"),
+                new Case("a template, unapplied", "  x => { s: tmpl }", "tmpl"),
+                new Case("a template, applied", "  x => tmpl<text>", "tmpl"));
 
-        String applied = governed("  x => tmpl<text>");
-        String message = assertThrows(RuntimeException.class,
-                () -> tson(metaSource, applied).resolve(applied)).getMessage();
-        assertTrue(message.contains("is a template taking 1 type argument"),
-                "when #18 is fixed the refusal stays and the message changes -- it should stop claiming the "
-                        + "arguments are missing: " + message);
+        for (Case one : cases) {
+            String doc = governed(one.declaration());
+            String message = assertThrows(RuntimeException.class,
+                    () -> tson(metaSource, doc).resolve(doc), () -> "expected " + one.label() + " to be refused")
+                    .getMessage();
+            assertTrue(message.contains("unresolved reference '" + one.name() + "'"),
+                    () -> one.label() + ": " + message);
+        }
+    }
+
+    /** And the control: the same template declared locally applies fine. */
+    @Test
+    void aLocallyDeclaredTemplateApplies() {
+        String metaSource = meta("  ctor => ~data & { a: text }");
+        String doc = governed("  local => <T> { v: T }\n  x => local<text>");
+
+        tson(metaSource, doc).resolve(doc);
     }
 
     // ── #10's reverse case at the meta layer -- fixed, pinned ────────────────────────────────────
