@@ -160,10 +160,11 @@ class UpstreamGapsTest {
     // ── #18: applying a meta-layer template misreports its arguments ─────────────────────────────
 
     /**
-     * <b>Two lookup paths disagree about scope.</b> A meta-layer declaration is not in the governed schema's
-     * type namespace, and the reference path says so plainly — for an atom, a record, or an unapplied
-     * template alike. Only the <em>application</em> path reaches into the meta layer, finds the template, and
-     * then fails for an unrelated reason it states inaccurately.
+     * <b>{@code UPSTREAM.md} #18 — the refusal is right, the message is not.</b> A meta layer is the schema
+     * <em>for</em> the schema: its declarations are the vocabulary a schema is written in, not types that
+     * schema may reference. So every form below is correctly refused, including the application. What is
+     * wrong is that one of them asks for arguments that are present, sending an author to fix what is not
+     * broken, where the others say plainly that the name does not resolve.
      */
     @Test
     void applyingAMetaLayerTemplateMisreportsItsArguments() {
@@ -177,7 +178,8 @@ class UpstreamGapsTest {
         String message = assertThrows(RuntimeException.class,
                 () -> tson(metaSource, applied).resolve(applied)).getMessage();
         assertTrue(message.contains("is a template taking 1 type argument"),
-                "when #18 is fixed this should say `unresolved reference 'tmpl'`: " + message);
+                "when #18 is fixed the refusal stays and the message changes -- it should stop claiming the "
+                        + "arguments are missing: " + message);
     }
 
     // ── #10's reverse case at the meta layer -- fixed, pinned ────────────────────────────────────

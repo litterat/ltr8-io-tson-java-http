@@ -707,12 +707,14 @@ schema type and a meta-layer constructor shared a name.
 **Cost of not fixing it:** every consumer of the `data` kind drops to `TsonCompiledMetaRegistry`, and so
 gives up `Tson`'s reader, writer and registries, or wires both and keeps them consistent by hand.
 
-## 18. Applying a meta-layer template reports the arguments as missing, when they are present
+## 18. A meta-layer name in a governed schema is refused with the wrong message
 
-**Probably by design apart from the message** — see the reading below. Reproducer:
-`scratchpad/MetaLayerLookupTest.java`, self-contained, drops into `tson/src/test/java/io/ltr8/tson/`.
+**Confirmed by design, and the defect is the message alone.** A meta layer is the schema *for the schema*: its
+declarations are the vocabulary a schema is written **in**, not types that schema can reference. A governed
+schema may apply a meta's constructors as `!C { … }` and nothing else. Every refusal below is therefore
+correct; only one of them says so intelligibly.
 
-A meta layer declares four things; a schema governed by it refers to each:
+Reproducer: `scratchpad/MetaLayerLookupTest.java`, self-contained, drops into `tson/src/test/java/io/ltr8/tson/`.
 
 ```tson
 !!id:"https://example.test/meta-x.tn"
@@ -726,42 +728,33 @@ A meta layer declares four things; a schema governed by it refers to each:
 }
 ```
 
-| the governed schema writes | result |
-|---|---|
-| `x => { s: scalar }` | `'x' field 's' has an unresolved reference 'scalar'` |
-| `x => { s: plain }` | `'x' field 's' has an unresolved reference 'plain'` |
-| `x => { s: ctor }` | `'x' field 's' has an unresolved reference 'ctor'` |
-| `x => { s: tmpl }` | `'x' field 's' has an unresolved reference 'tmpl'` |
-| **`x => tmpl<text>`** | **`'x' source: 'tmpl' is a template taking 1 type argument [T], and a template is not a type until it is applied — write 'tmpl<...>' with its arguments (§5.10)`** |
-| control: `local => <T> {…}` then `x => local<text>` | resolves |
+| the governed schema writes | result | right? |
+|---|---|---|
+| `x => { s: scalar }` | `'x' field 's' has an unresolved reference 'scalar'` | yes |
+| `x => { s: plain }` | `'x' field 's' has an unresolved reference 'plain'` | yes |
+| `x => { s: ctor }` | `'x' field 's' has an unresolved reference 'ctor'` | yes |
+| `x => { s: tmpl }` | `'x' field 's' has an unresolved reference 'tmpl'` | yes |
+| **`x => tmpl<text>`** | `'x' source: 'tmpl' is a template taking 1 type argument [T] … write 'tmpl<...>' with its arguments (§5.10)` | **refusal yes, message no** |
 
-**Four reference forms agree and one does not**, and the odd one out is the only *application*. Note the third
-row: even a constructor — the one thing a governed schema genuinely may use from its meta layer — is not a
-type in that namespace. So the rule the first four state is clear and right.
+**Why that one reads differently, and why it is not a lookup bug.** The failing case is in the entry-*source*
+position — the message says so (`'x' source:`) — and that position resolves against the meta namespace by the
+same rule that lets `search => !operation { … }` work at all. So the name is found there legitimately, turns
+out to be a template rather than an applicable constructor, and the refusal is then reported with a sentence
+about arguments.
 
-**The likely explanation, which makes most of this by design.** The failing case is in the entry-*source*
-position, and the message says so (`'x' source:`). That position resolves against the meta namespace by the
-same rule that lets `search => !operation { … }` work at all — constructors live there and are found there. So
-`tmpl<text>` gets a meta-namespace lookup legitimately, finds a template rather than a constructor, and then
-reports the failure with the wrong sentence.
-
-If that is right, there is no lookup bug and **the whole of the defect is the message**: it asks for arguments
-that are present, sending an author to fix something that is not wrong. What it should say is what actually
-happened — that the name resolves to a template declared by the governing meta-schema, and a governed schema
-may apply that meta's *constructors* (`!c { … }`) but not its templates.
-
-**Worth confirming which reading is intended**, because the alternative changes the fix: if applying a
-meta-layer template is *meant* to work, the failure itself is the bug and the message is a symptom. Either
-way the message is wrong under both readings, which is why this is worth doing regardless.
+**The message asks for something that is already there**, which sends an author to fix what is not wrong. It
+should say what happened: that the name is declared by the governing meta-schema, which is the schema for this
+schema — its constructors may be applied as `!C { … }`, and its declarations are not types this schema can
+reference. The other four rows already say the last part, in the words a reader can act on.
 
 **Ranked higher than when filed.** A check that lies costs a reader the same afternoon whether that reader is
-a person or a model iterating against the diagnostics — and a model has no instinct that something smells off.
-A missing check leaves you no worse off; a lying one sends you somewhere wrong.
+a person or a model iterating against diagnostics — and a model has no instinct that something smells off. A
+missing check leaves you no worse off; a lying one sends you somewhere wrong.
 
-**Also worth stating once, since it is undocumented and cost time here:** shared vocabulary for a meta layer
-cannot live in the meta layer. A governed schema cannot see it (the four rows above), and an ordinary schema
-cannot `!!import` a meta layer either — `void` is declared by both it and `core.tn`, so the import collides.
-It has to go in a third ordinary schema that both import.
+**A consequence of the layering worth stating, since the message does not.** Vocabulary a governed schema
+needs to *reference* cannot live in its meta layer — that was never the meta layer's job. It goes in an
+ordinary schema both import. Note also that an ordinary schema cannot `!!import` a meta layer to get at it:
+`void` is declared by both it and `core.tn`, so the import collides.
 
 
 ## 19. ~~A bind mismatch has no code of its own, so a server cannot tell it from an invalid document~~ — DONE (`e2daff3`)
