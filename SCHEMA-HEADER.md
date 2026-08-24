@@ -216,7 +216,52 @@ diagnostic. Before this, JSON appeared in this repo only as something to answer 
 it, so verification costs the same read it always did. What the header buys is that whatever routed the request
 *here* — a gateway, which will not parse a body and cannot parse a compressed one — never had to.
 
-## 7. What this should not become
+## 7. Its companion: `TSON-Accept-Schema`
+
+**Built, and the reason it is a second field rather than a second meaning.** `TSON-Schema` says what the body
+of *this* message is — the schema layer's `Content-Type`. A client also needs to say which versions it can
+read **back**, which is the schema layer's `Accept`. HTTP keeps those apart because one message routinely asks
+both at once: a POST sending a v1 order and wanting a v2 confirmation is the ordinary case, and a single field
+cannot carry both.
+
+Overloading `TSON-Schema` is tempting on a `GET`, where there is no body for it to describe and the meaning
+would be unambiguous by vacuity. That yields a field whose meaning depends on the method — worse than two
+fields, and something HTTP field semantics avoid.
+
+**Why negotiation is needed at all, when reading is not negotiated.** A request body names the schema that
+governs it, so reading obeys the document. A response has no such anchor, and a `GET` carries no request body
+to hold one. Something has to say which version the reply is in, and only the client knows what it can read.
+
+**The field.** An RFC 9651 sf-list of sf-strings, each optionally carrying `;q=` — the same shape and meaning
+as `Accept`'s quality values:
+
+```
+TSON-Accept-Schema: "https://schemas.example.com/2026/32/app/order-2.tn",
+                    "https://schemas.example.com/2026/32/app/order-1.tn";q=0.5
+```
+
+The rules, each pinned by a test in `TsonSchemaVersionsTest`:
+
+1. **Absence means the server chooses**, as `Accept`'s absence means "anything" — normally its newest version.
+   This is what makes the field additive: a client that has never heard of it keeps working unchanged.
+2. **Quality orders the choice**, and the client's own order breaks a tie.
+3. **`q=0` refuses a version** rather than ranking it last.
+4. **A version the server does not serve is ignored**, not fatal — refusing the whole field for one unknown
+   member would deny the client its other choices.
+5. **Matching is by canonical identity** (§2.2.1), so a different scheme or a `?sha256=` pin still matches.
+6. **Nothing acceptable is `406`**, never a fallback. Answering in a version the client said it cannot read is
+   worse than refusing: it hands back a body that will fail to parse, under a status claiming success.
+7. **A malformed field is `400`**, not silently "any". A client that meant to constrain the answer and
+   mistyped should hear about it rather than receive whatever the server preferred.
+
+**The reply needs no new field.** It names what was chosen in its own `TSON-Schema` and in the body's
+`!!schema`, so a response stays self-describing — `Accept` → `Content-Type`, exactly.
+
+**What is still open**, and is the reason this is a note rather than a proposal: how a client learns which
+versions exist before asking. An error naming them is the honest floor, and any advertisement can be stale
+under a rolling deploy, so the error path is load-bearing whatever else is added. That thread is parked.
+
+## 8. What this should not become
 
 A way to validate a document against a schema its author did not choose. The header says what the *sender*
 claims governs the body. It is not an instruction to the receiver to apply a schema of the receiver's choosing

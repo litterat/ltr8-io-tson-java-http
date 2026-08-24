@@ -58,7 +58,13 @@ Package group `io.ltr8`, as in tson-java (reverse-DNS names who *publishes*, not
   - **Error mapping** — `Diagnostic` and the exception hierarchy → status code + a TSON error body.
   - **`TsonSchemaSource` over HTTP** — `TsonHttpSchemaSource`: host allow-list, host→location mapping,
     caps on size and time, identity-keyed cache.
-  - **`TsonSchemaHeader`** — the `TSON-Schema` field: sf-string parse/format, and `resolve` reading both
+  - **`TsonAcceptSchemaHeader`** — the `TSON-Accept-Schema` request field: which schema versions a client will
+    accept **back**. A separate field from `TSON-Schema` on purpose — that one says what *this* body is
+    (`Content-Type`), this says what the reply should be (`Accept`), and a POST routinely asks both. Absence
+    means the server chooses, so it is additive; `q=0` refuses; nothing acceptable is 406; matching is by
+    canonical identity. `TsonSchemaVersions.chooseResponseVersion` is the endpoint-level answer, preferring
+    the last version registered unless `preferredResponseVersion` says otherwise. `SCHEMA-HEADER.md` §7.
+- **`TsonSchemaHeader`** — the `TSON-Schema` field: sf-string parse/format, and `resolve` reading both
     channels and enforcing agreement. **`TsonHttpCodec.acceptingJson()`** is what admits a JSON body, opt-in.
   - **`TsonSchemaCatalog`** — the schemas a server publishes, indexed by the path each one's own `!!id`
     names, plus the cache policy. Server-agnostic because every adapter needs the same lookup and the same two
@@ -308,11 +314,25 @@ map it to two classes. The failure is at least loud: *"the schema's root type `o
 not assignable to the requested OrderV2"*. Tree mode has none of this difficulty; one `Tson` holds every version
 happily, because no classes are involved. Reach for `TsonSchemaVersions` only in bind mode.
 
+**Reading is governed, writing is negotiated.** A request body names the schema that governs it and `route`
+obeys it. A response has no such anchor — a GET carries no body at all — so `chooseResponseVersion` reads the
+client's `TSON-Accept-Schema` and picks from what this endpoint serves. Do not reach for `TSON-Schema` on a
+request to mean "what I want back": it means what the request body *is*, and a field whose meaning depends on
+the method is worse than two fields.
+
 **Routing is a safety feature, not a convenience.** A codec built for v1 will read a v2 document and silently
 drop what its class has no component for — `OrderV1[sku=A, quantity=1]`, no error, **no diagnostic even
 collecting** (`UPSTREAM.md` #10). So `route` refuses a document naming a version this endpoint does not serve,
 and refuses one naming none. Do not add a fallback that guesses; that is the failure it exists to prevent.
 `defaultVersion` exists for an older unversioned client and is off by default for the same reason.
+
+**The schema is honest, and migration across versions is the developer's call.** A v1 document read into a
+class that also serves v2 fills the v2-only fields from the constructor that read it — and that constructor
+*is* the migration rule, written by whoever owns the domain. It is not a value the format invented: v1's
+schema declares no currency, v2's declares a required one, and a document written as v2 has one because
+someone decided it does. **Do not go looking for a defaulted-versus-given distinction; TSON deliberately does
+not track provenance**, and adding it would push a domain decision back into the format. Written down because
+reasoning from JSON-Schema habits produces the opposite conclusion, confidently.
 
 **Two ways to model the Java side**, both tested: a class per version, switching on `Routed.schemaId()`; or
 one class holding the union of every version's fields, with a `@Profile`-annotated constructor per version and

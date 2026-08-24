@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -325,4 +326,86 @@ class TsonSchemaVersionsTest {
                         && d.message().contains("currency")),
                 "expected a bind-disagreement diagnostic, got: " + failed.diagnostics());
     }
+    // ── choosing the version to answer in ──
+
+    /**
+     * <b>Saying nothing is the ordinary case</b>, and gets the newest registered. That is what keeps this
+     * additive: a client that has never heard of the field keeps working exactly as before.
+     */
+    @Test
+    void aRequestExpressingNoPreferenceGetsThePreferredVersion() {
+        assertEquals(V2_ID, versions.chooseResponseVersion(null));
+        assertEquals(V2_ID, versions.chooseResponseVersion(""));
+        assertEquals(V2_ID, versions.preferredResponseVersion(), "the last version registered");
+    }
+
+    /** Declaring the preference explicitly overrides registration order. */
+    @Test
+    void thePreferredVersionCanBeDeclared() {
+        TsonSchemaVersions oldestPreferred = TsonSchemaVersions.builder()
+                .version(V1_ID, V1, SOURCE, Map.of("order", OrderV1.class))
+                .version(V2_ID, V2, SOURCE, Map.of("order", OrderV2.class))
+                .preferredResponseVersion(V1_ID)
+                .build();
+
+        assertEquals(V1_ID, oldestPreferred.chooseResponseVersion(null));
+    }
+
+    /** A client that names one version gets it, matched by canonical identity rather than by spelling. */
+    @Test
+    void aNamedVersionIsChosen() {
+        assertEquals(V1_ID, versions.chooseResponseVersion(TsonAcceptSchemaHeader.format(List.of(V1_ID))));
+
+        // §2.2.1: the scheme is a transport hint and a ?sha256= pin is not part of the name.
+        assertEquals(V1_ID, versions.chooseResponseVersion(
+                TsonAcceptSchemaHeader.format(List.of(V1_ID.replace("https://", "http://") + "?sha256=abc"))));
+    }
+
+    /** Quality values order the choice, and the client's own order breaks a tie. */
+    @Test
+    void qualityValuesOrderTheChoice() {
+        assertEquals(V1_ID, versions.chooseResponseVersion(
+                "\"" + V2_ID + "\";q=0.2, \"" + V1_ID + "\";q=0.9"));
+        assertEquals(V2_ID, versions.chooseResponseVersion(
+                "\"" + V2_ID + "\", \"" + V1_ID + "\""), "equal quality keeps the order written");
+    }
+
+    /** {@code q=0} refuses a version rather than merely ranking it low. */
+    @Test
+    void zeroQualityRefusesAVersion() {
+        assertEquals(V1_ID, versions.chooseResponseVersion(
+                "\"" + V2_ID + "\";q=0, \"" + V1_ID + "\""));
+    }
+
+    /** A version this endpoint does not serve is ignored, so the client's other choices still count. */
+    @Test
+    void anUnknownVersionDoesNotSpoilTheRest() {
+        assertEquals(V1_ID, versions.chooseResponseVersion(
+                "\"https://schemas.example.com/2026/32/app/order-9.tn\", \"" + V1_ID + "\""));
+    }
+
+    /**
+     * <b>Nothing acceptable is a 406, not a fallback.</b> Answering in a version the client said it cannot
+     * read would be worse than refusing: the client gets a body it will fail to parse, at a status that says
+     * everything went well.
+     */
+    @Test
+    void nothingAcceptableIs406() {
+        TsonHttpException refused = assertThrows(TsonHttpException.class, () -> versions.chooseResponseVersion(
+                "\"https://schemas.example.com/2026/32/app/order-9.tn\""));
+
+        assertEquals(TsonHttpException.NOT_ACCEPTABLE, refused.status());
+        assertTrue(refused.getMessage().contains("order-1"), refused.getMessage());
+    }
+
+    /** A malformed field is the client's error, and is not silently treated as "any". */
+    @Test
+    void aMalformedAcceptSchemaFieldIsRefused() {
+        TsonHttpException refused = assertThrows(TsonHttpException.class,
+                () -> versions.chooseResponseVersion("https://unquoted.example/order-1.tn"));
+
+        assertEquals(TsonHttpException.BAD_REQUEST, refused.status());
+        assertTrue(refused.getMessage().contains("sf-list"), refused.getMessage());
+    }
+
 }

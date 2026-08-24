@@ -6,6 +6,7 @@ import io.ltr8.tson.compiler.TsonSchemaSource;
 import io.ltr8.tson.schema.TsonCanonicalIdentity;
 
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -72,12 +73,45 @@ public final class TsonSchemaVersions {
     private final Map<String, TsonHttpCodec> byIdentity;
     private final Map<String, String> declaredIds;
     private final Optional<String> defaultSchemaId;
+    private final String preferredResponseId;
 
     private TsonSchemaVersions(Map<String, TsonHttpCodec> byIdentity, Map<String, String> declaredIds,
-                               Optional<String> defaultSchemaId) {
+                               Optional<String> defaultSchemaId, String preferredResponseId) {
         this.byIdentity = Map.copyOf(byIdentity);
         this.declaredIds = Map.copyOf(declaredIds);
         this.defaultSchemaId = defaultSchemaId;
+        this.preferredResponseId = preferredResponseId;
+    }
+
+    /**
+     * The version to answer in, from the request's {@code TSON-Accept-Schema}.
+     *
+     * <p><b>Reading is governed by the document; writing is negotiated.</b> A request body names the schema
+     * that governs it and {@link #route} obeys that. A <em>response</em> has no such anchor — a GET carries no
+     * body at all — so the client asks for what it can read and the server picks from what it serves. That is
+     * {@code Accept}/{@code Content-Type} at the schema layer, and it is why the request field is a different
+     * one from {@link TsonSchemaHeader}.
+     *
+     * <p><b>Saying nothing is the ordinary case and gets the preferred version</b>, which is the newest
+     * registered unless {@link Builder#preferredResponseVersion} says otherwise. So an existing client that
+     * has never heard of this field keeps working, and a client that pins a version opts in.
+     *
+     * @param fieldValue the {@code TSON-Accept-Schema} header value, or {@code null}
+     * @return the registered identity to answer in -- never a reference the client happened to spell
+     * @throws TsonHttpException 400 if the field is malformed, 406 if this endpoint serves nothing the client
+     *                           will accept
+     */
+    public String chooseResponseVersion(String fieldValue) {
+        List<String> available = new ArrayList<>(declaredIds.values());
+        return TsonAcceptSchemaHeader.choose(TsonAcceptSchemaHeader.parse(fieldValue), available,
+                preferredResponseId).orElseThrow(() -> TsonHttpException.notAcceptable(
+                        "this endpoint can answer in " + schemaIds() + ", and the "
+                                + TsonAcceptSchemaHeader.NAME + " header accepts none of them"));
+    }
+
+    /** The version answered when a request expresses no preference. */
+    public String preferredResponseVersion() {
+        return preferredResponseId;
     }
 
     /**
@@ -171,6 +205,7 @@ public final class TsonSchemaVersions {
         private final Map<String, TsonHttpCodec> byIdentity = new LinkedHashMap<>();
         private final Map<String, String> declaredIds = new LinkedHashMap<>();
         private Optional<String> defaultSchemaId = Optional.empty();
+        private Optional<String> preferredResponseId = Optional.empty();
 
         private Builder() {
         }
@@ -249,17 +284,37 @@ public final class TsonSchemaVersions {
             return this;
         }
 
+        /**
+         * The version to answer in when a request's {@code TSON-Accept-Schema} expresses no preference.
+         *
+         * <p>Defaults to the <b>last</b> {@link #version} registered, so declaring them oldest-first gets the
+         * newest by default. Unlike {@link #defaultVersion}, this is not optional in effect: a response has to
+         * be in some version, so there is always a choice to make and the only question is who makes it.
+         */
+        public Builder preferredResponseVersion(String schemaId) {
+            this.preferredResponseId = Optional.of(schemaId);
+            return this;
+        }
+
         public TsonSchemaVersions build() {
             if (byIdentity.isEmpty()) {
                 throw new IllegalStateException("no versions declared");
             }
+            preferredResponseId.ifPresent(id -> {
+                if (!byIdentity.containsKey(identityOf(id))) {
+                    throw new IllegalArgumentException("the preferred response version '" + id + "' is not "
+                            + "one of the versions served: " + declaredIds.values());
+                }
+            });
             defaultSchemaId.ifPresent(id -> {
                 if (!byIdentity.containsKey(identityOf(id))) {
                     throw new IllegalArgumentException("the default version '" + id + "' is not one of the "
                             + "versions served: " + declaredIds.values());
                 }
             });
-            return new TsonSchemaVersions(byIdentity, declaredIds, defaultSchemaId);
+            String preferred = preferredResponseId.map(id -> declaredIds.get(identityOf(id)))
+                    .orElseGet(() -> List.copyOf(declaredIds.values()).getLast());
+            return new TsonSchemaVersions(byIdentity, declaredIds, defaultSchemaId, preferred);
         }
 
         private static String identityOf(String schemaId) {
