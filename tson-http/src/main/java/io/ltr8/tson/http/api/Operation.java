@@ -24,6 +24,27 @@ public record Operation(HttpMethod method, String path, Optional<String> summary
                         Optional<Boolean> deprecated, List<Parameter> parameters,
                         Optional<TypeRef> request, List<Response> responses) implements Data {
 
+    /**
+     * Normalises an omitted {@code parameters} to empty.
+     *
+     * <p><b>A bound class guards its own optional lists</b> — the convention this library follows for
+     * {@code RecordBody}'s {@code groups}/{@code supertypes}, and for {@code TypeDefinition} and
+     * {@code TypeRef}. An optional field the document omits reaches the constructor as {@code null}, and
+     * absent and {@code []} are the same value, so the guard belongs here rather than being a rule the
+     * binder guesses at.
+     *
+     * <p>Worth doing rather than leaving: {@link #references()} walks {@code parameters}, and it runs inside
+     * schema resolution — so an unguarded null is an NPE out of {@code Tson.resolve}, which reads as a
+     * library fault when it is a document legitimately omitting an optional field.
+     *
+     * <p>{@code responses} is REQUIRED and deliberately not guarded: a required field never reaches a
+     * constructor, because the reader reports {@code FIELD_REQUIRED} and abandons the construction first.
+     * Guarding it would mask a real violation rather than absorb a legitimate absence.
+     */
+    public Operation {
+        parameters = parameters == null ? List.of() : List.copyOf(parameters);
+    }
+
     @Override
     public List<TypeRef> references() {
         List<TypeRef> all = new ArrayList<>();

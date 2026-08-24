@@ -84,7 +84,7 @@
     path:        text
     summary:     text?
     deprecated:  boolean?
-    parameters:  [parameter]
+    parameters:  [parameter]?
     request:     type_ref?
     responses:   [response]
   }

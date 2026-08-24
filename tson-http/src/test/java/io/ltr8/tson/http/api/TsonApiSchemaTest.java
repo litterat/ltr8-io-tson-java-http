@@ -42,7 +42,6 @@ class TsonApiSchemaTest {
                 method:     POST
                 path:       "/orders"
                 summary:    "Place an order"
-                parameters: []
                 request:    order
                 responses:  [
                   !response { status: 201  body: order    description: "The confirmed order" }
@@ -360,6 +359,20 @@ class TsonApiSchemaTest {
 
         assertTrue(assertThrows(IllegalStateException.class, coverage::requireComplete)
                 .getMessage().contains("notServedHere"));
+    }
+
+    /**
+     * <b>An operation with no parameters omits the list.</b> {@code parameters} is optional and a bound class
+     * guards its own optional lists, so absent arrives as empty rather than {@code null} — which matters more
+     * than tidiness here, because {@link Operation#references()} walks it inside schema resolution, where a
+     * null would surface as an NPE out of {@code resolve} and read as a library fault.
+     */
+    @Test
+    void anOperationWithNoParametersOmitsTheList() {
+        Operation create = TsonApiSchema.describedBy(resolved(API), API_ID).operations().get("create_order");
+
+        assertEquals(List.of(), create.parameters());
+        assertFalse(API.contains("parameters:  []"), "the description should not have to write an empty list");
     }
 
 }

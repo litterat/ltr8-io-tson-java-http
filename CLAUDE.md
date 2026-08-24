@@ -415,6 +415,13 @@ Each cost a debugging cycle here and is pinned by a test.
   makes a type contract operate on the token's *text*, not on how it was written. A handler that needs
   string-ness says so with a `pattern`, not by assuming `text` means it. Pinned by
   `TsonHttpCodecTest.aTextFieldAcceptsAnyTokenButNotAContainer`.
+- **A bound class guards its own optional lists.** An optional field a document omits reaches the constructor
+  as `null`, and the binder does not normalise it — the convention upstream follows is that the record does,
+  in its compact constructor, as `RecordBody`, `TypeDefinition` and `TypeRef` all do. `Operation` guards
+  `parameters` for that reason. A **required** list is deliberately not guarded: it never reaches a
+  constructor, because the reader reports `FIELD_REQUIRED` and abandons the construction first, so a guard
+  there would mask a real violation. Getting this wrong inside a `Data` body's `references()` is an NPE out
+  of `Tson.resolve` that reads as a library fault.
 - **A bound class must be public.** tson-java declares no `opens` and binding only ever touches public
   constructors and methods, so a package-private record fails analysis with a bare `DataBindException:
   Failed to resolve` that names nothing useful.

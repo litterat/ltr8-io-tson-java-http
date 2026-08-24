@@ -10,7 +10,6 @@
     method:      POST
     path:        "/orders"
     summary:     "Place an order"
-    parameters:  []
     request:     order
     responses:   [
       !response { status: 201  body: order
