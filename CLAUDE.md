@@ -142,6 +142,19 @@ produced 1416 contended monitor entries and not one of them has a tson frame. Th
 exist are on the resolve and register paths, which run at startup on one thread. That is the "build during
 startup, then share for reads" shape working.
 
+**Reading the throughput numbers, because two wrong conclusions came out of them first.** The harnesses put
+client and server in one JVM, so a single request stream already costs ~3.7 of 16 cores — client, server, GC
+and JIT together. Scaling therefore tops out near 16/3.7 ≈ 4x, which is what both adapters show
+(10.5k req/s on one thread, 43k on sixteen, at 14 of 16 cores — saturated). **That is a property of the
+measurement, not of the library.** Two things to avoid repeating: comparing runs that differ in more than one
+variable (a serial server at 8 client threads against a concurrent one at 8 is not a scaling curve), and
+trusting a `ps` sample for CPU — use `OperatingSystemMXBean.getProcessCpuTime` over the timed region, which is
+what showed the machine was saturated after a `ps` sample suggested it was at a fifth.
+
+**A shared `HttpClient` costs 16–23%** at four threads and up, so a load generator that shares one measures
+itself as much as the server. Both harnesses take a flag for a client per thread, built and warmed before the
+timed region.
+
 **Concurrency is tested, not assumed.** Every adapter shares one `TsonHttpCodec` across request threads, and
 every other test in this repo is single-threaded — so a codec wrong under concurrency would pass all of them.
 `TsonHttpCodecConcurrencyTest`, `TsonHttpSchemaSourceConcurrencyTest` and each adapter's

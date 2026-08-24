@@ -42,3 +42,8 @@ dependencies {
     // after the demo source set exists, which is what creates this configuration.
     "demoRuntimeOnly"("org.slf4j:slf4j-simple:2.0.17")
 }
+
+tasks.register("printDemoClasspath") {
+    val cp = demo.runtimeClasspath
+    doLast { println(cp.asPath) }
+}
