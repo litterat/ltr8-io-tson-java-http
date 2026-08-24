@@ -209,6 +209,19 @@ and hands it back — so the path comes from the description wherever the framew
 description does not declare is refused where the handler is written, and a declared one with no handler
 fails startup rather than 404ing for a client that read the contract and believed it.
 
+**The opinion has a way out.** "Everything declared is served" is an opinion, and a fixed one would be the
+wrong kind of helper — an operation documented ahead of being built, or served by another process behind the
+same proxy, are real cases, and a check that cannot express them gets switched off wholesale, taking the
+operations it was right about with it. `notServedHere(name, reason)` is the way out and the reason is
+required: an exemption somebody has to justify in a greppable string is a decision, where a boolean is a
+hole. Readable back through `exemptions()`, and `requireComplete()`'s failure message names the method, so
+the way out is discoverable from the error rather than the Javadoc.
+
+**This is the shape to copy for any future helper here**, and it is upstream's: `bindings()` is opinionated
+but `dataBindContext()` still exists; `SchemaMetaNameBinder.extendedWith` is public so `metaNameBinder` is not
+a black box; and `lenientBinding()` is the model — the way out is a *named position with a rationale*, not a
+flag meaning "be sloppy". An opinionated helper is fine. A fixed opinion is not.
+
 **It checks coverage, not path equality, and that is what keeps it framework-agnostic.** The registered path
 and the declared path may differ and often must — the JDK demo serves `/{schemaPath}` from a
 `createContext("/")` prefix, Javalin needs `/<path>` because an identity path has slashes that only the angle

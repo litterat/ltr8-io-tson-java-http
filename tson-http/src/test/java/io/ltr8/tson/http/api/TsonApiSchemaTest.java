@@ -307,4 +307,59 @@ class TsonApiSchemaTest {
                 .getMessage().contains("already served"));
     }
 
+    /**
+     * <b>The opinion has a way out, and it costs a reason.</b> An operation documented ahead of being built,
+     * or served by another process behind the same proxy, is a real case — and a check that cannot express
+     * it gets switched off wholesale, taking the operations it was right about with it.
+     */
+    @Test
+    void aDeclaredOperationCanBeExemptedWithAReason() {
+        TsonApiCoverage coverage = TsonApiCoverage.of(TsonApiSchema.describedBy(resolved(API), API_ID));
+        coverage.serving("create_order");
+        coverage.notServedHere("get_schema", "served by the static origin in front of this service");
+
+        assertEquals(Set.of(), coverage.unserved());
+        coverage.requireComplete();
+        assertEquals(Map.of("get_schema", "served by the static origin in front of this service"),
+                coverage.exemptions(), "readable back, so a server can log or publish what it does not serve");
+    }
+
+    /** A reason is required: without one an exemption is indistinguishable from a hole punched to go green. */
+    @Test
+    void anExemptionWithoutAReasonIsRefused() {
+        TsonApiCoverage coverage = TsonApiCoverage.of(TsonApiSchema.describedBy(resolved(API), API_ID));
+
+        assertTrue(assertThrows(IllegalArgumentException.class,
+                () -> coverage.notServedHere("get_schema", "  ")).getMessage().contains("needs a reason"));
+        assertTrue(assertThrows(IllegalArgumentException.class,
+                () -> coverage.notServedHere("no_such_op", "because")).getMessage().contains("no_such_op"),
+                "and it is still an operation the description has to declare");
+    }
+
+    /** Served and exempt are contradictory, in either order. */
+    @Test
+    void anOperationCannotBeBothServedAndExempt() {
+        TsonApiDescription described = TsonApiSchema.describedBy(resolved(API), API_ID);
+
+        TsonApiCoverage one = TsonApiCoverage.of(described);
+        one.serving("create_order");
+        assertTrue(assertThrows(IllegalStateException.class,
+                () -> one.notServedHere("create_order", "why")).getMessage().contains("cannot also be exempt"));
+
+        TsonApiCoverage other = TsonApiCoverage.of(described);
+        other.notServedHere("create_order", "why");
+        assertTrue(assertThrows(IllegalStateException.class, () -> other.serving("create_order"))
+                .getMessage().contains("cannot also be served"));
+    }
+
+    /** And the failure names the way out, so it is discoverable from the message rather than the Javadoc. */
+    @Test
+    void theIncompleteMessageNamesTheWayOut() {
+        TsonApiCoverage coverage = TsonApiCoverage.of(TsonApiSchema.describedBy(resolved(API), API_ID));
+        coverage.serving("create_order");
+
+        assertTrue(assertThrows(IllegalStateException.class, coverage::requireComplete)
+                .getMessage().contains("notServedHere"));
+    }
+
 }
