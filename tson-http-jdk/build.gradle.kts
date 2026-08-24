@@ -45,3 +45,9 @@ tasks.named<Test>("test") {
         .withPropertyName("readme")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
+
+// For the allocation harness: prints the demo runtime classpath so it can be run under JFR by hand.
+tasks.register("printDemoClasspath") {
+    val cp = demo.runtimeClasspath
+    doLast { println(cp.asPath) }
+}
