@@ -227,31 +227,33 @@ descriptor resolution off the request thread, not a correctness measure.
 
 ---
 
-## 9. No public way to read a data document's header without reading the document
+## 9. ~~No public way to read a data document's header without reading the document~~ — DONE (`5e41bca`)
 
-**Hit:** routing a request to the right schema version means knowing which schema the document names *before*
-choosing how to read it. There is no API for that. `TsonDataParser.peekDirectiveName()` exists and is exactly
-right, but is package-private in a package `tson-compiler` does not export; `TsonSchemaParser` handles schema
-documents, not data ones; and everything public reads the whole document, which is the thing that needs the
-answer first.
+**Landed as `TsonDocumentHeader`, and it answers more than was asked.** `peek(String)`/`peek(InputStream)`
+return `(id, schema, meta)`; `isSchemaDocument()` decides from the presence of `!!meta` (§12.1 requiring
+exactly one); and the writers' `describing` builds the same type to emit, so both ends of the library share
+one notion of what a header is.
 
-**This is a designed-for capability with no door.** [TSON-DATA] §7.1: "classification requires at most two
-directives of lookahead and no value parsing, so streams, previews, and content sniffers can classify a
-document from its opening bytes." That sentence describes a use case the format deliberately supports and this
-library cannot serve.
+**`peekResumable` is the part that matters for a server**, and I had not thought to ask for it. An HTTP
+request body is one-shot — no mark, no rewind — and the routing decision needs the header before the read that
+consumes it. It records what the lexer pulled to reach the end of the header and hands back the document from
+its **first byte**, directives included, so the peek costs nothing a reader then has to know about.
 
-**Workaround in place:** `TsonDocumentPeek`, a small strict scanner over the leading bytes, with adversarial
-tests whose governing rule is that it may answer "I could not tell" but must never answer with a schema the
-document does not name. It is a second implementation of a fragment of the lexer, which is exactly what should
-not exist.
+**Adopted here by deletion.** `io.ltr8.tson.http.TsonDocumentPeek` — 187 lines of hand-rolled scanner, with a
+standing note that it must stay conservative because it could not be right — is gone, along with its test.
+`TsonSchemaHeader.resolve` calls `peekResumable`, and the conformance test uses `peek(String)`. The scanner
+existed only because there was no door; there is one now, and it is over the real lexer rather than beside it.
 
-**Change:** expose it — a `TsonDocumentHeader` for *data* documents (`!!id`, `!!schema`) read from a stream
-without consuming it, or simply make the existing peek reachable. Symmetric with the `DocumentHeader` the
-writers just gained (#7), which names the same two directives from the other end.
+**And the review found a bug in this project's own API.** `TsonSchemaVersions.declaredSchemaOf` promised the
+schema *"without consuming"* the body, for a gateway that dispatches and then forwards. On a
+`ByteArrayInputStream` that was true — it supports `mark`/`reset`, so every test of it passed. On a stream
+that does not, which is what an HTTP request body is, **the entire body was gone**: 98 bytes in, 0 remaining.
+A proxy using it as documented would have forwarded an empty document.
 
-**Blast radius:** additive.
+Deleted rather than fixed: a caller wanting exactly that now calls `peekResumable` and forwards `document()`.
+`TsonSchemaHeaderTest` pins the property over a stream with `markSupported()` returning false — the shape of
+test that would have caught it, and did not exist because the obvious fixture hides the defect.
 
----
 
 ## 10. ~~Binding drops a schema field the target class has no component for, silently~~ — DONE (`4d02eab`, `83b8524`, `1acf7c2`)
 

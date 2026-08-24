@@ -2,6 +2,9 @@ package io.ltr8.tson.http;
 
 import io.ltr8.tson.schema.TsonCanonicalIdentity;
 
+import io.ltr8.tson.compiler.TsonDocumentHeader;
+import io.ltr8.tson.compiler.TsonDocumentPeek;
+
 import java.io.InputStream;
 import java.util.List;
 import java.util.Optional;
@@ -107,8 +110,11 @@ public final class TsonSchemaHeader {
      */
     public static Governing resolve(InputStream body, String fieldValue) {
         Optional<String> fromHeader = parse(fieldValue);
-        TsonDocumentPeek peek = TsonDocumentPeek.of(body);
-        Optional<String> fromBody = peek.schema();
+        // The library's own header peek, over the real lexer: it buffers what the lexer pulled to reach the
+        // end of the header and hands back the document from its first byte, so a one-shot request body
+        // survives the look (UPSTREAM.md #9).
+        TsonDocumentPeek peek = TsonDocumentHeader.peekResumable(body);
+        Optional<String> fromBody = peek.header().schema();
 
         if (fromHeader.isPresent() && fromBody.isPresent()
                 && !identityOf(fromHeader.get()).equals(identityOf(fromBody.get()))) {
@@ -121,7 +127,7 @@ public final class TsonSchemaHeader {
         }
         // Either, since where both are present they agree. The body's is preferred when it has one, so a value
         // read back out matches what the document itself says.
-        return new Governing(fromBody.or(() -> fromHeader), peek.body());
+        return new Governing(fromBody.or(() -> fromHeader), peek.document());
     }
 
     /** Canonical identity, or a 400 -- a reference that is not a legal identity governs nothing. */

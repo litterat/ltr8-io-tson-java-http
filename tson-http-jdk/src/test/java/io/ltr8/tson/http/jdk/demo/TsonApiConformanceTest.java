@@ -2,7 +2,7 @@ package io.ltr8.tson.http.jdk.demo;
 
 import com.sun.net.httpserver.HttpServer;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.http.TsonDocumentPeek;
+import io.ltr8.tson.compiler.TsonDocumentHeader;
 import io.ltr8.tson.http.api.HttpMethod;
 import io.ltr8.tson.http.api.Operation;
 import io.ltr8.tson.http.api.Parameter;
@@ -168,11 +168,10 @@ class TsonApiConformanceTest {
                 () -> "the " + response.statusCode() + " body is not a " + type.get() + ": " + response.body());
 
         // And the schema it names must be one this server publishes -- fetched, not assumed.
-        TsonDocumentPeek peek = TsonDocumentPeek.of(
-                new ByteArrayInputStream(response.body().getBytes(StandardCharsets.UTF_8)));
-        assertTrue(peek.schema().isPresent(), () -> "a self-describing body: " + response.body());
-        assertEquals(200, get(URI.create(peek.schema().orElseThrow()).getPath()).statusCode(),
-                () -> "the " + response.statusCode() + " body names " + peek.schema().orElseThrow()
+        TsonDocumentHeader header = TsonDocumentHeader.peek(response.body());
+        assertTrue(header.schema().isPresent(), () -> "a self-describing body: " + response.body());
+        assertEquals(200, get(URI.create(header.schema().orElseThrow()).getPath()).statusCode(),
+                () -> "the " + response.statusCode() + " body names " + header.schema().orElseThrow()
                         + ", which this server does not publish");
     }
 }

@@ -439,10 +439,12 @@ Each cost a debugging cycle here and is pinned by a test.
 - **A JSON body names neither its schema nor its root type**, and cannot — directive syntax is not JSON. So the
   schema comes from the `TSON-Schema` header and the root type from the route, which means reading one is
   `readObjectAs`/`readTreeAs`, never the bare `read`. Same two-part requirement as `describing()`, same reason.
-- **`TsonDocumentPeek` is a hand-rolled scanner, and must stay conservative.** There is no public header peek
-  upstream (`UPSTREAM.md` #9) despite §7.1 designing for exactly this. Its governing rule: it may answer "I
-  could not tell", but it must never answer with a schema the document does not name — a wrong answer routes a
-  request to the wrong version. When changing it, add to `neverInventsASchemaForRubbish` first.
+- **Peek a header with `TsonDocumentHeader`, and use `peekResumable` for a request body.** A body is one-shot
+  — no mark, no rewind — and `peekResumable` records what the lexer pulled and hands back the document from
+  its first byte, so looking costs the reader nothing. **A `ByteArrayInputStream` will not catch a mistake
+  here**: it supports `mark`/`reset`, so a peek that consumes the stream still looks intact. Test with a
+  stream whose `markSupported()` is false, as `TsonSchemaHeaderTest` does — this project shipped a peek that
+  ate the whole body on a real request and had a green test suite over the wrong fixture.
 - **`describing()` needs a root type name as well as a schema URI, for an object.** A bound record writes no
   type-ref of its own, so `!!schema` alone yields a document whose reader cannot select a type. The tree form
   takes one argument, because a tree node already carries a type-ref. `TsonHttpCodec.write(value, schemaUri,

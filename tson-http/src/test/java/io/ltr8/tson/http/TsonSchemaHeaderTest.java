@@ -127,4 +127,58 @@ class TsonSchemaHeaderTest {
         var governing = TsonSchemaHeader.resolve(body(document), TsonSchemaHeader.format(V1));
         assertEquals(document, new String(governing.body().readAllBytes(), StandardCharsets.UTF_8));
     }
+    /**
+     * <b>A one-shot body survives being looked at.</b> An HTTP request body has no mark and no rewind, and
+     * the routing decision needs the header before the read that consumes it. {@code peekResumable} records
+     * what the lexer pulled and hands back the document from its first byte.
+     *
+     * <p>Pinned because the hand-rolled peek this replaced got it wrong in exactly the way a test over
+     * {@code ByteArrayInputStream} could not see: that stream supports {@code mark}/{@code reset}, so the
+     * body came back intact and the bug stayed invisible. Over a stream that does not, the whole body was
+     * gone.
+     */
+    @Test
+    void aBodyWithNoMarkSupportIsStillReadableAfterTheLook() throws Exception {
+        String document = """
+                !!schema:"https://schemas.example.com/2026/32/app/order-1.tn"
+                !order { sku: "ABC-1"  quantity: 3 }""";
+
+        TsonSchemaHeader.Governing governing = TsonSchemaHeader.resolve(oneShot(document), null);
+
+        assertEquals(Optional.of("https://schemas.example.com/2026/32/app/order-1.tn"), governing.schema());
+        assertEquals(document, new String(governing.body().readAllBytes(), StandardCharsets.UTF_8),
+                "the document, from its first byte -- directives included");
+    }
+
+    /** And with no schema to find, the body is still whole. */
+    @Test
+    void aSchemalessOneShotBodyIsAlsoIntact() throws Exception {
+        String document = "!order { sku: \"ABC-1\"  quantity: 3 }";
+
+        TsonSchemaHeader.Governing governing = TsonSchemaHeader.resolve(oneShot(document), null);
+
+        assertEquals(Optional.empty(), governing.schema());
+        assertEquals(document, new String(governing.body().readAllBytes(), StandardCharsets.UTF_8));
+    }
+
+    /** What an HTTP request body actually is: no mark, no rewind. */
+    private static InputStream oneShot(String text) {
+        return new java.io.FilterInputStream(
+                new java.io.ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8))) {
+            @Override
+            public boolean markSupported() {
+                return false;
+            }
+
+            @Override
+            public synchronized void mark(int limit) {
+            }
+
+            @Override
+            public synchronized void reset() throws java.io.IOException {
+                throw new java.io.IOException("mark/reset not supported");
+            }
+        };
+    }
+
 }

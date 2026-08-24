@@ -61,8 +61,11 @@ import java.util.Set;
  * <h2>Major versions across separate servers</h2>
  *
  * <p>Nothing here requires one process. Routing by declared schema works the same whether the versions are
- * codecs in one server or hosts behind a proxy -- {@link #declaredSchemaOf} answers the routing question on its
- * own, which is what a gateway needs, and it does so without consuming the body.
+ * codecs in one server or hosts behind a proxy. A gateway that needs only the routing answer, without a codec,
+ * calls {@link io.ltr8.tson.compiler.TsonDocumentHeader#peekResumable} directly and forwards the
+ * {@code document()} it hands back -- which is the whole document, first byte included, so a one-shot body
+ * survives being looked at. This class used to offer a {@code declaredSchemaOf} for that and it was wrong:
+ * it returned the schema and left the caller a body that had been read to the end.
  */
 public final class TsonSchemaVersions {
 
@@ -109,17 +112,6 @@ public final class TsonSchemaVersions {
             throw unknownSchema(schemaId);
         }
         return codec;
-    }
-
-    /**
-     * The schema a document declares, without consuming it -- the routing question on its own, for a caller
-     * that dispatches somewhere other than a codec (a proxy choosing an upstream, say).
-     *
-     * <p>A proxy with a {@code TSON-Schema} header to read should read that instead and not touch the body at
-     * all; this is for one that has no header to go on.
-     */
-    public static Optional<String> declaredSchemaOf(InputStream body) {
-        return TsonDocumentPeek.of(body).schema();
     }
 
     /** {@link #route(InputStream, String)} for a message carrying no {@code TSON-Schema} header. */
