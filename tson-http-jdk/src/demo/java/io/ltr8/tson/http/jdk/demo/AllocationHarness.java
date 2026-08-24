@@ -46,6 +46,7 @@ public final class AllocationHarness {
 
     public static void main(String[] args) throws Exception {
         int requests = args.length > 0 ? Integer.parseInt(args[0]) : 20_000;
+        int threads = args.length > 1 ? Integer.parseInt(args[1]) : 1;
         HttpServer server = OrderServer.start(0);
         String base = "http://127.0.0.1:" + server.getAddress().getPort();
         HttpClient client = HttpClient.newHttpClient();
@@ -62,10 +63,29 @@ public final class AllocationHarness {
 
         long before = allocatedBytes();
         long heapBefore = liveHeap();
-        drive(client, base, valid, invalid, requests);
+        long started = System.nanoTime();
+        if (threads == 1) {
+            drive(client, base, valid, invalid, requests);
+        } else {
+            // Concurrent, which is the only way a lock on the read path shows itself: every request thread
+            // shares one codec, one Tson and one compiled-schema registry, which is the shape a server has.
+            try (var pool = java.util.concurrent.Executors.newFixedThreadPool(threads)) {
+                for (int t = 0; t < threads; t++) {
+                    pool.submit(() -> {
+                        try {
+                            drive(client, base, valid, invalid, requests / threads);
+                        } catch (Exception e) {
+                            throw new IllegalStateException(e);
+                        }
+                    });
+                }
+            }
+        }
+        long elapsedMs = (System.nanoTime() - started) / 1_000_000;
         long clientSide = allocatedBytes() - before;
 
-        System.out.printf("requests=%d%n", requests * 2);
+        System.out.printf("threads=%d requests=%d in %d ms (%.0f req/s)%n",
+                threads, requests * 2, elapsedMs, requests * 2 * 1000.0 / Math.max(1, elapsedMs));
         System.out.printf("client-thread bytes/request=%d  (the harness's own cost, not the server's)%n",
                 clientSide / (requests * 2));
         System.out.printf("live heap before=%d after=%d delta=%d bytes%n",

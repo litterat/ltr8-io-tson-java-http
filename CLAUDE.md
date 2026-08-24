@@ -130,6 +130,18 @@ no TSON knowledge of its own; what it *does* own is the error boundary, and that
 
 A handler that returns without answering is a bug in the handler, so it is a 500 rather than a silent 200.
 
+**A `com.sun.net.httpserver` with no executor is serial**, and that quietly defeated this project's own
+concurrency test for the JDK adapter — `OrderServerConcurrencyTest` drove eight client threads at a server
+running every handler on its dispatch thread, so two handlers never ran at once and a race in the shared codec
+could not have been caught. The demo now sets a virtual-thread executor. **Virtual threads, not a pool**:
+`HttpServer.stop()` does not shut down an executor you hand it, so a platform-thread pool keeps its
+non-daemon threads alive and the JVM never exits — which cost a hung ten-minute run to discover.
+
+**No lock is taken on the read or write path**, measured rather than assumed: 48,000 requests across 8 threads
+produced 1416 contended monitor entries and not one of them has a tson frame. The `synchronized` methods that
+exist are on the resolve and register paths, which run at startup on one thread. That is the "build during
+startup, then share for reads" shape working.
+
 **Concurrency is tested, not assumed.** Every adapter shares one `TsonHttpCodec` across request threads, and
 every other test in this repo is single-threaded — so a codec wrong under concurrency would pass all of them.
 `TsonHttpCodecConcurrencyTest`, `TsonHttpSchemaSourceConcurrencyTest` and each adapter's

@@ -148,6 +148,15 @@ public final class OrderServer {
         codec.prepareToWrite(described.boundClasses(bindings).toArray(Class<?>[]::new));
 
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
+        // Without an executor, com.sun.net.httpserver runs every handler on its dispatch thread -- one
+        // request at a time, however many clients are talking to it. That is a poor demonstration of a codec
+        // built to be shared across request threads, and it quietly defeats OrderServerConcurrencyTest, which
+        // drives this server from many threads and could not have caught a race while only one handler ran.
+        //
+        // Virtual threads rather than a pool, for a reason worth knowing: HttpServer.stop() does not shut down
+        // an executor you hand it, so a platform-thread pool keeps its non-daemon threads alive and the JVM
+        // never exits. Virtual threads are daemons and cost nothing idle, so stop() is enough.
+        server.setExecutor(java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
 
         // The description is a contract, so hold this server to it before it accepts anything. `serving`
         // hands back the operation, which is where the path below comes from -- and refuses a name the

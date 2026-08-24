@@ -83,6 +83,28 @@ the first write of a class. Those tests are the obvious starting point for the u
 
 ---
 
+
+**Measured, which is worth adding to a report that is otherwise about documentation.** 48,000 requests across
+8 request threads through the JDK demo, one shared `Tson`/`TsonHttpCodec`, JFR recording contended monitor
+entries at a zero threshold:
+
+```
+1416 contended monitor entries, 29 ms total
+  inside the tson library: 0
+  everything else: KQueueSelectorImpl.wakeup (1027), clearInterrupt (180),
+                   ServerImpl$Dispatcher.run (68), HttpClient's auth cache (82) …
+```
+
+**Not one contended monitor acquisition has a tson frame.** The `synchronized` methods that exist —
+`TsonCompiledMetaRegistry.register`/`get`, `DataClassUnion`'s member registration,
+`CodePointSet.ofCategory` — are on the resolve and register paths, which a server runs at startup on one
+thread. Nothing on the read or write path takes a lock, which is what the "build during startup, then share
+for reads" shape is supposed to buy and now has evidence behind it.
+
+So the item stands as filed — the *contract* is still inferred rather than stated, and a consumer should not
+have to measure to find out. But the shape being documented is the shape the library actually has.
+
+
 ## 4. No HTTP-backed `TsonSchemaSource` — now built here
 
 **Hit:** `TsonConfig.schemaSource(…)` takes a `TsonSchemaSource`, and every example supplies a lambda
