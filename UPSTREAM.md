@@ -834,49 +834,34 @@ Pinned by `UpstreamGapsTest.anEntrysTwoAnnotationPositionsLandInDifferentPlaces`
 nothing is broken: the shape of the mistake is worth having written down.
 
 
-## 21. `TsonDataEmitter.quotedString` runs a regex per character, to test `c <= 0x1f`
+## 21. ~~`TsonDataEmitter.quotedString` runs a regex per character~~ — DONE (`6cd0050` and around)
 
-**Hit:** profiling allocation per request on the demo server. `TsonDataEmitter.java:284`, in the loop over
-every character of every quoted string a response writes:
+**Fixed, and the surrounding allocation work went further than the report.** `quotedString` tests with
+`isControl(c)` and the `Pattern` is gone, with a note at the call site saying why it must not come back.
+Alongside it: `NumberScanner` replaces the regex number grammar on the read path, a quoted token with nothing
+to unescape is no longer copied, and a diagnostic's pointers are built when the diagnostic is built rather
+than eagerly.
 
-```java
-if (CONTROL_CHAR.matcher(String.valueOf(c)).matches()) {
-```
+**Measured here, same harness and workload — 30,000 requests through the JDK demo:**
 
-Three allocations per character — a `String` from `valueOf`, a `Matcher`, and the `IntHashSet[]` a `Matcher`
-builds internally — to answer a question one comparison answers. Measured, against the same loop with
-`c <= 0x1f`:
+| | before | after |
+|---|---|---|
+| total sampled allocation | 4,633 MB | **2,477 MB** |
+| `java.util.regex.Matcher` | 7.1% (330 MB) | **gone** |
+| `java.util.regex.IntHashSet[]` | 5.9% (275 MB) | **gone** |
+| `java.lang.String` | 13.3% (615 MB) | out of the top twelve |
+| `int[]` | 9.1% (420 MB) | 1.0% (24 MB) |
+| collections / total pause | 30 / 157 ms | 24 / 136 ms |
+| live heap delta per request | 2.3 bytes | 3.1 bytes |
 
-| | bytes per character |
-|---|---|
-| `CONTROL_CHAR.matcher(String.valueOf(c)).matches()` | **56.0** |
-| `c <= 0x1f` | **0.0** |
+**Allocation roughly halved**, and no `io.ltr8` frame allocates a regex object at all now — the grep that
+found the original defect comes back empty. The live-heap figure was near zero before and still is; both
+numbers are noise around nothing retained, which was the finding that mattered and has not changed.
 
-A self-describing reply naming its schema quotes about 55 characters between the `!!schema` URI and a short
-field, so **that one line is roughly 3 KB of garbage per response**. In a JFR profile of the demo under load,
-`Matcher` and `IntHashSet[]` alone are 13% of all sampled allocation — in a JVM also running the HTTP client,
-so the server's own share is higher — plus an unquantified part of the 13% that is `String` and the 17% that
-is `char[]`.
+What is left at the top is the shape of the work rather than waste: `HeapCharBuffer` and `char[]` are the
+decode path, `byte[]` the transport. Reducing those means changing how text is read, not removing something
+that should not be there.
 
-**The same line again at 339**, in the multi-line string path.
-
-**Change:** `c <= 0x1f`, or `c < 0x20`. The `CONTROL_CHAR` pattern can go; nothing else uses it as a pattern.
-`String.format("\\u%04x", …)` on the branch it guards is fine — that path is genuinely rare.
-
-**Not a defect, but the other regex source, for completeness:** `NumberGrammar` matches a `Pattern` per number
-token (`tryInteger`, `tryFloat`, `tryBasedInteger`). That is regex used as a parser rather than as a character
-comparison, so a `Matcher` per token is the cost of the approach rather than waste. Much smaller in the
-profile, and replacing it means hand-writing number parsing.
-
-**What this does *not* find, which is the more important half.** Nothing the library allocates per request
-survives a collection. Over 30,000 requests the live heap moved 2.3 bytes per request, and every
-`OldObjectSample` in the recording traces to startup — `TsonSchemaCompiler$Compilation`,
-`DefaultRecordBinder.getDataConstructor`/`createEmbedConstructor`. Those are the compiled schemas and bind
-descriptors that are *meant* to live for the process, which is what `CLAUDE.md`'s "resolve every schema during
-startup" rule asks for, and they are built once. So the read and write paths are clean of retention; the whole
-cost is transient garbage, and this is the one avoidable source large enough to matter.
-
-Reproduce with `AllocationHarness` in `tson-http-jdk`'s demo source set — the JFR flags are in its class note.
 
 ## Spec feedback to file
 
