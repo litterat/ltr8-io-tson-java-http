@@ -709,50 +709,60 @@ gives up `Tson`'s reader, writer and registries, or wires both and keeps them co
 
 ## 18. Applying a meta-layer template reports the arguments as missing, when they are present
 
-**Hit:** weighing a `responses: [type_ref]` shape for meta-http (`sketch/README.md`). A meta layer declares a
-template, and the schema it governs applies it:
+**Probably by design apart from the message** — see the reading below. Reproducer:
+`scratchpad/MetaLayerLookupTest.java`, self-contained, drops into `tson/src/test/java/io/ltr8/tson/`.
+
+A meta layer declares four things; a schema governed by it refers to each:
 
 ```tson
-tmpl => <T> { v: T }          // in the meta layer
-x    => tmpl<text>            // in the governed schema
+!!id:"https://example.test/meta-x.tn"
+!!meta:"https://tson.io/2026/32/m/meta-kernel.tn"
+!!import:"https://tson.io/2026/32/m/meta.tn"
+{
+  scalar => !integer ^ { min: 100  max: 599 }
+  plain  => { a: text }
+  tmpl   => <T> { v: T }
+  ctor   => ~data & { a: text }
+}
 ```
-
-```
-'x' source: 'tmpl' is a template taking 1 type argument [T], and a template is not a type
-until it is applied -- write 'tmpl<...>' with its arguments (§5.10)
-```
-
-**The argument is right there.** The message asks for exactly what was written, so the author's first move is
-to check the arguments they already supplied.
-
-**The actual rule is a different one, and it is enforced correctly everywhere else.** A meta-layer declaration
-is not in the governed schema's type namespace, and every other reference form says so plainly. Measured, all
-against the same meta layer:
 
 | the governed schema writes | result |
 |---|---|
-| `x => { s: status_code }` — a meta-layer atom | `'x' field 's' has an unresolved reference 'status_code'` |
-| `x => { s: plain }` — a meta-layer record | `'x' field 's' has an unresolved reference 'plain'` |
-| `x => { s: tmpl }` — the template, unapplied | `'x' field 's' has an unresolved reference 'tmpl'` |
-| `x => tmpl<text>` — the template, **applied** | *"is a template taking 1 type argument"* ← wrong |
-| `local => <T> { v: T }` then `x => local<text>` | resolves — control |
+| `x => { s: scalar }` | `'x' field 's' has an unresolved reference 'scalar'` |
+| `x => { s: plain }` | `'x' field 's' has an unresolved reference 'plain'` |
+| `x => { s: ctor }` | `'x' field 's' has an unresolved reference 'ctor'` |
+| `x => { s: tmpl }` | `'x' field 's' has an unresolved reference 'tmpl'` |
+| **`x => tmpl<text>`** | **`'x' source: 'tmpl' is a template taking 1 type argument [T], and a template is not a type until it is applied — write 'tmpl<...>' with its arguments (§5.10)`** |
+| control: `local => <T> {…}` then `x => local<text>` | resolves |
 
-**So two lookup paths disagree about what is in scope.** The reference path correctly does not see the meta
-layer; the *application* path does see it, finds the template, and then fails for an unrelated reason it
-reports inaccurately. The consistent answer is the one the other three rows give:
-`unresolved reference 'tmpl'`.
+**Four reference forms agree and one does not**, and the odd one out is the only *application*. Note the third
+row: even a constructor — the one thing a governed schema genuinely may use from its meta layer — is not a
+type in that namespace. So the rule the first four state is clear and right.
 
-**Change:** resolve an application's head through the same namespace the reference path uses, so a meta-layer
-name is unresolved in a governed schema whether or not it is applied. If there is a reason the application
-path should reach further, then the message is the thing to fix — it must not claim missing arguments that
-are present.
+**The likely explanation, which makes most of this by design.** The failing case is in the entry-*source*
+position, and the message says so (`'x' source:`). That position resolves against the meta namespace by the
+same rule that lets `search => !operation { … }` work at all — constructors live there and are found there. So
+`tmpl<text>` gets a meta-namespace lookup legitimately, finds a template rather than a constructor, and then
+reports the failure with the wrong sentence.
 
-**Worth deciding either way, because the rule itself is worth stating.** A consumer's first instinct with a
-meta layer is to put shared vocabulary in it — `status_code`, an envelope template — and discover only by
-error that governed schemas cannot see any of it. That the vocabulary must go in a *third* ordinary schema,
-imported normally, is a real design constraint of the `data` base kind and is currently undocumented. Note a
-meta layer also cannot simply be `!!import`ed by an ordinary schema: `void` is declared by both it and
-`core.tn`, so the import collides.
+If that is right, there is no lookup bug and **the whole of the defect is the message**: it asks for arguments
+that are present, sending an author to fix something that is not wrong. What it should say is what actually
+happened — that the name resolves to a template declared by the governing meta-schema, and a governed schema
+may apply that meta's *constructors* (`!c { … }`) but not its templates.
+
+**Worth confirming which reading is intended**, because the alternative changes the fix: if applying a
+meta-layer template is *meant* to work, the failure itself is the bug and the message is a symptom. Either
+way the message is wrong under both readings, which is why this is worth doing regardless.
+
+**Ranked higher than when filed.** A check that lies costs a reader the same afternoon whether that reader is
+a person or a model iterating against the diagnostics — and a model has no instinct that something smells off.
+A missing check leaves you no worse off; a lying one sends you somewhere wrong.
+
+**Also worth stating once, since it is undocumented and cost time here:** shared vocabulary for a meta layer
+cannot live in the meta layer. A governed schema cannot see it (the four rows above), and an ordinary schema
+cannot `!!import` a meta layer either — `void` is declared by both it and `core.tn`, so the import collides.
+It has to go in a third ordinary schema that both import.
+
 
 ## 19. ~~A bind mismatch has no code of its own, so a server cannot tell it from an invalid document~~ — DONE (`e2daff3`)
 

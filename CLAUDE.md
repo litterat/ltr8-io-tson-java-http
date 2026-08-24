@@ -584,6 +584,9 @@ request exercises that.
   explored side by side (three as schemas, one as data); this is the one picked, and the others are gone
   along with the `sketch/` directory that held them. The comparison is in git history if it is ever wanted
   again — the short version is in "Describing an API" above.
+- `scratchpad/` — standalone reproducers for upstream items, written to drop straight into the sibling's own
+  test tree. **Never copy one into `../ltr8-io-tson-java` and leave it there** — that repo is hands-off, and a
+  stray test in it is a change nobody asked for.
 - `UpstreamGapsTest` — every gap and constraint in the library that this project depends on knowing about,
   each named to its `UPSTREAM.md` number, so a change upstream fails a test here rather than passing
   unnoticed. **Pin the gap, not the way it is delivered**: one of these once asserted that resolution
