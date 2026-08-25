@@ -39,15 +39,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class UpstreamGapsTest {
 
-    private static final String META_ID = "https://tson.io/2026/32/ltr8/http/meta-probe.tn";
-    private static final String API_ID = "https://schemas.example.com/2026/32/app/probe-1.tn";
+    private static final String META_ID = "https://tson.io/2026/33/ltr8/http/meta-probe.tn";
+    private static final String API_ID = "https://schemas.example.com/2026/33/app/probe-1.tn";
 
     /** A meta layer with a `~data &` constructor, standing in for meta-http without depending on its shape. */
     private static String meta(String declarations) {
         return """
                 !!id:"%s"
-                !!meta:"https://tson.io/2026/32/m/meta-kernel.tn"
-                !!import:"https://tson.io/2026/32/m/meta.tn"
+                !!meta:"https://tson.io/2026/33/m/meta-kernel.tn"
+                !!import:"https://tson.io/2026/33/m/meta.tn"
                 {
                 %s
                 }""".formatted(META_ID, declarations);
@@ -57,7 +57,7 @@ class UpstreamGapsTest {
         return """
                 !!id:"%s"
                 !!meta:"%s"
-                !!import:"https://tson.io/2026/32/m/core.tn"
+                !!import:"https://tson.io/2026/33/m/core.tn"
                 {
                 %s
                 }""".formatted(API_ID, META_ID, declarations);
@@ -85,9 +85,9 @@ class UpstreamGapsTest {
     @Test
     void anApplicationInsideAChoiceIsStillNotImplemented() {
         String schema = """
-                !!id:"https://s.example.com/2026/32/p-1.tn"
-                !!meta:"https://tson.io/2026/32/m/meta.tn"
-                !!import:"https://tson.io/2026/32/m/core.tn"
+                !!id:"https://s.example.com/2026/33/p-1.tn"
+                !!meta:"https://tson.io/2026/33/m/meta.tn"
+                !!import:"https://tson.io/2026/33/m/core.tn"
                 {
                     order   => { sku: text }
                     problem => { title: text }
@@ -108,9 +108,9 @@ class UpstreamGapsTest {
     @Test
     void aValueParameterFixedFieldConstrains() {
         String schema = """
-                !!id:"https://s.example.com/2026/32/p-1.tn"
-                !!meta:"https://tson.io/2026/32/m/meta.tn"
-                !!import:"https://tson.io/2026/32/m/core.tn"
+                !!id:"https://s.example.com/2026/33/p-1.tn"
+                !!meta:"https://tson.io/2026/33/m/meta.tn"
+                !!import:"https://tson.io/2026/33/m/core.tn"
                 {
                     order    => { sku: text }
                     resp     => <T, S> { status: int32 = S  body: T }
@@ -118,7 +118,7 @@ class UpstreamGapsTest {
                 }""";
         Tson tson = Tson.builder().schemaSource(u -> schema).build();
         tson.resolve(schema);
-        String header = "!!schema:\"https://s.example.com/2026/32/p-1.tn\"\n";
+        String header = "!!schema:\"https://s.example.com/2026/33/p-1.tn\"\n";
 
         assertEquals(List.of(), tson.validate(header
                 + "!created { status: 201  body: !order { sku: \"a\" } }"));
@@ -135,9 +135,9 @@ class UpstreamGapsTest {
     @Test
     void aMaterialisedApplicationCarriesAFixedField() {
         String schema = """
-                !!id:"https://s.example.com/2026/32/p-1.tn"
-                !!meta:"https://tson.io/2026/32/m/meta.tn"
-                !!import:"https://tson.io/2026/32/m/core.tn"
+                !!id:"https://s.example.com/2026/33/p-1.tn"
+                !!meta:"https://tson.io/2026/33/m/meta.tn"
+                !!import:"https://tson.io/2026/33/m/core.tn"
                 {
                     order   => { sku: text }
                     resp    => <T, S> { status: int32 = S  body: T }
@@ -145,7 +145,7 @@ class UpstreamGapsTest {
                 }""";
         Tson tson = Tson.builder().schemaSource(u -> schema).build();
         tson.resolve(schema);
-        var entries = tson.schemaRegistry().get("https://s.example.com/2026/32/p-1.tn").orElseThrow()
+        var entries = tson.schemaRegistry().get("https://s.example.com/2026/33/p-1.tn").orElseThrow()
                 .schema().entries();
 
         String materialised = entries.get("created").source().orElseThrow().name();
@@ -264,9 +264,9 @@ class UpstreamGapsTest {
     @Test
     void anEntrysTwoAnnotationPositionsLandInDifferentPlaces() {
         String schema = """
-                !!id:"https://s.example.com/2026/32/p-1.tn"
-                !!meta:"https://tson.io/2026/32/m/meta.tn"
-                !!import:"https://tson.io/2026/32/m/core.tn"
+                !!id:"https://s.example.com/2026/33/p-1.tn"
+                !!meta:"https://tson.io/2026/33/m/meta.tn"
+                !!import:"https://tson.io/2026/33/m/core.tn"
                 {
                   @doc:"on the entry"
                   before => { a: text }
@@ -274,7 +274,7 @@ class UpstreamGapsTest {
                 }""";
         Tson tson = Tson.builder().schemaSource(u -> schema).build();
         tson.resolve(schema);
-        var entries = tson.schemaRegistry().get("https://s.example.com/2026/32/p-1.tn")
+        var entries = tson.schemaRegistry().get("https://s.example.com/2026/33/p-1.tn")
                 .orElseThrow().schema().entries();
 
         assertEquals(java.util.Optional.of("on the entry"),
@@ -290,9 +290,9 @@ class UpstreamGapsTest {
     @Test
     void anUnknownAnnotationOnAnEntryIsRefused() {
         String schema = """
-                !!id:"https://s.example.com/2026/32/p-1.tn"
-                !!meta:"https://tson.io/2026/32/m/meta.tn"
-                !!import:"https://tson.io/2026/32/m/core.tn"
+                !!id:"https://s.example.com/2026/33/p-1.tn"
+                !!meta:"https://tson.io/2026/33/m/meta.tn"
+                !!import:"https://tson.io/2026/33/m/core.tn"
                 {
                   @nosuchtype:"x"
                   thing => { a: text }
@@ -319,5 +319,35 @@ class UpstreamGapsTest {
 
         assertTrue(message.contains("describes something other than a data value"), message);
         assertInstanceOf(TypeRef.class, TypeRef.of("op"));
+    }
+
+    // ── staged spec feedback: no template-application sugar at a `type_ref` slot in data ─────────
+
+    /**
+     * <b>Not a gap — the spec's design, pinned because {@code UPSTREAM.md} stages feedback about what it
+     * costs.</b> [TSON-SCHEMA] §8.1 gives {@code type_ref} a positional form at every {@code type_ref}-typed
+     * position: a bare token fills {@code name}, and the braced record is the explicit form, canonical only
+     * where {@code arguments} is present. A <em>schema</em> may therefore write {@code page<order>}; a
+     * <em>data</em> payload at such a slot — an {@code !operation { … }} governed by a consumer's meta layer
+     * — cannot, because {@code <} is not data syntax. So an API description applying one template at four
+     * endpoints writes the braced record four times, or names four aliases. Both spellings are asserted
+     * here: the braced one resolves, the sugar is a parse error.
+     */
+    @Test
+    void aTemplateApplicationAtATypeRefSlotInDataNeedsTheBracedForm() {
+        String metaSource = meta("  operation => ~data & { method: text  path: text  responses: [type_ref] }");
+        String body = """
+                  order => { sku: text }
+                  page  => <T> { items: [T] }
+                  op    => !operation { method: "GET"  path: "/x"  responses: [ %s ] }""";
+
+        String braced = governed(body.formatted("{ name: page  arguments: [ { name: order } ] }"));
+        tson(metaSource, braced, "io.ltr8.tson.http.probe").resolve(braced);
+
+        String sugar = governed(body.formatted("page<order>"));
+        String message = assertThrows(RuntimeException.class,
+                () -> tson(metaSource, sugar, "io.ltr8.tson.http.probe").resolve(sugar)).getMessage();
+
+        assertTrue(message.contains("adjacent values must be separated"), message);
     }
 }

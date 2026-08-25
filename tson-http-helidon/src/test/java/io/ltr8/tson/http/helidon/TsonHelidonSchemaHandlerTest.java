@@ -25,13 +25,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TsonHelidonSchemaHandlerTest {
 
     private static final String HOST = "schemas.example.com";
-    private static final String SCHEMA_ID = "https://schemas.example.com/2026/32/app/order-1.tn";
-    private static final String SCHEMA_PATH = "/2026/32/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://schemas.example.com/2026/33/app/order-1.tn";
+    private static final String SCHEMA_PATH = "/2026/33/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/32/app/order-1.tn"
-            !!meta:"https://tson.io/2026/32/m/meta.tn"
-            !!import:"https://tson.io/2026/32/m/core.tn"
+            !!id:"https://schemas.example.com/2026/33/app/order-1.tn"
+            !!meta:"https://tson.io/2026/33/m/meta.tn"
+            !!import:"https://tson.io/2026/33/m/core.tn"
             {
                 order => { sku: text  quantity: int32 }
             }""";
@@ -68,7 +68,7 @@ class TsonHelidonSchemaHandlerTest {
 
     @Test
     void servesEachSchemaAtItsOwnIdentityPath() throws Exception {
-        assertEquals(Set.of(SCHEMA_PATH, "/2026/32/ltr8/http/problem-1.tn"),
+        assertEquals(Set.of(SCHEMA_PATH, "/2026/33/ltr8/http/problem-1.tn"),
                 TsonSchemaHandler.of(SCHEMA, TsonProblemSchema.source()).paths());
 
         HttpResponse<String> response = get(SCHEMA_PATH);
@@ -77,7 +77,7 @@ class TsonHelidonSchemaHandlerTest {
         assertEquals(SCHEMA, response.body());
     }
 
-    /** [TSON-SCHEMA] §10: a published schema's content never changes, so this is the format's rule, not a guess. */
+    /** [TSON-SCHEMA] §3.5: a published schema's content never changes, so this is the format's rule, not a guess. */
     @Test
     void saysImmutableBecauseTheFormatSaysSo() throws Exception {
         assertTrue(get(SCHEMA_PATH).headers().firstValue("Cache-Control").orElseThrow().contains("immutable"));
@@ -91,7 +91,7 @@ class TsonHelidonSchemaHandlerTest {
 
     @Test
     void anUnknownPathIs404() throws Exception {
-        assertEquals(404, get("/2026/32/app/nope-1.tn").statusCode());
+        assertEquals(404, get("/2026/33/app/nope-1.tn").statusCode());
     }
 
     /**

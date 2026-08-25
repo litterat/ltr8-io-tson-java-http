@@ -34,12 +34,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Driven end to end over real HTTP -- the point of an adapter is what a framework does with it. */
 class TsonJdkAdapterTest {
 
-    private static final String SCHEMA_ID = "https://schemas.example.com/2026/32/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://schemas.example.com/2026/33/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/32/app/order-1.tn"
-            !!meta:"https://tson.io/2026/32/m/meta.tn"
-            !!import:"https://tson.io/2026/32/m/core.tn"
+            !!id:"https://schemas.example.com/2026/33/app/order-1.tn"
+            !!meta:"https://tson.io/2026/33/m/meta.tn"
+            !!import:"https://tson.io/2026/33/m/core.tn"
             {
                 order => { sku: text  quantity: int32 }
             }""";

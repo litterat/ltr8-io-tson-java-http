@@ -2,6 +2,11 @@
 
 A proposal, written up for the spec author. **Implemented in this repo** — see §6 for what it took.
 
+**Still open against 2026 Revision 33.** [TSON-DATA] §7.1 was rewritten to settle the `.tn`/`.tn1` extension
+question and §6 to sharpen the two JSON exceptions, and neither gained a way to name a governing schema out of
+band. So the gap this proposal answers is exactly where it was: a JSON body cannot carry `!!schema`, and an
+intermediary routing by schema cannot parse a compressed body to find one.
+
 **Decided:**
 
 - **A schemaless body stays valid TSON over HTTP.** The requirement is endpoint policy, not a format rule: *a
@@ -34,7 +39,7 @@ A proposal, written up for the spec author. **Implemented in this repo** — see
 A header carrying the identity of the schema that governs the message body:
 
 ```
-TSON-Schema: "https://schemas.example.com/2026/32/app/order-1.tn"
+TSON-Schema: "https://schemas.example.com/2026/33/app/order-1.tn"
 ```
 
 **It is a projection of `!!schema`, not an alternative to it.** That framing is the whole proposal. The body
@@ -176,7 +181,7 @@ field name alongside it is coherent rather than extra machinery.
 Define it as an RFC 9651 structured field: an **Item** whose bare-item is an **sf-string**.
 
 ```
-TSON-Schema: "https://schemas.example.com/2026/32/app/order-1.tn"
+TSON-Schema: "https://schemas.example.com/2026/33/app/order-1.tn"
 ```
 
 **DECIDED: sf-string, so the quotes are mandatory.** Which also matches the directive: `!!schema`'s argument
@@ -236,8 +241,8 @@ to hold one. Something has to say which version the reply is in, and only the cl
 as `Accept`'s quality values:
 
 ```
-TSON-Accept-Schema: "https://schemas.example.com/2026/32/app/order-2.tn",
-                    "https://schemas.example.com/2026/32/app/order-1.tn";q=0.5
+TSON-Accept-Schema: "https://schemas.example.com/2026/33/app/order-2.tn",
+                    "https://schemas.example.com/2026/33/app/order-1.tn";q=0.5
 ```
 
 The rules, each pinned by a test in `TsonSchemaVersionsTest`:

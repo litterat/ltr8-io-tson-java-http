@@ -33,12 +33,12 @@ import java.util.Map;
 public final class TsonProblemSchema {
 
     /** The current error-body schema's identity -- the {@code !!id} it declares and the URL it is served at. */
-    public static final String ID = "https://tson.io/2026/32/ltr8/http/problem-1.tn";
+    public static final String ID = "https://tson.io/2026/33/ltr8/http/problem-1.tn";
 
     /**
      * Every version of this schema that is still published, current first -- one, today.
      *
-     * <p>§10 makes a <em>published</em> schema immutable: a shape change is a new name, and the superseded
+     * <p>§3.5 makes a <em>published</em> schema immutable: a shape change is a new name, and the superseded
      * document stays served because something may already name it. Nothing here is published, so there is one
      * version and it is edited in place. This method exists as the shape a server needs when that stops being
      * true -- hand it to {@link TsonSchemaCatalog#of(java.util.Collection)} and the whole history is published

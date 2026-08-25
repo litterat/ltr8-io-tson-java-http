@@ -24,25 +24,25 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Two versions of one schema, served side by side. §10 makes a published schema immutable, so a shape change is
+ * Two versions of one schema, served side by side. §3.5 makes a published schema immutable, so a shape change is
  * a new document under a new name -- which means versions coexist rather than replace each other, and a server
  * that outlives one of its clients has to serve both.
  */
 class TsonSchemaVersionsTest {
 
-    private static final String V1_ID = "https://schemas.example.com/2026/32/app/order-1.tn";
-    private static final String V2_ID = "https://schemas.example.com/2026/32/app/order-2.tn";
+    private static final String V1_ID = "https://schemas.example.com/2026/33/app/order-1.tn";
+    private static final String V2_ID = "https://schemas.example.com/2026/33/app/order-2.tn";
 
     private static final String V1 = """
-            !!id:"https://schemas.example.com/2026/32/app/order-1.tn"
-            !!meta:"https://tson.io/2026/32/m/meta.tn"
-            !!import:"https://tson.io/2026/32/m/core.tn"
+            !!id:"https://schemas.example.com/2026/33/app/order-1.tn"
+            !!meta:"https://tson.io/2026/33/m/meta.tn"
+            !!import:"https://tson.io/2026/33/m/core.tn"
             { order => { sku: text  quantity: int32 } }""";
 
     private static final String V2 = """
-            !!id:"https://schemas.example.com/2026/32/app/order-2.tn"
-            !!meta:"https://tson.io/2026/32/m/meta.tn"
-            !!import:"https://tson.io/2026/32/m/core.tn"
+            !!id:"https://schemas.example.com/2026/33/app/order-2.tn"
+            !!meta:"https://tson.io/2026/33/m/meta.tn"
+            !!import:"https://tson.io/2026/33/m/core.tn"
             { order => { sku: text  quantity: int32  currency: text } }""";
 
     private static final String V1_PROFILE = "orders-1";
@@ -155,7 +155,7 @@ class TsonSchemaVersionsTest {
     /** And the guard: routing refuses before that can happen. */
     @Test
     void routingRefusesAVersionThisEndpointDoesNotServe() {
-        String unknown = "https://schemas.example.com/2026/32/app/order-3.tn";
+        String unknown = "https://schemas.example.com/2026/33/app/order-3.tn";
         TsonHttpException refused = assertThrows(TsonHttpException.class,
                 () -> versions.route(body(order(unknown, "{ sku: \"A\" quantity: 1 }"))));
         assertEquals(TsonHttpException.BAD_REQUEST, refused.status());
@@ -381,7 +381,7 @@ class TsonSchemaVersionsTest {
     @Test
     void anUnknownVersionDoesNotSpoilTheRest() {
         assertEquals(V1_ID, versions.chooseResponseVersion(
-                "\"https://schemas.example.com/2026/32/app/order-9.tn\", \"" + V1_ID + "\""));
+                "\"https://schemas.example.com/2026/33/app/order-9.tn\", \"" + V1_ID + "\""));
     }
 
     /**
@@ -392,7 +392,7 @@ class TsonSchemaVersionsTest {
     @Test
     void nothingAcceptableIs406() {
         TsonHttpException refused = assertThrows(TsonHttpException.class, () -> versions.chooseResponseVersion(
-                "\"https://schemas.example.com/2026/32/app/order-9.tn\""));
+                "\"https://schemas.example.com/2026/33/app/order-9.tn\""));
 
         assertEquals(TsonHttpException.NOT_ACCEPTABLE, refused.status());
         assertTrue(refused.getMessage().contains("order-1"), refused.getMessage());

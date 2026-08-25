@@ -13,6 +13,10 @@ It is a **consumer** of the TSON library, not part of it. The library lives in t
 and consumed as a Gradle **included build** (see "Consuming tson-java" below). Destination remote:
 `https://github.com/litterat/`.
 
+**Built against 2026 Revision 33** of the spec — the sibling's `spec/` holds the snapshot, and every identity
+in this repo carries `/2026/33/`. The revision series changes without compatibility guarantees, so a `git pull`
+of the sibling can move the whole identity space; "Project-owned schema `!!id`" below says what that costs.
+
 **Status.** All four modules are built and tested, each adapter with a runnable demo server and a concurrency
 suite driving it under load. Responses are self-describing in both directions: an error body names
 `problem-1.tn`, a demo's order reply names the schema governing it, and the server publishes both so those
@@ -211,6 +215,15 @@ operations. That is what makes `request: order` a *reference the compiler resolv
 the property no data-shaped design can have, because a data document can name a schema but cannot hold a
 reference to a type.
 
+**Revision 33 made both halves of that shape normative, and names this as the case they exist for.**
+[TSON-SCHEMA] §4.1 declares `data` as the fourth base kind — "an HTTP operation binding request and response
+types by name is the motivating case" — with `operation => ~data & { … }` as its own worked example, and makes
+naming a `kind: DATA` entry where a type is expected a resolver error. §9's guidance for extension meta-schemas
+then requires the other half: a constructor field holding a type reference **MUST** be typed `type_ref`, not
+`type_name`, because `type_ref` is what makes the slot participate in flattening, `@alias` recording and
+structural identity — and it names `request`/`response` as the example. Both were already how this is built, so
+nothing changed; what changed is that they are now rules to cite rather than a design to defend.
+
 **The wiring is three things**: this schema reachable from the `schemaSource`, the bound classes in
 `io.ltr8.tson.http.api`, and `TsonApiSchema.metaNameBinder()` on the config — **not** `bindings`, which binds
 the data a schema describes. A meta layer's vocabulary is a separate namespace on purpose.
@@ -304,7 +317,7 @@ envelope, the service owns "SKU not found". One rule that costs time otherwise:
 
 ### Serving several schema versions
 
-§10 makes a published schema immutable: a shape change is a new document under a new name (`order-1.tn`,
+§3.5 makes a published schema immutable: a shape change is a new document under a new name (`order-1.tn`,
 `order-2.tn`), so versions coexist rather than replace each other, and a server outliving one of its clients
 serves both. `TsonSchemaVersions` is that, and `TsonDocumentPeek` is what lets it route.
 
@@ -529,10 +542,14 @@ Each cost a debugging cycle here and is pinned by a test.
 data or a schema document, in at most two directives of lookahead and with no value parsing — so a
 handler can classify from the opening bytes without a full parse.
 
-**Use the `.tn` extension, not `.tn1`**, matching tson-java: `.tn1` is a stability claim §7.1 reserves for
-a frozen "TSON version 1" that hasn't happened (tson-java's `SPEC-FEEDBACK.md` #20).
+**Use the `.tn` extension, not `.tn1`**, matching tson-java. §7.1 now says this outright rather than leaving it
+to be inferred: `.tn` is the extension of the 2026 revision series and makes no stability claim, while `.tn1` is
+a positive claim of TSON version 1 stability that **MUST NOT** be used before that freeze. The rule has a sting
+in its tail for this repo — renaming a document to `.tn1` at the freeze changes its identifying URI and so its
+canonical identity, and references pinned during the revision series do not carry over. So the eventual freeze
+is a re-pinning exercise across every `!!id`, `!!import` and constant here, not a rename.
 
-**Immutability binds a *published* schema, and nothing here is published yet.** §10 makes a schema immutable
+**Immutability binds a *published* schema, and nothing here is published yet.** §3.5 makes a schema immutable
 once it is available for someone else to pin — that is what the rule protects: a document that named it must go
 on resolving. Until this project is released, **edit the file in place and do not bump the version.**
 
@@ -556,9 +573,17 @@ worth keeping from the bumps:
 anyone noticed them. Keep it.
 
 **Project-owned schema `!!id`** follows tson-java's convention with this repo's own group:
-`https://tson.io/2026/32/ltr8/http/<name>-<version>.tn` — `/2026/32` the spec revision, `ltr8` the
+`https://tson.io/2026/33/ltr8/http/<name>-<version>.tn` — `/2026/33` the spec revision, `ltr8` the
 publishing org, `http` the subsystem. The version in the name is real, but see above for when bumping it is
 required rather than reflexive.
+
+**A spec revision moves every identity in the repo**, this project's own and the three bundled ones alike, and
+it is one substitution across everything — `.tn` sources, Java constants, test fixtures, `README.md`,
+`SCHEMA-HEADER.md`. Nothing derives the revision from a constant and nothing should: an identity is a literal in
+a published document, which is exactly why `OrderServerTest.identitiesMatchTheConstants` holds the demo schemas'
+literals to the Java constants rather than letting either side interpolate. So the check that the bump is
+complete is that no `2026/<previous>` string survives anywhere, and then a green build — the three bundled
+identities move at the same time, so a missed one fails to resolve rather than resolving to something stale.
 
 ## Conventions inherited from tson-java
 
@@ -577,6 +602,11 @@ These are not restated preferences; matching them is what keeps the two repos re
   or plain error goes into tson-java's `SPEC-FEEDBACK.md` — raise it in conversation, and record it there
   rather than silently picking an interpretation. Since that repo is read-only for now, stage such
   findings in `UPSTREAM.md` under "Spec feedback to file".
+- **Cite the spec, not the argument that got it there.** That register holds only what is open against the
+  current revision and renumbers from #1 whenever a revision closes, so a `SPEC-FEEDBACK.md #N` here is a
+  reference to a *live* entry and goes stale the moment the spec adopts it. Prose and Javadoc name the section
+  that requires the behaviour; the number is for a finding with no section to point at yet. **Re-check every
+  such citation on a revision bump** — Revision 33 turned two of them (`#55`, `#20`) into §2.2.3 and §7.1.
 
 ## Demo servers
 

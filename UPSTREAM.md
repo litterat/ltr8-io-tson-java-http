@@ -166,7 +166,7 @@ what an HTTP error body should be:
   RFC 9457's suggested per-error shape (`detail` + `pointer`), which would throw away the code vocabulary, the
   two-ended location model and the source positions §8.1 requires.
 
-**Versioned rather than edited** — which was §10 applied too eagerly, and has since been undone. Immutability
+**Versioned rather than edited** — which was §3.5 applied too eagerly, and has since been undone. Immutability
 protects a document someone may already have pinned; nothing here is published, so the versions were collapsed
 back to one `problem-1.tn` that is edited in place. `TsonProblemSchema.publishedSources()` still exists and the
 demos still serve what it returns, so the shape is ready for a real release.
@@ -387,9 +387,11 @@ rather than a trimmed single-import stand-in.
 proposed making the implementation shallow, per §2.2.3. The fix instead **keeps transitivity** and corrects the
 collision rule to compare the declaring schema's canonical identity rather than counting name occurrences — one
 schema reached by several routes unifies; two different schemas declaring one name is an error naming both. It
-diverges from §2.2.3 deliberately, argued in the sibling's `SPEC-FEEDBACK.md` #55: §3.3.1 already gives
-`!!meta` the transitive rule ("the target's local declarations plus its imports"), and `core.tn`'s own
-`void => !unit {}` depends on it. The bundled chain is itself a diamond.
+diverged from §2.2.3 as it then stood, and **Revision 33 settled it the implementation's way**: §2.2.3 now
+reads "an `!!import` contributes the imported schema's entire namespace", so transitivity is the rule rather
+than a documented divergence from one. The argument that got it there — §3.3.1 already gives `!!meta` the
+transitive rule, and `core.tn`'s own `void => !unit {}` depends on it, the bundled chain being itself a
+diamond — has served its purpose; cite §2.2.3.
 
 A bonus the shallow reading would not have given: because identities carry the spec revision, a closure
 reaching two revisions of `core.tn` is now rejected at namespace construction rather than surfacing later as a
@@ -432,7 +434,7 @@ problems, so one unimplemented construct no longer costs every other declaration
 **Worth recording because it nearly read as a fix here.** The pinning test asserted that resolution *throws*;
 it stopped throwing, which is indistinguishable from the feature landing if the test is not looking at the
 code. It had not landed. A test that pins a gap must pin the gap, not the delivery mechanism — corrected in
-`SketchTest.anApplicationInsideAChoiceIsStillNotImplemented`.
+`UpstreamGapsTest.anApplicationInsideAChoiceIsStillNotImplemented`.
 
 
 **Hit:** describing an operation's responses. `response => <T, S> { status: status_code = S  body: T }` is the
@@ -790,7 +792,7 @@ classification one and is now upstream backlog.
   wire was a consequence of a bind mismatch landing in the 400 branch, where a body carries every diagnostic
   by design. The detail is still populated, because that is what gets logged.
 - `problem-1.tn` declares `BIND_MISMATCH`, and `TsonProblemSchemaTest` caught the missing member before I did.
-  It went out as `problem-4.tn` at the time — §10 applied reflexively to an unpublished schema, since collapsed
+  It went out as `problem-4.tn` at the time — §3.5 applied reflexively to an unpublished schema, since collapsed
   back to one version. Immutability binds at release, not during development.
 
 **Also fixed while here:** the three demo servers no longer hardcode the problem schema's version in their own
@@ -889,6 +891,13 @@ that should not be there.
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off.
 
+**That register renumbers from #1 each time a revision closes**, and its convention is now *cite the spec, not
+the argument that got it there*: an open finding is cited by number, and once the spec carries the rule the
+citation names the section instead. Mirror it here — a `SPEC-FEEDBACK.md #N` in this repo is a reference to an
+entry that is still open, so re-check it after a revision bump rather than leaving it to rot into a wrong
+number. Revision 33 closed the two that were cited here (#55, transitive imports, now §2.2.3; #20, `.tn` versus
+`.tn1`, now §7.1) and left the two staged below untouched.
+
 ### To file: how a schema is named for a document that cannot carry `!!schema` (§6, §7.1)
 
 **Section:** [TSON-DATA] §6 (JSON compatibility) and §7.1 (Encoding, Normalization, and Media Type).
@@ -908,6 +917,9 @@ proposal — rules, naming procedure, structured-field syntax, and the two decis
 **The interpretation this project uses today**, pending a decision: the body's `!!schema` is the only channel;
 `TsonSchemaVersions` refuses a document that names no version rather than guessing one.
 
+**Unchanged by Revision 33.** §7.1 was rewritten (the `.tn`/`.tn1` extension rule) and §6 sharpened, and
+neither gained an out-of-band channel. Still worth filing, and the second reason above is the stronger one.
+
 **The conflict rule, whatever is decided,** has a precedent in this same spec and should follow it. §2.2.1 on
 content hashes: "two that declare different hashes are in conflict — at most one describes the real bytes — and
 a consumer that observes both MUST report an error rather than choosing between them". A header and a directive
@@ -926,8 +938,12 @@ body: { name: page  arguments: [ { name: order } ] }
 ```
 
 because `page<order>` in that position is a *parse* error (`adjacent values must be separated by whitespace,
-a comma, or both`), the `<` never being data syntax. Measured, and both spellings resolve and are checked;
-`SketchTest` pins them.
+a comma, or both`), the `<` never being data syntax. Measured, and both spellings are asserted by
+`UpstreamGapsTest.aTemplateApplicationAtATypeRefSlotInDataNeedsTheBracedForm` — the braced record resolves,
+the sugar does not parse.
+
+**Unchanged by Revision 33**, which rewrote §8.2 around synthetic entries and left §8.1's positional-form
+paragraph saying exactly what it said before. Still worth filing.
 
 **This is by design and the spec is not wrong.** What is worth raising is whether the design is intended to
 cost this much at the one place it now shows up. §5.6's positional form was written for the argument-free

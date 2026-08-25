@@ -27,12 +27,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TsonHttpCodecTest {
 
-    private static final String SCHEMA_ID = "https://example.com/2026/32/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://example.com/2026/33/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://example.com/2026/32/app/order-1.tn"
-            !!meta:"https://tson.io/2026/32/m/meta.tn"
-            !!import:"https://tson.io/2026/32/m/core.tn"
+            !!id:"https://example.com/2026/33/app/order-1.tn"
+            !!meta:"https://tson.io/2026/33/m/meta.tn"
+            !!import:"https://tson.io/2026/33/m/core.tn"
             {
                 order => { sku: text  quantity: int32 }
             }""";
@@ -296,8 +296,8 @@ class TsonHttpCodecTest {
     void aTypeNothingBindsIsAServerFaultNotALibraryGap() {
         String schema = """
                 !!id:"https://example.test/thing-1.tn"
-                !!meta:"https://tson.io/2026/32/m/meta.tn"
-                !!import:"https://tson.io/2026/32/m/core.tn"
+                !!meta:"https://tson.io/2026/33/m/meta.tn"
+                !!import:"https://tson.io/2026/33/m/core.tn"
                 { thing => { a: text } }""";
         Tson tson = Tson.builder().schemaSource(uri -> schema).bindings(Map.of()).build();
         tson.resolve(schema);

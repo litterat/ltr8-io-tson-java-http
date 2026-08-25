@@ -44,7 +44,7 @@ public final class TsonApiDescription {
      * The spec's own bundled meta directory. Every implementation has these; a service does not publish them,
      * and a client resolving this description already has them.
      */
-    private static final String BUNDLED = "https://tson.io/2026/32/m/";
+    private static final String BUNDLED = "https://tson.io/2026/33/m/";
 
     private final Tson tson;
     private final String schemaId;

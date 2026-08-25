@@ -31,15 +31,15 @@ Each starts the same server and prints what to try. The same commands work again
 
 ```
 $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binary '
-  !!schema:"https://schemas.example.com/2026/32/app/order-1.tn"
+  !!schema:"https://schemas.example.com/2026/33/app/order-1.tn"
   !order { sku: "ABC-1"  quantity: 3 }'
-!!schema:"https://schemas.example.com/2026/32/app/order-1.tn"
+!!schema:"https://schemas.example.com/2026/33/app/order-1.tn"
 !order { sku: "ABC-1" quantity: 6 }
 
 $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binary '
-  !!schema:"https://schemas.example.com/2026/32/app/order-1.tn"
+  !!schema:"https://schemas.example.com/2026/33/app/order-1.tn"
   !order { }'
-!!schema:"https://tson.io/2026/32/ltr8/http/problem-1.tn"
+!!schema:"https://tson.io/2026/33/ltr8/http/problem-1.tn"
 !problem { status: 400 title: "Invalid TSON document" detail: "the request body has 2 problems" errors: [
   { path: "/sku" schema_pointer: "/order/sku" code: "FIELD_REQUIRED"
     message: "missing required field \'sku\' for \'order\'" data_position: "3:8:70" ... }
@@ -52,8 +52,8 @@ Both replies name the schema that governs them, and the server publishes both do
 validate what it received with nothing told out of band:
 
 ```
-$ curl -s localhost:8080/2026/32/ltr8/http/problem-1.tn | head -1
-!!id:"https://tson.io/2026/32/ltr8/http/problem-1.tn"
+$ curl -s localhost:8080/2026/33/ltr8/http/problem-1.tn | head -1
+!!id:"https://tson.io/2026/33/ltr8/http/problem-1.tn"
 ```
 
 ```java

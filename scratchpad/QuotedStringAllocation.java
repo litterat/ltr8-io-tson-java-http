@@ -36,7 +36,7 @@ public class QuotedStringAllocation {
 
     public static void main(String[] args) {
         // A realistic payload: the schema URI a self-describing reply names, plus a SKU.
-        String uri = "https://schemas.example.com/2026/32/app/order-1.tn";
+        String uri = "https://schemas.example.com/2026/33/app/order-1.tn";
         String sku = "ABC-1";
         int reps = 200_000;
 

@@ -21,8 +21,8 @@ class MetaLayerLookupTest {
 
     private static final String META_SOURCE = """
             !!id:"https://example.test/meta-x.tn"
-            !!meta:"https://tson.io/2026/32/m/meta-kernel.tn"
-            !!import:"https://tson.io/2026/32/m/meta.tn"
+            !!meta:"https://tson.io/2026/33/m/meta-kernel.tn"
+            !!import:"https://tson.io/2026/33/m/meta.tn"
             {
               scalar => !integer ^ { min: 100  max: 599 }
               plain  => { a: text }
@@ -35,7 +35,7 @@ class MetaLayerLookupTest {
         return """
                 !!id:"https://example.test/g-1.tn"
                 !!meta:"https://example.test/meta-x.tn"
-                !!import:"https://tson.io/2026/32/m/core.tn"
+                !!import:"https://tson.io/2026/33/m/core.tn"
                 {
                 %s
                 }

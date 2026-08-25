@@ -7,13 +7,9 @@ import io.ltr8.tson.schema.meta.TypeRef;
 import java.util.List;
 
 /**
- * The <b>alternative</b> operation shape, for the design {@code SketchTest} weighs and rejects: responses as
- * type references into an ordinary schema, each naming an application of {@code response<T, S>}, rather than
- * as {@code !response { status: … body: … }} data records.
- *
- * <p>Kept because rejecting a design is worth a test. See {@code sketch/README.md} for why this one is not
- * adopted — in short, the template exists in {@code http-api-1.tn} to <em>manufacture types</em>, which is
- * the constraint the {@code data} base kind removed.
+ * A minimal operation shape, bound by {@code UpstreamGapsTest}'s probes so they can drive a {@code ~data &}
+ * constructor without depending on {@code meta-http-1.tn}'s real one: responses as bare type references,
+ * rather than as the {@code !response { status: … body: … }} data records the shipped meta layer declares.
  *
  * <p>The class must be named {@code Operation}: {@code DefaultDataNameBinder} mangles the schema type name
  * to PascalCase and calls {@code Class.forName}, so {@link Typename} names the schema side but does not make

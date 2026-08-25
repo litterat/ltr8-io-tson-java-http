@@ -77,7 +77,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <h2>Caching and threading</h2>
  *
- * <p>Cached by canonical identity, so a varied query string cannot force repeated outbound fetches, and §10's
+ * <p>Cached by canonical identity, so a varied query string cannot force repeated outbound fetches, and §3.5's
  * immutability rule makes the entry permanently valid. The cache is bounded; once full it stops accepting
  * entries rather than evicting, since a schema set is small and fixed in practice.
  *

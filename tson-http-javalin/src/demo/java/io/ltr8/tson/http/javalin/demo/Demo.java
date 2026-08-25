@@ -26,10 +26,10 @@ final class Demo {
                   curl -s -o /dev/null -w '%%{http_code}\\n' %s/orders -H 'Content-Type: application/json' -d '{}'
 
                 The schema this server validates against, published at its own identity path:
-                  curl -s %s/2026/32/app/order-1.tn
+                  curl -s %s/2026/33/app/order-1.tn
 
                 The schema its error bodies conform to:
-                  curl -s %s/2026/32/ltr8/http/problem-1.tn
+                  curl -s %s/2026/33/ltr8/http/problem-1.tn
 
                 Note the schema's identity is %s, not localhost:
                 [TSON-DATA] §2.2.1 forbids a port in an identifying URI, so a name and a

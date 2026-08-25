@@ -76,7 +76,7 @@ public final class TsonHttpException extends RuntimeException {
      * Where this project's problem-type identifiers live. They dereference to nothing yet; the point today is
      * that they are stable and matchable where a title is prose.
      */
-    public static final String TYPES = "https://tson.io/2026/32/ltr8/http/problems/";
+    public static final String TYPES = "https://tson.io/2026/33/ltr8/http/problems/";
 
     /** RFC 9457's own default: no semantics beyond the status code. */
     public static final String ABOUT_BLANK = "about:blank";

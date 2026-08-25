@@ -31,7 +31,7 @@ import java.util.Set;
 public final class TsonSchemaCatalog {
 
     /**
-     * What a schema response should say about caching. [TSON-SCHEMA] §10's immutability rule is that a
+     * What a schema response should say about caching. [TSON-SCHEMA] §3.5's immutability rule is that a
      * published schema's content never changes -- a shape change is published under a new name -- so this is a
      * statement of the format's own rule rather than an optimistic guess about a deployment.
      */

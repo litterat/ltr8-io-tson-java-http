@@ -34,12 +34,12 @@ import io.ltr8.tson.http.helidon.TsonSchemaHandler;
 public final class OrderServer {
 
     /** The schema this server governs orders by. Its identity names a host; where it is served is separate. */
-    public static final String SCHEMA_ID = "https://schemas.example.com/2026/32/app/order-1.tn";
+    public static final String SCHEMA_ID = "https://schemas.example.com/2026/33/app/order-1.tn";
 
     public static final String SCHEMA = schema("order-1.tn");
 
     /** The identity of this service's business-error schema. */
-    public static final String ERRORS_ID = "https://schemas.example.com/2026/32/app/orders-errors-1.tn";
+    public static final String ERRORS_ID = "https://schemas.example.com/2026/33/app/orders-errors-1.tn";
 
     /**
      * This service's business errors, composed on the transport-level problem schema.
@@ -64,7 +64,7 @@ public final class OrderServer {
      * this server. The data-shaped predecessor spelled the same thing as {@code "order"} and needed forty
      * lines of its own to notice.
      */
-    public static final String API_ID = "https://schemas.example.com/2026/32/app/orders-api-1.tn";
+    public static final String API_ID = "https://schemas.example.com/2026/33/app/orders-api-1.tn";
 
     public static final String API = schema("orders-api-1.tn");
 
@@ -204,7 +204,7 @@ public final class OrderServer {
      * description references. Deriving makes the two the same thing, so a schema referenced but not published
      * is no longer possible rather than merely tested for.
      *
-     * <p>§10 still applies to what goes in: when a published schema is superseded, both versions stay served,
+     * <p>§3.5 still applies to what goes in: when a published schema is superseded, both versions stay served,
      * because a document that named the old one must go on resolving.
      */
     private static TsonSchemaCatalog catalog(TsonApiDescription described, Map<String, String> schemas) {

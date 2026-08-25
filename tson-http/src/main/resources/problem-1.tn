@@ -1,6 +1,6 @@
-!!id:"https://tson.io/2026/32/ltr8/http/problem-1.tn"
-!!meta:"https://tson.io/2026/32/m/meta.tn"
-!!import:"https://tson.io/2026/32/m/core.tn"
+!!id:"https://tson.io/2026/33/ltr8/http/problem-1.tn"
+!!meta:"https://tson.io/2026/33/m/meta.tn"
+!!import:"https://tson.io/2026/33/m/core.tn"
 @doc:"""
   The error body this project writes when a request cannot be fulfilled.
 
@@ -17,7 +17,7 @@
   RFC 9457's per-error shape -- that RFC suggests detail and pointer, which would throw away the
   code vocabulary, the two-ended location model and the source positions §8.1 requires.
 
-  Versioning, per §10: a shape change to a PUBLISHED schema is a new name, never an edit, because a
+  Versioning, per §3.5: a shape change to a PUBLISHED schema is a new name, never an edit, because a
   document that named the old one must go on resolving. Nothing here is published yet, so this file
   is edited in place and stays -1. When that changes, adding so much as an enum member below becomes
   problem-2.tn, and this document keeps being served alongside it.
