@@ -26,15 +26,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Gaps and constraints in the library this project builds on, each pinned so that a change upstream shows up
  * here as a <em>failing test</em> rather than as nothing happening.
  *
- * <p>Every one is written up in {@code UPSTREAM.md} with the number named below. Two rules learned the hard
- * way and worth restating:
+ * <p><b>This class outlives {@code UPSTREAM.md}'s entries.</b> That file holds only what is still open and
+ * deletes an item once it closes, so most of what is pinned here has no entry any more — which is the point:
+ * a fixed gap is exactly the thing that regresses unnoticed. Only a still-open gap names its number, because
+ * only a number that can go stale is worth checking. Two rules learned the hard way and worth restating:
  *
  * <ul>
- *   <li><b>Pin the gap, not the way it is delivered.</b> The #13 test below once asserted that resolution
+ *   <li><b>Pin the gap, not the way it is delivered.</b> The choice test below once asserted that resolution
  *       <em>throws</em>. It stopped throwing when gaps became diagnostics — indistinguishable from the
  *       feature landing, if the test is not looking at the code. It had not landed.</li>
- *   <li><b>A fixed gap flips its test, it does not delete it.</b> #14's entry asserts the constraint now
- *       holds, which is what stops it silently regressing.</li>
+ *   <li><b>A fixed gap flips its test, it does not delete it.</b> The fixed-field tests assert the constraint
+ *       now holds, which is what stops it silently regressing.</li>
  * </ul>
  */
 class UpstreamGapsTest {
@@ -74,7 +76,7 @@ class UpstreamGapsTest {
         return builder.build();
     }
 
-    // ── #13: a template application cannot appear inside a choice ────────────────────────────────
+    // ── open (UPSTREAM.md #2): a template application cannot appear inside a choice ──────────────
 
     /**
      * <b>Still open; only the channel changed.</b> A gap used to abort the pass as an
@@ -102,7 +104,7 @@ class UpstreamGapsTest {
                 () -> "expected a NOT_IMPLEMENTED diagnostic, got " + problems);
     }
 
-    // ── #14: a value parameter filling a FIXED field -- fixed upstream, pinned here ──────────────
+    // ── fixed upstream, pinned here: a value parameter filling a FIXED field ─────────────────────
 
     /** {@code status: status_code = S} applied as {@code <order, 201>} both carries 201 and enforces it. */
     @Test
@@ -124,13 +126,13 @@ class UpstreamGapsTest {
                 + "!created { status: 201  body: !order { sku: \"a\" } }"));
         assertTrue(tson.validate(header + "!created { status: 999  body: !order { sku: \"a\" } }").stream()
                         .anyMatch(d -> d.code() == Diagnostic.Code.FIELD_FIXED),
-                "a parameter-filled FIXED field constrains, since #14 -- the whole point of `= S`");
+                "a parameter-filled FIXED field constrains -- the whole point of `= S`");
     }
 
     /**
      * The same, seen through a materialised entry: the substituted field is {@code REQUIRED_FIXED} rather
      * than merely carrying its value. This is the shape that made the {@code response<T, S>} design
-     * unattractive while #14 was open, so it is worth knowing it is now sound.
+     * unattractive while the constraint was being lost, so it is worth knowing it is now sound.
      */
     @Test
     void aMaterialisedApplicationCarriesAFixedField() {
@@ -157,13 +159,13 @@ class UpstreamGapsTest {
         assertEquals(FieldState.REQUIRED_FIXED, status.state());
     }
 
-    // ── #18, fixed: every meta-layer name in a governed schema refuses the same way ──────────────
+    // ── fixed upstream: every meta-layer name in a governed schema refuses the same way ──────────
 
     /**
      * <b>A meta layer is the schema <em>for</em> the schema.</b> Its declarations are the vocabulary a schema
      * is written in, not types that schema may reference — a governed schema applies its constructors as
-     * {@code !C { … }} and nothing else. So every form here is refused, and since {@code UPSTREAM.md} #18
-     * they are all refused in the same words.
+     * {@code !C { … }} and nothing else. So every form here is refused, and they are all refused in the
+     * same words.
      *
      * <p>The one that used to differ was the <em>application</em>, which claimed the arguments were missing
      * when they were written. Not a lookup bug: the desugar pass collapsed the application to its bare head,
@@ -207,7 +209,7 @@ class UpstreamGapsTest {
         tson(metaSource, doc).resolve(doc);
     }
 
-    // ── #10's reverse case at the meta layer -- fixed, pinned ────────────────────────────────────
+    // ── fixed upstream: a Java component the meta layer does not declare ─────────────────────────
 
     /**
      * A Java component the meta declaration does not declare used to arrive {@code null} and be dereferenced
@@ -249,17 +251,14 @@ class UpstreamGapsTest {
         assertTrue(message.contains("not permitted in an instance template binding"), message);
     }
 
-    // ── not a gap: an entry's two annotation positions ──────────────────────────────────────────
+    // ── not a gap: an entry's two annotation positions ───────────────────────────────────────────
 
     /**
-     * <b>Filed as {@code UPSTREAM.md} #20 and withdrawn — the report was wrong.</b> A schema entry has two
-     * annotation positions and they land in different places: before the name annotates the <em>entry</em>
-     * and is read from the entries map, after the arrow annotates the <em>definition</em> and is read from
-     * the {@code TypeDefinition}. Checking only the second for an annotation written in the first position
-     * looks exactly like the annotation being dropped.
-     *
-     * <p>Kept as a test because the shape of that mistake is worth having pinned: it cost a wrongly-filed
-     * upstream item and a redundant {@code description} field on {@code operation}, both since undone.
+     * <b>Not a gap, and pinned because it reads like one.</b> A schema entry has two annotation positions and
+     * they land in different places: before the name annotates the <em>entry</em> and is read from the entries
+     * map, after the arrow annotates the <em>definition</em> and is read from the {@code TypeDefinition}.
+     * Checking only the second for an annotation written in the first position looks exactly like the
+     * annotation being dropped — which is what makes both retention rules worth asserting.
      */
     @Test
     void anEntrysTwoAnnotationPositionsLandInDifferentPlaces() {
@@ -325,7 +324,7 @@ class UpstreamGapsTest {
 
     /**
      * <b>Not a gap — the spec's design, pinned because {@code UPSTREAM.md} stages feedback about what it
-     * costs.</b> [TSON-SCHEMA] §8.1 gives {@code type_ref} a positional form at every {@code type_ref}-typed
+     * costs (see "Spec feedback to file").</b> [TSON-SCHEMA] §8.1 gives {@code type_ref} a positional form at every {@code type_ref}-typed
      * position: a bare token fills {@code name}, and the braced record is the explicit form, canonical only
      * where {@code arguments} is present. A <em>schema</em> may therefore write {@code page<order>}; a
      * <em>data</em> payload at such a slot — an {@code !operation { … }} governed by a consumer's meta layer

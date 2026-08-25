@@ -62,10 +62,10 @@ is a job for a gateway, and:
   inspection at that layer is a layering violation before it is anything else.
 - **`Content-Encoding: gzip` makes it impossible.** Routing on a directive inside a compressed body means
   decompressing to route. The same goes for any payload encrypted above the transport.
-- **It forced a lexer fragment into this project.** `TsonDocumentPeek` exists only because routing needs the
-  schema before the read, and nothing public answers that (`UPSTREAM.md` #9). It is a second, partial
-  implementation of something the real lexer already does, with a standing rule that it must never guess. A
-  header removes the need for it in the routing path.
+- **It forces a peek before the read.** Routing needs the schema before the body is read, so the origin has to
+  look inside it first. That is answered now — `TsonDocumentHeader.peekResumable` reads the header over the
+  real lexer and hands back the document from its first byte — but it is still a read of the body performed
+  only to decide where the body goes. A header removes the need for it in the routing path.
 
 **Honest limit: a header does not save the origin server from peeking.** If header and body can disagree, the
 endpoint must still read the directive to check. The saving is at the network, not at the server — except for a
@@ -100,8 +100,8 @@ at length and a Class 1 processor is required to handle — becomes unsendable o
 other media type to send it as.
 
 That may be intended. It has a real virtue: a client that forgets both the header and the directive gets
-rejected rather than silently accepted unvalidated, which is the same class of hazard as the version-mismatch
-silent drop this project just found (`UPSTREAM.md` #10).
+rejected rather than silently accepted unvalidated, which is the same class of hazard as a v1 codec binding a
+v2 document to a class with fewer components and dropping the difference in silence.
 
 **But it makes the same bytes mean different things depending on transport**, which is the kind of discrepancy
 that surfaces years later. Absence already has a meaning in TSON — schemaless — and redefining it at the HTTP

@@ -31,8 +31,8 @@ import java.nio.charset.StandardCharsets;
  * }</pre>
  *
  * <p><b>Client and server share this JVM</b>, so a share-of-total figure from the recording includes
- * {@code HttpClient}'s own allocation. Attribute by stack, not by percentage. {@code UPSTREAM.md} #21 is what
- * this found.
+ * {@code HttpClient}'s own allocation. Attribute by stack, not by percentage -- which is how this found a
+ * regex being used as a character comparison in the writer's quoting path, since fixed upstream.
  */
 public final class AllocationHarness {
 

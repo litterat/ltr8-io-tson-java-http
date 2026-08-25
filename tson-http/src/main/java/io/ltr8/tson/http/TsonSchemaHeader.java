@@ -112,7 +112,7 @@ public final class TsonSchemaHeader {
         Optional<String> fromHeader = parse(fieldValue);
         // The library's own header peek, over the real lexer: it buffers what the lexer pulled to reach the
         // end of the header and hands back the document from its first byte, so a one-shot request body
-        // survives the look (UPSTREAM.md #9).
+        // survives the look.
         TsonDocumentPeek peek = TsonDocumentHeader.peekResumable(body);
         Optional<String> fromBody = peek.header().schema();
 

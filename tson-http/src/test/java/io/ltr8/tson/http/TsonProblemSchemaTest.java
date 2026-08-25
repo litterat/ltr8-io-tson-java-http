@@ -117,8 +117,8 @@ class TsonProblemSchemaTest {
      * ever produced a code that is new.
      *
      * <p><b>The Java enum is the source of truth</b>, which is why this asserts against it rather than against
-     * tson-cli's schema. Two schemas checked against each other would only prove they drifted together, and
-     * since {@code UPSTREAM.md} #5 they are free to diverge everywhere else.
+     * tson-cli's schema. Two schemas checked against each other would only prove they drifted together, and the
+     * two are free to diverge everywhere else -- a CLI reports on files, a server reports on requests.
      */
     @Test
     void everyDiagnosticCodeIsDeclaredInTheSchema() {

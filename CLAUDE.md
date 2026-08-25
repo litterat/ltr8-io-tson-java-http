@@ -113,9 +113,10 @@ each other.
   put nothing status-shaped anywhere else.
 - `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem-1.tn` — the error body, its schema,
   and the reader that proves the two agree. **This project's own schema, maintained here** — it began as a copy
-  of `tson-cli`'s `diagnostics.tn` and has diverged on purpose (`UPSTREAM.md` #5): a CLI reports on files and a
-  server reports on requests. `problem` follows **RFC 9457**; `diagnostic` stays close to what a TSON read
-  produces, because that is what it reports.
+  of `tson-cli`'s `diagnostics.tn` and has diverged on purpose: a CLI reports on files and a server reports on
+  requests, and lifting the two into a shared module was asked for upstream and rightly rejected. `problem`
+  follows **RFC 9457**; `diagnostic` stays close to what a TSON read produces, because that is what it
+  reports.
 - `TsonHttpSchemaSource` / `TsonSchemaFetchException` — fetching a schema named by an untrusted request
   body, under policy. Read its class notes before changing anything in it; every rule there is load-bearing.
 
@@ -169,8 +170,9 @@ timed region.
 every other test in this repo is single-threaded — so a codec wrong under concurrency would pass all of them.
 `TsonHttpCodecConcurrencyTest`, `TsonHttpSchemaSourceConcurrencyTest` and each adapter's
 `demo/OrderServerConcurrencyTest` close that gap, and each task checks its own result: the failure worth
-looking for is a crossed or torn value, not a call that threw. Writing them is what found `UPSTREAM.md` #8.
-Keep them green, and add to them rather than around them.
+looking for is a crossed or torn value, not a call that threw. Writing them is what found a real race in
+`DataBindContext`'s descriptor resolution, since fixed upstream. Keep them green, and add to them rather than
+around them.
 
 **The adapter test suites are near-copies on purpose.** `TsonJdkAdapterTest`, `TsonJavalinAdapterTest` and
 `TsonHelidonAdapterTest` ask the same questions and assert the same answers, because three adapters over one
@@ -230,7 +232,7 @@ the data a schema describes. A meta layer's vocabulary is a separate namespace o
 
 **`TsonApiDescription` has no `validate`, and that is the entire argument for the design.** Its data-shaped
 predecessor carried forty lines resolving bare names against an import list, and those lines reimplemented an
-upstream namespace bug twice — once by counting how many imports surface a name (`UPSTREAM.md` #11's bug), and
+upstream namespace bug twice — once by counting how many imports surface a name, and
 once by comparing whole `TypeDefinition`s, which differ per route because linking credits each route's own
 subtypes. Here an unsound description does not resolve, so the model cannot exist for one.
 
@@ -282,9 +284,9 @@ they are values inside a payload, with nothing for an annotation to attach to.
 
 **A schema entry has two annotation positions and they land in different places.** `@doc:"…" op => …`
 annotates the **entry**, read from `entries.getAnnotations(name)`; `op => @doc:"…" { … }` annotates the
-**definition**, read from `TypeDefinition.annotations()`. Both are retained. Reading only the second and
-concluding `@doc` is dropped cost a wrongly-filed upstream item and a redundant field here (`UPSTREAM.md`
-#20, withdrawn).
+**definition**, read from `TypeDefinition.annotations()`. Both are retained, so reading only the second and
+concluding `@doc` is dropped is a mistake that looks exactly like a library bug. Pinned by
+`UpstreamGapsTest.anEntrysTwoAnnotationPositionsLandInDifferentPlaces`.
 
 **Parameters are where TSON's document-orientation does not reach.** A URL segment cannot carry a record, so
 `parameter.type` names a scalar and nothing enforces that. Stating the limit beats papering over it.
@@ -310,8 +312,8 @@ envelope, the service owns "SKU not found". One rule that costs time otherwise:
 
 - **Imports are transitive, but name what you use anyway.** A name reaches you through what you import, so
   `orders-errors-1.tn` would get `text` through `problem-1.tn` without saying so. Name `core.tn` too: a
-  collision is judged by the *declaring schema's identity* now, not by how many routes reach it
-  (`UPSTREAM.md` #11), so naming a shared dependency twice is redundant rather than an error.
+  collision is judged by the *declaring schema's identity*, not by how many routes reach it, so naming a
+  shared dependency twice is redundant rather than an error.
 - **`errors` stays data-level.** A business failure carries `errors: []` and its own fields. They never
   co-occur anyway — validation is a gate, so business logic is not reached on a document that failed it.
 
@@ -335,7 +337,7 @@ the method is worse than two fields.
 
 **Routing is a safety feature, not a convenience.** A codec built for v1 will read a v2 document and silently
 drop what its class has no component for — `OrderV1[sku=A, quantity=1]`, no error, **no diagnostic even
-collecting** (`UPSTREAM.md` #10). So `route` refuses a document naming a version this endpoint does not serve,
+collecting**. So `route` refuses a document naming a version this endpoint does not serve,
 and refuses one naming none. Do not add a fallback that guesses; that is the failure it exists to prevent.
 `defaultVersion` exists for an older unversioned client and is off by default for the same reason.
 
@@ -450,17 +452,18 @@ shape is:
 > handler.
 
 A schema arriving at runtime (an unknown `!!schema` URL) must go through a single guarded resolution
-path, not a concurrent one. Treat this as an invariant to be pinned by a test, and see `UPSTREAM.md` #3 —
-the upstream contract needs to be stated explicitly rather than inferred, as it is here.
+path, not a concurrent one. Treat this as an invariant to be pinned by a test, and see `UPSTREAM.md` #1 —
+the upstream contract is still inferred from scattered class Javadoc rather than stated on the types a server
+actually holds.
 
 ## Traps — read before touching the code involved
 
 Each cost a debugging cycle here and is pinned by a test.
 
-- **`TsonHttpException.from`'s base-syntax branch is a net, not a path.** A document that will not parse is now
-  reported through the receiver (`UPSTREAM.md` #6, fixed upstream), so a collecting read returns its
-  diagnostics rather than throwing. `Diagnostic.ofBaseSyntaxError` stays in `from` because it classifies the
-  three base-syntax exception types — two of which live in an unexported package, so no caller here could
+- **`TsonHttpException.from`'s base-syntax branch is a net, not a path.** A document that will not parse is
+  reported through the receiver, so a collecting read returns its diagnostics rather than throwing.
+  `Diagnostic.ofBaseSyntaxError` stays in `from` because it classifies the three base-syntax exception
+  types — two of which live in an unexported package, so no caller here could
   `catch` them — and **rethrows anything else**, which is what stops an unexpected fault becoming a false
   verdict about the request. Do not delete it for being unreachable.
 - **`problem-1.tn`'s `diagnostic_code` is a hand-written copy of `Diagnostic.Code`.** Nothing but
@@ -512,11 +515,11 @@ Each cost a debugging cycle here and is pinned by a test.
   mode. `TsonHttpCodec.prepareToRead(schemaId)` forces that at startup and `TsonSchemaVersions` calls it —
   without it the same mistake is a 500 on the first request that reads one. `@Unbound` marks a component that
   is the class's own; `TsonConfig.lenientBinding()` is the deliberate versioned-evolution position. **A
-  mismatch reaching the diagnostics channel is still reported as `SCHEMA_ERROR` and so becomes a 400**
-  (`UPSTREAM.md` #19) — routing and `prepareToRead` are what keep it unreachable.
-- **`prepareToWrite` is a warm-up, not a correctness measure** — it was one, before `UPSTREAM.md` #8 was fixed
-  upstream. Keep calling it at startup to move first-write descriptor resolution off the request thread; do not
-  treat it as load-bearing for concurrency any more.
+  mismatch reaching the diagnostics channel is still reported as `SCHEMA_ERROR` and so becomes a 400** —
+  routing and `prepareToRead` are what keep it unreachable.
+- **`prepareToWrite` is a warm-up, not a correctness measure** — it was one, before the descriptor race was
+  fixed upstream. Keep calling it at startup to move first-write descriptor resolution off the request thread;
+  do not treat it as load-bearing for concurrency any more.
 - **A schema reference may not carry a port, userinfo or a fragment** (§2.2.1), so a schema origin cannot run
   on a non-default port. Use `mapHost`. See "Identity is not location" above — this is the trap that costs the
   most time, because the failure surfaces from the resolver rather than from the fetch.
@@ -651,22 +654,28 @@ request exercises that.
 ## Files
 
 - `UPSTREAM.md` — changes wanted in `ltr8-io-tson-java`, plus spec feedback staged for its
-  `SPEC-FEEDBACK.md`. **The only place upstream changes are recorded** while that repo is hands-off.
+  `SPEC-FEEDBACK.md`. **The only place upstream changes are recorded** while that repo is hands-off, and
+  **it holds only what is open**: an item whose change landed, or whose answer was a decision, is deleted
+  rather than struck through, so its numbers renumber and an `UPSTREAM.md #N` citation needs re-checking
+  whenever it is pruned. Where a gap has closed, state the rule it left behind where it applies — in the
+  Javadoc of the class that relies on it, or in "Traps" above — with no number at all.
 - `demo/schemas/` — the three schemas the demo servers publish (`order-1.tn`, `orders-errors-1.tn`,
   `orders-api-1.tn`), as real `.tn` files on the demo source sets' shared resource path rather than Java text
   blocks. One copy for three adapters, so a change cannot land in one demo and not the others. They name
   their imports **literally**, as a published document must, and each `OrderServerTest.identitiesMatchTheConstants`
   holds those literals to the constants — which is what the old string interpolation gave for free.
-- `tson-http/src/main/resources/meta-http-1.tn` — the meta layer an API description names. Four designs were
-  explored side by side (three as schemas, one as data); this is the one picked, and the others are gone
-  along with the `sketch/` directory that held them. The comparison is in git history if it is ever wanted
-  again — the short version is in "Describing an API" above.
-- `scratchpad/` — standalone reproducers for upstream items, written to drop straight into the sibling's own
-  test tree. **Never copy one into `../ltr8-io-tson-java` and leave it there** — that repo is hands-off, and a
-  stray test in it is a change nobody asked for.
+- `tson-http/src/main/resources/meta-http-1.tn` — the meta layer an API description names. Picked out of four
+  designs explored side by side (three as schemas, one as data); the comparison is in git history, and why this
+  one won is in "Describing an API" above.
+- `scratchpad/` — where a standalone reproducer for an upstream item goes, written to drop straight into the
+  sibling's own test tree. Empty when nothing is open enough to need one; a reproducer for a gap that has since
+  closed is deleted with its `UPSTREAM.md` entry. **Never copy one into `../ltr8-io-tson-java` and leave it
+  there** — that repo is hands-off, and a stray test in it is a change nobody asked for.
 - `UpstreamGapsTest` — every gap and constraint in the library that this project depends on knowing about,
-  each named to its `UPSTREAM.md` number, so a change upstream fails a test here rather than passing
-  unnoticed. **Pin the gap, not the way it is delivered**: one of these once asserted that resolution
-  *throws*, stopped throwing when gaps became diagnostics, and read exactly like the feature landing.
+  so a change upstream fails a test here rather than passing unnoticed. **It outlives `UPSTREAM.md`'s
+  entries**: a fixed gap flips its assertion rather than losing it, so most of what it pins has no entry any
+  more, and only a still-open gap names a number. **Pin the gap, not the way it is delivered**: one of these
+  once asserted that resolution *throws*, stopped throwing when gaps became diagnostics, and read exactly like
+  the feature landing.
 - `SCHEMA-HEADER.md` — the proposal for naming a governing schema in an HTTP header. A design document for the
   spec author, not a description of anything built.

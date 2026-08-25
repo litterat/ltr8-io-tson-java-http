@@ -78,10 +78,9 @@ public final class TsonHttpCodec {
      * Resolves the binding descriptors for {@code classes} now, rather than on the first request that writes
      * one. Idempotent and cheap; call it at startup for every type this server writes.
      *
-     * <p><b>A warm-up, not a correctness measure.</b> It began as one: descriptor resolution used to race on a
-     * concurrent first write and the loser got {@code Class already registered} ({@code UPSTREAM.md} #8, now
-     * fixed upstream -- a lost race takes the winner's entry). What remains is the latency, which is worth
-     * moving off the request thread.
+     * <p><b>A warm-up, not a correctness measure.</b> Descriptor resolution settles a concurrent first write by
+     * keeping the winner's entry, so nothing here is load-bearing for correctness. What remains is the latency,
+     * which is worth moving off the request thread.
      */
     public void prepareToWrite(Class<?>... classes) {
         for (Class<?> target : classes) {

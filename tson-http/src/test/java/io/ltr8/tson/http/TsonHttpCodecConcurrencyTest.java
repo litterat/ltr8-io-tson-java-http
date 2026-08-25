@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * that is wrong under concurrency would pass all of the rest of the suite -- every other test here drives it
  * from one thread.
  *
- * <p>It is also the evidence attached to {@code UPSTREAM.md} #3, which asks tson-java to state the contract its
+ * <p>It is also the evidence attached to {@code UPSTREAM.md} #1, which asks tson-java to state the contract its
  * own classes only imply. Asking for a guarantee is worth more when you have measured whether it holds.
  *
  * <p><b>Correctness, not just absence of exceptions.</b> Each task checks its own result, because the failure
@@ -68,11 +68,11 @@ class TsonHttpCodecConcurrencyTest {
     /**
      * Resolved once, on this thread, before anything is shared -- the invariant under test.
      *
-     * <p>{@code prepareToWrite} is the other half of it, and is not decoration: <b>delete that line and
-     * {@code writesConcurrently} fails on most runs</b> with {@code Class already registered}, which is
-     * {@code UPSTREAM.md} #8 reproduced. It is left as a comment rather than an assertion because "this races"
-     * is not something a test can assert without being flaky -- the write-up carries the finding, and this
-     * carries the fix.
+     * <p>{@code prepareToWrite} is the other half of it, but a warm-up rather than a correctness measure:
+     * descriptor resolution once raced on a concurrent first write and the loser got {@code Class already
+     * registered}, which this line was what stopped. It now settles by keeping the winner's entry, so deleting
+     * the line costs latency and nothing else. Kept because moving that work off the request thread is still
+     * what a server wants.
      */
     @BeforeEach
     void setUp() {

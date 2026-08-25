@@ -131,9 +131,9 @@ class TsonHttpCodecTest {
 
     /**
      * A document that will not parse reports like any other bad document -- through the collector, carrying
-     * everything found rather than the first thing thrown. It did not always: base-syntax failures used to
-     * throw past the receiver, and the codec had to classify the exception itself ({@code UPSTREAM.md} #6,
-     * fixed upstream). The classifier is still there as a net; this asserts the path that should be taken.
+     * everything found rather than the first thing thrown. {@code TsonHttpException.from}'s base-syntax branch
+     * is still there as a net, classifying three exception types that no caller here could catch and rethrowing
+     * anything else; this asserts the path that should be taken instead.
      */
     @Test
     void rejectsMalformedTsonAsABadRequestCarryingItsDiagnostics() {

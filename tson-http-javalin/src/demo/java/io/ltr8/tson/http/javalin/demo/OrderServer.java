@@ -47,8 +47,8 @@ public final class OrderServer {
      *
      * <p>Both imports are named, which is the clearer spelling. {@code text} would arrive through
      * the problem schema's own import of {@code core.tn} either way — imports are transitive — but a schema
-     * that uses a name should say where it comes from. Naming both was rejected until {@code UPSTREAM.md} #11
-     * was fixed.
+     * that uses a name should say where it comes from. A collision is judged by the declaring schema's own
+     * identity, so naming a shared dependency twice is redundant rather than an error.
      */
     public static final String ERRORS = schema("orders-errors-1.tn");
 
@@ -139,8 +139,8 @@ public final class OrderServer {
 
         // Every type this server writes, warmed now rather than on a request thread -- derived from the
         // description's payload types rather than listed, so a response type added there cannot be missed.
-        // Descriptor resolution is lazy and its check-then-act is not atomic, so a concurrent first write of
-        // a class races (UPSTREAM.md #8).
+        // A warm-up, not a correctness measure: a concurrent first write settles by keeping the winner's
+        // descriptor, so this buys latency rather than safety.
         codec.prepareToWrite(described.boundClasses(bindings).toArray(Class<?>[]::new));
 
         Javalin app = Javalin.create(config -> config.showJavalinBanner = false).start(port);

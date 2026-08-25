@@ -19,9 +19,9 @@ import java.util.Optional;
  * The two RFC 6901 pointers need no narrowing: they are already {@link Optional} at the source, because for a
  * pointer {@code ""} is not absence but the root, which a document-level schema problem genuinely carries.
  *
- * <p>It began as a copy of {@code tson-cli}'s {@code CliDiagnostic} and is no longer held to it -- see
- * {@code UPSTREAM.md} #5. What it must stay in step with is {@link Diagnostic} itself, and
- * {@code TsonProblemSchemaTest} is what checks that.
+ * <p>Not held to {@code tson-cli}'s {@code CliDiagnostic}, which it began as a copy of: a CLI reports on files
+ * and a server reports on requests, so the two are free to diverge. What it must stay in step with is
+ * {@link Diagnostic} itself, and {@code TsonProblemSchemaTest} is what checks that.
  */
 @Typename(name = "diagnostic")
 public record TsonProblemDiagnostic(Optional<String> path, @Field("schema_pointer") Optional<String> schemaPointer,

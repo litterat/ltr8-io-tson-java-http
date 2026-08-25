@@ -129,8 +129,8 @@ class TsonSchemaVersionsTest {
     /**
      * <b>The reason routing exists, and it is no longer silent.</b> A v1 codec handed a v2 document used to
      * bind it to a class with no {@code currency} component and return {@code OrderV1[sku=A, quantity=1]}
-     * with the field gone — no exception, no diagnostic ({@code UPSTREAM.md} #10). For an order that is the
-     * wrong currency rather than a rejected request.
+     * with the field gone — no exception, no diagnostic. For an order that is the wrong currency rather than
+     * a rejected request.
      *
      * <p>Strict binding refuses it instead. Routing is still the guard — this codec should never have seen
      * this document — but the library no longer quietly does the wrong thing when the guard is bypassed.

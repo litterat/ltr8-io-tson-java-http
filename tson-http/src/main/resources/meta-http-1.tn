@@ -70,8 +70,8 @@
     a reader gets it back from the entry's annotations. `summary` is the short form OpenAPI keeps
     beside the long one.
 
-    Worth knowing, because it cost a wrongly-filed upstream item: a schema entry has TWO annotation
-    positions and they land in different places. `@doc:"..." op => ...` annotates the ENTRY and is read
+    Worth knowing, because getting it wrong looks exactly like a library bug: a schema entry has TWO
+    annotation positions and they land in different places. `@doc:"..." op => ...` annotates the ENTRY and is read
     from the entries map's own annotations; `op => @doc:"..." { ... }` annotates the DEFINITION and is
     read from the TypeDefinition. Both are retained. Looking only at the second and concluding @doc was
     dropped is the mistake.

@@ -20,7 +20,8 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * A {@link TsonSchemaSource} that fetches a schema document over HTTP, under a host allow-list and hard caps on
  * size and time. The implementation of tson-java's own deferred "real disk/HTTP-backed {@code TsonSchemaSource}
- * with whitelist/blacklist policy" ({@code UPSTREAM.md} #4).
+ * with whitelist/blacklist policy" ({@code UPSTREAM.md} #3, which is an offer to lift this upstream -- so keep
+ * it liftable: no adapter types in its signatures, and no tson-java dependency beyond {@link TsonSchemaSource}).
  *
  * <h2>Identity is not location</h2>
  *

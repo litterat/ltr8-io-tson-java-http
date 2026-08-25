@@ -32,8 +32,8 @@ import java.util.Set;
  *
  * <p><b>A codec built for v1 will read a v2 document and silently drop what its class has no component for.</b>
  * Given {@code order-2.tn} adding a {@code currency} field, a v1 codec that can reach that schema returns
- * {@code OrderV1[sku=A, quantity=1]} -- no error, and <em>no diagnostic even under a collecting receiver</em>
- * ({@code UPSTREAM.md} #10). The document was read correctly against its own schema; it is the bind to a class
+ * {@code OrderV1[sku=A, quantity=1]} -- no error, and <em>no diagnostic even under a collecting receiver</em>.
+ * The document was read correctly against its own schema; it is the bind to a class
  * with fewer components that discards the field. For an order, that is the wrong currency rather than a
  * rejected request.
  *
