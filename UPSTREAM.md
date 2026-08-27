@@ -51,45 +51,41 @@ documented is the shape the library has. `CLAUDE.md` carries the numbers.
 
 ---
 
-## 2. A template application cannot appear inside a choice
+## 2. A templated `~data &` constructor declares, but its application cannot be named
 
-**Hit:** describing an operation's responses. `response => <T, S> { status: status_code = S  body: T }` is the
-natural shape, and `(response<order, 201> | response<problem, 400>)` the natural use of it. The message
-diagnoses itself — *"a container sugar form must be lifted to an entry before resolution (§5.3); this one was
-not … which has no entry to name until it is materialised: Choice"*. An application works as a plain field type
-and inside an array; only `choice` lacks the lift.
+**Hit:** the CRUD-family payoff of an API description. `fetch => <T> !operation { method: GET  path: "/x"
+responses: [ { status: 200  body: T  description: "found" } ] }` — one declaration standing for every
+fetch-by-id endpoint — now **declares and resolves**, where it used to be a parse error. The remaining gap is
+one stage later: nothing may apply it.
 
-**Reported as a `NOT_IMPLEMENTED` diagnostic** rather than aborting the pass, so one unimplemented construct no
-longer costs every other declaration its verdict. That is a channel change, not the feature.
+`getOrder => fetch<order>` materialises the application correctly — the synthetic entry's name records the
+substitution — and is then refused:
 
-**Workaround in place:** name each application as an entry, then choose over the names —
-`order_created => response<order, 201>`, then `(order_created | order_invalid | …)`. Each response is still one
-line rather than a record declaration, so this costs a name, not a shape.
+> `'fetch<order>' names 'operation_GET_/x_200_order_found_1f8d998a', which is built with 'operation' and
+> describes something other than a data value — it is declared by this schema but is not a type, so nothing
+> can be typed by it`
 
-**Priority: low** — an ergonomic edge with a one-line workaround, and the diagnostic says it is a gap rather
-than an author error. Pinned by `UpstreamGapsTest.anApplicationInsideAChoiceIsStillNotImplemented`, which
-asserts the **code**: an earlier version asserted that resolution *throws*, stopped throwing when gaps became
-diagnostics, and read exactly like the feature landing.
+**The refusal is right on its own terms**, which is what makes this a design question rather than a bug.
+`name => application` is an alias, an alias names a type, and §4.1 makes naming a `kind: DATA` entry where a
+type is expected an error. `@alias` does not change it. So a templated data constructor is currently
+*declarable and unusable*: the template resolves, and there is no spelling that binds a name to the data entry
+an application of it materialises.
 
----
+**Change:** a way to name the application of a templated `~data &` constructor. Whether that is the alias
+position learning that a `data` entry may be named by one, or a separate spelling, is upstream's call — the
+constraint is only that the resulting name is what a consumer sees, since a generated name like the one above
+is no use to anything that looks an operation up by name (`TsonApiCoverage.serving`).
 
-## 3. Offer to lift the fetching schema source upstream
+**Workaround in place:** write each operation out untemplated, which is what this project's description does.
+That costs a full record per endpoint where the template would have cost an application, and it is the cost
+the `data` base kind otherwise removes.
 
-**Hit:** `TsonConfig.schemaSource(…)` takes a `TsonSchemaSource`, and every example supplies a lambda returning
-a literal string. Upstream's own `BACKLOG.md` tracks the gap — "a real disk/HTTP-backed `TsonSchemaSource` with
-whitelist/blacklist policy" — so this is not a report that it is missing. It is an offer.
-
-**`TsonHttpSchemaSource` is that source**, built here and deliberately liftable: no adapter types in its
-signatures, and its only tson-java dependencies are `TsonSchemaSource` itself and the spec. It has now run
-against all three adapters, which was the condition set for proposing it. Its class Javadoc is the design
-document — host allow-list denying by default, host→location mapping, no redirects, caps on size and time,
-optional required `?sha256=` pin, and the two checks it deliberately leaves to the loader.
-
-**Change:** decide whether the policy-and-cache part belongs upstream. Until then, keep it liftable — this is
-the one item here that constrains how code in *this* repo may be written.
-
-**Security note, since it is easy to get wrong:** the reference comes from an untrusted request body. A naive
-fetcher is an SSRF primitive.
+**Priority: low** — the description is written once and read often, so verbosity there is cheap. Worth
+recording because the parse-level half has just closed, and the half left is small enough to look already
+done. Pinned at both stages by
+`UpstreamGapsTest.aTemplatedDataConstructorDeclaresButItsApplicationCannotBeNamed`: asserting only the throw
+would go on passing if the declaration regressed to a parse error, which is a different gap wearing the same
+red.
 
 ---
 
