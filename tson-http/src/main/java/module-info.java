@@ -6,7 +6,7 @@ module io.ltr8.tson.http {
     exports io.ltr8.tson.http;
     exports io.ltr8.tson.http.api;
 
+    // transitive: TsonHttpSchemaSource, TsonValue and the diagnostics are all in this module's own
+    // signatures, and java.net.http reaches a consumer through it -- nothing here names that module directly.
     requires transitive io.ltr8.tson;
-    // transitive: Builder.httpClient(HttpClient) is public API, so a consumer naming it needs this module.
-    requires transitive java.net.http;
 }

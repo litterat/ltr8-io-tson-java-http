@@ -3,7 +3,7 @@ package io.ltr8.tson.http.helidon;
 import io.helidon.webserver.WebServer;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.http.TsonHttpCodec;
-import io.ltr8.tson.http.TsonHttpSchemaSource;
+import io.ltr8.tson.TsonHttpSchemaSource;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.AfterEach;

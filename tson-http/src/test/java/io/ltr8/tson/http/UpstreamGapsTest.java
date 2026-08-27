@@ -5,6 +5,7 @@ import io.ltr8.tson.Tson;
 import io.ltr8.tson.compiler.Diagnostic;
 import io.ltr8.tson.compiler.TsonBindMismatchException;
 import io.ltr8.tson.http.api.TsonApiSchema;
+import io.ltr8.tson.schema.meta.ChoiceBody;
 import io.ltr8.tson.schema.meta.FieldState;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.RecordField;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -76,16 +78,22 @@ class UpstreamGapsTest {
         return builder.build();
     }
 
-    // ── open (UPSTREAM.md #2): a template application cannot appear inside a choice ──────────────
+    // ── fixed upstream, pinned here: a template application inside a choice ─────────────────────
 
     /**
-     * <b>Still open; only the channel changed.</b> A gap used to abort the pass as an
-     * {@code UnsupportedOperationException} and now travels as a {@code NOT_IMPLEMENTED} diagnostic beside
-     * the ordinary problems, so one unimplemented construct no longer costs every other declaration its
-     * verdict. Asserting the <em>code</em> is what keeps this honest.
+     * <b>Fixed: {@code (resp<order, 201> | resp<problem, 400>)} resolves.</b> This is the shape an operation's
+     * responses want, and it used to be the gap this project's API description worked around by naming each
+     * application as its own entry first. The lift now happens for a choice as it already did for a field and
+     * an array, so the workaround is a choice of style rather than a necessity.
+     *
+     * <p>Asserting resolution alone would pass on silence, which is how the old version of this test nearly
+     * read as a fix when only the reporting channel had changed. So it asserts the resolved shape: each
+     * application becomes its own synthetic entry, the choice names both, and each carries the value argument
+     * as a {@code REQUIRED_FIXED} field -- which is the part that would be quietly wrong if the substitution
+     * were dropped.
      */
     @Test
-    void anApplicationInsideAChoiceIsStillNotImplemented() {
+    void anApplicationInsideAChoiceResolves() {
         String schema = """
                 !!id:"https://s.example.com/2026/33/p-1.tn"
                 !!meta:"https://tson.io/2026/33/m/meta.tn"
@@ -96,12 +104,24 @@ class UpstreamGapsTest {
                     resp    => <T, S> { status: int32 = S  body: T }
                     op      => { response: (resp<order, 201> | resp<problem, 400>) }
                 }""";
+        Tson tson = Tson.builder().schemaSource(u -> null).build();
 
-        List<Diagnostic> problems = Tson.builder().schemaSource(u -> null).build().validateSchema(schema);
+        List<Diagnostic> problems = tson.validateSchema(schema);
+        assertEquals(List.of(), problems, () -> "expected a clean resolution, got " + problems);
 
-        assertTrue(problems.stream().anyMatch(d -> d.code() == Diagnostic.Code.NOT_IMPLEMENTED
-                        && d.message().contains("must be lifted to an entry")),
-                () -> "expected a NOT_IMPLEMENTED diagnostic, got " + problems);
+        var entries = tson.schemaRegistry().get("https://s.example.com/2026/33/p-1.tn").orElseThrow()
+                .schema().entries();
+        TypeRef response = ((RecordBody) entries.get("op").body()).fields().getFirst().type();
+        var variants = assertInstanceOf(ChoiceBody.class, entries.get(response.name()).body()).variants();
+        assertEquals(2, variants.size(), () -> "both applications lift: " + variants);
+
+        // 201 with an order, 400 with a problem -- the substitution the synthetic names encode, checked.
+        assertEquals(List.of("201", "order", "400", "problem"), variants.stream()
+                .map(v -> (RecordBody) entries.get(v.name()).body())
+                .flatMap(b -> b.fields().stream())
+                .map(f -> f.state() == FieldState.REQUIRED_FIXED
+                        ? f.value().orElseThrow().text() : f.type().name())
+                .toList());
     }
 
     // ── fixed upstream, pinned here: a value parameter filling a FIXED field ─────────────────────
@@ -231,24 +251,75 @@ class UpstreamGapsTest {
                 thrown.getMessage());
     }
 
-    // ── §12.1: a `~data &` constructor cannot itself be templated ────────────────────────────────
+    // ── open: a templated `~data &` constructor declares, but its application cannot be named ───
 
     /**
-     * <b>The CRUD-family payoff a templated operation would give is not available.</b>
-     * {@code list => <T> !operation { … }} — one declaration standing for every paged-list endpoint — is a
-     * parse error: §12.1 permits a type name, an application or a literal in an instance template binding,
-     * and an {@code !operation { … }} payload is a container form.
+     * <b>The CRUD-family payoff a templated operation would give is still not available -- but the refusal has
+     * moved, and so has what would fix it.</b> {@code fetch => <T> !operation { … }}, one declaration standing
+     * for every fetch-by-id endpoint, used to be rejected at the parse: §12.1 permitted a type name, an
+     * application or a literal in an instance template binding, and an {@code !operation { … }} payload is a
+     * container form. It now <em>declares</em> and the template body is held, so the parse gap has closed.
+     *
+     * <p><b>Applying it is what fails now</b>, one stage later. {@code getOrder => fetch<order>} materialises
+     * the application correctly -- the synthetic entry's name records the substitution -- and is then refused
+     * because the entry it names is {@code kind: DATA}, which §4.1 makes an error where a type is expected.
+     * That refusal is right on its own terms: {@code name => application} is an alias, and an alias names a
+     * type. What is missing is a spelling that binds a name to a materialised <em>data</em> entry, and
+     * {@code @alias} does not supply one.
+     *
+     * <p>So the template is declarable and unusable: nothing may apply it, and an operation must still be
+     * written out per endpoint. The workaround is the untemplated form, which is what this project uses, and
+     * it is asserted here beside the refusal so the comparison stays honest.
+     *
+     * <p>Pinned at both stages deliberately. Asserting only the throw would go on passing if the declaration
+     * regressed to a parse error, which is a different gap wearing the same red.
      */
     @Test
-    void aDataConstructorCannotItselfBeTemplated() {
-        String metaSource = meta("  operation => ~data & { method: text  path: text  responses: [type_ref] }");
-        String doc = governed("""
-                  list => <T> !operation { method: "GET"  path: "/x"  responses: [] }""");
+    void aTemplatedDataConstructorDeclaresButItsApplicationCannotBeNamed() {
+        String template = """
+                  order => { sku: text }
+                  fetch => <T> !operation {
+                    method: GET  path: "/x"
+                    responses: [ { status: 200  body: T  description: "found" } ]
+                  }""";
 
+        // The declaration alone resolves -- the parse gap has closed. Nothing applies it, so nothing lifts.
+        assertDoesNotThrow(() -> resolveAgainstApiMeta(template));
+
+        // Applying it is the gap: the application materialises and is then refused as a non-type.
         String message = assertThrows(RuntimeException.class,
-                () -> tson(metaSource, doc, "io.ltr8.tson.http.api").resolve(doc)).getMessage();
+                () -> resolveAgainstApiMeta(template + "\n  getOrder => fetch<order>")).getMessage();
+        assertTrue(message.contains("describes something other than a data value"), message);
 
-        assertTrue(message.contains("not permitted in an instance template binding"), message);
+        // And the workaround this project uses is unaffected: one operation, written out.
+        assertDoesNotThrow(() -> resolveAgainstApiMeta("""
+                  order => { sku: text }
+                  getOrder => !operation {
+                    method: GET  path: "/x"
+                    responses: [ { status: 200  body: order  description: "found" } ]
+                  }"""));
+    }
+
+    /**
+     * Resolves {@code declarations} as a schema governed by this project's own {@code meta-http-1.tn}. The
+     * probe meta the other tests use would do for the parse, but not past it: it declares a deliberately
+     * minimal {@code operation}, and once these declarations resolve far enough to bind, that shape disagrees
+     * with {@link io.ltr8.tson.http.api.Operation} and the mismatch arrives instead of the answer being asked
+     * for. The real meta is also the one whose payoff this is.
+     */
+    private static void resolveAgainstApiMeta(String declarations) {
+        String doc = """
+                !!id:"%s"
+                !!meta:"%s"
+                !!import:"https://tson.io/2026/33/m/core.tn"
+                {
+                %s
+                }""".formatted(API_ID, TsonApiSchema.ID, declarations);
+        Tson.builder()
+                .schemaSource(u -> TsonApiSchema.ID.equals(u) ? TsonApiSchema.source() : null)
+                .metaNameBinder(TsonApiSchema.metaNameBinder())
+                .build()
+                .resolve(doc);
     }
 
     // ── not a gap: an entry's two annotation positions ───────────────────────────────────────────

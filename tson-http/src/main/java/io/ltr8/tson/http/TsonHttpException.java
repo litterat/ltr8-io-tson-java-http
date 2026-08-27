@@ -1,5 +1,6 @@
 package io.ltr8.tson.http;
 
+import io.ltr8.tson.TsonSchemaFetchException;
 import io.ltr8.tson.compiler.Diagnostic;
 import io.ltr8.tson.compiler.TsonBindMismatchException;
 import io.ltr8.tson.compiler.TsonReadException;
@@ -17,7 +18,8 @@ import java.util.List;
  * <table border="1">
  * <caption>Library exception to HTTP status</caption>
  * <tr><th>Upstream</th><th>Means</th><th>Status</th></tr>
- * <tr><td>{@link TsonReadException}</td><td>this document breaks its schema</td><td>400</td></tr>
+ * <tr><td>{@link TsonReadException}</td><td>this document breaks its schema, unless its code says
+ * otherwise</td><td>400</td></tr>
  * <tr><td>{@link TsonSchemaValidationException}</td><td>the schema it names is wrong or unavailable</td><td>400</td></tr>
  * <tr><td>{@link UnsupportedOperationException}</td><td>the library hasn't implemented that yet</td><td>501</td></tr>
  * <tr><td>{@link IllegalStateException}</td><td>an internal invariant broke</td><td>500</td></tr>
@@ -39,9 +41,17 @@ import java.util.List;
  *
  * <p><b>A gap must never be reported as a client error.</b> That is the load-bearing row. tson-java's
  * classification test is "a schema error's verdict doesn't change when this library improves; a gap's does", and
- * the CLI rides exit 1 against exit 70 on it. Answering 400 for an {@code UnsupportedOperationException} tells a
- * client to fix a document that is not wrong, and sends them round a retry loop that cannot terminate. 501 says
- * what is true: the request was fine and this server cannot do it yet.
+ * the CLI rides exit 1 against exit 70 on it. Answering 400 for a gap tells a client to fix a document that is
+ * not wrong, and sends them round a retry loop that cannot terminate. 501 says what is true: the request was
+ * fine and this server cannot do it yet.
+ *
+ * <p><b>Which is why the exception type is not enough, and the row above carries a caveat.</b> A read gap no
+ * longer travels as its own exception type: it is reported like any other problem, so it reaches a collecting
+ * caller as a {@code NOT_IMPLEMENTED} diagnostic among the rest and a fail-fast one as a {@link
+ * TsonReadException} carrying that same code. Both channels therefore hand this class a verdict and a gap in
+ * one shape, and only {@link Diagnostic#code()} separates them -- so {@link #invalidDocument} asks the code,
+ * and {@link #from} routes every {@code TsonReadException} through it rather than assuming a verdict. The
+ * {@code UnsupportedOperationException} row survives for the gaps still raised outside a read.
  *
  * <p>Anything not in the table is not classified here at all -- {@link #from} rethrows it, so an unexpected fault
  * reaches the adapter's own handler with its stack trace intact rather than being laundered into a false verdict
@@ -153,6 +163,20 @@ public final class TsonHttpException extends RuntimeException {
      * fix, and the only one whose message names a server type -- which is why 5xx drops the body's detail.
      */
     public static TsonHttpException invalidDocument(List<Diagnostic> diagnostics) {
+        return invalidDocument(diagnostics, diagnostics.size() == 1 ? "the request body has 1 problem"
+                : "the request body has " + diagnostics.size() + " problems", null);
+    }
+
+    /**
+     * The rule itself, shared by both channels a diagnostic can arrive through: collected into a list, or
+     * carried by a single {@link TsonReadException} on a fail-fast read. Asking the <em>code</em> is what lets
+     * one rule serve both -- the exception type no longer distinguishes a gap from a verdict, because a read
+     * gap now travels as a {@code NOT_IMPLEMENTED} diagnostic whichever receiver is in use.
+     *
+     * @param detail what to say for the 400 case; the two 5xx cases write their own, since theirs is for a log
+     * @param cause  the exception this came from, or {@code null} when the diagnostics were collected
+     */
+    private static TsonHttpException invalidDocument(List<Diagnostic> diagnostics, String detail, Throwable cause) {
         // This server's own wiring, and the most serious of the three for whoever runs it. Its message names
         // a server class, so the detail here exists to be logged: the adapter boundary drops both detail and
         // diagnostics from any 5xx body, which is what keeps it off the wire.
@@ -161,7 +185,7 @@ public final class TsonHttpException extends RuntimeException {
         if (!mismatches.isEmpty()) {
             return new TsonHttpException(INTERNAL_SERVER_ERROR, TYPES + "internal-error",
                     "Internal server error", "a schema and the class bound to it disagree: " + mismatches
-                            .stream().map(Diagnostic::message).toList(), diagnostics, null);
+                            .stream().map(Diagnostic::message).toList(), diagnostics, cause);
         }
         long gaps = diagnostics.stream().filter(d -> d.code() == Diagnostic.Code.NOT_IMPLEMENTED).count();
         if (gaps > 0) {
@@ -169,12 +193,10 @@ public final class TsonHttpException extends RuntimeException {
                     "this server's TSON library has not implemented a construct the request body uses, so the "
                             + "body could not be checked" + (gaps == diagnostics.size() ? ""
                             : "; the other " + (diagnostics.size() - gaps) + " problem(s) reported are real"),
-                    diagnostics, null);
+                    diagnostics, cause);
         }
-        return new TsonHttpException(BAD_REQUEST, TYPES + "invalid-document", "Invalid TSON document",
-                diagnostics.size() == 1 ? "the request body has 1 problem"
-                        : "the request body has " + diagnostics.size() + " problems",
-                diagnostics, null);
+        return new TsonHttpException(BAD_REQUEST, TYPES + "invalid-document", "Invalid TSON document", detail,
+                diagnostics, cause);
     }
 
     /** The request body is not something this handler can read. */
@@ -212,8 +234,10 @@ public final class TsonHttpException extends RuntimeException {
             // names a server class, which is not a client's business. 5xx carries no detail for that reason.
             case TsonBindMismatchException mismatch -> new TsonHttpException(INTERNAL_SERVER_ERROR,
                     TYPES + "internal-error", "Internal server error", null, List.of(), mismatch);
-            case TsonReadException read -> new TsonHttpException(BAD_REQUEST, TYPES + "invalid-document",
-                    "Invalid TSON document", read.getMessage(), List.of(read.diagnostic()), read);
+            // Not unconditionally a 400: a fail-fast read reports a library gap through this same type, with
+            // the code as the only thing telling the two apart. Routing on it is what keeps the two channels
+            // answering alike -- see invalidDocument.
+            case TsonReadException read -> invalidDocument(List.of(read.diagnostic()), read.getMessage(), read);
             case TsonSchemaValidationException schema -> new TsonHttpException(BAD_REQUEST,
                     TYPES + "invalid-schema", "Invalid TSON schema", schema.getMessage(), List.of(), schema);
             case UnsupportedOperationException gap -> new TsonHttpException(NOT_IMPLEMENTED,

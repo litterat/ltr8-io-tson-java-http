@@ -5,6 +5,7 @@ import io.ltr8.bind.DataBindContext;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.compiler.Diagnostic;
+import io.ltr8.tson.compiler.TsonReadException;
 import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
 import io.ltr8.tson.compiler.config.TsonAtomContext;
 import io.ltr8.tson.tree.TsonValue;
@@ -22,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -349,6 +351,46 @@ class TsonHttpCodecTest {
         TsonProblem sent = TsonProblem.of(thrown.type(), thrown.status(), thrown.title(), null, List.of());
         assertEquals(Optional.empty(), sent.detail());
         assertEquals(List.of(), sent.errors());
+    }
+
+    /**
+     * <b>The same rule reaches a gap that arrives fail-fast, not only one collected into a list.</b> A read
+     * gap is now reported rather than thrown, so it reaches a fail-fast caller as a {@code TsonReadException}
+     * carrying {@code NOT_IMPLEMENTED} -- the very type a schema violation arrives as. Classifying by
+     * exception type therefore answers 400 for a gap, which is the one verdict this policy may never give.
+     * Only the code separates them, so {@code from} routes on it.
+     */
+    @Test
+    void aFailFastReadGapIsAGapNotABadRequest() {
+        var thrown = TsonHttpException.from(new TsonReadException(withCode(aGap(),
+                Diagnostic.Code.NOT_IMPLEMENTED)));
+
+        assertEquals(TsonHttpException.NOT_IMPLEMENTED, thrown.status());
+        assertTrue(thrown.type().endsWith("not-implemented"), thrown.type());
+    }
+
+    /** And a fail-fast bind mismatch is this server's wiring, on the same reasoning as the collected one. */
+    @Test
+    void aFailFastBindMismatchDiagnosticIsAServerFault() {
+        var thrown = TsonHttpException.from(new TsonReadException(withCode(aBindMismatch(),
+                Diagnostic.Code.BIND_MISMATCH)));
+
+        assertEquals(TsonHttpException.INTERNAL_SERVER_ERROR, thrown.status());
+    }
+
+    /**
+     * <b>The ordinary fail-fast case is unchanged</b>, and keeps the diagnostic's own message as the detail
+     * rather than the collected channel's problem count -- a fail-fast read has exactly one to describe.
+     */
+    @Test
+    void anOrdinaryFailFastReadFailureIsStillABadRequest() {
+        var read = new TsonReadException(anOrdinaryProblem());
+        var thrown = TsonHttpException.from(read);
+
+        assertEquals(TsonHttpException.BAD_REQUEST, thrown.status());
+        assertEquals(List.of(read.diagnostic()), thrown.diagnostics());
+        assertEquals(read.getMessage(), thrown.getMessage());
+        assertSame(read, thrown.getCause(), "the cause survives, so a 5xx sibling can be logged with a trace");
     }
 
     /** Rebuilds a diagnostic under {@code code} -- the factories fix theirs, and this needs BIND_MISMATCH. */

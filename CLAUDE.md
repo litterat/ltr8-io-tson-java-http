@@ -60,8 +60,12 @@ Package group `io.ltr8`, as in tson-java (reverse-DNS names who *publishes*, not
   - **Codec** — request `InputStream` → `TsonValue` (tree mode) or a bound Java object (bind mode);
     object/`TsonValue` → response bytes.
   - **Error mapping** — `Diagnostic` and the exception hierarchy → status code + a TSON error body.
-  - **`TsonSchemaSource` over HTTP** — `TsonHttpSchemaSource`: host allow-list, host→location mapping,
-    caps on size and time, identity-keyed cache.
+  - **~~`TsonSchemaSource` over HTTP~~ — this module no longer owns one.** `TsonHttpSchemaSource` was built
+    here, offered upstream, and accepted: it now lives in tson-java as `io.ltr8.tson.TsonHttpSchemaSource`,
+    alongside a `TsonFileSchemaSource` this repo never had and the `SchemaReference` rules they share. Use it
+    from there — `TsonConfig.httpSchemas(hosts…)` is the one-call form. **Do not reintroduce a copy here**:
+    the reference comes from an untrusted request body, so a second implementation is a second place for one
+    security check to drift lenient.
   - **`TsonAcceptSchemaHeader`** — the `TSON-Accept-Schema` request field: which schema versions a client will
     accept **back**. A separate field from `TSON-Schema` on purpose — that one says what *this* body is
     (`Content-Type`), this says what the reply should be (`Accept`), and a POST routinely asks both. Absence
@@ -117,8 +121,11 @@ each other.
   requests, and lifting the two into a shared module was asked for upstream and rightly rejected. `problem`
   follows **RFC 9457**; `diagnostic` stays close to what a TSON read produces, because that is what it
   reports.
-- `TsonHttpSchemaSource` / `TsonSchemaFetchException` — fetching a schema named by an untrusted request
-  body, under policy. Read its class notes before changing anything in it; every rule there is load-bearing.
+- `io.ltr8.tson.TsonHttpSchemaSource` / `TsonSchemaFetchException` — **upstream's, not this module's** (see
+  above). What stays here is the half upstream cannot know: `TsonHttpException.from` maps a fetch `Reason` to a
+  status, and `TsonHttpSchemaSourceIntegrationTest` pins that mapping and the codec's end-to-end read of a
+  document whose schema arrived over the wire. The policy itself is upstream's suite — do not retest it here.
+  Read the class notes before relying on anything in it; every rule there is load-bearing.
 
 ### What an adapter owes the codec
 
@@ -168,7 +175,7 @@ timed region.
 
 **Concurrency is tested, not assumed.** Every adapter shares one `TsonHttpCodec` across request threads, and
 every other test in this repo is single-threaded — so a codec wrong under concurrency would pass all of them.
-`TsonHttpCodecConcurrencyTest`, `TsonHttpSchemaSourceConcurrencyTest` and each adapter's
+`TsonHttpCodecConcurrencyTest` and each adapter's
 `demo/OrderServerConcurrencyTest` close that gap, and each task checks its own result: the failure worth
 looking for is a crossed or torn value, not a call that threw. Writing them is what found a real race in
 `DataBindContext`'s descriptor resolution, since fixed upstream. Keep them green, and add to them rather than
@@ -274,6 +281,19 @@ and the declared path may differ and often must — the JDK demo serves `/{schem
 form matches across, and Helidon uses `any()`. Comparing paths would need a translation table per framework,
 and a wrong entry there is a route that silently never matches: a worse failure than the one being prevented.
 Claiming by name sidesteps it entirely.
+
+**One operation per endpoint, written out — the template that would collapse them does not apply yet.**
+`fetch => <T> !operation { … }` now declares and resolves, but `getOrder => fetch<order>` is refused: naming
+an application means writing an alias, an alias names a type, and the entry the application materialises is
+`kind: DATA`. So the CRUD-family payoff is visible and not yet reachable, and the longhand below is not a
+style choice. `UPSTREAM.md` #2, pinned at both stages by `UpstreamGapsTest`.
+
+**A choice of applications does resolve**, though, and used to be the other half of this — `(resp<order, 201>
+| resp<problem, 400>)` lifts each application to its own synthetic entry, carries each value argument as a
+`REQUIRED_FIXED` field, and needs no workaround. Noted because the workaround it needed (name each
+application as an entry first) is still the obvious thing to reach for. The description here does not use a
+choice at all — `responses` is an array of `response` records — so nothing changed; the point is that nothing
+has to.
 
 Still not built: the route table proper (registering from the description rather than claiming against it),
 which is where that per-adapter path seam would finally have to exist.
@@ -429,16 +449,25 @@ body is an **untrusted URL**, so the HTTP-backed source must be policy-gated (al
 timeouts, size cap, cache) rather than fetching whatever it is handed. Never wire a naive fetcher in.
 
 **Error classification is already a policy upstream — mirror it, don't invent one.** tson-java splits:
-`TsonSchemaValidationException` = the author's document/schema is wrong per the spec;
-`UnsupportedOperationException` = the library hasn't implemented that yet; `IllegalStateException` = an
-internal invariant broke. Only the first is ever collected into a `Diagnostic`. The CLI rides its exit
-codes on that split (1 = your document is bad, 70 = a fault in the library), and **the HTTP mapping is
-the same split wearing status codes**: validation → 4xx, gap or internal fault → 5xx. A gap must never be
-reported to a client as "your request was invalid".
+the author's document/schema is wrong per the spec; the library hasn't implemented that yet
+(`UnsupportedOperationException`, where it is raised outside a read); `IllegalStateException` = an
+internal invariant broke. The CLI rides its exit codes on that split (1 = your document is bad, 70 = a fault
+in the library), and **the HTTP mapping is the same split wearing status codes**: validation → 4xx, gap or
+internal fault → 5xx. A gap must never be reported to a client as "your request was invalid".
 
-`Diagnostic.Code` is the 4xx detail vocabulary: `FIELD_REQUIRED`, `FIELD_FIXED`, `TYPE_MISMATCH`,
-`WRONG_ARITY`, `UNKNOWN_TYPE_REF`, `ATOM_CONSTRAINT_VIOLATION`, `UNRECOGNIZED_FIELD`, `DUPLICATE_MAP_KEY`,
-`DUPLICATE_FIELD`, `SCHEMA_ERROR`, `UNKNOWN_TYPE`, `VALIDATION_ERROR`.
+**Ask the `Diagnostic.Code`, not the exception type — the split is no longer one type per outcome.** A read
+gap is now *reported* like any other problem rather than thrown, so it reaches a collecting caller as a
+`NOT_IMPLEMENTED` diagnostic among the rest, and a fail-fast one as a `TsonReadException` carrying that same
+code — the very type a schema violation arrives as. Classifying by type therefore answers 400 for a gap,
+which is the one verdict this policy may never give. `TsonHttpException.invalidDocument` holds the rule and
+`from` routes every `TsonReadException` through it, so both channels answer alike. The same applies to
+`BIND_MISMATCH`, which is a 500 either way. Upstream states the rule as *"asking by code rather than by
+exception type is the stated policy"*.
+
+`Diagnostic.Code` is the detail vocabulary — mostly 4xx, but see above for the two that are not:
+`FIELD_REQUIRED`, `FIELD_FIXED`, `TYPE_MISMATCH`, `WRONG_ARITY`, `UNKNOWN_TYPE_REF`,
+`ATOM_CONSTRAINT_VIOLATION`, `UNRECOGNIZED_FIELD`, `DUPLICATE_MAP_KEY`, `DUPLICATE_FIELD`, `SCHEMA_ERROR`,
+`UNKNOWN_TYPE`, `VALIDATION_ERROR`, `NOT_IMPLEMENTED`, `BIND_MISMATCH`.
 
 **Concurrency — the load-bearing constraint for a server.** tson-java is not documented as thread-safe as
 a whole, and parts of it explicitly are not (`TsonCompiledMetaRegistry`: "`register`/`get` are
@@ -523,14 +552,16 @@ Each cost a debugging cycle here and is pinned by a test.
 - **A schema reference may not carry a port, userinfo or a fragment** (§2.2.1), so a schema origin cannot run
   on a non-default port. Use `mapHost`. See "Identity is not location" above — this is the trap that costs the
   most time, because the failure surfaces from the resolver rather than from the fetch.
-- **Never `computeIfAbsent` on the schema cache.** It holds a `ConcurrentHashMap` bin lock for the whole of a
+- **Never `computeIfAbsent` on a schema cache.** It holds a `ConcurrentHashMap` bin lock for the whole of a
   network fetch, blocking every other thread whose key lands in that bin — and stalling a resize — for as long
   as the timeout allows. `TsonHttpSchemaSource` uses get-then-put; two threads racing one identity fetch it
   twice and store identical content, which costs a request and breaks nothing.
 
   *Not* because the loader is re-entrant: it isn't. It fetches a document, returns, and only then resolves and
-  fetches its imports, so `fetch` is never called from inside `fetch` (measured — max depth 1, pinned by
-  `TsonHttpSchemaSourceConcurrencyTest`). An earlier version of this note claimed otherwise.
+  fetches its imports, so `fetch` is never called from inside `fetch` (measured — max depth 1). Kept here
+  because the reasoning was worked out in this repo and reads as a bug to anyone who meets get-then-put cold;
+  the code and its concurrency test are upstream's now, so this is a rule to know rather than one to maintain.
+  An earlier version of this note claimed the loader was re-entrant.
 - **Policy is checked on every reference, cached or not.** A cache hit must skip the network, never the
   allow-list — otherwise a schema fetched for one request becomes fetchable for a request that would have been
   refused.
