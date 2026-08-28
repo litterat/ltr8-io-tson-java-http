@@ -169,6 +169,52 @@ class ReadmeTest {
                 "and the name in the table must be the current one");
     }
 
+    /**
+     * <b>The problem-type table lists exactly the types this project mints, in both directions.</b>
+     *
+     * <p>{@code type} is the member a client matches on -- stable where {@code title} is prose -- so the set
+     * of them is client-facing contract, and it was undocumented until this table existed: fifteen
+     * identifiers spread over five files, discoverable only by grepping Java source. A table nothing enforces
+     * would be stale by the next one added, which is how it stayed unnoticed that the adapters mint a
+     * sixteenth ({@code method-not-allowed}) that no single-module grep finds.
+     *
+     * <p>Derived from source rather than from a hand-kept list, so adding a type to any module's main code
+     * fails here until the table names it, and deleting one fails until the row goes. Main source sets only:
+     * a demo's {@code sku-not-found} is the application's own business error composing {@code problem}, not
+     * part of this project's vocabulary, which is the distinction the table would otherwise blur.
+     */
+    @Test
+    void theProblemTypeTableMatchesTheTypesThatExist() throws Exception {
+        Set<String> documented = new LinkedHashSet<>();
+        Matcher row = Pattern.compile("^\\| `([a-z-]+)` \\| \\d{3} \\|", Pattern.MULTILINE).matcher(readme);
+        while (row.find()) {
+            documented.add(row.group(1));
+        }
+        assertFalse(documented.isEmpty(), "the README should carry a problem-type table");
+
+        Set<String> minted = new LinkedHashSet<>();
+        Pattern mint = Pattern.compile("TYPES \\+ \"([a-z-]+)\"");
+        for (Path java : mainSources()) {
+            Matcher m = mint.matcher(Files.readString(java));
+            while (m.find()) {
+                minted.add(m.group(1));
+            }
+        }
+        assertFalse(minted.isEmpty(), "the scan should find the types the code mints");
+
+        assertEquals(new java.util.TreeSet<>(minted), new java.util.TreeSet<>(documented),
+                "the README's problem-type table and the types the code mints have diverged");
+    }
+
+    /** Every {@code src/main/java} file in the project -- the demos and tests deliberately excluded. */
+    private static List<Path> mainSources() throws Exception {
+        try (var paths = Files.walk(Path.of(".."))) {
+            return paths.filter(p -> p.toString().endsWith(".java"))
+                    .filter(p -> p.toString().contains("/src/main/java/"))
+                    .toList();
+        }
+    }
+
     /** A test count in prose is a fact nothing maintains, so the README should not state one. */
     @Test
     void theReadmeDoesNotClaimATestCount() {
