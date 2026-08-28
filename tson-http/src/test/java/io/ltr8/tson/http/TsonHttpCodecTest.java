@@ -393,6 +393,29 @@ class TsonHttpCodecTest {
         assertSame(read, thrown.getCause(), "the cause survives, so a 5xx sibling can be logged with a trace");
     }
 
+    /**
+     * <b>A schema nobody would supply is not a verdict on the document, so it is not a 400.</b> The body was
+     * never read against a schema, so whether it would have passed is unknown -- and answering "invalid"
+     * would send a client with a perfectly good document to go and fix it because a host did not answer.
+     */
+    @Test
+    void aSchemaUnavailableDiagnosticIsNotABadRequest() {
+        TsonHttpException thrown = TsonHttpException.invalidDocument(
+                List.of(withCode(aGap(), Diagnostic.Code.SCHEMA_UNAVAILABLE)));
+
+        assertEquals(TsonHttpException.BAD_GATEWAY, thrown.status());
+        assertTrue(thrown.type().endsWith("schema-origin-failed"), thrown.type());
+    }
+
+    /** A gap outranks it, on upstream's own precedent: retrying reaches the gap again, the origin may recover. */
+    @Test
+    void aGapOutranksAnUnavailableSchema() {
+        TsonHttpException thrown = TsonHttpException.invalidDocument(
+                List.of(withCode(aGap(), Diagnostic.Code.SCHEMA_UNAVAILABLE), aGap()));
+
+        assertEquals(TsonHttpException.NOT_IMPLEMENTED, thrown.status());
+    }
+
     /** Rebuilds a diagnostic under {@code code} -- the factories fix theirs, and this needs BIND_MISMATCH. */
     private static Diagnostic withCode(Diagnostic d, Diagnostic.Code code) {
         return new Diagnostic(d.path(), d.schemaPointer(), d.schemaId(), code, d.message(), d.expected(),

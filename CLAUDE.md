@@ -460,14 +460,39 @@ gap is now *reported* like any other problem rather than thrown, so it reaches a
 `NOT_IMPLEMENTED` diagnostic among the rest, and a fail-fast one as a `TsonReadException` carrying that same
 code — the very type a schema violation arrives as. Classifying by type therefore answers 400 for a gap,
 which is the one verdict this policy may never give. `TsonHttpException.invalidDocument` holds the rule and
-`from` routes every `TsonReadException` through it, so both channels answer alike. The same applies to
-`BIND_MISMATCH`, which is a 500 either way. Upstream states the rule as *"asking by code rather than by
-exception type is the stated policy"*.
+`from` routes every `TsonReadException` through it, so both channels answer alike. Upstream states the rule
+as *"asking by code rather than by exception type is the stated policy"*.
 
-`Diagnostic.Code` is the detail vocabulary — mostly 4xx, but see above for the two that are not:
+**Three codes are not verdicts on the document, and they differ by who could not give one** — this library, the
+reading application, whoever was to serve the schema. None may be a 4xx, because in each case the body went
+unchecked and "invalid" is not something this server learned:
+
+| Code | Who | Status |
+|---|---|---|
+| `NOT_IMPLEMENTED` | this library has not built it | 501 |
+| `BIND_MISMATCH` | this server's own wiring | 500 |
+| `SCHEMA_UNAVAILABLE` | nobody would supply the schema | 502 |
+
+`BIND_MISMATCH` outranks, being the one an operator has to fix; then `NOT_IMPLEMENTED` over
+`SCHEMA_UNAVAILABLE`, taking upstream's own precedent that the CLI ranks by permanence (70 over 69 over 1),
+since retrying reaches a gap again where an origin may recover.
+
+**`SCHEMA_UNAVAILABLE`'s 502 is a rounding, and `from`'s five-way split is now nearly startup-only.** A
+`TsonSchemaFetchException` carries a `Reason` and `from` maps all five across 400, 502 and 504 — but the
+diagnostic built from it keeps none of it, and **every read through the codec collects**, so a fetch failure
+essentially always arrives as a diagnostic and essentially never as that exception. So the two channels
+disagree for one failure: `NOT_PERMITTED` is 400 thrown, 502 collected. The rounding goes away from the client
+deliberately — see `UPSTREAM.md` #3 for the one-field change that would restore the split. Do not try to
+recover the reason by parsing the message; upstream made the code trustworthy precisely so nobody does.
+
+`Diagnostic.Code` is the detail vocabulary — mostly 4xx, but see the table above for the three that are not:
 `FIELD_REQUIRED`, `FIELD_FIXED`, `TYPE_MISMATCH`, `WRONG_ARITY`, `UNKNOWN_TYPE_REF`,
 `ATOM_CONSTRAINT_VIOLATION`, `UNRECOGNIZED_FIELD`, `DUPLICATE_MAP_KEY`, `DUPLICATE_FIELD`, `SCHEMA_ERROR`,
-`UNKNOWN_TYPE`, `VALIDATION_ERROR`, `NOT_IMPLEMENTED`, `BIND_MISMATCH`.
+`UNKNOWN_TYPE`, `VALIDATION_ERROR`, `NOT_IMPLEMENTED`, `BIND_MISMATCH`, `SCHEMA_UNAVAILABLE`.
+
+**`TsonSchemaFetchException` lives in `io.ltr8.tson.compiler`**, beside the `TsonSchemaSource` interface whose
+contract it is — `fetch` names it as the one way a source says "cannot supply this", which is what lets the
+classification route on it at all.
 
 **Concurrency — the load-bearing constraint for a server.** tson-java is not documented as thread-safe as
 a whole, and parts of it explicitly are not (`TsonCompiledMetaRegistry`: "`register`/`get` are

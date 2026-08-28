@@ -2,9 +2,10 @@ package io.ltr8.tson.http;
 
 import com.sun.net.httpserver.HttpServer;
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.compiler.Diagnostic;
 import io.ltr8.tson.TsonHttpSchemaSource;
-import io.ltr8.tson.TsonSchemaFetchException;
-import io.ltr8.tson.TsonSchemaFetchException.Reason;
+import io.ltr8.tson.compiler.TsonSchemaFetchException;
+import io.ltr8.tson.compiler.TsonSchemaFetchException.Reason;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +17,7 @@ import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -104,6 +106,30 @@ class TsonHttpSchemaSourceIntegrationTest {
         assertEquals(TsonHttpException.BAD_GATEWAY, statusFor(Reason.TRANSPORT));
         assertEquals(TsonHttpException.BAD_GATEWAY, statusFor(Reason.TOO_LARGE));
         assertEquals(Reason.values().length, 5, "a new Reason needs a status, not a default");
+    }
+
+    /**
+     * <b>And the collecting path is the one that actually fires</b>, which is why the mapping above is not the
+     * whole story. Every read through the codec collects, so an unfetchable {@code !!schema} does not arrive
+     * as {@link TsonSchemaFetchException} at all -- it is reported as a {@code SCHEMA_UNAVAILABLE} diagnostic
+     * and the {@code Reason} is gone by the time a status is chosen. Asserted end to end, against a source
+     * that permits nothing, because the two channels disagreeing here is exactly what would go unnoticed:
+     * {@code statusFor(NOT_PERMITTED)} says 400 and this says 502, for one underlying failure.
+     */
+    @Test
+    void anUnfetchableSchemaInACollectingReadIsNotABadRequest() {
+        try (TsonHttpSchemaSource denyAll = TsonHttpSchemaSource.builder().build()) {
+            TsonHttpCodec codec = new TsonHttpCodec(Tson.builder().schemaSource(denyAll).build());
+
+            TsonHttpException thrown = assertThrows(TsonHttpException.class, () -> codec.readTree(body("""
+                    !!schema:"%s"
+                    !order { sku: "ABC-1"  quantity: 3 }""".formatted(reference("/order-1.tn"))),
+                    "application/tson"));
+
+            assertEquals(TsonHttpException.BAD_GATEWAY, thrown.status());
+            assertEquals(List.of(Diagnostic.Code.SCHEMA_UNAVAILABLE),
+                    thrown.diagnostics().stream().map(Diagnostic::code).toList());
+        }
     }
 
     private static int statusFor(Reason reason) {

@@ -27,19 +27,21 @@
     A hand-written copy of io.ltr8.tson.compiler.Diagnostic.Code, which is the source of truth;
     TsonProblemSchemaTest is the only thing that checks the two agree.
 
-    Two members are not a verdict on the request, and both are answered 5xx rather than 400.
-    NOT_IMPLEMENTED says the library could not check a construct the body uses -- the same split the
-    CLI rides its exit codes on (70, not 1). BIND_MISMATCH says a schema and the Java class bound to
-    it disagree, which is this server's own wiring; its message names a server class, so it is a 500
-    and the boundary drops it from the body entirely.
+    Three members are not a verdict on the request, and all three are answered 5xx rather than 400.
+    They differ by who could not give a verdict. NOT_IMPLEMENTED: this library could not check a
+    construct the body uses -- the same split the CLI rides its exit codes on (70, not 1).
+    BIND_MISMATCH: a schema and the Java class bound to it disagree, which is this server's own
+    wiring; its message names a server class, so it is a 500 and the boundary drops it from the body
+    entirely. SCHEMA_UNAVAILABLE: nobody would supply the schema, so the body was never read against
+    one and whether it would have passed is unknown -- a 502.
 
-    They are declared here even though a client should never see either, because this enum copies
-    Diagnostic.Code rather than the subset one server happens to emit.
+    They are declared here even though a client should never see the first two, because this enum
+    copies Diagnostic.Code rather than the subset one server happens to emit.
     """
   diagnostic_code => !enum [
     FIELD_REQUIRED FIELD_FIXED TYPE_MISMATCH WRONG_ARITY UNKNOWN_TYPE_REF ATOM_CONSTRAINT_VIOLATION
     UNRECOGNIZED_FIELD DUPLICATE_MAP_KEY DUPLICATE_FIELD SCHEMA_ERROR UNKNOWN_TYPE VALIDATION_ERROR
-    NOT_IMPLEMENTED BIND_MISMATCH
+    NOT_IMPLEMENTED BIND_MISMATCH SCHEMA_UNAVAILABLE
   ]
   @doc:"""
     One problem, located at up to two ends: the value in the data (path, data_position) and the rule

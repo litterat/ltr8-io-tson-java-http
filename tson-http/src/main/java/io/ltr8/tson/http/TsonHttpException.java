@@ -1,9 +1,9 @@
 package io.ltr8.tson.http;
 
-import io.ltr8.tson.TsonSchemaFetchException;
 import io.ltr8.tson.compiler.Diagnostic;
 import io.ltr8.tson.compiler.TsonBindMismatchException;
 import io.ltr8.tson.compiler.TsonReadException;
+import io.ltr8.tson.compiler.TsonSchemaFetchException;
 import io.ltr8.tson.schema.TsonSchemaValidationException;
 
 import java.util.List;
@@ -32,6 +32,12 @@ import java.util.List;
  * slow is this server's dependency failing while the request was perfectly good, which is what 502 and 504 are
  * for. Collapsing these into one status would either blame a client for an outage or hide an outage as a client
  * error -- and the retry advice differs: a 400 says fix the document, a 502 says try again.
+ *
+ * <p><b>That row is now reached mostly at startup.</b> Every read through {@link TsonHttpCodec} collects, so a
+ * fetch failure during a request is reported as a {@code SCHEMA_UNAVAILABLE} diagnostic rather than thrown --
+ * leaving this branch to {@code preload} and {@code prepareToRead}, which do fail fast. The two channels
+ * therefore answer differently for one failure, because the diagnostic keeps no {@code Reason}; {@link
+ * #invalidDocument} says what it does about that and {@code UPSTREAM.md} carries the ask.
  *
  * <p><b>The last row cannot be written as a {@code catch} here.</b> A document that fails before any reader sees
  * a value throws rather than reporting, and two of the three exception types involved live in {@code
@@ -161,6 +167,21 @@ public final class TsonHttpException extends RuntimeException {
      * nor a gap in the library: a schema and the Java class bound to it disagree, which is this server's own
      * wiring and nothing the client can act on. It is checked first because it is the one an operator has to
      * fix, and the only one whose message names a server type -- which is why 5xx drops the body's detail.
+     *
+     * <p><b>{@code SCHEMA_UNAVAILABLE} is the third that is not a verdict, and is a 502.</b> Nobody would
+     * supply the schema, so the body was never read against one and whether it would have passed is unknown
+     * -- "invalid" is not something this server learned. It ranks below a gap on upstream's own precedent:
+     * its CLI takes the most permanent of three, 70 over 69 over 1, since retrying reaches a gap again where
+     * an origin may recover.
+     *
+     * <p><b>502 is a deliberate rounding, and it rounds away from the client.</b> {@link
+     * TsonSchemaFetchException} splits five reasons across 400, 502 and 504 in {@link #from}, and two of them
+     * -- a reference no allow-list permits, and one nothing serves -- really are the document's fault. That
+     * split is unavailable here: the diagnostic is built from the exception but keeps none of its {@code
+     * Reason}, and the distinction is deliberately not recoverable from the message. Given one status for
+     * both, this takes the one that cannot tell a client with a perfectly good document to go and fix it,
+     * which is the same asymmetry the gap row above turns on. See {@code UPSTREAM.md} for the ask that would
+     * restore the split.
      */
     public static TsonHttpException invalidDocument(List<Diagnostic> diagnostics) {
         return invalidDocument(diagnostics, diagnostics.size() == 1 ? "the request body has 1 problem"
@@ -194,6 +215,14 @@ public final class TsonHttpException extends RuntimeException {
                             + "body could not be checked" + (gaps == diagnostics.size() ? ""
                             : "; the other " + (diagnostics.size() - gaps) + " problem(s) reported are real"),
                     diagnostics, cause);
+        }
+        // Ranked below a gap on upstream's own precedent: its CLI takes "the most permanent of three", 70 over
+        // 69 over 1, because retrying reaches the gap again where the origin may well come back.
+        if (diagnostics.stream().anyMatch(d -> d.code() == Diagnostic.Code.SCHEMA_UNAVAILABLE)) {
+            return new TsonHttpException(BAD_GATEWAY, TYPES + "schema-origin-failed", "Schema origin failed",
+                    "the schema governing the request body could not be obtained, so the body was not checked: "
+                            + diagnostics.stream().filter(d -> d.code() == Diagnostic.Code.SCHEMA_UNAVAILABLE)
+                            .map(Diagnostic::message).toList(), diagnostics, cause);
         }
         return new TsonHttpException(BAD_REQUEST, TYPES + "invalid-document", "Invalid TSON document", detail,
                 diagnostics, cause);
