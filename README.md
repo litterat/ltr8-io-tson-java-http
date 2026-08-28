@@ -8,7 +8,7 @@ Four modules:
 
 | Module | What it is |
 |---|---|
-| `tson-http` | Server-agnostic core: media type and `Accept` negotiation, codec, status policy, TSON error body (`problem-1.tn`), API description (`meta-http-1.tn`), HTTP-backed schema source, schema catalog. No external dependencies. |
+| `tson-http` | Server-agnostic core: media type and `Accept` negotiation, codec, status policy, TSON error body (`problem-1.tn`), API description (`meta-http-1.tn`), schema catalog. No external dependencies. |
 | `tson-http-jdk` | Adapter for the JDK's own `com.sun.net.httpserver`, plus schema serving. No external dependencies. |
 | `tson-http-javalin` | Adapter for [Javalin](https://javalin.io) 6. |
 | `tson-http-helidon` | Adapter for [Helidon](https://helidon.io) 4 SE, plus `TsonMediaSupport` so plain handlers read and write TSON natively. |
@@ -47,6 +47,34 @@ $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binar
 ```
 
 Both problems, in one response — a client fixing one error per round trip needs one round trip per error.
+
+### Problem types
+
+`type` is the member to match on: it is stable where `title` is prose. Every failure this project produces
+carries one of these, under `https://tson.io/2026/33/ltr8/http/problems/`.
+
+| `type` | Status | Raised when |
+|---|---|---|
+| `invalid-document` | 400 | the body was read against its schema and broke it |
+| `malformed-document` | 400 | the body does not lex, does not parse, or is not data |
+| `invalid-schema` | 400 | the schema the body names is itself wrong |
+| `unusable-schema-reference` | 400 | the body names a schema this server will not load, or nothing serves |
+| `no-schema-declared` | 400 | the endpoint requires a version and the body named none |
+| `unsupported-schema-version` | 400 | the body names a schema version this endpoint does not serve |
+| `malformed-schema-header` | 400 | `TSON-Schema` or `TSON-Accept-Schema` is not a valid sf-string |
+| `conflicting-schema` | 400 | header and body both name a schema and they disagree |
+| `no-such-schema` | 404 | a schema was requested at a path this server does not publish |
+| `method-not-allowed` | 405 | the route does not take this method (adapters) |
+| `not-acceptable` | 406 | `Accept` rules out the only representation the route produces |
+| `unsupported-media-type` | 415 | the body is not something the route can read |
+| `internal-error` | 500 | this server's own wiring — a bind mismatch, or an unclassified fault |
+| `not-implemented` | 501 | this server's TSON library has not built a construct the body uses |
+| `schema-origin-failed` | 502 | the schema could not be obtained, so the body went unchecked |
+| `schema-origin-timeout` | 504 | the origin holding the schema did not answer in time |
+
+A 5xx body carries `status` and `title` and no `detail`, and no `errors` either — an internal message can name
+a class or an internal host, and a client is not the audience. A 4xx is the opposite: its detail and
+diagnostics are the point.
 
 Both replies name the schema that governs them, and the server publishes both documents, so a client can
 validate what it received with nothing told out of band:
