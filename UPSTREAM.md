@@ -89,6 +89,40 @@ red.
 
 ---
 
+## 3. A `SCHEMA_UNAVAILABLE` diagnostic drops the `Reason` that says whose fault it is
+
+**Hit:** choosing a status for a request body whose schema could not be fetched. `TsonSchemaFetchException`
+carries a `Reason`, and this project maps all five: `NOT_PERMITTED` and `NOT_FOUND` are the document's fault
+(400 — it named a schema this server will not load, or one nothing serves), while `TIMEOUT` is 504 and
+`TRANSPORT`/`TOO_LARGE` are 502, this server's dependency failing while the request was perfectly good. The
+retry advice differs, which is the whole reason for splitting them.
+
+**`Diagnostic.ofSchemaUnavailable` keeps none of it.** It is built from that exception and from nothing else —
+which is what makes the code trustworthy — but stores only the message, with `expected` and `actual` set to
+`""`. So a consumer that reads through a collecting receiver gets "nobody would supply this schema" and no way
+to learn which of the five it was.
+
+**That is the common path, not an edge.** Every read through `TsonHttpCodec` collects, so in this project a
+schema-fetch failure now essentially always arrives as a diagnostic and essentially never as the exception —
+the carefully split mapping in `TsonHttpException.from` is reachable only from startup (`preload`,
+`prepareToRead`). Two channels for one failure now answer differently: `NOT_PERMITTED` is a 400 thrown and a
+502 collected.
+
+**Change:** carry the reason on the diagnostic. `expected` is already free and already spare-typed, so
+`expected = reason.name()` would cost nothing and need no new field — though a typed accessor would be better
+if `Diagnostic` is willing to grow one. Either way the point is that the distinction survives the receiver,
+since it is not recoverable from the message and deliberately should not be parsed out of one.
+
+**Workaround in place:** round to 502 for the whole class, and say why in the Javadoc. It rounds away from the
+client on purpose — given one status for both, the wrong one to pick is the one that tells a client with a
+good document to go and fix it because a host did not answer. But it means a reference no allow-list permits,
+which really is the caller's mistake, is reported as this server's dependency failing.
+
+**Priority: medium** — it is a wrong status on a live path rather than an ergonomic edge, and the fix is one
+field.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. That register renumbers from #1
