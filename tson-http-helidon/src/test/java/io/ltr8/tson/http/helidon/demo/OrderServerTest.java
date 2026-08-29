@@ -119,4 +119,26 @@ class OrderServerTest {
                 "the description is governed by the CURRENT meta layer");
     }
 
+
+    /**
+     * <b>A document naming a schema this server does not publish is not this server's fault.</b> The caller
+     * chooses that identity, so answering 500 would let any client manufacture one -- and it would say the
+     * wrong thing besides. Nobody would supply the schema, so the body was never checked against one and
+     * whether it would have passed is unknown, which is exactly what {@code SCHEMA_UNAVAILABLE}'s 502 means.
+     *
+     * <p>It reached 500 until the schema source was made to refuse by the contract:
+     * {@link io.ltr8.tson.compiler.TsonSchemaSource} admits only {@code TsonSchemaFetchException} for "cannot
+     * supply this", and a {@code Map::get} returning {@code null} instead reached the registry and threw a
+     * {@code NullPointerException} the boundary could only read as an internal fault.
+     */
+    @Test
+    void aDocumentNamingAnUnknownSchemaIsNotThisServersFault() throws Exception {
+        HttpResponse<String> response = post("""
+                !!schema:"https://schemas.example.com/2026/34/app/nowhere-1.tn"
+                !order { sku: "ABC-1"  quantity: 3 }""");
+
+        assertEquals(502, response.statusCode(), response.body());
+        assertTrue(response.body().contains("schema-origin-failed"), response.body());
+    }
+
 }
