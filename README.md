@@ -98,6 +98,46 @@ app.post("/orders", TsonHandler.asHandler(codec, tson -> tson.respond(201, store
 routing.post("/orders", (req, res) -> res.status(201).send(store(req.content().as(Order.class))));
 ```
 
+## The validator demo
+
+A second demo, and the opposite one. The order server above is the shape a real service takes — every schema
+resolved at startup and shared for reads. This one takes **the schema from the request**, which that shape
+forbids, and the interest is in what it costs to do safely.
+
+```
+./gradlew :tson-http-jdk:runValidator
+```
+
+Then open `localhost:8080` for a page with a document on one side and a schema on the other, and every problem
+in one pass on the right. The same pair on [tson.io](https://tson.io/) is checked by the TypeScript
+implementation in the browser; this checks it with the Java one over HTTP, on the same scenarios — so a
+difference in code, message or source position between the two is a finding.
+
+The request is itself a TSON document, governed by a schema the service publishes:
+
+```
+!!schema:"https://schemas.example.com/2026/34/app/validate-1.tn"
+!validation_request {
+  schema: "!!id:\"...the schema under test...\" ..."
+  data:   "!!schema:\"...that same identity...\" ..."
+}
+```
+
+Three things about it are decisions rather than details:
+
+- **A document that does not conform is a `200`.** The request was well formed and the service answered it;
+  the diagnostics *are* the answer. A `400` here is always about the envelope and never about the document
+  under test — otherwise a client cannot tell "you asked badly" from "the thing you asked about is bad".
+- **`phase` says which of the two runs reported.** `SCHEMA` means the schema was at fault and the data was
+  never looked at; `DATA` means the schema was sound. Without it, "no diagnostics" and "nothing was checked"
+  look alike.
+- **A fresh `Tson` per request**, because `validateSchema` registers a sound schema: two callers submitting
+  different schemas under one `!!id` would otherwise be answered about each other's. It costs the
+  standard-library bootstrap, which is why `elapsed_ms` times the validation and not the request.
+
+It fetches nothing. The submitted schema is served at its own `!!id` and every other identity is refused — a
+reference in an untrusted document is an untrusted URL.
+
 ## Building
 
 Requires JDK 25 and a checkout of [ltr8-io-tson-java](https://github.com/litterat/ltr8-io-tson-java) at

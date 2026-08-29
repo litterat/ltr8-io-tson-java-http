@@ -1,0 +1,55 @@
+!!id:"https://schemas.example.com/2026/34/app/validate-1.tn"
+!!meta:"https://tson.io/2026/34/m/meta.tn"
+!!import:"https://tson.io/2026/34/m/core.tn"
+!!import:"https://tson.io/2026/34/ltr8/http/problem-1.tn"
+@doc:"""
+  The validator demo's own envelope: a schema and a document go in, the diagnostics come back.
+
+  This is a CONFORMANCE tool as much as a demo. tson.io's home page runs the same two documents
+  through the TypeScript implementation in the visitor's browser; this runs them through the Java
+  one over HTTP, so the two verdicts can be put side by side. That is why the result carries the
+  diagnostics whole rather than a summary: a code, a message and two source positions are what the
+  implementations have to agree on.
+
+  Both payloads are `text` and nothing here constrains them further, which is the point -- the
+  service's whole job is to say whether they are well-formed, so a schema that rejected a malformed
+  one at the envelope would answer the question by refusing to be asked it.
+
+  It imports problem-1.tn for `diagnostic` rather than declaring its own. A diagnostic is a
+  diagnostic whether it rides in an error body or in a result, and two shapes for one thing is how
+  a client ends up with two renderers.
+  """
+{
+  @doc:"""
+    Which phase the diagnostics come from, and so what they are a verdict ON.
+
+    The two run in order and the first to report stops the run, because a document cannot be checked
+    against a schema that did not resolve. So SCHEMA means the schema is the thing at fault and the
+    data was never looked at; DATA means the schema was sound and these are the document's own
+    problems. Without this field a client cannot tell "your document is fine" from "your document
+    was never checked", which is the same distinction the transport-level 5xx codes exist for.
+    """
+  validation_phase => !enum [SCHEMA DATA]
+
+  @doc:"""
+    What to check. `schema` absent asks for a Class 1 read -- base syntax and the built-in type
+    vocabulary, no schema in scope -- which is a real mode rather than a degenerate one: it is what
+    a JSON document gets, and what a document naming no !!schema gets.
+    """
+  validation_request => {
+    schema: text?
+    data:   text
+  }
+
+  @doc:"""
+    The verdict. `conforming` is `diagnostics` being empty, restated so a client can branch without
+    reasoning about a list, and `elapsed_ms` times the validation alone -- not the request, and not
+    the per-request bootstrap the service pays to keep one caller's schema out of another's.
+    """
+  validation_result => {
+    conforming:  boolean
+    phase:       validation_phase
+    elapsed_ms:  float64
+    diagnostics: [diagnostic]
+  }
+}
