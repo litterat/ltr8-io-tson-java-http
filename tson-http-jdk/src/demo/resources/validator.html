@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TSON validator — Java implementation</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --panel: #fff; --ink: #1c1b19; --muted: #6b6862; --line: #e4e1db;
+    --accent: #b3261e; --ok: #1a7f4b; --okbg: #e7f5ec; --warn: #9a6700; --warnbg: #fdf6e3;
+    --badbg: #fdecea; --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161614; --panel: #1e1e1b; --ink: #e8e6e1; --muted: #9a968e; --line: #33322e;
+      --accent: #f2836b; --ok: #5bc98b; --okbg: #14301f; --warn: #e0b341; --warnbg: #302713;
+      --badbg: #33191a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header { padding: 1.75rem 1.5rem 0; max-width: 74rem; margin: 0 auto; }
+  h1 { font-size: 1.3rem; margin: 0 0 0.35rem; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); margin: 0 0 1.25rem; max-width: 56rem; font-size: 0.9rem; }
+  .lede code { font-family: var(--mono); font-size: 0.85em; }
+  main { padding: 0 1.5rem 3rem; max-width: 74rem; margin: 0 auto; }
+
+  .scenarios { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; padding-bottom: 0.9rem; }
+  .scenarios .label {
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--accent); margin-right: 0.25rem;
+  }
+  .chip {
+    font-family: var(--mono); font-size: 0.75rem; font-weight: 600; border-radius: 999px;
+    padding: 0.3rem 0.8rem; background: var(--warnbg); color: var(--warn);
+    border: 1px solid transparent; cursor: pointer;
+  }
+  .chip.ok { background: var(--okbg); color: var(--ok); }
+  .chip[aria-pressed="true"] { border-color: currentColor; }
+
+  .panes { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+  @media (max-width: 62rem) { .panes { grid-template-columns: 1fr; } }
+  .pane {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .pane-head {
+    display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
+    padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--line);
+  }
+  .pane-title { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+  .pane-note { font-size: 0.72rem; color: var(--muted); font-family: var(--mono); }
+  textarea {
+    width: 100%; min-height: 21rem; border: 0; resize: vertical; padding: 0.85rem;
+    background: transparent; color: inherit; font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
+    tab-size: 2;
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .tabstrip { display: flex; gap: 0.25rem; }
+  .tab {
+    font: inherit; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+    background: none; border: 0; padding: 0.15rem 0.3rem; color: var(--muted); cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .badge {
+    display: inline-block; min-width: 1.3em; text-align: center; border-radius: 999px;
+    padding: 0 0.4em; font-size: 0.85em; background: var(--okbg); color: var(--ok);
+  }
+  .badge.bad { background: var(--badbg); color: var(--accent); }
+  .badge.warn { background: var(--warnbg); color: var(--warn); }
+
+  .diag-panel { padding: 0.85rem; min-height: 21rem; overflow: auto; }
+  .verdict {
+    display: flex; align-items: baseline; gap: 0.5rem; font-size: 0.85rem; margin-bottom: 0.75rem;
+    font-family: var(--mono);
+  }
+  .verdict .count { font-weight: 700; }
+  .verdict.ok { color: var(--ok); }
+  .verdict.bad { color: var(--accent); }
+  .verdict.warn { color: var(--warn); }
+  .verdict .timing { color: var(--muted); margin-left: auto; }
+  ul.diags { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+  ul.diags button {
+    width: 100%; text-align: left; font: inherit; cursor: pointer; display: block;
+    background: var(--badbg); border: 1px solid transparent; border-radius: 7px; padding: 0.5rem 0.65rem;
+    color: inherit;
+  }
+  ul.diags button:hover { border-color: var(--accent); }
+  .diag-top { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; }
+  .code { font-family: var(--mono); font-size: 0.72rem; font-weight: 700; color: var(--accent); }
+  .code.gap { color: var(--warn); }
+  .at { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); }
+  .msg { display: block; font-size: 0.85rem; margin-top: 0.2rem; }
+  .detail { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.3rem;
+            font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+  .detail .k { color: var(--accent); }
+  .empty { color: var(--muted); font-size: 0.85rem; font-family: var(--mono); }
+  footer { max-width: 74rem; margin: 0 auto; padding: 0 1.5rem 3rem; color: var(--muted); font-size: 0.8rem; }
+  footer code { font-family: var(--mono); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>TSON validator — the Java implementation, over HTTP</h1>
+  <p class="lede">
+    A schema and a document go to <code>POST /validate</code> as a TSON document, and every problem comes
+    back in one pass. The same pair on <a href="https://tson.io/">tson.io</a> is checked by the TypeScript
+    implementation in your browser; this one is checked by the Java implementation on the server, so the two
+    verdicts can be compared. A difference in code, message or source position between them is a finding.
+  </p>
+</header>
+
+<main>
+  <div class="scenarios">
+    <span class="label">Try it</span>
+    <span id="chips"></span>
+  </div>
+
+  <div class="panes">
+    <div class="pane">
+      <div class="pane-head">
+        <span class="pane-title">TSON data</span>
+        <span class="pane-note" id="data-note">the document under test</span>
+      </div>
+      <textarea id="data" spellcheck="false" aria-label="TSON document"></textarea>
+    </div>
+
+    <div class="pane">
+      <div class="pane-head">
+        <span class="tabstrip" role="tablist" aria-label="schema or diagnostics">
+          <button type="button" class="tab" id="tab-schema" role="tab" aria-selected="true"
+                  aria-controls="schema">TSON schema</button>
+          <button type="button" class="tab" id="tab-diags" role="tab" aria-selected="false"
+                  aria-controls="panel-diags">Diagnostics <span class="badge" id="badge">0</span></button>
+        </span>
+        <span class="pane-note" id="note">validated on the server</span>
+      </div>
+      <textarea id="schema" spellcheck="false" aria-label="TSON schema"
+                role="tabpanel" aria-labelledby="tab-schema"></textarea>
+      <div class="diag-panel" id="panel-diags" role="tabpanel" aria-labelledby="tab-diags" hidden>
+        <div class="verdict ok" id="verdict"><span>…</span></div>
+        <ul class="diags" id="diags"></ul>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Empty the schema pane to ask for a Class&nbsp;1 read — base syntax and the built-in type vocabulary, no
+  schema in scope. That is what a JSON document gets, and what a document naming no <code>!!schema</code>
+  gets. The service publishes its own envelope at
+  <code><a href="/2026/34/app/validate-1.tn">/2026/34/app/validate-1.tn</a></code> and describes itself at
+  <code><a href="/2026/34/app/validate-api-1.tn">/2026/34/app/validate-api-1.tn</a></code>.
+</footer>
+
+<script>
+const ENVELOPE = "https://schemas.example.com/2026/34/app/validate-1.tn";
+
+const PEOPLE = `!!id:"https://example.com/people.tn"
+!!meta:"https://tson.io/2026/34/m/meta.tn"
+!!import:"https://tson.io/2026/34/m/core.tn"
+@doc:"The demo schema: an employee record."
+{
+  @doc:"A person on the payroll."
+  employee => {
+    id:        uuid
+    name:      non_empty_text
+    age:       uint8
+    email:     email
+    started:   date
+    active:    boolean
+    tags:      [non_empty_text]?
+  }
+}
+`;
+
+const HEAD = '!!schema:"https://example.com/people.tn"\n';
+
+const SCENARIOS = [
+  {
+    id: 'valid', label: 'valid', ok: true, schema: PEOPLE,
+    data: HEAD + `!employee {
+  id:      "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+  name:    "Ada Lovelace"
+  age:     36
+  email:   "ada@example.com"
+  started: 2026-01-15
+  active:  true
+  tags:    ["founder" "mathematician"]
+}
+`,
+  },
+  {
+    id: 'planted', label: 'ten planted errors', schema: PEOPLE,
+    data: HEAD + `!employee {
+  id:        "not-a-uuid"
+  name:      ""
+  age:       300
+  email:     "ada@@example.com"
+  started:   2026-13-45
+  active:    yes
+  tags:      { first: "founder" }
+  nickname:  "Countess"
+  salary:    100000
+  id:        "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+}
+`,
+  },
+  {
+    // One mistyped field name, two diagnostics: the field nobody declared, and the required one it was
+    // meant to be. A tolerant reader would have dropped the value in silence.
+    id: 'typo', label: 'one typo', schema: PEOPLE,
+    data: HEAD + `!employee {
+  id:      "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+  name:    "Ada Lovelace"
+  age:     36
+  emai:    "ada@example.com"
+  started: 2026-01-15
+  active:  true
+}
+`,
+  },
+  {
+    id: 'missing', label: 'missing fields', schema: PEOPLE,
+    data: HEAD + `!employee {
+  id:   "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+  name: "Ada Lovelace"
+}
+`,
+  },
+  {
+    // No schema at all: the document is still checked against the built-in vocabulary its own type
+    // annotations name, which is more than JSON can say about itself.
+    id: 'class1', label: 'no schema (class 1)', schema: '',
+    data: `{
+  when:  !date 2026-13-45
+  who:   !email "ada@@example.com"
+  count: !uint8 300
+  free:  "anything at all"
+}
+`,
+  },
+  {
+    // The schema is the thing at fault, so the data is never looked at -- which is what `phase` reports.
+    id: 'badschema', label: 'broken schema',
+    schema: `!!id:"https://example.com/people.tn"
+!!meta:"https://tson.io/2026/34/m/meta.tn"
+!!import:"https://tson.io/2026/34/m/core.tn"
+{
+  employee => {
+    id:   uuid
+    name: no_such_type
+  }
+}
+`,
+    data: HEAD + `!employee { id: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"  name: "Ada" }
+`,
+  },
+];
+
+const dataEl = document.getElementById('data');
+const schemaEl = document.getElementById('schema');
+const diagsEl = document.getElementById('diags');
+const verdictEl = document.getElementById('verdict');
+const badgeEl = document.getElementById('badge');
+const noteEl = document.getElementById('note');
+const chipsEl = document.getElementById('chips');
+const tabSchema = document.getElementById('tab-schema');
+const tabDiags = document.getElementById('tab-diags');
+const panelSchema = document.getElementById('schema');
+const panelDiags = document.getElementById('panel-diags');
+
+/**
+ * The user's text as a single-line TSON quoted token ([TSON-DATA] §7.2.2). Single-line rather than the
+ * triple-quoted form on purpose: a multi-line token is closed by `"""` on its own line, so a schema that
+ * contains one -- and a schema pasted into a validator is exactly where one turns up -- would end the token
+ * early. Escaping a defined set of characters has no such edge.
+ */
+function tsonText(s) {
+  let out = '"';
+  for (const ch of s) {
+    const c = ch.codePointAt(0);
+    if (ch === '"') out += '\\"';
+    else if (ch === '\\') out += '\\\\';
+    else if (ch === '\n') out += '\\n';
+    else if (ch === '\r') out += '\\r';
+    else if (ch === '\t') out += '\\t';
+    // Below U+0020, plus the three line terminators §7.2.2 excludes from a single-line token.
+    else if (c < 0x20 || c === 0x85 || c === 0x2028 || c === 0x2029) {
+      out += '\\u' + c.toString(16).padStart(4, '0');
+    } else out += ch;
+  }
+  return out + '"';
+}
+
+function requestBody(data, schema) {
+  const fields = [`  data:   ${tsonText(data)}`];
+  // An absent field, not an empty one: `schema` is optional in the envelope, and omitting it is how the
+  // request asks for a class 1 read rather than for a check against an empty schema.
+  if (schema.trim() !== '') fields.unshift(`  schema: ${tsonText(schema)}`);
+  return `!!schema:"${ENVELOPE}"\n!validation_request {\n${fields.join('\n')}\n}\n`;
+}
+
+const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+// The three codes that are not a verdict on the document: nothing was checked, so they are shown as a
+// caution rather than an error. The server answers 5xx for these when they arrive through a read; here they
+// are the answer to a question, so they arrive as data.
+const GAPS = new Set(['NOT_IMPLEMENTED', 'BIND_MISMATCH', 'SCHEMA_UNAVAILABLE']);
+
+function positionLabel(d) {
+  const p = d.data_position || d.schema_position;
+  if (!p) return '';
+  const [line, column] = p.split(':');
+  return `${d.data_position ? 'data' : 'schema'} ${line}:${column}`;
+}
+
+/** A UTF-8 byte offset, as `problem-1.tn` states positions, to a UTF-16 index a textarea can select. */
+function utf16IndexOfByteOffset(text, offset) {
+  let bytes = 0;
+  for (let i = 0; i < text.length; ) {
+    if (bytes >= offset) return i;
+    const cp = text.codePointAt(i);
+    bytes += cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+    i += cp > 0xffff ? 2 : 1;
+  }
+  return text.length;
+}
+
+function showTab(which) {
+  const diags = which === 'diags';
+  tabSchema.setAttribute('aria-selected', String(!diags));
+  tabDiags.setAttribute('aria-selected', String(diags));
+  panelSchema.hidden = diags;
+  panelDiags.hidden = !diags;
+}
+tabSchema.addEventListener('click', () => showTab('schema'));
+tabDiags.addEventListener('click', () => showTab('diags'));
+
+function render(result) {
+  const diagnostics = result.diagnostics;
+  badgeEl.textContent = String(diagnostics.length);
+  badgeEl.className = 'badge ' + (diagnostics.length === 0 ? 'ok'
+    : diagnostics.every((d) => GAPS.has(d.code)) ? 'warn' : 'bad');
+
+  noteEl.textContent = result.phase === 'SCHEMA' ? 'the schema itself' : 'validated on the server';
+
+  const kind = diagnostics.length === 0 ? 'ok'
+    : diagnostics.every((d) => GAPS.has(d.code)) ? 'warn' : 'bad';
+  const label = diagnostics.length === 0
+    ? (result.phase === 'SCHEMA' ? 'the schema is sound' : 'the document conforms')
+    : result.phase === 'SCHEMA'
+      ? (diagnostics.length === 1 ? 'problem in the schema — the data was not checked'
+                                  : 'problems in the schema — the data was not checked')
+      : (diagnostics.length === 1 ? 'diagnostic, in one pass' : 'diagnostics, in one pass');
+  verdictEl.className = 'verdict ' + kind;
+  verdictEl.innerHTML =
+    `<span><span class="count">${diagnostics.length}</span> ${escapeHtml(label)}</span>` +
+    `<span class="timing">${result.elapsed_ms.toFixed(2)} ms</span>`;
+
+  if (diagnostics.length === 0) {
+    diagsEl.innerHTML = '<li class="empty">Nothing to report.</li>';
+    return;
+  }
+  diagsEl.innerHTML = diagnostics.map((d, i) => {
+    const detail = [];
+    if (d.path) detail.push(`<span><span class="k">at</span> ${escapeHtml(d.path)}</span>`);
+    if (d.expected) detail.push(`<span><span class="k">expected</span> ${escapeHtml(d.expected)}</span>`);
+    if (d.actual) detail.push(`<span><span class="k">found</span> ${escapeHtml(d.actual)}</span>`);
+    return `<li><button type="button" data-i="${i}">
+      <span class="diag-top">
+        <span class="code${GAPS.has(d.code) ? ' gap' : ''}">${escapeHtml(d.code)}</span>
+        <span class="at">${escapeHtml(positionLabel(d))}</span>
+      </span>
+      <span class="msg">${escapeHtml(d.message)}</span>
+      ${detail.length ? `<span class="detail">${detail.join('')}</span>` : ''}
+    </button></li>`;
+  }).join('');
+
+  // Clicking a diagnostic puts the caret on the offending byte, in whichever pane it belongs to.
+  for (const button of diagsEl.querySelectorAll('button')) {
+    button.addEventListener('click', () => {
+      const d = diagnostics[Number(button.dataset.i)];
+      const target = d.data_position ? dataEl : d.schema_position ? schemaEl : null;
+      if (!target) return;
+      const offset = Number((d.data_position || d.schema_position).split(':')[2]);
+      if (target === schemaEl) showTab('schema');
+      const index = utf16IndexOfByteOffset(target.value, offset);
+      target.focus();
+      target.setSelectionRange(index, Math.min(index + 1, target.value.length));
+    });
+  }
+}
+
+function renderTransportFailure(message) {
+  verdictEl.className = 'verdict warn';
+  verdictEl.innerHTML = '<span>the service did not answer</span>';
+  badgeEl.textContent = '1';
+  badgeEl.className = 'badge warn';
+  diagsEl.innerHTML = `<li><button type="button"><span class="diag-top">` +
+    `<span class="code gap">TRANSPORT</span></span>` +
+    `<span class="msg">${escapeHtml(message)}</span></button></li>`;
+}
+
+let inFlight = 0;
+async function run() {
+  const seq = ++inFlight;
+  let response;
+  try {
+    response = await fetch('/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/tson', 'Accept': 'application/tson' },
+      body: requestBody(dataEl.value, schemaEl.value),
+    });
+  } catch (e) {
+    if (seq === inFlight) renderTransportFailure(String(e));
+    return;
+  }
+  // A later keystroke has already asked again; this answer is stale and would flicker the panel.
+  if (seq !== inFlight) return;
+
+  const text = await response.text();
+  if (!response.ok) {
+    // The envelope was rejected, which is a problem with this page rather than with what was typed.
+    renderTransportFailure(`${response.status} — ${text.slice(0, 400)}`);
+    showTab('diags');
+    return;
+  }
+  render(parseResult(text));
+  showTab('diags');
+}
+
+/**
+ * The result, read out of the TSON reply. Deliberately a small hand-rolled reader rather than a TSON
+ * library: this page's job is to show what the JAVA implementation said, and shipping a second
+ * implementation to read the answer would put a second implementation's bugs in the way of that.
+ *
+ * It reads exactly the shape `validation_result` declares -- scalars, then the diagnostics array -- and
+ * nothing else. `problem-1.tn` writes every diagnostic field as text or an enum member, so there is no
+ * nesting to descend into.
+ */
+function parseResult(tson) {
+  const scalar = (name) => {
+    const m = tson.match(new RegExp(`\\b${name}:\\s*("(?:[^"\\\\]|\\\\.)*"|[^\\s}\\]]+)`));
+    return m ? unquote(m[1]) : null;
+  };
+  const diagnostics = [];
+  const list = tson.slice(tson.indexOf('diagnostics:'));
+  // Each diagnostic is one brace-delimited record; they do not nest, so a depth counter is enough.
+  let depth = 0, start = -1;
+  for (let i = list.indexOf('['); i < list.length; i++) {
+    if (list[i] === '"') { i = skipQuoted(list, i); continue; }
+    if (list[i] === '{') { if (depth++ === 0) start = i; }
+    else if (list[i] === '}') { if (--depth === 0) diagnostics.push(record(list.slice(start, i + 1))); }
+    else if (list[i] === ']' && depth === 0) break;
+  }
+  return {
+    conforming: scalar('conforming') === 'true',
+    phase: scalar('phase'),
+    elapsed_ms: Number(scalar('elapsed_ms')),
+    diagnostics,
+  };
+}
+
+function skipQuoted(text, i) {
+  for (i++; i < text.length; i++) {
+    if (text[i] === '\\') i++;
+    else if (text[i] === '"') return i;
+  }
+  return i;
+}
+
+function record(text) {
+  const out = {};
+  const field = /([a-z_]+):\s*("(?:[^"\\]|\\.)*"|[^\s}]+)/g;
+  let m;
+  while ((m = field.exec(text)) !== null) out[m[1]] = unquote(m[2]);
+  return out;
+}
+
+function unquote(token) {
+  if (token[0] !== '"') return token;
+  return token.slice(1, -1).replace(/\\u([0-9a-fA-F]{4})|\\(.)/g, (_, hex, ch) =>
+    hex ? String.fromCharCode(parseInt(hex, 16))
+        : ({ n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', s: ' ' })[ch] ?? ch);
+}
+
+let debounce;
+function scheduleRun() {
+  clearTimeout(debounce);
+  debounce = setTimeout(run, 350);
+}
+dataEl.addEventListener('input', scheduleRun);
+schemaEl.addEventListener('input', scheduleRun);
+
+function load(scenario) {
+  dataEl.value = scenario.data;
+  schemaEl.value = scenario.schema;
+  for (const chip of chipsEl.querySelectorAll('.chip')) {
+    chip.setAttribute('aria-pressed', String(chip.dataset.id === scenario.id));
+  }
+  run();
+}
+
+for (const scenario of SCENARIOS) {
+  const chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'chip' + (scenario.ok ? ' ok' : '');
+  chip.dataset.id = scenario.id;
+  chip.textContent = scenario.label;
+  chip.setAttribute('aria-pressed', 'false');
+  chip.addEventListener('click', () => load(scenario));
+  chipsEl.append(chip);
+}
+load(SCENARIOS[0]);
+</script>
+</body>
+</html>

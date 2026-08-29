@@ -32,6 +32,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * examples named {@code problem-1.tn} through three version bumps that made them wrong, and nothing noticed
  * until the versions were collapsed back and the examples became accidentally correct again.
  *
+ * <p><b>Two servers, because the README documents two demos.</b> A schema URL or a path it prints has to be
+ * served by one of them; which one is not the README's reader's problem and is not asserted here.
+ *
  * <p><b>What it checks is derived from the README's text</b>, not copied from it — the paths it tells a reader
  * to fetch, the schema URLs it prints, and the request bodies it says to post. Editing the README to say
  * something untrue fails here; editing it to say something true in different words does not.
@@ -48,20 +51,25 @@ class ReadmeTest {
 
     private static String readme;
     private HttpServer server;
+    private HttpServer validator;
     private HttpClient client;
     private String base;
+    private String validatorBase;
 
     @BeforeEach
     void startServer() throws Exception {
         readme = Files.readString(Path.of("..", "README.md"));
         server = OrderServer.start(0);
         base = "http://127.0.0.1:" + server.getAddress().getPort();
+        validator = ValidatorServer.start(0);
+        validatorBase = "http://127.0.0.1:" + validator.getAddress().getPort();
         client = HttpClient.newHttpClient();
     }
 
     @AfterEach
     void stopServer() {
         server.stop(0);
+        validator.stop(0);
         client.close();
     }
 
@@ -75,8 +83,18 @@ class ReadmeTest {
     }
 
     private HttpResponse<String> get(String path) throws Exception {
-        return client.send(HttpRequest.newBuilder(URI.create(base + path)).GET().build(),
+        return get(base, path);
+    }
+
+    private HttpResponse<String> get(String from, String path) throws Exception {
+        return client.send(HttpRequest.newBuilder(URI.create(from + path)).GET().build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    }
+
+    /** The response from whichever demo serves {@code path}, or the order server's 404 if neither does. */
+    private HttpResponse<String> getFromEitherDemo(String path) throws Exception {
+        HttpResponse<String> response = get(base, path);
+        return response.statusCode() == 200 ? response : get(validatorBase, path);
     }
 
     private HttpResponse<String> post(String path, String body) throws Exception {
@@ -98,8 +116,9 @@ class ReadmeTest {
 
         for (String url : named) {
             String path = URI.create(url).getPath();
-            HttpResponse<String> response = get(path);
-            assertEquals(200, response.statusCode(), url + " is printed by the README but not served at " + path);
+            HttpResponse<String> response = getFromEitherDemo(path);
+            assertEquals(200, response.statusCode(),
+                    url + " is printed by the README but neither demo serves it at " + path);
             assertTrue(response.body().startsWith("!!id:\"" + url + "\""),
                     () -> path + " serves a document that is not " + url + ": "
                             + response.body().lines().findFirst().orElse(""));
