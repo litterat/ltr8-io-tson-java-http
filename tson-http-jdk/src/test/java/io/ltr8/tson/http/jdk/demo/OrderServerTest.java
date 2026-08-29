@@ -95,8 +95,8 @@ class OrderServerTest {
     /** The last two: both schemas published at their own identity paths. */
     @Test
     void publishesBothSchemasAtTheirIdentityPaths() throws Exception {
-        assertEquals(OrderServer.SCHEMA, get("/2026/33/app/order-1.tn").body());
-        assertEquals(TsonProblemSchema.source(), get("/2026/33/ltr8/http/problem-1.tn").body());
+        assertEquals(OrderServer.SCHEMA, get("/2026/34/app/order-1.tn").body());
+        assertEquals(TsonProblemSchema.source(), get("/2026/34/ltr8/http/problem-1.tn").body());
     }
     /**
      * <b>The schemas name their identities literally, so something has to hold them to the constants.</b>

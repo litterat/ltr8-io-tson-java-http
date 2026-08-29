@@ -39,7 +39,7 @@ class TsonProblemSchemaTest {
     void whatWriteProblemEmitsValidatesAgainstProblem1AndRoundTrips() {
         TsonHttpCodec codec = new TsonHttpCodec(TsonProblemSchema.tson());
         TsonProblem problem = TsonProblem.of(TsonHttpException.TYPES + "invalid-document", 400, "Invalid TSON document", "the request body has 1 problem",
-                List.of(Diagnostic.ofSchemaError("https://example.com/2026/33/app/order-1.tn", "order",
+                List.of(Diagnostic.ofSchemaError("https://example.com/2026/34/app/order-1.tn", "order",
                         "missing required field 'sku'", Optional.empty())));
 
         byte[] written = codec.writeProblem(problem);
@@ -59,7 +59,7 @@ class TsonProblemSchemaTest {
     void anErrorBodySaysWhatGovernsItAndReadsBackWithNothingToldOutOfBand() {
         TsonHttpCodec codec = new TsonHttpCodec(TsonProblemSchema.tson());
         TsonProblem problem = TsonProblem.of(TsonHttpException.TYPES + "invalid-document", 400, "Invalid TSON document", "the request body has 1 problem",
-                List.of(Diagnostic.ofSchemaError("https://example.com/2026/33/app/order-1.tn", "order",
+                List.of(Diagnostic.ofSchemaError("https://example.com/2026/34/app/order-1.tn", "order",
                         "missing required field 'sku'", Optional.empty())));
 
         String written = new String(codec.writeProblem(problem), StandardCharsets.UTF_8);

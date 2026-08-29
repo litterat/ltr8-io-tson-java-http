@@ -1,6 +1,6 @@
-!!id:"https://tson.io/2026/33/ltr8/http/meta-http-1.tn"
-!!meta:"https://tson.io/2026/33/m/meta-kernel.tn"
-!!import:"https://tson.io/2026/33/m/meta.tn"
+!!id:"https://tson.io/2026/34/ltr8/http/meta-http-1.tn"
+!!meta:"https://tson.io/2026/34/m/meta-kernel.tn"
+!!import:"https://tson.io/2026/34/m/meta.tn"
 @doc:"""
   A meta layer adding HTTP operations to the type system: a schema governed by this one describes an
   HTTP API, and its request and response payloads are type references the compiler resolves.

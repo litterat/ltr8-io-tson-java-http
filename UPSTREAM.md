@@ -127,9 +127,9 @@ field.
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. That register renumbers from #1
 each time a revision closes, and its convention is *cite the spec, not the argument that got it there* — so
-re-check every `SPEC-FEEDBACK.md #N` in this repo after a revision bump. Revision 33 closed the two that were
-cited here (#55, transitive imports, now §2.2.3; #20, `.tn` versus `.tn1`, now §7.1) and left both of the
-below untouched.
+re-check every `SPEC-FEEDBACK.md #N` in this repo after a revision bump. Revision 34 carried fourteen of the
+seventeen entries that register held and renumbered the survivors from #1; nothing here cites it by number any
+more. Neither of the two below has been filed there yet, and Revision 34 addressed neither.
 
 ### To file: how a schema is named for a document that cannot carry `!!schema` (§6, §7.1)
 
@@ -150,8 +150,8 @@ proposal — rules, naming procedure, structured-field syntax, and the two decis
 **The interpretation this project uses today**, pending a decision: the body's `!!schema` is the only channel;
 `TsonSchemaVersions` refuses a document that names no version rather than guessing one.
 
-**Unchanged by Revision 33.** §7.1 was rewritten (the `.tn`/`.tn1` extension rule) and §6 sharpened, and
-neither gained an out-of-band channel. Still worth filing, and the second reason above is the stronger one.
+**Unchanged by Revision 34**, which left §6 alone and rewrote §7.1 around the identifier layer rather than
+the media type. Still worth filing, and the second reason above is the stronger one.
 
 **The conflict rule, whatever is decided,** has a precedent in this same spec and should follow it. §2.2.1 on
 content hashes: "two that declare different hashes are in conflict — at most one describes the real bytes — and
@@ -162,9 +162,9 @@ a schema nobody intended.
 ### To file: no shorthand for a template application at a `type_ref` slot in data ([TSON-SCHEMA] §5.6, §8.1)
 
 The meta-kernel's `type_ref` is explicit and the implementation matches it: at a `type_ref`-typed slot, a bare
-token fills `name`, and *"a braced record is the explicit form, canonical only when `arguments` is present."*
-So a schema can write `page<order>`, but a **data** payload at a `type_ref` slot — an `!operation { … }`
-governed by a consumer's meta layer — must write
+token fills `name`, and *"a braced record is the explicit form. Canonical output MUST use the bare token
+whenever `arguments` is absent."* So a schema can write `page<order>`, but a **data** payload at a `type_ref`
+slot — an `!operation { … }` governed by a consumer's meta layer — must write
 
 ```tson
 body: { name: page  arguments: [ { name: order } ] }
@@ -175,8 +175,16 @@ a comma, or both`), the `<` never being data syntax. Measured, and both spelling
 `UpstreamGapsTest.aTemplateApplicationAtATypeRefSlotInDataNeedsTheBracedForm` — the braced record resolves,
 the sugar does not parse.
 
-**Unchanged by Revision 33**, which rewrote §8.2 around synthetic entries and left §8.1's positional-form
-paragraph saying exactly what it said before. Still worth filing.
+**Unchanged by Revision 34**, which reworked §8.1 heavily — held bodies, `reference.target` widened to a
+`type_ref` — and left the positional-form paragraph byte-identical. Still worth filing.
+
+Worth reading alongside it, because it answers a neighbouring question and can be mistaken for this one:
+§8.1 explains why the *arguments* are braced — `type_argument` has no REQUIRED field, so "a bare token cannot
+self-classify as reference or literal, so its braced record is load-bearing, not ceremony." That is sound, and
+it is one level down from the cost reported here, which is the **application** at the `type_ref` slot, where
+`name` is REQUIRED and the positional form does apply in a schema and cannot be written in data. It does bear
+on option 3 below: extending the sugar into data position would have to reach a record the spec argues must
+stay braced.
 
 **This is by design and the spec is not wrong.** What is worth raising is whether the design is intended to
 cost this much at the one place it now shows up. §5.6's positional form was written for the argument-free

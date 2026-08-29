@@ -349,7 +349,8 @@ public final class TsonHttpCodec {
 
     /**
      * A write collected into bytes. The writer encodes UTF-8 itself and emits no BOM -- [TSON-DATA] §7.1 fixes
-     * the encoding and §9.4 treats a BOM as a confusable hazard rather than a signal.
+     * the encoding, says an encoder SHOULD NOT emit one, and makes U+FEFF a lexer error anywhere but the very
+     * first character, it being a format character no profile admits.
      */
     private static byte[] buffered(Consumer<OutputStream> write) {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();

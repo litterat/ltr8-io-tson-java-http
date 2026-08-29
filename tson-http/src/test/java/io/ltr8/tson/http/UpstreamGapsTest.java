@@ -43,15 +43,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class UpstreamGapsTest {
 
-    private static final String META_ID = "https://tson.io/2026/33/ltr8/http/meta-probe.tn";
-    private static final String API_ID = "https://schemas.example.com/2026/33/app/probe-1.tn";
+    private static final String META_ID = "https://tson.io/2026/34/ltr8/http/meta-probe.tn";
+    private static final String API_ID = "https://schemas.example.com/2026/34/app/probe-1.tn";
 
     /** A meta layer with a `~data &` constructor, standing in for meta-http without depending on its shape. */
     private static String meta(String declarations) {
         return """
                 !!id:"%s"
-                !!meta:"https://tson.io/2026/33/m/meta-kernel.tn"
-                !!import:"https://tson.io/2026/33/m/meta.tn"
+                !!meta:"https://tson.io/2026/34/m/meta-kernel.tn"
+                !!import:"https://tson.io/2026/34/m/meta.tn"
                 {
                 %s
                 }""".formatted(META_ID, declarations);
@@ -61,7 +61,7 @@ class UpstreamGapsTest {
         return """
                 !!id:"%s"
                 !!meta:"%s"
-                !!import:"https://tson.io/2026/33/m/core.tn"
+                !!import:"https://tson.io/2026/34/m/core.tn"
                 {
                 %s
                 }""".formatted(API_ID, META_ID, declarations);
@@ -95,9 +95,9 @@ class UpstreamGapsTest {
     @Test
     void anApplicationInsideAChoiceResolves() {
         String schema = """
-                !!id:"https://s.example.com/2026/33/p-1.tn"
-                !!meta:"https://tson.io/2026/33/m/meta.tn"
-                !!import:"https://tson.io/2026/33/m/core.tn"
+                !!id:"https://s.example.com/2026/34/p-1.tn"
+                !!meta:"https://tson.io/2026/34/m/meta.tn"
+                !!import:"https://tson.io/2026/34/m/core.tn"
                 {
                     order   => { sku: text }
                     problem => { title: text }
@@ -109,7 +109,7 @@ class UpstreamGapsTest {
         List<Diagnostic> problems = tson.validateSchema(schema);
         assertEquals(List.of(), problems, () -> "expected a clean resolution, got " + problems);
 
-        var entries = tson.schemaRegistry().get("https://s.example.com/2026/33/p-1.tn").orElseThrow()
+        var entries = tson.schemaRegistry().get("https://s.example.com/2026/34/p-1.tn").orElseThrow()
                 .schema().entries();
         TypeRef response = ((RecordBody) entries.get("op").body()).fields().getFirst().type();
         var variants = assertInstanceOf(ChoiceBody.class, entries.get(response.name()).body()).variants();
@@ -130,9 +130,9 @@ class UpstreamGapsTest {
     @Test
     void aValueParameterFixedFieldConstrains() {
         String schema = """
-                !!id:"https://s.example.com/2026/33/p-1.tn"
-                !!meta:"https://tson.io/2026/33/m/meta.tn"
-                !!import:"https://tson.io/2026/33/m/core.tn"
+                !!id:"https://s.example.com/2026/34/p-1.tn"
+                !!meta:"https://tson.io/2026/34/m/meta.tn"
+                !!import:"https://tson.io/2026/34/m/core.tn"
                 {
                     order    => { sku: text }
                     resp     => <T, S> { status: int32 = S  body: T }
@@ -140,7 +140,7 @@ class UpstreamGapsTest {
                 }""";
         Tson tson = Tson.builder().schemaSource(u -> schema).build();
         tson.resolve(schema);
-        String header = "!!schema:\"https://s.example.com/2026/33/p-1.tn\"\n";
+        String header = "!!schema:\"https://s.example.com/2026/34/p-1.tn\"\n";
 
         assertEquals(List.of(), tson.validate(header
                 + "!created { status: 201  body: !order { sku: \"a\" } }"));
@@ -157,9 +157,9 @@ class UpstreamGapsTest {
     @Test
     void aMaterialisedApplicationCarriesAFixedField() {
         String schema = """
-                !!id:"https://s.example.com/2026/33/p-1.tn"
-                !!meta:"https://tson.io/2026/33/m/meta.tn"
-                !!import:"https://tson.io/2026/33/m/core.tn"
+                !!id:"https://s.example.com/2026/34/p-1.tn"
+                !!meta:"https://tson.io/2026/34/m/meta.tn"
+                !!import:"https://tson.io/2026/34/m/core.tn"
                 {
                     order   => { sku: text }
                     resp    => <T, S> { status: int32 = S  body: T }
@@ -167,7 +167,7 @@ class UpstreamGapsTest {
                 }""";
         Tson tson = Tson.builder().schemaSource(u -> schema).build();
         tson.resolve(schema);
-        var entries = tson.schemaRegistry().get("https://s.example.com/2026/33/p-1.tn").orElseThrow()
+        var entries = tson.schemaRegistry().get("https://s.example.com/2026/34/p-1.tn").orElseThrow()
                 .schema().entries();
 
         String materialised = entries.get("created").source().orElseThrow().name();
@@ -311,7 +311,7 @@ class UpstreamGapsTest {
         String doc = """
                 !!id:"%s"
                 !!meta:"%s"
-                !!import:"https://tson.io/2026/33/m/core.tn"
+                !!import:"https://tson.io/2026/34/m/core.tn"
                 {
                 %s
                 }""".formatted(API_ID, TsonApiSchema.ID, declarations);
@@ -334,9 +334,9 @@ class UpstreamGapsTest {
     @Test
     void anEntrysTwoAnnotationPositionsLandInDifferentPlaces() {
         String schema = """
-                !!id:"https://s.example.com/2026/33/p-1.tn"
-                !!meta:"https://tson.io/2026/33/m/meta.tn"
-                !!import:"https://tson.io/2026/33/m/core.tn"
+                !!id:"https://s.example.com/2026/34/p-1.tn"
+                !!meta:"https://tson.io/2026/34/m/meta.tn"
+                !!import:"https://tson.io/2026/34/m/core.tn"
                 {
                   @doc:"on the entry"
                   before => { a: text }
@@ -344,7 +344,7 @@ class UpstreamGapsTest {
                 }""";
         Tson tson = Tson.builder().schemaSource(u -> schema).build();
         tson.resolve(schema);
-        var entries = tson.schemaRegistry().get("https://s.example.com/2026/33/p-1.tn")
+        var entries = tson.schemaRegistry().get("https://s.example.com/2026/34/p-1.tn")
                 .orElseThrow().schema().entries();
 
         assertEquals(java.util.Optional.of("on the entry"),
@@ -360,9 +360,9 @@ class UpstreamGapsTest {
     @Test
     void anUnknownAnnotationOnAnEntryIsRefused() {
         String schema = """
-                !!id:"https://s.example.com/2026/33/p-1.tn"
-                !!meta:"https://tson.io/2026/33/m/meta.tn"
-                !!import:"https://tson.io/2026/33/m/core.tn"
+                !!id:"https://s.example.com/2026/34/p-1.tn"
+                !!meta:"https://tson.io/2026/34/m/meta.tn"
+                !!import:"https://tson.io/2026/34/m/core.tn"
                 {
                   @nosuchtype:"x"
                   thing => { a: text }
@@ -419,5 +419,38 @@ class UpstreamGapsTest {
                 () -> tson(metaSource, sugar, "io.ltr8.tson.http.probe").resolve(sugar)).getMessage();
 
         assertTrue(message.contains("adjacent values must be separated"), message);
+    }
+
+    /**
+     * <b>Name hygiene defaults the two ways round, and a server inherits both.</b> [TSON-DATA] §8.2 makes
+     * the restriction level a policy rather than validity, so the defaults are the library's choice and not
+     * the format's -- which is exactly why they are pinned here rather than assumed. A <em>declared</em> name
+     * defaults to Highly Restrictive, so a schema a request body names is refused for a homograph nobody
+     * could have read correctly; a <em>value</em> defaults to unrestricted, because data may legitimately be
+     * a Cyrillic display name and a script rule over payload would break ordinary documents to no end.
+     *
+     * <p>Both halves matter to this project and they pull opposite ways, so asserting one would leave the
+     * other free to move. §8.2's "Values" paragraph names this project's own situation -- a service that
+     * renders or matches untrusted values -- and says the deployment applies {@code TsonConfig.tokenPolicy}
+     * knowingly. {@code tson-http} does not build the {@code Tson}, so that decision is the application's;
+     * what is fixed here is what it gets if it does not make one.
+     */
+    @Test
+    void aDeclaredNameDefaultsToHighlyRestrictiveAndAValueToUnrestricted() {
+        String schema = """
+                !!id:"https://example.com/2026/34/app/hygiene-1.tn"
+                !!meta:"https://tson.io/2026/34/m/meta.tn"
+                !!import:"https://tson.io/2026/34/m/core.tn"
+                {
+                  rec => { \u0430dmin: text }
+                }""";
+
+        String refused = assertThrows(RuntimeException.class,
+                () -> Tson.builder().schemaSource(u -> schema).build().resolve(schema)).getMessage();
+        assertTrue(refused.contains("HIGHLY_RESTRICTIVE"), refused);
+
+        // The same text as a value, through a schemaless read: nothing is checked, and nothing should be.
+        assertDoesNotThrow(() -> Tson.builder().schemaSource(u -> null).build().treeReader()
+                .readWithoutSchema("{ name: \"\u0430dmin\" }"));
     }
 }

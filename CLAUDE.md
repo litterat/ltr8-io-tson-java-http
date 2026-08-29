@@ -13,8 +13,8 @@ It is a **consumer** of the TSON library, not part of it. The library lives in t
 and consumed as a Gradle **included build** (see "Consuming tson-java" below). Destination remote:
 `https://github.com/litterat/`.
 
-**Built against 2026 Revision 33** of the spec — the sibling's `spec/` holds the snapshot, and every identity
-in this repo carries `/2026/33/`. The revision series changes without compatibility guarantees, so a `git pull`
+**Built against 2026 Revision 34** of the spec — the sibling's `spec/` holds the snapshot, and every identity
+in this repo carries `/2026/34/`. The revision series changes without compatibility guarantees, so a `git pull`
 of the sibling can move the whole identity space; "Project-owned schema `!!id`" below says what that costs.
 
 **Status.** All four modules are built and tested, each adapter with a runnable demo server and a concurrency
@@ -224,14 +224,13 @@ operations. That is what makes `request: order` a *reference the compiler resolv
 the property no data-shaped design can have, because a data document can name a schema but cannot hold a
 reference to a type.
 
-**Revision 33 made both halves of that shape normative, and names this as the case they exist for.**
+**The spec makes both halves of that shape normative, and names this as the case they exist for.**
 [TSON-SCHEMA] §4.1 declares `data` as the fourth base kind — "an HTTP operation binding request and response
 types by name is the motivating case" — with `operation => ~data & { … }` as its own worked example, and makes
 naming a `kind: DATA` entry where a type is expected a resolver error. §9's guidance for extension meta-schemas
 then requires the other half: a constructor field holding a type reference **MUST** be typed `type_ref`, not
 `type_name`, because `type_ref` is what makes the slot participate in flattening, `@alias` recording and
-structural identity — and it names `request`/`response` as the example. Both were already how this is built, so
-nothing changed; what changed is that they are now rules to cite rather than a design to defend.
+structural identity — and it names `request`/`response` as the example.
 
 **The wiring is three things**: this schema reachable from the `schemaSource`, the bound classes in
 `io.ltr8.tson.http.api`, and `TsonApiSchema.metaNameBinder()` on the config — **not** `bindings`, which binds
@@ -487,12 +486,40 @@ recover the reason by parsing the message; upstream made the code trustworthy pr
 
 `Diagnostic.Code` is the detail vocabulary — mostly 4xx, but see the table above for the three that are not:
 `FIELD_REQUIRED`, `FIELD_FIXED`, `TYPE_MISMATCH`, `WRONG_ARITY`, `UNKNOWN_TYPE_REF`,
-`ATOM_CONSTRAINT_VIOLATION`, `UNRECOGNIZED_FIELD`, `DUPLICATE_MAP_KEY`, `DUPLICATE_FIELD`, `SCHEMA_ERROR`,
-`UNKNOWN_TYPE`, `VALIDATION_ERROR`, `NOT_IMPLEMENTED`, `BIND_MISMATCH`, `SCHEMA_UNAVAILABLE`.
+`ATOM_CONSTRAINT_VIOLATION`, `UNRECOGNIZED_FIELD`, `DUPLICATE_MAP_KEY`, `DUPLICATE_FIELD`, `CONFUSABLE_NAMES`,
+`RESTRICTED_TOKEN`, `SCHEMA_ERROR`, `UNKNOWN_TYPE`, `VALIDATION_ERROR`, `NOT_IMPLEMENTED`, `BIND_MISMATCH`,
+`SCHEMA_UNAVAILABLE`.
 
 **`TsonSchemaFetchException` lives in `io.ltr8.tson.compiler`**, beside the `TsonSchemaSource` interface whose
 contract it is — `fetch` names it as the one way a source says "cannot supply this", which is what lets the
 classification route on it at all.
+
+**Name hygiene is policy, not validity, and it arrives as two more codes.** [TSON-DATA] §8.2 is a layer two
+conforming processors may legitimately disagree on, which is why its defaults are the library's choice rather
+than the format's. `CONFUSABLE_NAMES` (two names in one scope with equal UTS #39 skeletons) and
+`RESTRICTED_TOKEN` (a token whose script mix the restriction level refuses) report it, and **both are 400**,
+because both are verdicts on what arrived. That is the fall-through, and it is pinned rather than left
+implicit (`TsonHttpCodecTest.nameHygieneIsAVerdictOnTheDocument`): these are the first codes a server can meet
+because of its *own* configuration, and the temptation is to read "my policy refused it" as a 5xx. It is not —
+a body refused under a raised policy is refused as one over a size limit is, and it is still the client's to
+fix. Neither code says anything went **unchecked**, which is what the three 5xx codes have in common and these
+two do not.
+
+**The defaults are opposite on purpose**, and a server inherits both: `TsonConfig.identifierPolicy` defaults
+to Highly Restrictive over *declared names*, so a schema a request body names is refused for a homograph;
+`TsonConfig.tokenPolicy` defaults to unrestricted over *values*, because data may legitimately be a Cyrillic
+display name and no scan runs at all. Pinned by
+`UpstreamGapsTest.aDeclaredNameDefaultsToHighlyRestrictiveAndAValueToUnrestricted` — asserting one half would
+leave the other free to move.
+
+**Raising the token policy is the application's call, not this library's.** §8.2's "Values" paragraph names
+this project's exact situation — a service that renders or matches untrusted values faces on values the
+spoofing surface §9.4 raises for names — and says such a deployment applies the level *knowingly*.
+`tson-http` never builds the `Tson`, so it has no place to decide; a service that renders what it reads should
+pass `tokenPolicy(...)` where it builds one. Two traps if it does: a token policy stricter than the identifier
+policy **subsumes** it, since the check runs before anything knows which tokens are names; and a per-segment
+policy is refused outright at that setter, `_` and `-` being word separators in a name and ordinary characters
+in a value, so segmenting one would admit UTS #39's own `Toys-Я-Us`.
 
 **Concurrency — the load-bearing constraint for a server.** tson-java is not documented as thread-safe as
 a whole, and parts of it explicitly are not (`TsonCompiledMetaRegistry`: "`register`/`get` are
@@ -628,11 +655,12 @@ worth keeping from the bumps:
   build their `!!import` from `TsonProblemSchema.ID`; most of those sixteen files were demos hardcoding a
   constant.
 
-**`TsonProblemSchemaTest` is what catches a stale `diagnostic_code`**, and it caught two additions before
-anyone noticed them. Keep it.
+**`TsonProblemSchemaTest` is what catches a stale `diagnostic_code`**, and it is the only thing that does: an
+upstream revision adding a code is otherwise invisible here until an error body emits one its own schema
+rejects. It has caught every addition so far. Keep it.
 
 **Project-owned schema `!!id`** follows tson-java's convention with this repo's own group:
-`https://tson.io/2026/33/ltr8/http/<name>-<version>.tn` — `/2026/33` the spec revision, `ltr8` the
+`https://tson.io/2026/34/ltr8/http/<name>-<version>.tn` — `/2026/34` the spec revision, `ltr8` the
 publishing org, `http` the subsystem. The version in the name is real, but see above for when bumping it is
 required rather than reflexive.
 
@@ -665,7 +693,8 @@ These are not restated preferences; matching them is what keeps the two repos re
   current revision and renumbers from #1 whenever a revision closes, so a `SPEC-FEEDBACK.md #N` here is a
   reference to a *live* entry and goes stale the moment the spec adopts it. Prose and Javadoc name the section
   that requires the behaviour; the number is for a finding with no section to point at yet. **Re-check every
-  such citation on a revision bump** — Revision 33 turned two of them (`#55`, `#20`) into §2.2.3 and §7.1.
+  such citation on a revision bump** — Revision 34 carried fourteen of the seventeen entries that register
+  held, which is why nothing here cites it by number any more.
 
 ## Demo servers
 

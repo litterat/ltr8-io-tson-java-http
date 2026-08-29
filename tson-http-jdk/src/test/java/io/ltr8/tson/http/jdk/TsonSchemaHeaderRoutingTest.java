@@ -34,19 +34,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonSchemaHeaderRoutingTest {
 
-    private static final String V1_ID = "https://schemas.example.com/2026/33/app/order-1.tn";
-    private static final String V2_ID = "https://schemas.example.com/2026/33/app/order-2.tn";
+    private static final String V1_ID = "https://schemas.example.com/2026/34/app/order-1.tn";
+    private static final String V2_ID = "https://schemas.example.com/2026/34/app/order-2.tn";
 
     private static final String V1 = """
-            !!id:"https://schemas.example.com/2026/33/app/order-1.tn"
-            !!meta:"https://tson.io/2026/33/m/meta.tn"
-            !!import:"https://tson.io/2026/33/m/core.tn"
+            !!id:"https://schemas.example.com/2026/34/app/order-1.tn"
+            !!meta:"https://tson.io/2026/34/m/meta.tn"
+            !!import:"https://tson.io/2026/34/m/core.tn"
             { order => { sku: text  quantity: int32 } }""";
 
     private static final String V2 = """
-            !!id:"https://schemas.example.com/2026/33/app/order-2.tn"
-            !!meta:"https://tson.io/2026/33/m/meta.tn"
-            !!import:"https://tson.io/2026/33/m/core.tn"
+            !!id:"https://schemas.example.com/2026/34/app/order-2.tn"
+            !!meta:"https://tson.io/2026/34/m/meta.tn"
+            !!import:"https://tson.io/2026/34/m/core.tn"
             { order => { sku: text  quantity: int32  currency: text } }""";
 
     private static final TsonSchemaSource SOURCE = Map.of(V1_ID, V1, V2_ID, V2)::get;
