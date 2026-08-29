@@ -604,6 +604,13 @@ Each cost a debugging cycle here and is pinned by a test.
 - **A schema reference may not carry a port, userinfo or a fragment** (§2.2.1), so a schema origin cannot run
   on a non-default port. Use `mapHost`. See "Identity is not location" above — this is the trap that costs the
   most time, because the failure surfaces from the resolver rather than from the fetch.
+- **A `TsonSchemaSource` must refuse by throwing; `map::get` is the trap.** `TsonSchemaFetchException` is the
+  whole contract for "cannot supply this", and a source returning `null` instead does not get a diagnostic —
+  it gets an NPE inside `TsonCompiledMetaRegistry.recordAndVerify`, which the error boundary can only read as
+  a fault in this server. Since the identity comes from the request body, that is a **500 any client can
+  produce at will** where the answer should be `SCHEMA_UNAVAILABLE`'s 502. All three demos shipped
+  `schemaSource(schemas::get)` and did exactly that. Wrap the map. `UPSTREAM.md` #4, pinned in all three
+  adapters by `OrderServerTest.aDocumentNamingAnUnknownSchemaIsNotThisServersFault`.
 - **Never `computeIfAbsent` on a schema cache.** It holds a `ConcurrentHashMap` bin lock for the whole of a
   network fetch, blocking every other thread whose key lands in that bin — and stalling a resize — for as long
   as the timeout allows. `TsonHttpSchemaSource` uses get-then-put; two threads racing one identity fetch it

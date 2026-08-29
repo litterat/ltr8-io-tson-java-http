@@ -123,6 +123,51 @@ field.
 
 ---
 
+## 4. A `TsonSchemaSource` returning `null` is an NPE from inside the registry, not a contract complaint
+
+**Hit:** every server in this repo, and reachable by any client. `TsonSchemaSource`'s Javadoc is emphatic that
+`TsonSchemaFetchException` **is** the contract — *"a source signals 'cannot supply this' with that and nothing
+else"* — and `registeredOnly()` models it. But the natural first implementation is a map, and a map spells
+"nothing here" as `null`:
+
+```java
+Map<String, String> schemas = Map.of(SCHEMA_ID, SCHEMA, ...);
+Tson tson = Tson.builder().schemaSource(schemas::get).build();   // reads fine, and is wrong
+```
+
+That compiles, works for every identity in the map, and for anything else produces:
+
+```
+java.lang.NullPointerException: Cannot invoke "String.getBytes(java.nio.charset.Charset)"
+  because "sourceText" is null
+    at TsonCompiledMetaRegistry.recordAndVerify(TsonCompiledMetaRegistry.java:518)
+```
+
+**Why it matters more than an ordinary misuse:** the identity comes from the *request body*, so the caller
+chooses it. All three demo servers here shipped `schemas::get` and answered **500** to any document whose
+`!!schema` named something unpublished — a fault-in-this-server verdict for what the classification this
+project is built on calls a 502, and one any client could produce at will. An NPE four frames into the
+registry is also nowhere near the line that caused it.
+
+**Change:** make the contract violation say so. Either is enough, and the first is a two-line guard:
+
+1. `recordAndVerify` (or the call above it) rejects a `null` return with a message naming the source and the
+   URI — *"a TsonSchemaSource returned null for '…'; signal an unavailable schema with
+   TsonSchemaFetchException"*. `IllegalStateException` fits the house rule: a broken invariant, not a bad
+   document.
+2. Better, remove the trap: ship `TsonSchemaSource.ofMap(Map<String, String>)` alongside `registeredOnly()`,
+   which is what every caller writing `map::get` actually meant. Three demos here now carry an identical
+   private helper doing exactly that, which is the usual sign it belongs upstream.
+
+**Workaround in place:** each demo wraps its map in a source that throws `NOT_FOUND`, and
+`OrderServerTest.aDocumentNamingAnUnknownSchemaIsNotThisServersFault` pins the 502 in all three adapters.
+
+**Priority: medium** — the workaround is easy *once you know*, and the failure gives no hint. The library is
+otherwise scrupulous about this exact distinction; this is the one place it is enforced by documentation
+alone.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. That register renumbers from #1

@@ -3,6 +3,8 @@ package io.ltr8.tson.http.jdk.demo;
 import com.sun.net.httpserver.HttpServer;
 import io.ltr8.annotation.Typename;
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.compiler.TsonSchemaFetchException;
+import io.ltr8.tson.compiler.TsonSchemaSource;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.api.Operation;
 import io.ltr8.tson.http.api.TsonApiCoverage;
@@ -129,7 +131,7 @@ public final class OrderServer {
                 TsonApiSchema.ID, TsonApiSchema.source(), API_ID, API);
         // metaNameBinder, not bindings: one binds the data a schema describes, the other a governing meta's
         // own vocabulary. Without it the API schema below declares `operation` and nothing can build one.
-        Tson tson = Tson.builder().schemaSource(schemas::get).bindings(bindings)
+        Tson tson = Tson.builder().schemaSource(published(schemas)).bindings(bindings)
                 .metaNameBinder(TsonApiSchema.metaNameBinder()).build();
         tson.resolve(SCHEMA);
         tson.resolve(ERRORS);
@@ -197,6 +199,34 @@ public final class OrderServer {
         coverage.requireComplete();
         server.start();
         return server;
+    }
+
+
+    /**
+     * The schemas this server can resolve, as a source that refuses by the contract.
+     *
+     * <p><b>A {@code Map::get} will not do, and the way it fails is a trap worth knowing.</b>
+     * {@link io.ltr8.tson.compiler.TsonSchemaSource} states that {@link TsonSchemaFetchException} <em>is</em>
+     * the contract -- "a source signals 'cannot supply this' with that and nothing else" -- and a source
+     * returning {@code null} instead does not produce a diagnostic saying so. It produces a
+     * {@code NullPointerException} inside the registry's own verification step, which the error boundary can
+     * only read as a fault in this server: a 500, with the real answer nowhere in it.
+     *
+     * <p>That matters here because <b>the caller chooses the identity</b>. A request body naming any
+     * {@code !!schema} this server does not hold is a 500 anyone can produce at will, where the classification
+     * this project is built on calls it a 502 -- nobody would supply the schema, so the body was never checked
+     * and "invalid" is not a verdict this server learned. Pinned by
+     * {@code aDocumentNamingAnUnknownSchemaIsNotThisServersFault}.
+     */
+    private static TsonSchemaSource published(Map<String, String> schemas) {
+        return uri -> {
+            String source = schemas.get(uri);
+            if (source == null) {
+                throw new TsonSchemaFetchException(uri, TsonSchemaFetchException.Reason.NOT_FOUND,
+                        "this server publishes no schema under that identity", null);
+            }
+            return source;
+        };
     }
 
     /**
