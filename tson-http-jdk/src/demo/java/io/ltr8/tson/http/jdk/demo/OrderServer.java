@@ -34,12 +34,12 @@ import java.net.InetSocketAddress;
 public final class OrderServer {
 
     /** The schema this server governs orders by. Its identity names a host; where it is served is separate. */
-    public static final String SCHEMA_ID = "https://schemas.example.com/2026/33/app/order-1.tn";
+    public static final String SCHEMA_ID = "https://schemas.example.com/2026/34/app/order-1.tn";
 
     public static final String SCHEMA = schema("order-1.tn");
 
     /** The identity of this service's business-error schema. */
-    public static final String ERRORS_ID = "https://schemas.example.com/2026/33/app/orders-errors-1.tn";
+    public static final String ERRORS_ID = "https://schemas.example.com/2026/34/app/orders-errors-1.tn";
 
     /**
      * This service's business errors, composed on the transport-level problem schema.
@@ -64,7 +64,7 @@ public final class OrderServer {
      * this server. The data-shaped predecessor spelled the same thing as {@code "order"} and needed forty
      * lines of its own to notice.
      */
-    public static final String API_ID = "https://schemas.example.com/2026/33/app/orders-api-1.tn";
+    public static final String API_ID = "https://schemas.example.com/2026/34/app/orders-api-1.tn";
 
     public static final String API = schema("orders-api-1.tn");
 

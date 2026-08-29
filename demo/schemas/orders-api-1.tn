@@ -1,9 +1,9 @@
-!!id:"https://schemas.example.com/2026/33/app/orders-api-1.tn"
-!!meta:"https://tson.io/2026/33/ltr8/http/meta-http-1.tn"
-!!import:"https://schemas.example.com/2026/33/app/order-1.tn"
-!!import:"https://schemas.example.com/2026/33/app/orders-errors-1.tn"
-!!import:"https://tson.io/2026/33/ltr8/http/problem-1.tn"
-!!import:"https://tson.io/2026/33/m/core.tn"
+!!id:"https://schemas.example.com/2026/34/app/orders-api-1.tn"
+!!meta:"https://tson.io/2026/34/ltr8/http/meta-http-1.tn"
+!!import:"https://schemas.example.com/2026/34/app/order-1.tn"
+!!import:"https://schemas.example.com/2026/34/app/orders-errors-1.tn"
+!!import:"https://tson.io/2026/34/ltr8/http/problem-1.tn"
+!!import:"https://tson.io/2026/34/m/core.tn"
 {
   @doc:"Accept an order and confirm it with the quantity doubled."
   create_order => !operation {

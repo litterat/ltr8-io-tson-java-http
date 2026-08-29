@@ -29,12 +29,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TsonHttpCodecTest {
 
-    private static final String SCHEMA_ID = "https://example.com/2026/33/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://example.com/2026/34/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://example.com/2026/33/app/order-1.tn"
-            !!meta:"https://tson.io/2026/33/m/meta.tn"
-            !!import:"https://tson.io/2026/33/m/core.tn"
+            !!id:"https://example.com/2026/34/app/order-1.tn"
+            !!meta:"https://tson.io/2026/34/m/meta.tn"
+            !!import:"https://tson.io/2026/34/m/core.tn"
             {
                 order => { sku: text  quantity: int32 }
             }""";
@@ -298,8 +298,8 @@ class TsonHttpCodecTest {
     void aTypeNothingBindsIsAServerFaultNotALibraryGap() {
         String schema = """
                 !!id:"https://example.test/thing-1.tn"
-                !!meta:"https://tson.io/2026/33/m/meta.tn"
-                !!import:"https://tson.io/2026/33/m/core.tn"
+                !!meta:"https://tson.io/2026/34/m/meta.tn"
+                !!import:"https://tson.io/2026/34/m/core.tn"
                 { thing => { a: text } }""";
         Tson tson = Tson.builder().schemaSource(uri -> schema).bindings(Map.of()).build();
         tson.resolve(schema);
@@ -414,6 +414,41 @@ class TsonHttpCodecTest {
                 List.of(withCode(aGap(), Diagnostic.Code.SCHEMA_UNAVAILABLE), aGap()));
 
         assertEquals(TsonHttpException.NOT_IMPLEMENTED, thrown.status());
+    }
+
+    /**
+     * <b>Name hygiene is a verdict on the document, so it stays a 400.</b> [TSON-DATA] §8.2's two codes are
+     * the first this project can meet because of its <em>own</em> configuration rather than the format's
+     * rules -- {@code TsonConfig.tokenPolicy} decides which script mixes a value may carry -- and that is
+     * exactly why the status is worth pinning rather than left to the fall-through. A body refused under a
+     * raised policy is refused by this deployment, as one over a size limit is, and it is still the client's
+     * to fix; neither code says anything went unchecked, which is what the three 5xx codes have in common
+     * and these two do not.
+     */
+    @Test
+    void nameHygieneIsAVerdictOnTheDocument() {
+        for (Diagnostic.Code code : List.of(Diagnostic.Code.CONFUSABLE_NAMES, Diagnostic.Code.RESTRICTED_TOKEN)) {
+            TsonHttpException thrown = TsonHttpException.invalidDocument(List.of(withCode(anOrdinaryProblem(), code)));
+
+            assertEquals(TsonHttpException.BAD_REQUEST, thrown.status(), code::name);
+            assertTrue(thrown.type().endsWith("invalid-document"), thrown.type());
+        }
+    }
+
+    /**
+     * The same rule reached the way a client reaches it: a schemaless record whose two field names a reader
+     * cannot tell apart -- Latin {@code admin} beside a Cyrillic-{@code \u0430} one. §8.2 names the record's own
+     * field set as the one naming scope at the data layer, and a Class 1 record is where it has to be caught,
+     * no declaration standing behind those names.
+     */
+    @Test
+    void twoConfusableFieldNamesInASchemalessBodyAreABadRequest() {
+        TsonHttpException rejected = assertThrows(TsonHttpException.class,
+                () -> codec.readTree(body("{ admin: 1  \u0430dmin: 2 }"), "application/tson"));
+
+        assertEquals(TsonHttpException.BAD_REQUEST, rejected.status());
+        assertTrue(rejected.diagnostics().stream().anyMatch(d -> d.code() == Diagnostic.Code.CONFUSABLE_NAMES),
+                () -> "expected a CONFUSABLE_NAMES diagnostic, got " + rejected.diagnostics());
     }
 
     /** Rebuilds a diagnostic under {@code code} -- the factories fix theirs, and this needs BIND_MISMATCH. */

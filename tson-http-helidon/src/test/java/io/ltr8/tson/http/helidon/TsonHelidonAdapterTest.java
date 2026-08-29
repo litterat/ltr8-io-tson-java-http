@@ -39,12 +39,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonHelidonAdapterTest {
 
-    private static final String SCHEMA_ID = "https://schemas.example.com/2026/33/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://schemas.example.com/2026/34/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/33/app/order-1.tn"
-            !!meta:"https://tson.io/2026/33/m/meta.tn"
-            !!import:"https://tson.io/2026/33/m/core.tn"
+            !!id:"https://schemas.example.com/2026/34/app/order-1.tn"
+            !!meta:"https://tson.io/2026/34/m/meta.tn"
+            !!import:"https://tson.io/2026/34/m/core.tn"
             {
                 order => { sku: text  quantity: int32 }
             }""";

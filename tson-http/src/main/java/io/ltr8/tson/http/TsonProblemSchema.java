@@ -33,7 +33,7 @@ import java.util.Map;
 public final class TsonProblemSchema {
 
     /** The current error-body schema's identity -- the {@code !!id} it declares and the URL it is served at. */
-    public static final String ID = "https://tson.io/2026/33/ltr8/http/problem-1.tn";
+    public static final String ID = "https://tson.io/2026/34/ltr8/http/problem-1.tn";
 
     /**
      * Every version of this schema that is still published, current first -- one, today.

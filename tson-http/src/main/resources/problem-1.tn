@@ -1,6 +1,6 @@
-!!id:"https://tson.io/2026/33/ltr8/http/problem-1.tn"
-!!meta:"https://tson.io/2026/33/m/meta.tn"
-!!import:"https://tson.io/2026/33/m/core.tn"
+!!id:"https://tson.io/2026/34/ltr8/http/problem-1.tn"
+!!meta:"https://tson.io/2026/34/m/meta.tn"
+!!import:"https://tson.io/2026/34/m/core.tn"
 @doc:"""
   The error body this project writes when a request cannot be fulfilled.
 
@@ -37,11 +37,17 @@
 
     They are declared here even though a client should never see the first two, because this enum
     copies Diagnostic.Code rather than the subset one server happens to emit.
+
+    CONFUSABLE_NAMES and RESTRICTED_TOKEN are [TSON-DATA] §8.2's name hygiene, and both are 400 like
+    any other verdict. They are worth calling out because they are the first codes a server's own
+    CONFIGURATION can turn on: TsonConfig.tokenPolicy decides which script mixes a token may carry, so
+    a body refused under a raised policy is refused by this deployment rather than by the format. That
+    is still the client's to fix -- as a size limit is -- so the status does not change.
     """
   diagnostic_code => !enum [
     FIELD_REQUIRED FIELD_FIXED TYPE_MISMATCH WRONG_ARITY UNKNOWN_TYPE_REF ATOM_CONSTRAINT_VIOLATION
-    UNRECOGNIZED_FIELD DUPLICATE_MAP_KEY DUPLICATE_FIELD SCHEMA_ERROR UNKNOWN_TYPE VALIDATION_ERROR
-    NOT_IMPLEMENTED BIND_MISMATCH SCHEMA_UNAVAILABLE
+    UNRECOGNIZED_FIELD DUPLICATE_MAP_KEY DUPLICATE_FIELD CONFUSABLE_NAMES RESTRICTED_TOKEN SCHEMA_ERROR
+    UNKNOWN_TYPE VALIDATION_ERROR NOT_IMPLEMENTED BIND_MISMATCH SCHEMA_UNAVAILABLE
   ]
   @doc:"""
     One problem, located at up to two ends: the value in the data (path, data_position) and the rule

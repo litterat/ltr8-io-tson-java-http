@@ -129,9 +129,9 @@ class TsonApiConformanceTest {
     @Test
     void theSchemaRouteMatchesItsDeclaredResponsesToo() throws Exception {
         Operation getSchema = api.operation(HttpMethod.GET, "/{schemaPath}").orElseThrow();
-        assertEquals(200, get("/2026/33/app/order-1.tn").statusCode());
+        assertEquals(200, get("/2026/34/app/order-1.tn").statusCode());
         assertTrue(getSchema.responseFor(200).isPresent());
-        assertResponseMatches(getSchema, get("/2026/33/app/nope-1.tn"), 404);
+        assertResponseMatches(getSchema, get("/2026/34/app/nope-1.tn"), 404);
 
         Parameter path = getSchema.parameters().getFirst();
         assertEquals(ParameterLocation.PATH, path.in());
