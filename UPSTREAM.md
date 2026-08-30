@@ -102,6 +102,10 @@ and `path` live one hop away on the instantiation. `TsonApiDescription` does not
 That costs a full record per endpoint where the template would have cost an application, and it is the cost
 the `data` base kind otherwise removes.
 
+**Reproducing it needs #4 dodged.** A templated operation with a realistic path now fails earlier, on the
+generated entry name rather than on its kind, so the fixture that shows this gap carries a slash-free path.
+The measurement above is unaffected — `page<order>` generates a punctuation-free name.
+
 **Priority: low** — a description is written once and read often, so verbosity there is cheap. Recorded
 because the remaining step is small enough to look already done, and because the framing above took a
 measurement to arrive at. Pinned at both stages by
@@ -156,6 +160,59 @@ it.
 **Priority: medium** — small, and on a path a deployment that raises its token policy hits routinely. It is
 also the one gap in this class that cannot be closed downstream: a consumer can invent a problem type, but it
 cannot invent the version.
+
+---
+
+## 4. A generated entry name splices a field's text in verbatim, so ordinary punctuation stops it being an identifier
+
+**Hit:** applying a templated `~data &` constructor whose content contains punctuation — which, for an HTTP
+operation, means any realistic path.
+
+```tson
+fetch    => <T> !operation { method: GET  path: "/x"
+                             responses: [ { status: 200  body: T  description: "found" } ] }
+getOrder => fetch<order>
+```
+
+> `declared name 'operation_GET_/x_200_order_found_1f8d998a': 'operation_GET_/x_200_order_found_1f8d998a':`
+> `U+002F at index 14 is Identifier_Status=Restricted (UTS #39)`
+
+**The refusal is a symptom; the malformed name is the defect.** [TSON-SCHEMA] §8.2 makes it a **MUST** —
+*"Freshness (MUST): an internal name is a valid `identifier`"* — and [TSON-DATA] §7.7 admits only
+`XID_Continue` and `-`, so a name carrying `/` is not one. The resolver derives the name from the entry's
+identity-bearing content, as §8.2's determinism recommendation asks, and splices a `text` field's value in
+without checking that the result is still an identifier.
+
+It became visible only when §8.2's mechanism 2 started running over declared names. Before that it was a
+silently malformed name that happened to work.
+
+**An HTTP path is the case that finds it, which is the part worth weighing.** §4.1 names *"an HTTP operation
+binding request and response types by name"* as the motivating case for the `data` kind, and an operation's
+path contains slashes. So the feature's own worked example cannot be templated — #2 above is unreachable twice
+over, and only the second reason is visible until this is fixed.
+
+**Confined to templated applications**, which is why nothing else here notices: a declaration's own body
+resolves in place and is keyed by the name its author wrote (§8.2), so every demo in this repo declares
+operations with real paths and resolves fine.
+
+**Change:** make the derivation produce an identifier by construction. Sanitising spliced content to
+`XID_Continue` is the obvious form — the readable head is a diagnostic convenience, and the structural hash
+already carries identity, so nothing is lost by replacing a run of non-identifier characters with `_`. A
+resolver assertion that a generated name matches §7.7 would stop the next such slip.
+
+**Worth deciding separately: should the §8.2 mechanisms apply to internal names at all?** Even with the
+derivation fixed, a policy refusal on a name no author wrote is one nobody can act on — the document cannot
+be edited to satisfy it and the deployment can only relax the policy wholesale. §8.2's scopes are authored
+("the declared names of one schema", [TSON-SCHEMA] §11.4), and internal names are explicitly *"not part of
+this specification's conformance surface"*. Applying hygiene to them looks like a category error, with the
+identifier-validity MUST above covering what actually needs covering.
+
+**Workaround in place:** none needed yet, since this project writes operations out untemplated. Pinned by
+`UpstreamGapsTest.aGeneratedEntryNameSplicesPunctuationAndStopsBeingAnIdentifier`, which asserts both halves:
+a slash-free path reaches #2's kind refusal, and a real path does not.
+
+**Priority: medium** — it blocks nothing here today, and it makes the `data` kind's own motivating example
+impossible the moment anyone tries it.
 
 ---
 
