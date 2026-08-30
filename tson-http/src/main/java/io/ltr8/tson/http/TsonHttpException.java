@@ -168,20 +168,13 @@ public final class TsonHttpException extends RuntimeException {
      * wiring and nothing the client can act on. It is checked first because it is the one an operator has to
      * fix, and the only one whose message names a server type -- which is why 5xx drops the body's detail.
      *
-     * <p><b>{@code SCHEMA_UNAVAILABLE} is the third that is not a verdict, and is a 502.</b> Nobody would
-     * supply the schema, so the body was never read against one and whether it would have passed is unknown
-     * -- "invalid" is not something this server learned. It ranks below a gap on upstream's own precedent:
-     * its CLI takes the most permanent of three, 70 over 69 over 1, since retrying reaches a gap again where
-     * an origin may recover.
-     *
-     * <p><b>502 is a deliberate rounding, and it rounds away from the client.</b> {@link
-     * TsonSchemaFetchException} splits five reasons across 400, 502 and 504 in {@link #from}, and two of them
-     * -- a reference no allow-list permits, and one nothing serves -- really are the document's fault. That
-     * split is unavailable here: the diagnostic is built from the exception but keeps none of its {@code
-     * Reason}, and the distinction is deliberately not recoverable from the message. Given one status for
-     * both, this takes the one that cannot tell a client with a perfectly good document to go and fix it,
-     * which is the same asymmetry the gap row above turns on. See {@code UPSTREAM.md} for the ask that would
-     * restore the split.
+     * <p><b>{@code SCHEMA_UNAVAILABLE} is the third that is not a verdict</b>, and the one whose status
+     * depends on <em>whose</em> doing it was: {@link Diagnostic#fetchReason()} splits it across 400, 502 and
+     * 504 exactly as {@link #from} splits the thrown exception, which {@link #schemaUnavailable} carries out.
+     * Nobody would supply the schema, so the body was never read against one and whether it would have passed
+     * is unknown -- but a reference this deployment refuses is still the sender's to fix, where a host that
+     * timed out is not. It ranks below a gap on upstream's own precedent: the CLI takes the most permanent of
+     * three, 70 over 69 over 1, since retrying reaches a gap again where an origin may recover.
      */
     public static TsonHttpException invalidDocument(List<Diagnostic> diagnostics) {
         return invalidDocument(diagnostics, diagnostics.size() == 1 ? "the request body has 1 problem"
@@ -218,14 +211,52 @@ public final class TsonHttpException extends RuntimeException {
         }
         // Ranked below a gap on upstream's own precedent: its CLI takes "the most permanent of three", 70 over
         // 69 over 1, because retrying reaches the gap again where the origin may well come back.
-        if (diagnostics.stream().anyMatch(d -> d.code() == Diagnostic.Code.SCHEMA_UNAVAILABLE)) {
-            return new TsonHttpException(BAD_GATEWAY, TYPES + "schema-origin-failed", "Schema origin failed",
-                    "the schema governing the request body could not be obtained, so the body was not checked: "
-                            + diagnostics.stream().filter(d -> d.code() == Diagnostic.Code.SCHEMA_UNAVAILABLE)
-                            .map(Diagnostic::message).toList(), diagnostics, cause);
+        List<Diagnostic> unavailable = diagnostics.stream()
+                .filter(d -> d.code() == Diagnostic.Code.SCHEMA_UNAVAILABLE).toList();
+        if (!unavailable.isEmpty()) {
+            return schemaUnavailable(unavailable, diagnostics, cause);
         }
         return new TsonHttpException(BAD_REQUEST, TYPES + "invalid-document", "Invalid TSON document", detail,
                 diagnostics, cause);
+    }
+
+    /**
+     * A schema that could not be obtained, answered by <b>whose doing it was</b>.
+     *
+     * <p>{@link Diagnostic#fetchReason()} is what makes that answerable, and it is the same split {@link
+     * #from} applies to a thrown {@link TsonSchemaFetchException} -- which is the point. One failure travels
+     * two channels, thrown at startup and collected on every read through this codec, and a consumer picking
+     * a status has to get the same answer from both. It did not before: the diagnostic kept no reason, so the
+     * whole class rounded to 502, and {@code NOT_PERMITTED} was a 400 thrown and a 502 collected.
+     *
+     * <p><b>The first reason found decides</b>, rather than the worst. These arrive from one document's
+     * references and a mixture is possible in principle, but any of them means the body went unchecked; there
+     * is no ranking between "you named a reference we refuse" and "a host timed out" that is right in general,
+     * and picking the first keeps the answer the same as the fail-fast channel's, which sees exactly one.
+     *
+     * <p><b>A diagnostic stating no reason keeps the old 502</b>, which is the conservative rounding rather
+     * than a default worth having: it rounds away from the client, since given one status for both, the wrong
+     * one to pick is the one that tells a sender with a good document to go and fix it. Every diagnostic the
+     * library builds carries a reason, so this is for one assembled by hand.
+     */
+    private static TsonHttpException schemaUnavailable(List<Diagnostic> unavailable,
+                                                       List<Diagnostic> diagnostics, Throwable cause) {
+        String detail = "the schema governing the request body could not be obtained, so the body was not "
+                + "checked: " + unavailable.stream().map(Diagnostic::message).toList();
+        return unavailable.stream().flatMap(d -> d.fetchReason().stream()).findFirst()
+                .map(reason -> switch (reason) {
+                    // The document's own doing: it named a reference this deployment will not fetch, or one
+                    // nothing serves. The sender is who can fix it, so it is theirs to be told about.
+                    case NOT_PERMITTED, NOT_FOUND -> new TsonHttpException(BAD_REQUEST,
+                            TYPES + "unusable-schema-reference", "Unusable schema reference", detail,
+                            diagnostics, cause);
+                    case TIMEOUT -> new TsonHttpException(GATEWAY_TIMEOUT, TYPES + "schema-origin-timeout",
+                            "Schema origin timed out", detail, diagnostics, cause);
+                    case TRANSPORT, TOO_LARGE -> new TsonHttpException(BAD_GATEWAY,
+                            TYPES + "schema-origin-failed", "Schema origin failed", detail, diagnostics, cause);
+                })
+                .orElseGet(() -> new TsonHttpException(BAD_GATEWAY, TYPES + "schema-origin-failed",
+                        "Schema origin failed", detail, diagnostics, cause));
     }
 
     /** The request body is not something this handler can read. */

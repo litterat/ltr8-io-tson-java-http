@@ -470,19 +470,27 @@ unchecked and "invalid" is not something this server learned:
 |---|---|---|
 | `NOT_IMPLEMENTED` | this library has not built it | 501 |
 | `BIND_MISMATCH` | this server's own wiring | 500 |
-| `SCHEMA_UNAVAILABLE` | nobody would supply the schema | 502 |
+| `SCHEMA_UNAVAILABLE` | nobody would supply the schema | 400/502/504, by `fetchReason` |
 
 `BIND_MISMATCH` outranks, being the one an operator has to fix; then `NOT_IMPLEMENTED` over
 `SCHEMA_UNAVAILABLE`, taking upstream's own precedent that the CLI ranks by permanence (70 over 69 over 1),
 since retrying reaches a gap again where an origin may recover.
 
-**`SCHEMA_UNAVAILABLE`'s 502 is a rounding, and `from`'s five-way split is now nearly startup-only.** A
-`TsonSchemaFetchException` carries a `Reason` and `from` maps all five across 400, 502 and 504 — but the
-diagnostic built from it keeps none of it, and **every read through the codec collects**, so a fetch failure
-essentially always arrives as a diagnostic and essentially never as that exception. So the two channels
-disagree for one failure: `NOT_PERMITTED` is 400 thrown, 502 collected. The rounding goes away from the client
-deliberately — see `UPSTREAM.md` #3 for the one-field change that would restore the split. Do not try to
-recover the reason by parsing the message; upstream made the code trustworthy precisely so nobody does.
+**`SCHEMA_UNAVAILABLE` is one code and three statuses, and `Diagnostic.fetchReason` is what picks.**
+`NOT_PERMITTED` and `NOT_FOUND` are the document's doing — it named a reference this deployment will not
+fetch, or one nothing serves — so they are 400; `TIMEOUT` is 504 and `TRANSPORT`/`TOO_LARGE` are 502, the
+reference having been fine and the world not. Only one of those is worth retrying, which is the whole reason
+for splitting them.
+
+**Both channels must answer alike, and that is the invariant to protect.** One fetch failure reaches a
+consumer two ways: thrown as `TsonSchemaFetchException` (now essentially startup-only, since **every read
+through the codec collects**) and collected as a diagnostic, which is the common path. They diverged for a
+while — the diagnostic kept no reason, so the whole class rounded to 502 while `from` answered 400 for
+`NOT_PERMITTED` — and the tests now assert the *agreement* rather than the statuses, so the two cannot drift
+apart or drift together unnoticed (`TsonHttpCodecTest.aSchemaUnavailableDiagnosticIsAnsweredByItsReason`,
+`TsonHttpSchemaSourceIntegrationTest.bothChannelsAnswerAnUnfetchableSchemaAlike`). A diagnostic stating no
+reason keeps 502, which rounds away from the client on purpose. Do not try to recover the reason by parsing
+the message; it is a typed field precisely so nobody does.
 
 `Diagnostic.Code` is the detail vocabulary — mostly 4xx, but see the table above for the three that are not:
 `FIELD_REQUIRED`, `FIELD_FIXED`, `TYPE_MISMATCH`, `WRONG_ARITY`, `UNKNOWN_TYPE_REF`,
@@ -604,13 +612,14 @@ Each cost a debugging cycle here and is pinned by a test.
 - **A schema reference may not carry a port, userinfo or a fragment** (§2.2.1), so a schema origin cannot run
   on a non-default port. Use `mapHost`. See "Identity is not location" above — this is the trap that costs the
   most time, because the failure surfaces from the resolver rather than from the fetch.
-- **A `TsonSchemaSource` must refuse by throwing; `map::get` is the trap.** `TsonSchemaFetchException` is the
-  whole contract for "cannot supply this", and a source returning `null` instead does not get a diagnostic —
-  it gets an NPE inside `TsonCompiledMetaRegistry.recordAndVerify`, which the error boundary can only read as
-  a fault in this server. Since the identity comes from the request body, that is a **500 any client can
-  produce at will** where the answer should be `SCHEMA_UNAVAILABLE`'s 502. All three demos shipped
-  `schemaSource(schemas::get)` and did exactly that. Wrap the map. `UPSTREAM.md` #4, pinned in all three
-  adapters by `OrderServerTest.aDocumentNamingAnUnknownSchemaIsNotThisServersFault`.
+- **Use `TsonSchemaSource.ofMap`, never `map::get`.** `TsonSchemaFetchException` is the whole contract for
+  "cannot supply this", and a source returning `null` is now refused by name rather than dereferenced — but
+  refused is still a failure, and `ofMap` is the form that does not fail: it throws `NOT_FOUND` for a miss and
+  compares by **canonical identity**, so a reference differing only in scheme or `?sha256=` pin still resolves
+  (§2.2.1). A hand-rolled map source gets the first half and misses the second. All three demos shipped
+  `schemaSource(schemas::get)`, which was an NPE — and so a 500 any client could produce at will, by naming a
+  schema nobody publishes. Pinned by `UpstreamGapsTest.ofMapRefusesAMissAndComparesByCanonicalIdentity` and,
+  in all three adapters, by `OrderServerTest.aDocumentNamingAnUnknownSchemaIsTheSendersMistake`.
 - **Never `computeIfAbsent` on a schema cache.** It holds a `ConcurrentHashMap` bin lock for the whole of a
   network fetch, blocking every other thread whose key lands in that bin — and stalling a resize — for as long
   as the timeout allows. `TsonHttpSchemaSource` uses get-then-put; two threads racing one identity fetch it

@@ -50,6 +50,19 @@
     UNKNOWN_TYPE VALIDATION_ERROR NOT_IMPLEMENTED BIND_MISMATCH SCHEMA_UNAVAILABLE
   ]
   @doc:"""
+    Why a schema could not be obtained, for the one code that says so.
+
+    A hand-written copy of io.ltr8.tson.compiler.TsonSchemaFetchException.Reason, checked against the
+    Java enum by TsonProblemSchemaTest for the same reason diagnostic_code is.
+
+    It splits SCHEMA_UNAVAILABLE by WHOSE doing it was, which the status compresses: NOT_PERMITTED
+    (a reference this deployment will not fetch) and NOT_FOUND (one nothing serves) are the sender's
+    and share a 400, while TIMEOUT is a 504 and TRANSPORT and TOO_LARGE a 502 -- the reference was
+    fine and the world was not. Only one of those is worth retrying.
+    """
+  fetch_reason => !enum [NOT_PERMITTED NOT_FOUND TRANSPORT TIMEOUT TOO_LARGE]
+
+  @doc:"""
     One problem, located at up to two ends: the value in the data (path, data_position) and the rule
     in the schema (schema_id, schema_pointer, schema_position). Either end may be absent -- a problem
     found in a schema has no data, and a schemaless read has no schema.
@@ -67,6 +80,7 @@
     actual: text?
     data_position: text?
     schema_position: text?
+    fetch_reason: fetch_reason?
   }
   @doc:"""
     RFC 9457's five members, plus errors.

@@ -4,6 +4,8 @@ import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.compiler.Diagnostic;
 import io.ltr8.tson.compiler.TsonBindMismatchException;
+import io.ltr8.tson.compiler.TsonSchemaFetchException;
+import io.ltr8.tson.compiler.TsonSchemaSource;
 import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.schema.meta.ChoiceBody;
 import io.ltr8.tson.schema.meta.FieldState;
@@ -20,6 +22,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -452,5 +455,57 @@ class UpstreamGapsTest {
         // The same text as a value, through a schemaless read: nothing is checked, and nothing should be.
         assertDoesNotThrow(() -> Tson.builder().schemaSource(u -> null).build().treeReader()
                 .readWithoutSchema("{ name: \"\u0430dmin\" }"));
+    }
+
+    /**
+     * <b>A source returning {@code null} is refused as the contract violation it is</b> — the flipped
+     * assertion of a gap that has closed, kept because this is the shape a regression would take.
+     *
+     * <p>{@code TsonSchemaSource} admits {@code TsonSchemaFetchException} and nothing else for "cannot supply
+     * this", but the natural first implementation is a map and a map spells absence as {@code null}. That used
+     * to reach {@code TsonCompiledMetaRegistry.recordAndVerify} and throw a bare {@code NullPointerException}
+     * four frames from the cause — which, since the identity comes from the request body, was a 500 any client
+     * could produce at will. It now says what is wrong, and {@code ofMap} exists so the mistake need not be
+     * made.
+     */
+    @Test
+    void aSourceReturningNullIsRefusedRatherThanThrowingAnNpe() {
+        // The import is what reaches the source at all: the meta layer and core are pre-loaded, so a schema
+        // naming only those never consults it and the null is never returned.
+        String schema = """
+                !!id:"https://example.com/2026/34/app/null-source-1.tn"
+                !!meta:"https://tson.io/2026/34/m/meta.tn"
+                !!import:"https://tson.io/2026/34/m/core.tn"
+                !!import:"https://example.com/2026/34/app/absent-1.tn"
+                { thing => { a: text } }""";
+        Tson tson = Tson.builder().schemaSource(u -> null).build();
+
+        RuntimeException refused = assertThrows(RuntimeException.class, () -> tson.resolve(schema));
+        assertFalse(refused instanceof NullPointerException,
+                () -> "a null return should be named, not dereferenced: " + refused);
+        assertTrue(refused.getMessage() != null && refused.getMessage().contains("null"), refused.getMessage());
+    }
+
+    /**
+     * And {@code ofMap} is the form that removes the trap: it refuses a miss with {@code NOT_FOUND}, and
+     * compares by canonical identity, so a reference differing only in scheme or {@code ?sha256=} pin still
+     * resolves (§2.2.1). Three demos here carried a private helper doing the first half and not the second.
+     */
+    @Test
+    void ofMapRefusesAMissAndComparesByCanonicalIdentity() {
+        String schema = """
+                !!id:"https://example.com/2026/34/app/ofmap-1.tn"
+                !!meta:"https://tson.io/2026/34/m/meta.tn"
+                !!import:"https://tson.io/2026/34/m/core.tn"
+                { thing => { a: text } }""";
+        TsonSchemaSource source =
+                TsonSchemaSource.ofMap(Map.of("https://example.com/2026/34/app/ofmap-1.tn", schema));
+
+        // The scheme is a transport hint, not part of the name.
+        assertDoesNotThrow(() -> source.fetch("http://example.com/2026/34/app/ofmap-1.tn"));
+
+        TsonSchemaFetchException refused = assertThrows(TsonSchemaFetchException.class,
+                () -> source.fetch("https://example.com/2026/34/app/absent-1.tn"));
+        assertEquals(TsonSchemaFetchException.Reason.NOT_FOUND, refused.reason());
     }
 }

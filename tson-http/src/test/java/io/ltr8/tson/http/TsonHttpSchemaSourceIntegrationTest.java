@@ -109,15 +109,20 @@ class TsonHttpSchemaSourceIntegrationTest {
     }
 
     /**
-     * <b>And the collecting path is the one that actually fires</b>, which is why the mapping above is not the
-     * whole story. Every read through the codec collects, so an unfetchable {@code !!schema} does not arrive
-     * as {@link TsonSchemaFetchException} at all -- it is reported as a {@code SCHEMA_UNAVAILABLE} diagnostic
-     * and the {@code Reason} is gone by the time a status is chosen. Asserted end to end, against a source
-     * that permits nothing, because the two channels disagreeing here is exactly what would go unnoticed:
-     * {@code statusFor(NOT_PERMITTED)} says 400 and this says 502, for one underlying failure.
+     * <b>And the collecting path is the one that actually fires, so it has to give the same answer.</b> Every
+     * read through the codec collects, so an unfetchable {@code !!schema} essentially never arrives as {@link
+     * TsonSchemaFetchException} and essentially always as a {@code SCHEMA_UNAVAILABLE} diagnostic. The two
+     * channels used to disagree for one underlying failure -- the diagnostic kept no {@code Reason}, so the
+     * whole class rounded to 502 while {@code statusFor(NOT_PERMITTED)} said 400 -- and
+     * {@link Diagnostic#fetchReason()} is what closed that.
+     *
+     * <p><b>Asserted as agreement, not as a status.</b> Writing 400 here would pass just as well if both
+     * channels drifted together, and the invariant is that they answer alike, not what they answer. A source
+     * that permits nothing refuses with {@code NOT_PERMITTED}, so the thrown mapping for that reason is the
+     * expectation.
      */
     @Test
-    void anUnfetchableSchemaInACollectingReadIsNotABadRequest() {
+    void bothChannelsAnswerAnUnfetchableSchemaAlike() {
         try (TsonHttpSchemaSource denyAll = TsonHttpSchemaSource.builder().build()) {
             TsonHttpCodec codec = new TsonHttpCodec(Tson.builder().schemaSource(denyAll).build());
 
@@ -126,9 +131,13 @@ class TsonHttpSchemaSourceIntegrationTest {
                     !order { sku: "ABC-1"  quantity: 3 }""".formatted(reference("/order-1.tn"))),
                     "application/tson"));
 
-            assertEquals(TsonHttpException.BAD_GATEWAY, thrown.status());
+            assertEquals(statusFor(Reason.NOT_PERMITTED), thrown.status(),
+                    "the collected diagnostic and the thrown exception must answer one failure alike");
             assertEquals(List.of(Diagnostic.Code.SCHEMA_UNAVAILABLE),
                     thrown.diagnostics().stream().map(Diagnostic::code).toList());
+            assertEquals(List.of(Reason.NOT_PERMITTED),
+                    thrown.diagnostics().stream().flatMap(d -> d.fetchReason().stream()).toList(),
+                    "the reason survives the receiver, which is what makes the two agree");
         }
     }
 
