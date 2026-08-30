@@ -42,7 +42,9 @@ tasks.register<JavaExec>("runValidator") {
     description = "Runs the validator demo -- a page and a service that check a document against a schema."
     classpath = demo.runtimeClasspath
     mainClass.set("io.ltr8.tson.http.jdk.demo.ValidatorServer")
-    args = listOf(project.findProperty("port")?.toString() ?: "8080")
+    // No default: with no -Pport, the demo's own deployment descriptor supplies the port, which is half the
+    // point of having one. Passing 8080 here would mean the descriptor's listener never applied.
+    args = listOfNotNull(project.findProperty("port")?.toString())
 }
 
 // ReadmeTest executes the README's own examples, so the README is an input to this task. Without this,

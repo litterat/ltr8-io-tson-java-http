@@ -1,0 +1,134 @@
+!!id:"https://tson.io/2026/34/ltr8/http/deployment-1.tn"
+!!meta:"https://tson.io/2026/34/m/meta.tn"
+!!import:"https://tson.io/2026/34/m/core.tn"
+@doc:"""
+  A deployment descriptor: how ONE INSTANCE is configured, as against what a document must be (a schema)
+  or what an endpoint offers (an API description).
+
+  [TSON-DATA] §8.2 introduced a security control with no artifact -- a restriction level, a unit and an
+  optional script set, enforced by default, with nothing said about where the configuration lives. This is a
+  proposal for where. UPSTREAM.md carries the argument; the short form is that the two obvious homes are both
+  wrong, and for reasons stronger than the decision being orthogonal:
+
+  A SCHEMA cannot hold it. An artifact that declared its own strictness would choose its own check, and a
+  document carrying homographs would simply declare the level that admits them. §3.5 also makes a published
+  schema immutable and §2.2.1 lets it be hash-pinned, while a policy must move -- confusables.txt updates,
+  threat models change -- so raising a level would mint a new identity and every document pinning the old one
+  would keep the old policy for good. [TSON-DATA] §8.3 settles it independently: skeleton distinctness does
+  not compose across !!import, so the policy is a property of the merged namespace rather than of any one
+  schema.
+
+  An API DESCRIPTION cannot hold it either, being a schema here and inheriting both, and it would put policy
+  in a contract -- raising a token policy would mean publishing a new description, which is the friction that
+  gets a control switched off.
+
+  THIS DOCUMENT IS DATA, NOT A SCHEMA, and the line is worth stating. An API description must be a schema
+  because `request: order` is a type reference the resolver resolves; that is the whole argument for it. A
+  descriptor references no types: a level is an enum member, a host is text, and a schema host is an
+  identity, which is a URI. Nothing here needs a namespace, so nothing here needs to be a schema.
+
+  Two rules hold, or self-certification returns by the back door:
+
+    1. A processor is HANDED a descriptor; it does not go looking for one. A descriptor is diffable and
+       reviewable where an environment variable is not, but a runtime that loads whatever is on its path
+       still lets a container image change a security policy with no code diff.
+    2. NO DOCUMENT MAY NAME ONE. There is no !!import of a descriptor and no reference to one from a schema
+       or a data document. The moment a document can point at a descriptor, it picks its own enforcement.
+
+  Rule 2 is why `acceptance_profile` below is a separate type rather than this one served as-is: what a
+  counterparty may see is a PROJECTION, derived from the descriptor, never the descriptor.
+  """
+{
+  @doc:"""
+    A hand-written copy of io.ltr8.tson.compiler.TsonUnicodePolicy.Level, which copies UTS #39 §5.2's six
+    levels. TsonDeploymentSchemaTest holds the two together.
+
+    The names are UTS #39's own, deliberately. §8.2 makes a point of it -- "the level is a UTS #39 name, so
+    two implementations agree on it without reading this document" -- so a descriptor that invented OPEN and
+    RESTRICTED would spend an interop property the series bought on purpose.
+    """
+  restriction_level => !enum [
+    ASCII_ONLY SINGLE_SCRIPT HIGHLY_RESTRICTIVE MODERATELY_RESTRICTIVE MINIMALLY_RESTRICTIVE UNRESTRICTED
+  ]
+
+  @doc:"""
+    What the level is applied to: the whole name, or each `_`/`-` delimited segment of it. §8.2 calls the
+    unit "this series' one refinement" on UTS #39, and names it as the relaxation to reach for FIRST --
+    per-segment Highly Restrictive still refuses every within-word homograph while admitting the compounds
+    that mix a Latin abbreviation with a name in another script.
+
+    Absent means WHOLE. It is a separate field rather than more levels because level and unit are
+    independent, and folding them would give twelve names where UTS #39 has six.
+    """
+  policy_unit => !enum [WHOLE SEGMENT]
+
+  @doc:"""
+    One §8.2 policy. `permitting` names an additional admitted script combination -- the mechanism §5.2
+    itself uses for Latin+Japanese and its siblings, and the narrowest relaxation available: a deployment
+    that knows it is Russian says [LATIN CYRILLIC] rather than dropping a level and losing the rule
+    everywhere else.
+
+    A script is named by its java.lang.Character.UnicodeScript constant, which is the Unicode script name.
+    Nothing here constrains it to a real one; a name nothing recognises fails when the descriptor is read,
+    which is the right time and the wrong place to spell it out in a type.
+    """
+  unicode_policy => {
+    level:      restriction_level
+    unit:       policy_unit?
+    permitting: [text]?
+  }
+
+  @doc:"Where this instance listens. Absent members leave the caller's own defaults alone."
+  listener => {
+    host: text?
+    port: uint16?
+  }
+
+  @doc:"""
+    One deployment.
+
+    `identifiers` governs declared names and `tokens` every token off the stream, values included. The two
+    default opposite ways round for reasons §8.2 gives -- a name is an interface and a homograph in one is an
+    attack, while data may legitimately be a Cyrillic display name -- so a descriptor stating neither is
+    asking for exactly that, not for nothing.
+
+    `schema_hosts` is the fetch allow-list: which schema identities this deployment will load over the
+    network. Empty means none, which is a real posture rather than a missing setting -- a service that
+    resolves only what it was given fetches nothing. It is deliberately NOT in `acceptance_profile`: a
+    counterparty has no business knowing which origins this deployment trusts.
+    """
+  deployment => {
+    name:         text
+    listener:     listener?
+    identifiers:  unicode_policy?
+    tokens:       unicode_policy?
+    schema_hosts: [text]?
+  }
+
+  @doc:"""
+    What a counterparty may see: the answer to "what will this endpoint accept?", and nothing else.
+
+    Served at a well-known path rather than at an identity's, and the reason is the same one that makes a
+    descriptor unnameable. In this series everything with an identity is served at its identity's path
+    (§2.2.1); a descriptor is precisely the artifact that must NOT have an identity, so a well-known path is
+    right for it for the same reason it would be wrong for a schema.
+
+    It is DERIVED from a descriptor rather than written beside one. The fetch allow-list is internal
+    topology, and two documents maintained by hand drift.
+
+    A PROFILE IS A HINT AND THE REFUSAL IS THE AUTHORITY. This can be cached, and a policy can change under
+    it; only the 4xx a request actually receives says what applied to that request. §8.2 is why -- it puts
+    the policy in the refusal, "under a stated policy and a stated data version".
+
+    `unicode_data_version` is that second half, and it is currently always absent: §8.3 marks all three
+    mechanisms unstable across Unicode versions, so a refusal is only interpretable against the data that
+    produced it -- and no library this project uses exposes that version. The field is declared rather than
+    omitted because the requirement is real and the gap is worth being visible. UPSTREAM.md #3.
+    """
+  acceptance_profile => {
+    name:                 text
+    identifiers:          unicode_policy?
+    tokens:               unicode_policy?
+    unicode_data_version: text?
+  }
+}

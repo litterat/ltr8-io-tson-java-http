@@ -152,10 +152,20 @@ Worth noting the version this reports is asked for in UTS #39 terms by §8.2's o
 with the UTS #39 version they were computed against"), where `UNICODE_VERSION` is the UCD version. They track
 in practice; stating which is meant would settle it.
 
+**And one blemish worth fixing in the same visit.** `Diagnostic.ofRestrictedToken` builds its message as
+`"the token '" + text + "' " + why`, while `TsonUnicodePolicy.violation` already opens by naming the text — so
+the token appears twice:
+
+> `the token 'аdmin' 'аdmin' mixes the scripts [LATIN, CYRILLIC], which UTS #39 §5.2's SINGLE_SCRIPT does not
+> admit`
+
+Cosmetic, and on a message a client sees.
+
 **Workaround in place:** none, and there is not much of one available. This project's error bodies carry what
 the diagnostic carries, so a `RESTRICTED_TOKEN` on the wire says the level in prose and the data version
-nowhere. A `policy-refused` problem type here would give both a home the moment there is something to put in
-it.
+nowhere. `deployment-1.tn`'s `acceptance_profile` declares `unicode_data_version` and leaves it absent, so the
+gap is visible in an artifact rather than only in this register. A `policy-refused` problem type here would
+give both a home the moment there is something to put in it.
 
 **Priority: medium** — small, and on a path a deployment that raises its token policy hits routinely. It is
 also the one gap in this class that cannot be closed downstream: a consumer can invent a problem type, but it
@@ -163,7 +173,7 @@ cannot invent the version.
 
 ---
 
-## 4. A generated entry name splices a field's text in verbatim, so ordinary punctuation stops it being an identifier
+## 4. A generated entry name splices a field's text in, so punctuation stops it being an identifier
 
 **Hit:** applying a templated `~data &` constructor whose content contains punctuation — which, for an HTTP
 operation, means any realistic path.

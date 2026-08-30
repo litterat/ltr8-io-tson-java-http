@@ -61,7 +61,7 @@ class ReadmeTest {
         readme = Files.readString(Path.of("..", "README.md"));
         server = OrderServer.start(0);
         base = "http://127.0.0.1:" + server.getAddress().getPort();
-        validator = ValidatorServer.start(0);
+        validator = ValidatorServer.start(0, ValidatorServer.deployment());
         validatorBase = "http://127.0.0.1:" + validator.getAddress().getPort();
         client = HttpClient.newHttpClient();
     }
@@ -132,7 +132,7 @@ class ReadmeTest {
         assertFalse(paths.isEmpty(), "the README should show at least one GET");
 
         for (String path : paths) {
-            HttpResponse<String> response = get(path);
+            HttpResponse<String> response = getFromEitherDemo(path);
             assertEquals(200, response.statusCode(), "the README says to fetch " + path);
             assertEquals("application/tson", response.headers().firstValue("Content-Type").orElseThrow());
         }

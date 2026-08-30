@@ -138,6 +138,24 @@ Three things about it are decisions rather than details:
 It fetches nothing. The submitted schema is served at its own `!!id` and every other identity is refused — a
 reference in an untrusted document is an untrusted URL.
 
+It also runs under a **deployment descriptor** — the third artifact kind, beside a schema (what a document
+must be) and an API description (what an endpoint offers). Revision 34 added [TSON-DATA] §8.2's name-hygiene
+policies as a security control with no artifact, and a schema cannot hold one: an artifact that declared its
+own strictness would choose its own check, and §3.5 makes a published schema immutable while a policy has to
+move. So the descriptor is *data*, it is handed to the process rather than found, and no document may name
+one. The demo's sets a token policy, which you can see decide a verdict:
+
+```
+$ curl -s localhost:8080/.well-known/tson-deployment
+!!schema:"https://tson.io/2026/34/ltr8/http/deployment-1.tn"
+!acceptance_profile { name: "validator-demo" tokens: { level: "SINGLE_SCRIPT" permitting: [] } }
+```
+
+That is a **projection** of the descriptor, not the descriptor: which origins a deployment will fetch schemas
+from is nobody else's business. It is served at a well-known path because everything with an identity in this
+series is served at its identity's path, and a descriptor is precisely the artifact that must not have one.
+And it is a hint — only the refusal a request actually receives says what applied to that request.
+
 ## Building
 
 Requires JDK 25 and a checkout of [ltr8-io-tson-java](https://github.com/litterat/ltr8-io-tson-java) at

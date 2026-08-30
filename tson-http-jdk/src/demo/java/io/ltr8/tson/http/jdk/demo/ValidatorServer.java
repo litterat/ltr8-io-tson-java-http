@@ -14,6 +14,7 @@ import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonProblemDiagnostic;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaCatalog;
+import io.ltr8.tson.http.TsonDeployment;
 import io.ltr8.tson.http.TsonSchemaHeader;
 import io.ltr8.tson.http.api.Operation;
 import io.ltr8.tson.http.api.TsonApiCoverage;
@@ -125,7 +126,7 @@ public final class ValidatorServer {
      * submitted document is an untrusted URL, and an endpoint that fetched it would be a request forger for
      * anyone who could reach it.
      */
-    static ValidationResult verdict(ValidationRequest request) {
+    static ValidationResult verdict(ValidationRequest request, TsonDeployment deployment) {
         String schemaText = request.schema().filter(text -> !text.isBlank()).orElse(null);
 
         // Serving the schema at the identity it declares, rather than at whatever the data asked for, is what
@@ -138,7 +139,13 @@ public final class ValidatorServer {
         // canonicalises, so a caller pinning their own schema with ?sha256= still resolves to it (§2.2.1).
         String id = schemaText == null ? null : declaredId(schemaText);
         Map<String, String> library = id == null ? Map.of() : Map.of(id, schemaText);
-        Tson probe = Tson.builder().schemaSource(TsonSchemaSource.ofMap(library)).build();
+        // The deployment's policies apply HERE and not to this service's own envelope, and the split is
+        // forced by what a validator is. A descriptor states one process's policies, and applying the token
+        // policy to the envelope would refuse a request whose `data` field merely CONTAINS a mixed-script
+        // value -- so the one service that exists to give a verdict on such a document could never be asked
+        // about one. Text a service acts on and text it is asked about are different surfaces; only the
+        // second is judged.
+        Tson probe = deployment.applyTo(Tson.builder().schemaSource(TsonSchemaSource.ofMap(library))).build();
 
         long started = System.nanoTime();
         Phase phase = Phase.DATA;
@@ -181,13 +188,21 @@ public final class ValidatorServer {
      * and it is shared across request threads for reads — the ordinary shape. The per-request instances
      * {@link #verdict} builds hold the caller's schema and are never shared with anything.
      */
-    public static HttpServer start(int port) throws IOException {
+    public static HttpServer start(int port, TsonDeployment deployment) throws IOException {
         Map<String, Class<?>> bindings = Map.of(
                 "validation_request", ValidationRequest.class,
                 "validation_result", ValidationResult.class,
-                "diagnostic", TsonProblemDiagnostic.class);
+                "diagnostic", TsonProblemDiagnostic.class,
+                "acceptance_profile", TsonDeployment.AcceptanceProfile.class,
+                "unicode_policy", TsonDeployment.Policy.class,
+                "restriction_level", io.ltr8.tson.compiler.TsonUnicodePolicy.Level.class,
+                "policy_unit", TsonDeployment.Unit.class);
+        // deployment-1.tn is published; a descriptor governed by it never is. A client fetches the schema
+        // to read the profile at /.well-known/tson-deployment, and there is nothing here to serve it the
+        // descriptor itself with.
         Map<String, String> schemas = Map.of(VALIDATE_ID, VALIDATE, API_ID, API,
                 TsonProblemSchema.ID, TsonProblemSchema.source(),
+                TsonDeployment.ID, TsonDeployment.source(),
                 TsonApiSchema.ID, TsonApiSchema.source());
         Tson tson = Tson.builder().schemaSource(TsonSchemaSource.ofMap(schemas)).bindings(bindings)
                 .metaNameBinder(TsonApiSchema.metaNameBinder()).build();
@@ -216,7 +231,8 @@ public final class ValidatorServer {
             // Computed before the header is set, not inside the respond call: a header describes the body it
             // goes out with, and setting it first would leave a failure's `problem` body labelled as a
             // `validation_result`.
-            byte[] body = exchange.codec().write(verdict(request), VALIDATE_ID, "validation_result");
+            byte[] body = exchange.codec()
+                    .write(verdict(request, deployment), VALIDATE_ID, "validation_result");
             // Self-describing, like every other reply in this repo: the result names the schema governing it,
             // which this server also publishes, so a client can check what it got without being told anything.
             exchange.setHeader(TsonSchemaHeader.NAME, TsonSchemaHeader.format(VALIDATE_ID));
@@ -228,13 +244,23 @@ public final class ValidatorServer {
         // deliberately does NOT go through TsonHandler -- that boundary checks Accept and every route behind
         // it produces TSON, so a browser asking for text/html would be answered 406 before it ever rendered.
         Operation page = coverage.serving("get_page");
+        Operation wellKnown = coverage.serving("get_acceptance_profile");
         coverage.serving("get_schema");
+        // Derived from the descriptor on every request rather than built once: it costs nothing, and a
+        // cached projection is how a published profile starts disagreeing with what is enforced.
+        byte[] profile = codec.write(deployment.profile(), TsonDeployment.ID, "acceptance_profile");
         HttpHandler schemaHandler = TsonHandler.asHttpHandler(codec,
                 TsonSchemaHandler.of(catalog(described, schemas)));
         server.createContext("/", exchange -> {
             String path = exchange.getRequestURI().getPath();
             if (page.path().equals(path) || "/index.html".equals(path)) {
                 respondWithPage(exchange);
+            } else if (wellKnown.path().equals(path)) {
+                exchange.getResponseHeaders().set("Content-Type", "application/tson");
+                exchange.sendResponseHeaders(200, profile.length);
+                try (var out = exchange.getResponseBody()) {
+                    out.write(profile);
+                }
             } else {
                 schemaHandler.handle(exchange);
             }
@@ -308,9 +334,21 @@ public final class ValidatorServer {
         }
     }
 
+    /**
+     * The descriptor this demo runs under, named here rather than found. {@link TsonDeployment} has no
+     * search path on purpose: a descriptor is diffable where an environment variable is not, but a runtime
+     * that loads whatever is on its path still lets a container image change a security policy with no code
+     * diff. The call site says which file; the file says what is in it.
+     */
+    public static TsonDeployment deployment() {
+        return TsonDeployment.read(resource("deployment.tn"));
+    }
+
     public static void main(String[] args) throws IOException {
-        int port = args.length > 0 ? Integer.parseInt(args[0]) : 8080;
-        HttpServer server = start(port);
+        TsonDeployment deployment = deployment();
+        int port = args.length > 0 ? Integer.parseInt(args[0])
+                : deployment.listener().flatMap(TsonDeployment.Listener::port).orElse(8080);
+        HttpServer server = start(port, deployment);
         int bound = server.getAddress().getPort();
         System.out.println("""
 
@@ -325,10 +363,14 @@ public final class ValidatorServer {
                     -H 'Content-Type: application/tson' \\
                     --data-binary @request.tn
 
+                What this deployment will accept, derived from its descriptor:
+
+                  curl -s http://localhost:%d/.well-known/tson-deployment
+
                 The schemas it publishes:
 
                   curl -s http://localhost:%d/2026/34/app/validate-1.tn
-                  curl -s http://localhost:%d/2026/34/app/validate-api-1.tn
-                """.formatted(bound, bound, bound, bound));
+                  curl -s http://localhost:%d/2026/34/ltr8/http/deployment-1.tn
+                """.formatted(bound, bound, bound, bound, bound));
     }
 }
