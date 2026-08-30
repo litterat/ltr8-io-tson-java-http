@@ -63,19 +63,38 @@
   policy_unit => !enum [WHOLE SEGMENT]
 
   @doc:"""
+    A Unicode script, as [UAX #24]'s `Script` property names one: either the long alias (`Latin`,
+    `Canadian_Aboriginal`) or the short alias, which is its ISO 15924 code (`Latn`, `Cans`). Both are
+    enumerated in the UCD's PropertyValueAliases.txt, and matching is case-insensitive, so `Latin`, `LATIN`,
+    `latin` and `Latn` all name one script.
+
+    The pattern constrains SHAPE and not membership, and the distinction is the whole design of this field.
+    Membership is a set of 171 values that grows with every Unicode release, and this is a PUBLISHED schema
+    (§3.5): an enum of them would need a new schema identity each time the UCD moved, which is exactly the
+    trap the policies themselves are here to avoid. A shape, on the other hand, never goes stale -- and it
+    is deliberately loose enough to admit every spelling above, including the mixed-case long aliases such
+    as `SignWriting` that a tighter rule would refuse.
+
+    No anchors: a `pattern` is I-Regexp (RFC 9485, the dialect the kernel's `regex` atom is pinned to), and
+    an I-Regexp match is against the whole token. `^` and `$` are not anchors there -- writing them makes a
+    pattern nothing can satisfy.
+
+    So it catches a typo of form and not of content. `Cyrrilic` is well-shaped and is not a script, and it
+    fails where the authoritative table is: when the descriptor is read. Spelling is canonicalised there
+    too, so two descriptors naming one set produce one policy however they spelled it.
+    """
+  script_name => !text ^ { pattern: "[A-Za-z][A-Za-z_]*" }
+
+  @doc:"""
     One §8.2 policy. `permitting` names an additional admitted script combination -- the mechanism §5.2
     itself uses for Latin+Japanese and its siblings, and the narrowest relaxation available: a deployment
-    that knows it is Russian says [LATIN CYRILLIC] rather than dropping a level and losing the rule
+    that knows it is Russian says [Latin Cyrillic] rather than dropping a level and losing the rule
     everywhere else.
-
-    A script is named by its java.lang.Character.UnicodeScript constant, which is the Unicode script name.
-    Nothing here constrains it to a real one; a name nothing recognises fails when the descriptor is read,
-    which is the right time and the wrong place to spell it out in a type.
     """
   unicode_policy => {
     level:      restriction_level
     unit:       policy_unit?
-    permitting: [text]?
+    permitting: [script_name]?
   }
 
   @doc:"Where this instance listens. Absent members leave the caller's own defaults alone."

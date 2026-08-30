@@ -79,35 +79,46 @@ public record TsonDeployment(String name, Optional<Listener> listener,
     @Typename(name = "unicode_policy")
     public record Policy(TsonUnicodePolicy.Level level, Optional<Unit> unit, List<String> permitting) {
 
+        /**
+         * <b>Script names are canonicalised here, against the authoritative table.</b> [UAX #24] gives every
+         * script a long alias and an ISO 15924 short alias and matching is case-insensitive, so {@code
+         * Latin}, {@code LATIN}, {@code latin} and {@code Latn} are four spellings of one script. The
+         * schema's {@code script_name} constrains shape and cannot constrain membership -- a set of 171
+         * values that grows with the UCD has no place in a published, immutable document -- so this is where
+         * a name becomes a script, and where two descriptors naming one set stop differing.
+         *
+         * <p>A name that is not a script <b>stops the read</b>, which is deliberate: a descriptor is loaded
+         * at startup by the operator who wrote it, and a typo in a security setting should halt the process
+         * rather than be carried as a policy quietly missing a script.
+         *
+         * @throws IllegalArgumentException if {@code permitting} names something that is not a script
+         */
         public Policy {
-            permitting = permitting == null ? List.of() : List.copyOf(permitting);
+            permitting = permitting == null ? List.of()
+                    : permitting.stream().map(Policy::canonical).toList();
         }
 
-        /**
-         * This policy as the library's own type.
-         *
-         * @throws IllegalArgumentException if {@code permitting} names something that is not a Unicode
-         *         script. Thrown rather than reported, because a descriptor is read at startup by the
-         *         operator who wrote it: a typo in a security setting should stop the process, not be
-         *         collected into a list nobody is reading yet.
-         */
+        /** This policy as the library's own type. */
         public TsonUnicodePolicy toPolicy() {
             TsonUnicodePolicy policy = TsonUnicodePolicy.of(level);
             if (unit.orElse(Unit.WHOLE) == Unit.SEGMENT) {
                 policy = policy.perSegment();
             }
             if (!permitting.isEmpty()) {
-                policy = policy.permitting(permitting.stream().map(Policy::script).toArray(UnicodeScript[]::new));
+                policy = policy.permitting(permitting.stream().map(UnicodeScript::forName)
+                        .toArray(UnicodeScript[]::new));
             }
             return policy;
         }
 
-        private static UnicodeScript script(String name) {
+        /** A script name as {@link UnicodeScript} spells it, whichever of its aliases was written. */
+        private static String canonical(String name) {
             try {
-                return UnicodeScript.forName(name);
+                return UnicodeScript.forName(name).name();
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("'" + name + "' is not a Unicode script name; a deployment "
-                        + "descriptor's `permitting` names java.lang.Character.UnicodeScript constants", e);
+                throw new IllegalArgumentException("'" + name + "' is not a Unicode script: a deployment "
+                        + "descriptor's `permitting` names scripts by their UAX #24 Script property alias, "
+                        + "long (Latin, Canadian_Aboriginal) or ISO 15924 (Latn, Cans)", e);
             }
         }
     }
