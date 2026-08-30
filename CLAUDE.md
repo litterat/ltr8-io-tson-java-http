@@ -725,6 +725,44 @@ second demo, on the JDK adapter only.
 ./gradlew :tson-http-jdk:runDemo -Pport=9000
 ```
 
+### Deployment descriptors (`deployment-1.tn`, `TsonDeployment`)
+
+**The third artifact kind**, beside a schema (what a document must be) and an API description (what an
+endpoint offers): how *one instance* is configured. Revision 34 added the §8.2 policies as a security control
+with no artifact, and this is a proposal for where it lives. The full argument is in `deployment-1.tn`'s own
+`@doc` and in `UPSTREAM.md`'s staged spec feedback; the short form:
+
+- **Not a schema.** An artifact declaring its own strictness chooses its own check, and §3.5's immutability
+  means raising a level mints a new identity, so every document pinning the old one keeps the old policy.
+  §8.3 settles it independently: skeleton distinctness does not compose across `!!import`, so the policy is a
+  property of the merged namespace rather than of any one schema.
+- **Not an API description**, which is a schema here and inherits both, and which would put policy in a
+  contract — raising a token policy would mean publishing a new description.
+- **It is data**, and that line is the useful one: an API description *must* be a schema because
+  `request: order` is a type reference; a descriptor references no types, so nothing about it needs a
+  namespace.
+
+**Two rules, enforced by shape rather than by documentation.** `TsonDeployment.read` takes source text — there
+is no search path and there must not be one, because a runtime that loads whatever it finds lets a container
+image change a security policy with no code diff. And no document may name a descriptor: nothing registers one
+with a schema source, and the catalog never serves one. `deployment-1.tn` itself *is* published, because a
+client needs it to read the profile.
+
+**An absent policy is not a permissive one.** The two defaults point opposite ways (Highly Restrictive over
+declared names, unrestricted over values), so `identifierPolicy()`/`tokenPolicy()` return empty and `applyTo`
+leaves a config alone rather than overwriting it with a guess.
+
+**The profile is derived, and it is a hint.** `profile()` drops the fetch allow-list and the listener —
+internal topology — and a server publishes *that*, at `/.well-known/tson-deployment`. A well-known path
+because everything with an identity is served at its identity's path, and a descriptor is precisely what must
+not have one. It can be cached and go stale; only the refusal a request receives says what applied to it,
+which is where §8.2 puts the policy. `unicode_data_version` is declared and always absent — nothing exposes
+it (`UPSTREAM.md` #3), and the field is there so the gap is visible in an artifact.
+
+**`restriction_level` copies `TsonUnicodePolicy.Level` by hand**, held to it by
+`TsonDeploymentTest.everyRestrictionLevelIsDeclaredInTheSchema` — the same discipline `diagnostic_code` gets,
+and the same failure if it lapses: a level added upstream that a descriptor can name and nothing can read.
+
 ### The validator demo (`ValidatorServer`, JDK adapter)
 
 A second demo, and the opposite one: `OrderServer` is the shape a real service takes — every schema resolved
@@ -759,6 +797,14 @@ fault and the data was never looked at.
 **It fetches nothing.** The per-request source serves the submitted schema at its own `!!id` and refuses every
 other identity, because a reference in an untrusted document is an untrusted URL and an endpoint that followed
 one would be a request forger for anyone who could reach it.
+
+**It runs under a deployment descriptor, and the policy applies to the probe and not to the envelope.** That
+split is forced by what a validator is: a descriptor states one process's policies, but applying the token
+policy to the envelope would refuse a request whose `data` field merely *contains* a mixed-script value — so
+the one service that exists to give a verdict on such a document could never be asked about one. Text a
+service acts on and text it is asked about are different surfaces, and only the second is judged. Pinned by
+`ValidatorServerTest.theEnvelopeIsNotJudgedByThePolicyItCarries`, which fails the day someone applies the
+descriptor to the service's own `Tson` as well.
 
 **The page's TSON is hand-written on both sides, on purpose.** It builds the request by escaping the two
 payloads as single-line quoted tokens (§7.2.2 — single-line rather than triple-quoted, since a schema pasted
@@ -807,6 +853,9 @@ request exercises that.
   blocks. One copy for three adapters, so a change cannot land in one demo and not the others. They name
   their imports **literally**, as a published document must, and each `OrderServerTest.identitiesMatchTheConstants`
   holds those literals to the constants — which is what the old string interpolation gave for free.
+- `tson-http/src/main/resources/deployment-1.tn` — the deployment-descriptor schema and the
+  `acceptance_profile` projection published from it. A proposal, like `SCHEMA-HEADER.md`'s field and
+  `meta-http-1.tn`, carrying its own argument in its `@doc`.
 - `tson-http-jdk/src/demo/resources/` — the validator demo's own schemas (`validate-1.tn`,
   `validate-api-1.tn`) and its page (`validator.html`). **Not** in `demo/schemas/`, which is the three order
   demos' shared resource path; these belong to one demo on one adapter.

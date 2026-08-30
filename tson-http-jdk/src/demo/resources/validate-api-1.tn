@@ -2,6 +2,7 @@
 !!meta:"https://tson.io/2026/34/ltr8/http/meta-http-1.tn"
 !!import:"https://schemas.example.com/2026/34/app/validate-1.tn"
 !!import:"https://tson.io/2026/34/ltr8/http/problem-1.tn"
+!!import:"https://tson.io/2026/34/ltr8/http/deployment-1.tn"
 !!import:"https://tson.io/2026/34/m/core.tn"
 {
   @doc:"""
@@ -33,6 +34,28 @@
     summary:     "The validator page"
     responses:   [
       !response { status: 200  description: "The page, served as bytes" }
+    ]
+  }
+
+  @doc:"""
+    What this deployment will accept, as a projection of its descriptor.
+
+    A well-known path rather than an identity's, and the reason is the reason the descriptor exists: in this
+    series everything with an identity is served at its identity's path (§2.2.1), and a deployment descriptor
+    is precisely the artifact that must NOT have an identity -- so a well-known path is right for it for the
+    same reason it would be wrong for a schema.
+
+    What is served is DERIVED from the descriptor, never the descriptor: the fetch allow-list is internal
+    topology. And it is a hint -- it can be cached, and only the refusal a request actually receives says
+    what applied to that request.
+    """
+  get_acceptance_profile => !operation {
+    method:      GET
+    path:        "/.well-known/tson-deployment"
+    summary:     "What this deployment will accept"
+    responses:   [
+      !response { status: 200  body: acceptance_profile
+                  description: "The policies a submitted document is judged under" }
     ]
   }
 

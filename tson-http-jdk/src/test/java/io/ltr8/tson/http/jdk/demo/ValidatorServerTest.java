@@ -3,6 +3,7 @@ package io.ltr8.tson.http.jdk.demo;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.compiler.Diagnostic;
 import io.ltr8.tson.http.TsonProblemDiagnostic;
+import io.ltr8.tson.http.TsonDeployment;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.jdk.demo.ValidatorServer.ValidationResult;
 import org.junit.jupiter.api.AfterEach;
@@ -50,7 +51,7 @@ class ValidatorServerTest {
 
     @BeforeEach
     void startServer() throws Exception {
-        server = ValidatorServer.start(0);
+        server = ValidatorServer.start(0, ValidatorServer.deployment());
         base = "http://127.0.0.1:" + server.getAddress().getPort();
         client = HttpClient.newHttpClient();
         // A reader for the reply, wired the way a real client would wire one: the envelope and the problem
@@ -249,6 +250,74 @@ class ValidatorServerTest {
 
         assertEquals(200, response.statusCode());
         assertTrue(response.body().startsWith("!!id:\"" + ValidatorServer.VALIDATE_ID + "\""), response.body());
+    }
+
+    /**
+     * <b>The deployment descriptor is a decision, not a description, and this is where that shows.</b> The
+     * demo's descriptor sets {@code tokens: { level: SINGLE_SCRIPT }}, so a value mixing scripts is refused
+     * -- by this deployment, under a policy another one need not apply. Remove the setting and the same
+     * document conforms.
+     */
+    @Test
+    void theDeploymentsTokenPolicyDecidesTheVerdict() throws Exception {
+        // Latin "dmin" behind a Cyrillic first letter: the homograph the rule exists for.
+        ValidationResult mixed = resultOf(validate(null, "{ display: \"\u0430dmin\" }"));
+
+        assertFalse(mixed.conforming());
+        assertEquals(List.of(Diagnostic.Code.RESTRICTED_TOKEN),
+                mixed.diagnostics().stream().map(TsonProblemDiagnostic::code).toList());
+
+        // Wholly Cyrillic is one script, so it is admitted -- the rule is about mixing, not about Cyrillic.
+        assertTrue(resultOf(validate(null, "{ display: \"\u0430\u0434\u043c\u0438\u043d\" }")).conforming());
+    }
+
+    /**
+     * <b>The policy judges the document under test and not the envelope carrying it</b>, which a validator
+     * forces: the request above puts that same mixed-script text in its own {@code data} field, so a token
+     * policy applied to the envelope would refuse the one service that exists to give a verdict on such a
+     * document. Text a service acts on and text it is asked about are different surfaces.
+     *
+     * <p>Asserted by the test above passing at all -- this one states the reason, and fails the day someone
+     * applies the deployment to the service's own {@link io.ltr8.tson.Tson} as well as to the probe.
+     */
+    @Test
+    void theEnvelopeIsNotJudgedByThePolicyItCarries() throws Exception {
+        HttpResponse<String> response = validate(null, "{ display: \"\u0430dmin\" }");
+
+        assertEquals(200, response.statusCode(),
+                "the envelope carries the refused text and must still be read: " + response.body());
+    }
+
+    /**
+     * <b>What a counterparty may see is a projection, never the descriptor.</b> The policies go out; the fetch
+     * allow-list and the listener do not -- which origins a deployment trusts is nobody else's business.
+     */
+    @Test
+    void theAcceptanceProfileIsPublishedAndDropsTheTrustConfiguration() throws Exception {
+        HttpResponse<String> response = client.send(HttpRequest.newBuilder(
+                        URI.create(base + "/.well-known/tson-deployment")).GET().build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+        assertEquals(200, response.statusCode());
+        assertEquals("application/tson", response.headers().firstValue("Content-Type").orElse(""));
+        assertTrue(response.body().contains("SINGLE_SCRIPT"), response.body());
+        // Self-describing, and the schema it names is published, so a client can check what it got.
+        assertTrue(response.body().contains(TsonDeployment.ID), response.body());
+        assertFalse(response.body().contains("schema_hosts"), response.body());
+        assertFalse(response.body().contains("listener"), response.body());
+    }
+
+    /** The descriptor governs the demo but is not itself served -- deployment-1.tn's rule 2. */
+    @Test
+    void theDescriptorIsNeverServed() throws Exception {
+        HttpResponse<String> schema = client.send(HttpRequest.newBuilder(
+                        URI.create(base + "/2026/34/ltr8/http/deployment-1.tn")).GET().build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        assertEquals(200, schema.statusCode(), "the schema is published, so a profile can be validated");
+
+        // And nothing anywhere serves an instance of it: the descriptor is not in the catalog under any path.
+        assertFalse(schema.body().contains("validator-demo"),
+                "the schema path served the descriptor rather than the schema");
     }
 
     /** The identities the demo publishes are the ones its Java constants name. */
