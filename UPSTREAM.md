@@ -111,6 +111,54 @@ red.
 
 ---
 
+## 3. A name-hygiene refusal states neither the policy nor the data version as data
+
+**Hit:** answering "what was I judged against?" for a client that has just been refused. [TSON-DATA] §8.2
+makes a policy refusal a fifth, distinguishable outcome, reported "**under a stated policy and a stated data
+version**". Neither is stated as anything a consumer can read.
+
+- **The policy** reaches the diagnostic as prose inside `message` — *"'аdmin' mixes the scripts [LATIN,
+  CYRILLIC], which UTS #39 §5.2's HIGHLY_RESTRICTIVE does not admit"*. Recovering the level means parsing
+  English, which is the practice upstream deliberately ended for the fetch `Reason`.
+- **The data version** does not reach it at all, and is unreachable besides. `Xid.UNICODE_VERSION` is
+  `"16.0"`, correctly documented as §7.1 asks — but `io.ltr8.tson.compiler.lexer` is **not exported** by the
+  module, so no consumer can read the constant even by hand.
+
+**Why this is not an ergonomic nicety.** §8.3's own conformance table marks all three Layer 2 rules "stable
+across Unicode versions: **no**", and §8.2 says the distinction between validity and policy is "what lets two
+conforming processors legitimately disagree on a Layer 2 refusal". A disagreement is only interpretable if the
+refusal says which table produced it. Unlike a status or a message, this is **unrecoverable after the fact**:
+nothing in the refusal, and nothing reachable from the consumer's side, identifies the `confusables.txt` that
+refused a name.
+
+**Change**, and the two halves want different treatments:
+
+1. **The policy rides the diagnostic**, because it varies per check. `identifierPolicy` and `tokenPolicy` are
+   separate settings, so one read can produce a `CONFUSABLE_NAMES` judged at Highly Restrictive and a
+   `RESTRICTED_TOKEN` judged at Unrestricted, and a client seeing both needs to know they were held to
+   different rules. This is exactly the shape of the fetch-`Reason` fix: a distinction that did not survive
+   the receiver, answered with a typed component present for the codes that carry it. The level, the unit, and
+   the script set where one is named.
+2. **The data version is a static accessor**, because it is constant for a process. Something like
+   `TsonUnicodePolicy.dataVersion()` on the already-exported `io.ltr8.tson.compiler` — no new `Diagnostic`
+   component, and a server can report it once per response rather than per problem. Exporting
+   `io.ltr8.tson.compiler.lexer` would also do it and is the worse option: that package is implementation.
+
+Worth noting the version this reports is asked for in UTS #39 terms by §8.2's own detection note ("labelled
+with the UTS #39 version they were computed against"), where `UNICODE_VERSION` is the UCD version. They track
+in practice; stating which is meant would settle it.
+
+**Workaround in place:** none, and there is not much of one available. This project's error bodies carry what
+the diagnostic carries, so a `RESTRICTED_TOKEN` on the wire says the level in prose and the data version
+nowhere. A `policy-refused` problem type here would give both a home the moment there is something to put in
+it.
+
+**Priority: medium** — small, and on a path a deployment that raises its token policy hits routinely. It is
+also the one gap in this class that cannot be closed downstream: a consumer can invent a problem type, but it
+cannot invent the version.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. That register renumbers from #1
@@ -195,11 +243,16 @@ Per-endpoint policy is the awkward case: a route that renders values into a UI w
 than one that only logs them, and a well-known document is origin-scoped. The honest answer is probably that
 the profile advertises the origin's default and the refusal reports what actually applied.
 
+**One thing the series could tighten regardless of where the descriptor lands.** §8.2 requires a refusal to
+be reported "under a stated policy and a stated data version" without saying that either must be recoverable
+as *data*, and prose in a message satisfies a literal reading. Given that §8.2's whole purpose is to let two
+conforming processors disagree legitimately, the version a refusal was computed against is the one thing that
+makes a disagreement interpretable, and it deserves to be machine-readable rather than merely present.
+
 **What this project does today**, pending any of it: both policies are code calls on `TsonConfig`
 (`identifierPolicy`, `tokenPolicy`), left at upstream's defaults, with the position and the reasoning written
 down in `CLAUDE.md` rather than expressed in an artifact. The reporting half is a gap here as much as in the
-series — a refusal states the level in prose inside its message and the UCD version nowhere, so a client that
-wants to know what it was judged against has to parse English.
+series, and #3 above is the library end of it.
 
 ### To file: how a schema is named for a document that cannot carry `!!schema` (§6, §7.1)
 
