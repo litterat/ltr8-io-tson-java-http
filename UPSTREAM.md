@@ -51,120 +51,63 @@ documented is the shape the library has. `CLAUDE.md` carries the numbers.
 
 ---
 
-## 2. A templated `~data &` constructor declares, but its application cannot be named
+## 2. A `data` entry is in the type system everywhere except at the one position that would name it
 
 **Hit:** the CRUD-family payoff of an API description. `fetch => <T> !operation { method: GET  path: "/x"
 responses: [ { status: 200  body: T  description: "found" } ] }` — one declaration standing for every
-fetch-by-id endpoint — now **declares and resolves**, where it used to be a parse error. The remaining gap is
-one stage later: nothing may apply it.
-
-`getOrder => fetch<order>` materialises the application correctly — the synthetic entry's name records the
-substitution — and is then refused:
+fetch-by-id endpoint — declares and resolves. Nothing may apply it. `getOrder => fetch<order>` is refused:
 
 > `'fetch<order>' names 'operation_GET_/x_200_order_found_1f8d998a', which is built with 'operation' and
 > describes something other than a data value — it is declared by this schema but is not a type, so nothing
 > can be typed by it`
 
-**The refusal is right on its own terms**, which is what makes this a design question rather than a bug.
-`name => application` is an alias, an alias names a type, and §4.1 makes naming a `kind: DATA` entry where a
-type is expected an error. `@alias` does not change it. So a templated data constructor is currently
-*declarable and unusable*: the template resolves, and there is no spelling that binds a name to the data entry
-an application of it materialises.
+**The mechanism is not missing, which is the thing to know before designing anything.** An earlier version of
+this entry asked for "a way to name the application", implying one had to be invented. It does not: the
+declaration position already produces a name-keyed entry for a template application. Measured, on the type
+case:
 
-**Change:** a way to name the application of a templated `~data &` constructor. Whether that is the alias
-position learning that a `data` entry may be named by one, or a separate spelling, is upstream's call — the
-constraint is only that the resulting name is what a consumer sees, since a generated name like the one above
-is no use to anything that looks an operation up by name (`TsonApiCoverage.serving`).
+```
+page_of_order => page<order>
+
+page_of_order          kind=REFERENCE  source=page_order_463f346d
+page_order_463f346d    kind=PRODUCT    source=page
+```
+
+The author's name survives as a real entry in the map — a REFERENCE onto the internal instantiation — which is
+exactly the shape an operation needs, since a generated name is no use to anything looking an operation up by
+name (`TsonApiCoverage.serving`). **What fails is one kind check at the last step**, because a REFERENCE is
+defined as pointing at a *type* and the target here is `kind: DATA`.
+
+**And the spec is not of one mind about that check.** §4.1 *enumerates* the positions where naming a
+`kind: DATA` entry is an error — "a field type, element type, variant, argument, composition operand, or
+refinement source" — and **a reference target is not among them**. But §4.1's own definition of the REFERENCE
+kind, and §8.3, both say a reference points at a type. Which reading governs decides whether this is a spec
+change or an implementation one, and it is worth settling either way: once `data` entries became full citizens
+of resolution — namespace membership, `type_ref` slots that flatten and carry `@alias`, templates, structural
+identity — "reference" quietly stopped meaning "reference to a type", and the definition did not move with it.
+
+**Change**, in preference order:
+
+1. **Let a reference target a `data` entry**, leaving §4.1's enumerated positions exactly as they are. An
+   alias declaration is a binding, not a typing position, so nothing that the DATA rule protects is weakened:
+   no field, element, variant, argument, composition operand or refinement source becomes able to name one.
+2. If that is wrong, say so in §4.1 — add the reference target to the enumerated list, so the refusal is
+   stated rather than inferred from REFERENCE's definition, and the gap becomes a deliberate closed door
+   rather than an oversight.
+
+**The consumer cost, stated because it is real and small:** `getOrder` would then be a REFERENCE, so `method`
+and `path` live one hop away on the instantiation. `TsonApiDescription` does not follow that hop today.
 
 **Workaround in place:** write each operation out untemplated, which is what this project's description does.
 That costs a full record per endpoint where the template would have cost an application, and it is the cost
 the `data` base kind otherwise removes.
 
-**Priority: low** — the description is written once and read often, so verbosity there is cheap. Worth
-recording because the parse-level half has just closed, and the half left is small enough to look already
-done. Pinned at both stages by
+**Priority: low** — a description is written once and read often, so verbosity there is cheap. Recorded
+because the remaining step is small enough to look already done, and because the framing above took a
+measurement to arrive at. Pinned at both stages by
 `UpstreamGapsTest.aTemplatedDataConstructorDeclaresButItsApplicationCannotBeNamed`: asserting only the throw
 would go on passing if the declaration regressed to a parse error, which is a different gap wearing the same
 red.
-
----
-
-## 3. A `SCHEMA_UNAVAILABLE` diagnostic drops the `Reason` that says whose fault it is
-
-**Hit:** choosing a status for a request body whose schema could not be fetched. `TsonSchemaFetchException`
-carries a `Reason`, and this project maps all five: `NOT_PERMITTED` and `NOT_FOUND` are the document's fault
-(400 — it named a schema this server will not load, or one nothing serves), while `TIMEOUT` is 504 and
-`TRANSPORT`/`TOO_LARGE` are 502, this server's dependency failing while the request was perfectly good. The
-retry advice differs, which is the whole reason for splitting them.
-
-**`Diagnostic.ofSchemaUnavailable` keeps none of it.** It is built from that exception and from nothing else —
-which is what makes the code trustworthy — but stores only the message, with `expected` and `actual` set to
-`""`. So a consumer that reads through a collecting receiver gets "nobody would supply this schema" and no way
-to learn which of the five it was.
-
-**That is the common path, not an edge.** Every read through `TsonHttpCodec` collects, so in this project a
-schema-fetch failure now essentially always arrives as a diagnostic and essentially never as the exception —
-the carefully split mapping in `TsonHttpException.from` is reachable only from startup (`preload`,
-`prepareToRead`). Two channels for one failure now answer differently: `NOT_PERMITTED` is a 400 thrown and a
-502 collected.
-
-**Change:** carry the reason on the diagnostic. `expected` is already free and already spare-typed, so
-`expected = reason.name()` would cost nothing and need no new field — though a typed accessor would be better
-if `Diagnostic` is willing to grow one. Either way the point is that the distinction survives the receiver,
-since it is not recoverable from the message and deliberately should not be parsed out of one.
-
-**Workaround in place:** round to 502 for the whole class, and say why in the Javadoc. It rounds away from the
-client on purpose — given one status for both, the wrong one to pick is the one that tells a client with a
-good document to go and fix it because a host did not answer. But it means a reference no allow-list permits,
-which really is the caller's mistake, is reported as this server's dependency failing.
-
-**Priority: medium** — it is a wrong status on a live path rather than an ergonomic edge, and the fix is one
-field.
-
----
-
-## 4. A `TsonSchemaSource` returning `null` is an NPE from inside the registry, not a contract complaint
-
-**Hit:** every server in this repo, and reachable by any client. `TsonSchemaSource`'s Javadoc is emphatic that
-`TsonSchemaFetchException` **is** the contract — *"a source signals 'cannot supply this' with that and nothing
-else"* — and `registeredOnly()` models it. But the natural first implementation is a map, and a map spells
-"nothing here" as `null`:
-
-```java
-Map<String, String> schemas = Map.of(SCHEMA_ID, SCHEMA, ...);
-Tson tson = Tson.builder().schemaSource(schemas::get).build();   // reads fine, and is wrong
-```
-
-That compiles, works for every identity in the map, and for anything else produces:
-
-```
-java.lang.NullPointerException: Cannot invoke "String.getBytes(java.nio.charset.Charset)"
-  because "sourceText" is null
-    at TsonCompiledMetaRegistry.recordAndVerify(TsonCompiledMetaRegistry.java:518)
-```
-
-**Why it matters more than an ordinary misuse:** the identity comes from the *request body*, so the caller
-chooses it. All three demo servers here shipped `schemas::get` and answered **500** to any document whose
-`!!schema` named something unpublished — a fault-in-this-server verdict for what the classification this
-project is built on calls a 502, and one any client could produce at will. An NPE four frames into the
-registry is also nowhere near the line that caused it.
-
-**Change:** make the contract violation say so. Either is enough, and the first is a two-line guard:
-
-1. `recordAndVerify` (or the call above it) rejects a `null` return with a message naming the source and the
-   URI — *"a TsonSchemaSource returned null for '…'; signal an unavailable schema with
-   TsonSchemaFetchException"*. `IllegalStateException` fits the house rule: a broken invariant, not a bad
-   document.
-2. Better, remove the trap: ship `TsonSchemaSource.ofMap(Map<String, String>)` alongside `registeredOnly()`,
-   which is what every caller writing `map::get` actually meant. Three demos here now carry an identical
-   private helper doing exactly that, which is the usual sign it belongs upstream.
-
-**Workaround in place:** each demo wraps its map in a source that throws `NOT_FOUND`, and
-`OrderServerTest.aDocumentNamingAnUnknownSchemaIsNotThisServersFault` pins the 502 in all three adapters.
-
-**Priority: medium** — the workaround is easy *once you know*, and the failure gives no hint. The library is
-otherwise scrupulous about this exact distinction; this is the one place it is enforced by documentation
-alone.
 
 ---
 
