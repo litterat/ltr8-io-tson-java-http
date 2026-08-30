@@ -8,7 +8,6 @@ import io.ltr8.annotation.Typename;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.compiler.Diagnostic;
 import io.ltr8.tson.compiler.TsonDocumentHeader;
-import io.ltr8.tson.compiler.TsonSchemaFetchException;
 import io.ltr8.tson.compiler.TsonSchemaSource;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
@@ -132,9 +131,14 @@ public final class ValidatorServer {
         // Serving the schema at the identity it declares, rather than at whatever the data asked for, is what
         // makes "your document names a schema you did not paste" reachable as SCHEMA_UNAVAILABLE instead of
         // arriving as a confusing identity mismatch from inside the loader.
+        //
+        // ofMap is what refuses everything else, and refusing is the security boundary rather than a
+        // convenience: a schema identity in a submitted document is an untrusted URL, and a source that went
+        // and fetched it would make this endpoint a request forger for anyone who could reach it. It also
+        // canonicalises, so a caller pinning their own schema with ?sha256= still resolves to it (§2.2.1).
         String id = schemaText == null ? null : declaredId(schemaText);
         Map<String, String> library = id == null ? Map.of() : Map.of(id, schemaText);
-        Tson probe = Tson.builder().schemaSource(submittedOnly(library)).build();
+        Tson probe = Tson.builder().schemaSource(TsonSchemaSource.ofMap(library)).build();
 
         long started = System.nanoTime();
         Phase phase = Phase.DATA;
@@ -153,30 +157,6 @@ public final class ValidatorServer {
 
         return new ValidationResult(diagnostics.isEmpty(), phase, elapsedMs,
                 diagnostics.stream().map(TsonProblemDiagnostic::from).toList());
-    }
-
-    /**
-     * A source that serves the submitted schema and refuses everything else <b>by throwing</b>.
-     *
-     * <p><b>A {@code Map::get} will not do here, and the way it fails is worth knowing.</b>
-     * {@link io.ltr8.tson.compiler.TsonSchemaSource} states that
-     * {@link TsonSchemaFetchException} <em>is</em> the contract — "a source signals 'cannot supply this' with
-     * that and nothing else" — and a source returning {@code null} instead does not get a diagnostic saying
-     * so. It gets a {@code NullPointerException} out of the registry's own verification step, which the error
-     * boundary can only read as a fault in this server: a 500, with the real answer ("nothing serves that
-     * identity") nowhere in it. Since a caller chooses the identity their document names, that is a 500 any
-     * caller can produce at will.
-     */
-    private static TsonSchemaSource submittedOnly(Map<String, String> library) {
-        return uri -> {
-            String source = library.get(uri);
-            if (source == null) {
-                throw new TsonSchemaFetchException(uri, TsonSchemaFetchException.Reason.NOT_FOUND,
-                        "this service resolves only the schema submitted with the request, and fetches "
-                                + "nothing: a reference in an untrusted document is an untrusted URL", null);
-            }
-            return source;
-        };
     }
 
     /**
@@ -209,7 +189,7 @@ public final class ValidatorServer {
         Map<String, String> schemas = Map.of(VALIDATE_ID, VALIDATE, API_ID, API,
                 TsonProblemSchema.ID, TsonProblemSchema.source(),
                 TsonApiSchema.ID, TsonApiSchema.source());
-        Tson tson = Tson.builder().schemaSource(schemas::get).bindings(bindings)
+        Tson tson = Tson.builder().schemaSource(TsonSchemaSource.ofMap(schemas)).bindings(bindings)
                 .metaNameBinder(TsonApiSchema.metaNameBinder()).build();
         tson.resolve(VALIDATE);
         tson.resolve(API);

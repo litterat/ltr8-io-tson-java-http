@@ -2,6 +2,7 @@ package io.ltr8.tson.http;
 
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.compiler.Diagnostic;
+import io.ltr8.tson.compiler.TsonSchemaFetchException;
 import io.ltr8.tson.schema.meta.EnumBody;
 import io.ltr8.tson.schema.meta.TypeDefinition;
 import org.junit.jupiter.api.Test;
@@ -106,8 +107,12 @@ class TsonProblemSchemaTest {
      * actually enforce, which is the property that matters.
      */
     private static List<String> declaredCodes() {
-        TypeDefinition entry = TsonProblemSchema.compiled().schema().entries().get("diagnostic_code");
-        return assertInstanceOf(EnumBody.class, entry.body(), "diagnostic_code is an enum").members();
+        return membersOf("diagnostic_code");
+    }
+
+    private static List<String> membersOf(String entryName) {
+        TypeDefinition entry = TsonProblemSchema.compiled().schema().entries().get(entryName);
+        return assertInstanceOf(EnumBody.class, entry.body(), entryName + " is an enum").members();
     }
 
     /**
@@ -127,6 +132,27 @@ class TsonProblemSchemaTest {
             assertTrue(declared.contains(code.name()),
                     () -> "Diagnostic.Code." + code + " is missing from problem-1.tn's diagnostic_code: "
                             + declared + " -- add it there under a new schema version (\u00a710)");
+        }
+    }
+
+    /**
+     * The same discipline for {@code fetch_reason}, which copies {@link TsonSchemaFetchException.Reason}.
+     * It is a smaller enum and a stabler one, but it is on the wire for the same reason
+     * {@code diagnostic_code} is, and a member added upstream would be emitted against a schema that rejects
+     * it in exactly the same way.
+     */
+    @Test
+    void everyFetchReasonIsDeclaredInTheSchema() {
+        List<String> declared = membersOf("fetch_reason");
+        for (TsonSchemaFetchException.Reason reason : TsonSchemaFetchException.Reason.values()) {
+            assertTrue(declared.contains(reason.name()),
+                    () -> "TsonSchemaFetchException.Reason." + reason + " is missing from problem-1.tn's "
+                            + "fetch_reason: " + declared);
+        }
+        List<String> known = Arrays.stream(TsonSchemaFetchException.Reason.values()).map(Enum::name).toList();
+        for (String reason : declared) {
+            assertTrue(known.contains(reason),
+                    () -> "problem-1.tn declares '" + reason + "', which is not a Reason: " + known);
         }
     }
 

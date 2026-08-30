@@ -6,6 +6,7 @@ import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.compiler.Diagnostic;
 import io.ltr8.tson.compiler.TsonReadException;
+import io.ltr8.tson.compiler.TsonSchemaFetchException;
 import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
 import io.ltr8.tson.compiler.config.TsonAtomContext;
 import io.ltr8.tson.tree.TsonValue;
@@ -394,17 +395,40 @@ class TsonHttpCodecTest {
     }
 
     /**
-     * <b>A schema nobody would supply is not a verdict on the document, so it is not a 400.</b> The body was
-     * never read against a schema, so whether it would have passed is unknown -- and answering "invalid"
-     * would send a client with a perfectly good document to go and fix it because a host did not answer.
+     * <b>A diagnostic stating no reason keeps the conservative 502.</b> Every diagnostic the library builds
+     * carries one, so this is the hand-assembled case -- and given one status for a class it cannot tell
+     * apart, the wrong one to pick is the one that tells a client with a perfectly good document to go and
+     * fix it because a host did not answer. It rounds away from the client, deliberately.
      */
     @Test
-    void aSchemaUnavailableDiagnosticIsNotABadRequest() {
+    void aSchemaUnavailableDiagnosticWithNoReasonRoundsAwayFromTheClient() {
         TsonHttpException thrown = TsonHttpException.invalidDocument(
                 List.of(withCode(aGap(), Diagnostic.Code.SCHEMA_UNAVAILABLE)));
 
         assertEquals(TsonHttpException.BAD_GATEWAY, thrown.status());
         assertTrue(thrown.type().endsWith("schema-origin-failed"), thrown.type());
+    }
+
+    /**
+     * <b>The reason decides the status, and the collected channel answers exactly as the thrown one does.</b>
+     * That agreement is the whole value of {@code Diagnostic.fetchReason}: one failure reaches a consumer two
+     * ways -- thrown at startup, collected on every read through this codec -- and the collected one used to
+     * lose the reason and round the lot to 502, so {@code NOT_PERMITTED} was a 400 thrown and a 502 collected.
+     *
+     * <p>Asserted against {@link TsonHttpException#from}'s own answer rather than against literal statuses,
+     * so the invariant under test is that the two channels agree rather than what they happen to agree on.
+     */
+    @Test
+    void aSchemaUnavailableDiagnosticIsAnsweredByItsReason() {
+        for (TsonSchemaFetchException.Reason reason : TsonSchemaFetchException.Reason.values()) {
+            TsonHttpException collected = TsonHttpException.invalidDocument(
+                    List.of(withReason(aGap(), Diagnostic.Code.SCHEMA_UNAVAILABLE, reason)));
+            TsonHttpException thrown = TsonHttpException.from(
+                    new TsonSchemaFetchException("https://example.com/x.tn", reason, "test", null));
+
+            assertEquals(thrown.status(), collected.status(), reason::name);
+            assertEquals(thrown.type(), collected.type(), reason::name);
+        }
     }
 
     /** A gap outranks it, on upstream's own precedent: retrying reaches the gap again, the origin may recover. */
@@ -453,8 +477,18 @@ class TsonHttpCodecTest {
 
     /** Rebuilds a diagnostic under {@code code} -- the factories fix theirs, and this needs BIND_MISMATCH. */
     private static Diagnostic withCode(Diagnostic d, Diagnostic.Code code) {
+        return withReason(d, code, null);
+    }
+
+    /**
+     * The same, stating a fetch reason -- which is what a {@code SCHEMA_UNAVAILABLE}'s status turns on. A
+     * {@code null} reason is the hand-assembled diagnostic the library itself never produces, and is what the
+     * conservative 502 rounding is for.
+     */
+    private static Diagnostic withReason(Diagnostic d, Diagnostic.Code code,
+                                         TsonSchemaFetchException.Reason reason) {
         return new Diagnostic(d.path(), d.schemaPointer(), d.schemaId(), code, d.message(), d.expected(),
-                d.actual(), d.dataPosition(), d.schemaPosition());
+                d.actual(), d.dataPosition(), d.schemaPosition(), Optional.ofNullable(reason));
     }
 
 }

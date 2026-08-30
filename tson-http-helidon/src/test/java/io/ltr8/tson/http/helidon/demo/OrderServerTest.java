@@ -121,24 +121,26 @@ class OrderServerTest {
 
 
     /**
-     * <b>A document naming a schema this server does not publish is not this server's fault.</b> The caller
-     * chooses that identity, so answering 500 would let any client manufacture one -- and it would say the
-     * wrong thing besides. Nobody would supply the schema, so the body was never checked against one and
-     * whether it would have passed is unknown, which is exactly what {@code SCHEMA_UNAVAILABLE}'s 502 means.
+     * <b>A document naming a schema this server does not publish is the sender's mistake, and is told so.</b>
+     * The caller chooses that identity, so a 500 would let any client manufacture one; and among the 4xx and
+     * 5xx answers, which is right turns on <em>whose</em> doing it was. Nothing serves that identity, which is
+     * {@code NOT_FOUND} -- the reference is wrong and the sender is who can fix it -- where a host that timed
+     * out would be a 504 and one that failed a 502.
      *
-     * <p>It reached 500 until the schema source was made to refuse by the contract:
-     * {@link io.ltr8.tson.compiler.TsonSchemaSource} admits only {@code TsonSchemaFetchException} for "cannot
-     * supply this", and a {@code Map::get} returning {@code null} instead reached the registry and threw a
-     * {@code NullPointerException} the boundary could only read as an internal fault.
+     * <p>Two upstream changes had to land for this to be answerable. {@code TsonSchemaSource.ofMap} refuses by
+     * the contract, where a {@code Map::get} returning {@code null} reached the registry and threw a
+     * {@code NullPointerException} the boundary could only read as an internal fault. And
+     * {@code Diagnostic.fetchReason} survives the collecting receiver, where before the reason was gone by the
+     * time a status was chosen and the whole class rounded to 502.
      */
     @Test
-    void aDocumentNamingAnUnknownSchemaIsNotThisServersFault() throws Exception {
+    void aDocumentNamingAnUnknownSchemaIsTheSendersMistake() throws Exception {
         HttpResponse<String> response = post("""
                 !!schema:"https://schemas.example.com/2026/34/app/nowhere-1.tn"
                 !order { sku: "ABC-1"  quantity: 3 }""");
 
-        assertEquals(502, response.statusCode(), response.body());
-        assertTrue(response.body().contains("schema-origin-failed"), response.body());
+        assertEquals(400, response.statusCode(), response.body());
+        assertTrue(response.body().contains("unusable-schema-reference"), response.body());
     }
 
 }
