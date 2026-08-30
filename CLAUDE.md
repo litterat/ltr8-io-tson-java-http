@@ -612,6 +612,12 @@ Each cost a debugging cycle here and is pinned by a test.
 - **A schema reference may not carry a port, userinfo or a fragment** (§2.2.1), so a schema origin cannot run
   on a non-default port. Use `mapHost`. See "Identity is not location" above — this is the trap that costs the
   most time, because the failure surfaces from the resolver rather than from the fetch.
+- **A `pattern` is I-Regexp, and `^`/`$` are not anchors.** The kernel pins `regex` to RFC 9485
+  ([TSON-SCHEMA] §4.2, "pinned to I-Regexp"), whose match is against the **whole** token — so a pattern needs
+  no anchors, and writing them adds two literal characters no token has. It fails in the worst way: the
+  schema compiles, and every value is refused with *"'Latn' does not match the required pattern
+  `^[A-Za-z][A-Za-z_]*$`"* — a message that reads like the value is wrong when the pattern is. Reflex from
+  JSON Schema, which is unanchored and needs them. `deployment-1.tn`'s `script_name` is the one pattern here.
 - **Use `TsonSchemaSource.ofMap`, never `map::get`.** `TsonSchemaFetchException` is the whole contract for
   "cannot supply this", and a source returning `null` is now refused by name rather than dereferenced — but
   refused is still a failure, and `ofMap` is the form that does not fail: it throws `NOT_FOUND` for a miss and

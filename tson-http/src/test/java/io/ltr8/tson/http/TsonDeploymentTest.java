@@ -24,7 +24,7 @@ class TsonDeploymentTest {
               name:         "production"
               listener:     { host: "127.0.0.1"  port: 8080 }
               identifiers:  { level: HIGHLY_RESTRICTIVE  unit: SEGMENT }
-              tokens:       { level: MODERATELY_RESTRICTIVE  permitting: ["LATIN" "CYRILLIC"] }
+              tokens:       { level: MODERATELY_RESTRICTIVE  permitting: ["Latn" "cyrillic"] }
               schema_hosts: ["schemas.example.com"]
             }""";
 
@@ -110,15 +110,51 @@ class TsonDeploymentTest {
                 "a version is now obtainable -- fill it in and delete this test's premise");
     }
 
-    /** A typo in a security setting stops the process rather than being collected for nobody to read. */
+    /**
+     * <b>Script names are canonicalised against the authoritative table, not by the schema.</b> [UAX #24]
+     * gives every script a long alias and an ISO 15924 short alias, matched case-insensitively, so {@code
+     * Latn} and {@code cyrillic} name the same two scripts as {@code LATIN} and {@code CYRILLIC}. The schema
+     * cannot enforce membership — 171 values that grow with the UCD have no place in a published immutable
+     * document — so it constrains shape and this is where a name becomes a script.
+     */
     @Test
-    void anUnknownScriptNameIsRefusedAtRead() {
-        TsonDeployment deployment = TsonDeployment.read("""
-                !!schema:"https://tson.io/2026/34/ltr8/http/deployment-1.tn"
-                !deployment { name: "typo"  tokens: { level: SINGLE_SCRIPT  permitting: ["CYRRILIC"] } }""");
+    void scriptNamesAreCanonicalisedWhicheverAliasIsWritten() {
+        TsonDeployment deployment = TsonDeployment.read(FULL);
 
-        String message = assertThrows(IllegalArgumentException.class, deployment::tokenPolicy).getMessage();
-        assertTrue(message.contains("CYRRILIC"), message);
+        assertEquals(List.of("LATIN", "CYRILLIC"), deployment.tokens().orElseThrow().permitting());
+        // And the projection publishes the canonical form, so two deployments naming one set look alike.
+        assertEquals(List.of("LATIN", "CYRILLIC"), deployment.profile().tokens().orElseThrow().permitting());
+    }
+
+    /**
+     * A typo in a security setting stops the read, rather than being carried as a policy quietly missing a
+     * script. {@code Cyrrilic} is well-shaped, so {@code script_name}'s pattern admits it and only the
+     * authoritative table can refuse it.
+     */
+    @Test
+    void anUnknownScriptNameStopsTheRead() {
+        String message = assertThrows(RuntimeException.class, () -> TsonDeployment.read("""
+                !!schema:"https://tson.io/2026/34/ltr8/http/deployment-1.tn"
+                !deployment { name: "typo"  tokens: { level: SINGLE_SCRIPT  permitting: ["Cyrrilic"] } }"""))
+                .getMessage();
+
+        assertTrue(message.contains("Cyrrilic"), message);
+    }
+
+    /**
+     * And the shape rule catches what it can before that: a script name is a name, so a bare number is not
+     * one. Worth pinning because a {@code text} field would have accepted it — [TSON-DATA] §4 does not apply
+     * base type resolution at a schema-typed position, so {@code 42} is a perfectly good {@code text}.
+     */
+    @Test
+    void somethingThatIsNotEvenNameShapedIsRefusedByTheSchema() {
+        List<io.ltr8.tson.compiler.Diagnostic> problems = TsonDeployment.tson().validate("""
+                !!schema:"https://tson.io/2026/34/ltr8/http/deployment-1.tn"
+                !deployment { name: "n"  tokens: { level: SINGLE_SCRIPT  permitting: [42] } }""");
+
+        assertEquals(List.of(io.ltr8.tson.compiler.Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION),
+                problems.stream().map(io.ltr8.tson.compiler.Diagnostic::code).toList(),
+                () -> "expected the pattern to refuse it, got " + problems);
     }
 
     /**
