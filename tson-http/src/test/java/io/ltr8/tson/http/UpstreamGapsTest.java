@@ -279,10 +279,14 @@ class UpstreamGapsTest {
      */
     @Test
     void aTemplatedDataConstructorDeclaresButItsApplicationCannotBeNamed() {
+        // The path carries no slash on purpose, and it costs this fixture its realism: with one, resolution
+        // fails earlier and for an unrelated reason, because the generated entry name splices the path in
+        // verbatim and stops being an identifier. That is pinned separately below -- this test is about the
+        // kind refusal, and a fixture that never reaches it would pin nothing.
         String template = """
                   order => { sku: text }
                   fetch => <T> !operation {
-                    method: GET  path: "/x"
+                    method: GET  path: "x"
                     responses: [ { status: 200  body: T  description: "found" } ]
                   }""";
 
@@ -455,6 +459,45 @@ class UpstreamGapsTest {
         // The same text as a value, through a schemaless read: nothing is checked, and nothing should be.
         assertDoesNotThrow(() -> Tson.builder().schemaSource(u -> null).build().treeReader()
                 .readWithoutSchema("{ name: \"\u0430dmin\" }"));
+    }
+
+    /**
+     * <b>A generated entry name splices a field's text in verbatim, so ordinary punctuation stops it being an
+     * identifier.</b> [TSON-SCHEMA] §8.2 makes this a MUST -- "an internal name is a valid {@code
+     * identifier}" -- and §7.7 admits only {@code XID_Continue} and {@code -}, so a name carrying {@code /}
+     * is not one. It surfaces as a name-hygiene refusal rather than as the malformed name it is, because
+     * §8.2's mechanism 2 now runs over declared names and {@code U+002F} is {@code Identifier_Status=
+     * Restricted}.
+     *
+     * <p><b>An HTTP path is the case that finds it, which is what makes it worth pinning here.</b> §4.1 names
+     * an operation binding request and response types as the motivating case for the {@code data} kind, and
+     * an operation's path contains slashes. So a templated {@code data} constructor cannot be applied at all
+     * once its content carries punctuation -- gap #2 above is unreachable twice over, and only the second
+     * reason is visible until this one is fixed.
+     *
+     * <p>Confined to <em>templated</em> applications: a declaration's own body resolves in place and is keyed
+     * by the name its author wrote (§8.2), which is why every demo here declares operations with real paths
+     * and resolves fine.
+     */
+    @Test
+    void aGeneratedEntryNameSplicesPunctuationAndStopsBeingAnIdentifier() {
+        String body = """
+                  order    => { sku: text }
+                  fetch    => <T> !operation {
+                    method: GET  path: "%s"
+                    responses: [ { status: 200  body: T  description: "found" } ]
+                  }
+                  getOrder => fetch<order>""";
+
+        // Without the slash the application materialises and is refused for its kind -- gap #2, as intended.
+        String kindRefusal = assertThrows(RuntimeException.class,
+                () -> resolveAgainstApiMeta(body.formatted("x"))).getMessage();
+        assertTrue(kindRefusal.contains("describes something other than a data value"), kindRefusal);
+
+        // With it -- an ordinary HTTP path -- resolution never gets that far.
+        String nameRefusal = assertThrows(RuntimeException.class,
+                () -> resolveAgainstApiMeta(body.formatted("/x"))).getMessage();
+        assertTrue(nameRefusal.contains("U+002F"), nameRefusal);
     }
 
     /**
