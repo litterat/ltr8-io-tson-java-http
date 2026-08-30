@@ -117,7 +117,89 @@ Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. T
 each time a revision closes, and its convention is *cite the spec, not the argument that got it there* — so
 re-check every `SPEC-FEEDBACK.md #N` in this repo after a revision bump. Revision 34 carried fourteen of the
 seventeen entries that register held and renumbered the survivors from #1; nothing here cites it by number any
-more. Neither of the two below has been filed there yet, and Revision 34 addressed neither.
+more. None of the three below has been filed there yet; Revision 34 addressed neither of the first two, and
+the third is a consequence of what it added.
+
+### To file: §8.2's policy has no artifact, and the two obvious homes are both wrong (§8.2, §3.5, §2.2.1)
+
+**Section:** [TSON-DATA] §8.2 (Name Hygiene), with consequences for [TSON-SCHEMA] §3.5 and [TSON-DATA] §2.2.1.
+
+**The gap.** Revision 34 makes name hygiene a policy layer that "MUST be implemented" and is "enforced by
+default", with a restriction level, a unit, and an optional script set — and says nothing about where that
+configuration lives or how a counterparty learns it. The series now has a security control with no artifact.
+That is a reasonable thing for a data format to leave alone, except that §8.2 also makes a refusal a **fifth,
+distinguishable outcome** reported "under a stated policy and a stated data version", which presumes the
+policy is something nameable. It is worth saying what it may not be, at least.
+
+**It may not be the schema, and orthogonality is not the reason.** Two stronger ones:
+
+- **Self-certification.** If a schema declared its own strictness, the artifact being checked would choose the
+  check, and a homograph-laden schema would declare the level that admits it. A policy the subject selects is
+  a preference.
+- **Immutability.** §3.5 makes a published schema immutable and §2.2.1 lets it be hash-pinned, while strictness
+  must move — `confusables.txt` updates, threat models change, a service starts rendering values it used to
+  only log. Raising a policy would mint a new identity and every document pinning the old one would keep the
+  old policy for good. Nobody raises a control that costs that.
+
+A third reason is specific to §8.3's own table: **skeleton distinctness does not compose across `!!import`**.
+The policy therefore is not a property of one schema at all, but of the merged namespace at the importing
+site, and no schema is in a position to declare it.
+
+**Nor an API description, where it is a schema.** In this project a service's description is a schema governed
+by a meta layer, so it inherits both objections whole. It also puts policy in a *contract*: raising a token
+policy would mean publishing a new description, which is the friction that gets a control switched off.
+
+**What is missing is a third artifact kind, and it already has a homeless occupant.** §2.2.1 evicted the port
+from identity — "no port (default or otherwise)" — and never said where location went; this project's answer
+is a code call with a long comment. A **deployment descriptor** is where that has been trying to live:
+location, fetch allow-lists and host mappings, and the two §8.2 policies.
+
+**It should be data, not a schema, and that line is worth stating in the series.** An API description must be a
+schema because `request: order` is a type reference the resolver resolves — that is the whole argument for it
+(§4.1's `data` kind, §9's `type_ref` rule). A deployment descriptor references no types: a level is an enum
+member, a host is text, and even a per-schema policy holds *identities*, which are URIs. So the three artifacts
+divide cleanly, and "which of these is a schema, and why" is exactly the question that costs an implementer
+time:
+
+| Artifact | Kind | Shared with counterparties | Immutable |
+|---|---|---|---|
+| Schema | schema | yes, by identity | yes (§3.5) |
+| API description | schema (holds type refs) | yes, by identity | yes |
+| Deployment descriptor | **data** (holds no type refs) | no — see discovery below | **no** |
+
+**Two constraints the series should make normative, or self-certification returns by the back door:**
+
+1. **Named at the call site, never discovered.** A descriptor answers the usual objection to configuration
+   files — it is diffable and reviewable, unlike an environment variable — but not the last one: if a runtime
+   loads whatever descriptor is on its path, swapping a container image changes a security policy with no code
+   diff. The processor should be handed one, not go looking.
+2. **Never resolvable by identity.** No `!!import` of a descriptor, and no data or schema document able to
+   name one. The moment a document can point at a descriptor it selects its own enforcement level.
+
+**Discovery, which is the half a format can usefully standardise.** A counterparty does have a legitimate
+question — *what will this endpoint accept?* — and three answers are available, with different standing:
+
+- **The refusal is the authority.** It is the only report that cannot be stale, which is presumably why §8.2
+  puts the policy there. Everything below is a hint.
+- **A `.well-known` path (RFC 8615) for the origin's acceptance profile.** The consistency argument is neat:
+  in this series everything with an identity is served at its identity's path, and a deployment descriptor is
+  precisely the artifact that *must not* have an identity — so a well-known path is the right shape for it for
+  the same reason it is the wrong shape for a schema. What is published there must be a **projection** of the
+  descriptor, not the descriptor: the fetch allow-list and host mappings are internal topology, and deriving
+  the public document from the private one is what stops the two drifting (the same discipline this project
+  applies to its schema catalog, derived from the description rather than listed beside it).
+- **Not the API description.** Advertising a mutable policy from an immutable artifact goes stale silently and
+  needs a republish to correct — the objection above, weakened but not gone.
+
+Per-endpoint policy is the awkward case: a route that renders values into a UI wants a stricter token policy
+than one that only logs them, and a well-known document is origin-scoped. The honest answer is probably that
+the profile advertises the origin's default and the refusal reports what actually applied.
+
+**What this project does today**, pending any of it: both policies are code calls on `TsonConfig`
+(`identifierPolicy`, `tokenPolicy`), left at upstream's defaults, with the position and the reasoning written
+down in `CLAUDE.md` rather than expressed in an artifact. The reporting half is a gap here as much as in the
+series — a refusal states the level in prose inside its message and the UCD version nowhere, so a client that
+wants to know what it was judged against has to parse English.
 
 ### To file: how a schema is named for a document that cannot carry `!!schema` (§6, §7.1)
 
