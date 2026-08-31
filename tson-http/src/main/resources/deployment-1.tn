@@ -139,10 +139,10 @@
     it; only the 4xx a request actually receives says what applied to that request. §8.2 is why -- it puts
     the policy in the refusal, "under a stated policy and a stated data version".
 
-    `unicode_data_version` is that second half, and it is currently always absent: §8.3 marks all three
-    mechanisms unstable across Unicode versions, so a refusal is only interpretable against the data that
-    produced it -- and no library this project uses exposes that version. The field is declared rather than
-    omitted because the requirement is real and the gap is worth being visible. UPSTREAM.md #3.
+    `unicode_data_version` is that second half. §8.3 marks all three rules unstable across Unicode
+    releases, so a refusal is only interpretable against the data that produced it, and two conforming
+    processors may legitimately disagree about one name. A refusal names it too; this states it once, for
+    a client that would rather know before it sends than after it is refused.
     """
   acceptance_profile => {
     name:                 text

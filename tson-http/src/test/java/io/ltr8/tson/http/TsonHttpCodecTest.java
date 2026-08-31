@@ -441,9 +441,10 @@ class TsonHttpCodecTest {
     }
 
     /**
-     * <b>Name hygiene is a verdict on the document, so it stays a 400.</b> [TSON-DATA] §8.2's two codes are
-     * the first this project can meet because of its <em>own</em> configuration rather than the format's
-     * rules -- {@code TsonConfig.tokenPolicy} decides which script mixes a value may carry -- and that is
+     * <b>Name hygiene is a verdict on the document, so it stays a 400.</b> [TSON-DATA] §8.2's three codes --
+     * one per rule -- are the first this project can meet because of its <em>own</em> configuration rather
+     * than the format's rules ({@code TsonConfig.tokenPolicy} decides which scripts a value may carry), and
+     * that is
      * exactly why the status is worth pinning rather than left to the fall-through. A body refused under a
      * raised policy is refused by this deployment, as one over a size limit is, and it is still the client's
      * to fix; neither code says anything went unchecked, which is what the three 5xx codes have in common
@@ -451,7 +452,8 @@ class TsonHttpCodecTest {
      */
     @Test
     void nameHygieneIsAVerdictOnTheDocument() {
-        for (Diagnostic.Code code : List.of(Diagnostic.Code.CONFUSABLE_NAMES, Diagnostic.Code.RESTRICTED_TOKEN)) {
+        for (Diagnostic.Code code : List.of(Diagnostic.Code.CONFUSABLE_NAMES,
+                Diagnostic.Code.RESTRICTED_CHARACTER, Diagnostic.Code.RESTRICTED_SCRIPT)) {
             TsonHttpException thrown = TsonHttpException.invalidDocument(List.of(withCode(anOrdinaryProblem(), code)));
 
             assertEquals(TsonHttpException.BAD_REQUEST, thrown.status(), code::name);
@@ -488,7 +490,8 @@ class TsonHttpCodecTest {
     private static Diagnostic withReason(Diagnostic d, Diagnostic.Code code,
                                          TsonSchemaFetchException.Reason reason) {
         return new Diagnostic(d.path(), d.schemaPointer(), d.schemaId(), code, d.message(), d.expected(),
-                d.actual(), d.dataPosition(), d.schemaPosition(), Optional.ofNullable(reason));
+                d.actual(), d.dataPosition(), d.schemaPosition(), Optional.ofNullable(reason),
+                Optional.empty());
     }
 
 }

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -100,14 +101,20 @@ class TsonDeploymentTest {
     }
 
     /**
-     * §8.2 requires a refusal to state the data version, and nothing exposes one — {@code Xid.UNICODE_VERSION}
-     * lives in a package the compiler module does not export. Asserted as absent rather than left untested, so
-     * that the day it can be filled, this test says so by failing. {@code UPSTREAM.md} #3.
+     * <b>The profile states the data version, read from the library rather than copied.</b> §8.3 marks all
+     * three of §8.2's rules unstable across Unicode releases, so two conforming processors may legitimately
+     * disagree about one name and the version is what explains it. A refusal names it too; the profile states
+     * it once, for a client that would rather know before it sends than after it is refused.
+     *
+     * <p>This test was the flipped assertion of a gap: it asserted the version was <em>unavailable</em>, so
+     * that the day it became obtainable it would say so by failing. It did.
      */
     @Test
-    void theUnicodeDataVersionIsNotAvailableToPublish() {
-        assertTrue(TsonDeployment.read(FULL).profile().unicodeDataVersion().isEmpty(),
-                "a version is now obtainable -- fill it in and delete this test's premise");
+    void theProfileStatesTheUnicodeDataVersion() {
+        assertEquals(Optional.of(TsonUnicodePolicy.dataVersion()),
+                TsonDeployment.read(FULL).profile().unicodeDataVersion());
+        // Read, not copied: a constant here would go stale silently on a library upgrade.
+        assertFalse(TsonUnicodePolicy.dataVersion().isBlank());
     }
 
     /**
