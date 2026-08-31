@@ -495,23 +495,37 @@ the message; it is a typed field precisely so nobody does.
 `Diagnostic.Code` is the detail vocabulary — mostly 4xx, but see the table above for the three that are not:
 `FIELD_REQUIRED`, `FIELD_FIXED`, `TYPE_MISMATCH`, `WRONG_ARITY`, `UNKNOWN_TYPE_REF`,
 `ATOM_CONSTRAINT_VIOLATION`, `UNRECOGNIZED_FIELD`, `DUPLICATE_MAP_KEY`, `DUPLICATE_FIELD`, `CONFUSABLE_NAMES`,
-`RESTRICTED_TOKEN`, `SCHEMA_ERROR`, `UNKNOWN_TYPE`, `VALIDATION_ERROR`, `NOT_IMPLEMENTED`, `BIND_MISMATCH`,
-`SCHEMA_UNAVAILABLE`.
+`RESTRICTED_CHARACTER`, `RESTRICTED_SCRIPT`, `SCHEMA_ERROR`, `UNKNOWN_TYPE`, `VALIDATION_ERROR`,
+`NOT_IMPLEMENTED`, `BIND_MISMATCH`, `SCHEMA_UNAVAILABLE`.
 
 **`TsonSchemaFetchException` lives in `io.ltr8.tson.compiler`**, beside the `TsonSchemaSource` interface whose
 contract it is — `fetch` names it as the one way a source says "cannot supply this", which is what lets the
 classification route on it at all.
 
-**Name hygiene is policy, not validity, and it arrives as two more codes.** [TSON-DATA] §8.2 is a layer two
-conforming processors may legitimately disagree on, which is why its defaults are the library's choice rather
-than the format's. `CONFUSABLE_NAMES` (two names in one scope with equal UTS #39 skeletons) and
-`RESTRICTED_TOKEN` (a token whose script mix the restriction level refuses) report it, and **both are 400**,
-because both are verdicts on what arrived. That is the fall-through, and it is pinned rather than left
-implicit (`TsonHttpCodecTest.nameHygieneIsAVerdictOnTheDocument`): these are the first codes a server can meet
-because of its *own* configuration, and the temptation is to read "my policy refused it" as a 5xx. It is not —
-a body refused under a raised policy is refused as one over a size limit is, and it is still the client's to
-fix. Neither code says anything went **unchecked**, which is what the three 5xx codes have in common and these
-two do not.
+**Name hygiene is policy, not validity, and it arrives as three more codes.** [TSON-DATA] §8.2 is a layer
+two conforming processors may legitimately disagree on, which is why its defaults are the library's choice
+rather than the format's. **One code per rule**: `CONFUSABLE_NAMES` (two names in one scope with equal
+UTS #39 skeletons), `RESTRICTED_CHARACTER` (a character outside the identifier profile) and
+`RESTRICTED_SCRIPT` (a script combination the level does not admit — wider than a mix, since `ASCII_ONLY`
+refuses a single-script name with nothing mixed).
+
+**All three are 400**, and it is pinned rather than left implicit
+(`TsonHttpCodecTest.nameHygieneIsAVerdictOnTheDocument`): these are the first codes a server can meet because
+of its *own* configuration, and the temptation is to read "my policy refused it" as a 5xx. It is not — a body
+refused under a raised policy is refused as one over a size limit is, and it is still the client's to fix.
+None of them says anything went **unchecked**, which is what the three 5xx codes have in common and these
+three do not.
+
+**The rule rides the code, not a field beside it**, and that is worth knowing before designing anything
+similar: a consumer routes on the code, and a second enum would restate what the code already fixes while
+being free to disagree with it. The three want three different fixes — rename one of a colliding pair, change
+a character, or relax the level — so the code has to carry enough to say which.
+
+**A refusal names the Unicode data it was computed against** (`Diagnostic.unicodeDataVersion`, present for
+these three codes and no others), because §8.3 marks all three rules unstable across releases: two conforming
+processors may legitimately disagree about one name, and the version is the only thing that explains it. The
+**level** is not carried and reaches a client only as prose — `UPSTREAM.md` #3 for why that is a decision
+rather than an omission, and `deployment-1.tn`'s profile is where a deployment states it.
 
 **The defaults are opposite on purpose**, and a server inherits both: `TsonConfig.identifierPolicy` defaults
 to Highly Restrictive over *declared names*, so a schema a request body names is refused for a homograph;
@@ -762,8 +776,10 @@ leaves a config alone rather than overwriting it with a guess.
 internal topology — and a server publishes *that*, at `/.well-known/tson-deployment`. A well-known path
 because everything with an identity is served at its identity's path, and a descriptor is precisely what must
 not have one. It can be cached and go stale; only the refusal a request receives says what applied to it,
-which is where §8.2 puts the policy. `unicode_data_version` is declared and always absent — nothing exposes
-it (`UPSTREAM.md` #3), and the field is there so the gap is visible in an artifact.
+which is where §8.2 puts the policy. `unicode_data_version` is read from
+`TsonUnicodePolicy.dataVersion()` rather than copied — a constant would go stale silently on an upgrade —
+and it is in the profile because §8.3 marks all three rules unstable across Unicode releases, so two
+conforming processors may legitimately disagree about one name and the version is what explains it.
 
 **`restriction_level` copies `TsonUnicodePolicy.Level` by hand**, held to it by
 `TsonDeploymentTest.everyRestrictionLevelIsDeclaredInTheSchema` — the same discipline `diagnostic_code` gets,

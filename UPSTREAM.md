@@ -115,65 +115,51 @@ red.
 
 ---
 
-## 3. A name-hygiene refusal states neither the policy nor the data version as data
+## 3. A `RESTRICTED_SCRIPT` names its level only in prose
 
-**Hit:** answering "what was I judged against?" for a client that has just been refused. [TSON-DATA] §8.2
-makes a policy refusal a fifth, distinguishable outcome, reported "**under a stated policy and a stated data
-version**". Neither is stated as anything a consumer can read.
+**Most of this entry has landed.** `Diagnostic` now carries `unicodeDataVersion` for the three name-hygiene
+codes, `TsonUnicodePolicy.dataVersion()` exposes it on the exported surface, and the rule a refusal broke is
+the code itself — `CONFUSABLE_NAMES`, `RESTRICTED_CHARACTER`, `RESTRICTED_SCRIPT`, one per §8.2 rule. That is
+a better answer than this entry asked for: a rule enum beside the code would have been a second source of
+truth for a fact the code already fixes, free to disagree with it.
 
-- **The policy** reaches the diagnostic as prose inside `message` — *"'аdmin' mixes the scripts [LATIN,
-  CYRILLIC], which UTS #39 §5.2's HIGHLY_RESTRICTIVE does not admit"*. Recovering the level means parsing
-  English, which is the practice upstream deliberately ended for the fetch `Reason`.
-- **The data version** does not reach it at all, and is unreachable besides. `Xid.UNICODE_VERSION` is
-  `"16.0"`, correctly documented as §7.1 asks — but `io.ltr8.tson.compiler.lexer` is **not exported** by the
-  module, so no consumer can read the constant even by hand.
+**What is left is one field for one code.** §8.2 asks a refusal to be reported "under a stated policy and a
+stated data version". The version is now data and the rule is the code; the **level** is neither — it reaches
+a consumer only inside `message`, as *"which UTS #39 §5.2's SINGLE_SCRIPT does not admit"*.
 
-**Why this is not an ergonomic nicety.** §8.3's own conformance table marks all three Layer 2 rules "stable
-across Unicode versions: **no**", and §8.2 says the distinction between validity and policy is "what lets two
-conforming processors legitimately disagree on a Layer 2 refusal". A disagreement is only interpretable if the
-refusal says which table produced it. Unlike a status or a message, this is **unrecoverable after the fact**:
-nothing in the refusal, and nothing reachable from the consumer's side, identifies the `confusables.txt` that
-refused a name.
+**It matters for exactly one code, and only across a process boundary.** `CONFUSABLE_NAMES` and
+`RESTRICTED_CHARACTER` have no configurable level behind them, so their code says everything. A
+`RESTRICTED_SCRIPT` does: at `SINGLE_SCRIPT` a wholly Cyrillic name is admitted and at `ASCII_ONLY` it is not,
+so a client cannot tell **what would be accepted** without the level. In process that is moot — the consumer
+configured the policy. Over HTTP it is not: this project forwards diagnostics to a client that configured
+nothing.
 
-**Change**, and the two halves want different treatments:
+**Change, or a decision either way.** Either a flat `Optional<String>` (or `Optional<Level>`) present for
+`RESTRICTED_SCRIPT`, matching how `fetchReason` and `unicodeDataVersion` already ride — or a written position
+that the level is a per-deployment constant, published once rather than repeated on every diagnostic, and that
+the prose in `message` is not meant to be parsed. **The second is defensible and is what this project now
+does**: `deployment-1.tn`'s `acceptance_profile` publishes the level, so a client can fetch it once. What is
+not defensible is leaving it looking like an omission, since the level is exactly as unrecoverable from the
+document and the schema as the version was.
 
-1. **The policy rides the diagnostic**, because it varies per check. `identifierPolicy` and `tokenPolicy` are
-   separate settings, so one read can produce a `CONFUSABLE_NAMES` judged at Highly Restrictive and a
-   `RESTRICTED_TOKEN` judged at Unrestricted, and a client seeing both needs to know they were held to
-   different rules. This is exactly the shape of the fetch-`Reason` fix: a distinction that did not survive
-   the receiver, answered with a typed component present for the codes that carry it. The level, the unit, and
-   the script set where one is named.
-2. **The data version is a static accessor**, because it is constant for a process. Something like
-   `TsonUnicodePolicy.dataVersion()` on the already-exported `io.ltr8.tson.compiler` — no new `Diagnostic`
-   component, and a server can report it once per response rather than per problem. Exporting
-   `io.ltr8.tson.compiler.lexer` would also do it and is the worse option: that package is implementation.
+**Priority: low.** The workaround is real and published, and one more component for one code is a poor trade
+against a constant a deployment can state once.
 
-Worth noting the version this reports is asked for in UTS #39 terms by §8.2's own detection note ("labelled
-with the UTS #39 version they were computed against"), where `UNICODE_VERSION` is the UCD version. They track
-in practice; stating which is meant would settle it.
+---
 
-**And one blemish worth fixing in the same visit.** `Diagnostic.ofRestrictedToken` builds its message as
-`"the token '" + text + "' " + why`, while `TsonUnicodePolicy.violation` already opens by naming the text — so
-the token appears twice:
+## 4. `ofRestrictedToken` doubles the token text
+
+`Diagnostic.ofRestrictedToken` builds its message as `"the token '" + text + "' " + why`, and
+`TsonUnicodePolicy.violation` already opens by naming the text:
 
 > `the token 'аdmin' 'аdmin' mixes the scripts [LATIN, CYRILLIC], which UTS #39 §5.2's SINGLE_SCRIPT does not
 > admit`
 
-Cosmetic, and on a message a client sees.
-
-**Workaround in place:** none, and there is not much of one available. This project's error bodies carry what
-the diagnostic carries, so a `RESTRICTED_TOKEN` on the wire says the level in prose and the data version
-nowhere. `deployment-1.tn`'s `acceptance_profile` declares `unicode_data_version` and leaves it absent, so the
-gap is visible in an artifact rather than only in this register. A `policy-refused` problem type here would
-give both a home the moment there is something to put in it.
-
-**Priority: medium** — small, and on a path a deployment that raises its token policy hits routinely. It is
-also the one gap in this class that cannot be closed downstream: a consumer can invent a problem type, but it
-cannot invent the version.
+Cosmetic, one line, and on a message a client sees. Noticed while reading a real refusal off the wire.
 
 ---
 
-## 4. A generated entry name splices a field's text in, so punctuation stops it being an identifier
+## 5. A generated entry name splices a field's text in, so punctuation stops it being an identifier
 
 **Hit:** applying a templated `~data &` constructor whose content contains punctuation — which, for an HTTP
 operation, means any realistic path.

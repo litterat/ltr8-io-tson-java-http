@@ -197,16 +197,17 @@ public record TsonDeployment(String name, Optional<Listener> listener,
     }
 
     /**
-     * The Unicode data version a refusal was computed against — <b>always empty today</b>, and declared
-     * because §8.2 requires a refusal to state one and §8.3 makes all three mechanisms unstable across
-     * versions, so a refusal is only interpretable against the data that produced it.
+     * The Unicode data version this build computes §8.2's rules against, read from the library rather than
+     * copied — a constant here would go stale silently on an upgrade, which is the failure the accessor
+     * exists to prevent.
      *
-     * <p>Nothing exposes it. {@code Xid.UNICODE_VERSION} holds it and lives in a package the compiler module
-     * does not export, so it cannot be read even by hand. Hardcoding a copy here would be a constant that
-     * goes stale silently on a library upgrade, which is worse than absent. {@code UPSTREAM.md} #3.
+     * <p>It is in the profile because §8.3 marks all three rules unstable across Unicode releases, so two
+     * conforming processors may legitimately disagree about one name and the version is what explains the
+     * disagreement. A refusal carries it too ({@code Diagnostic.unicodeDataVersion}); this states it once
+     * for a client that wants to know before it sends rather than after it is refused.
      */
     private static Optional<String> unicodeDataVersion() {
-        return Optional.empty();
+        return Optional.of(TsonUnicodePolicy.dataVersion());
     }
 
     private static String readResource(String path) {
