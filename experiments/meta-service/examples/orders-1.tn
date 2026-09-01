@@ -11,6 +11,7 @@
 {
   @doc:"The orders interface."
   orders => !interface {
+    @summary:"Place an order."
     @doc:"Accept an order and confirm it with the quantity doubled."
     place_order  => { request: new_order    response: order       errors: [sku_not_found] }
     @doc:"One order, by reference."

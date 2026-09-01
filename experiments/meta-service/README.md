@@ -25,7 +25,7 @@ schema writes, and both are **maps**:
   and `resource => ~data & { endpoints: {http_verb => endpoint} }` -- resources keyed by **path**, each holding
   endpoints keyed by **verb**: OpenAPI's `paths`, arrived at from the key types. A path key is data, so
   `/orders/{id}` needs no identifier minted from it and an endpoint needs no invented name.
-- `endpoint => ~data & placement & { status ~ 200  summary? }`, with `operation => ~endpoint & signature & {…}`
+- `endpoint => ~data & placement & { status ~ 200 }`, with `operation => ~endpoint & signature & {…}`
   and `binding => ~endpoint & { method: method_name  interface: type_name? }` deriving from it at constructor
   level. An `!operation` carries its signature inline, for an api with no interface behind it; a `!binding`
   borrows a method's. The tag says which, and it is not optional: the base has no data of its own to bind, so an
@@ -33,7 +33,9 @@ schema writes, and both are **maps**:
   behind it. The verb and path are the keys an endpoint sits under. (A choice `(operation | binding)` and a field
   group `( method | signature )` were both measured to work; the supertype won because the base is abstract for
   free, shared vocabulary is inherited rather than composed twice, and a new kind of endpoint is one more
-  derivation.)
+  derivation.) Documentation is annotation on the verb key -- `@summary` the short form, declared here as the kernel
+  declares `documentation`, and `@doc` the long -- not fields: an endpoint is a map value, and a map key carries
+  annotations.
 - `signature` and `placement` are plain records composed into the constructors above. `signature` is the
   transport-neutral contract (request, response, errors, `safe`/`idempotent`, the two stream flags, defined
   below). `placement` is **where the interface and the web service over it are allowed to look different**: a

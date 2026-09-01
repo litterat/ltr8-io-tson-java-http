@@ -10,8 +10,7 @@ import java.util.Optional;
 
 /** The sketch's {@code binding}: an endpoint whose signature is a method's, named by identifier. */
 @Typename(name = "binding")
-public record Binding(List<String> query, Map<String, String> headers, Optional<String> body,
-                      int status, Optional<String> summary,
+public record Binding(List<String> query, Map<String, String> headers, Optional<String> body, int status,
                       String method, @Field("interface") Optional<String> owner) implements Endpoint {
 
     public Binding {

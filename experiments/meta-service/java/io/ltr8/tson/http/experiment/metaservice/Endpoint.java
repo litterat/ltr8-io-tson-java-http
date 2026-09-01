@@ -22,6 +22,4 @@ public sealed interface Endpoint extends Data permits Operation, Binding {
     Optional<String> body();
 
     int status();
-
-    Optional<String> summary();
 }

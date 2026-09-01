@@ -154,7 +154,7 @@
 
   @doc:"""
     What sits under a verb, under a path, in an api: the base of `operation` and `binding`, carrying what
-    both have -- the placement of a request record, the status of the response, a summary. It has no data of
+    both have -- the placement of a request record and the status of the response. It has no data of
     its own to bind, so a value at an `endpoint`-typed slot must be tagged `!operation` or `!binding`; the
     resolver refuses an untagged one naming both subtypes. That tag is the whole difference between the
     one-declaration form and the two-declaration form, and it is read before anything else.
@@ -164,7 +164,10 @@
     `sku_not_found => problem & { status: = 404  sku: text }` -- so an error type an endpoint names MUST
     fix it. That is a conformance check on the service, not a resolver check.
 
-    Long description is a `@doc` before the verb key; `summary` is the short form.
+    Documentation is annotation, not fields: `@doc` before the verb key is the long form and `@summary` the
+    short one, both surviving into the read value as the key's annotations. A summary was a field in
+    `meta-http-1.tn` because an operation's responses and parameters were values with nothing for an
+    annotation to attach to; an endpoint is a map value, and a map key carries annotations.
 
     Deliberately absent, each a decision: security schemes, response headers, links, callbacks,
     examples, tags, servers, multi-media-type negotiation, and more than one success response. Adding
@@ -173,8 +176,16 @@
     """
   endpoint => ~data & placement & {
     status:   status_code ~ 200
-    summary:  text?
   }
+
+  @doc:"""
+    The short form of an endpoint's or a method's documentation, written before its key --
+    `@summary:"Place an order." POST => !binding { ... }`. Declared as the kernel declares `documentation`;
+    `@doc` remains the long form. Not a field, because documentation is metadata about a declaration rather
+    than part of what it declares, and an annotation type declared here reaches every schema this layer
+    governs (§6, one hop).
+    """
+  summary => @annotation text
 
   @doc:"""
     An endpoint with its signature INLINE -- the one-declaration form, for an api with no interface behind

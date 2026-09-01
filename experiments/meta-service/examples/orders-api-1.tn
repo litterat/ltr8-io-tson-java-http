@@ -20,10 +20,14 @@
     implements: [orders]
     resources: {
       "/orders" => !resource {
-        @doc:"Place an order."
+        @summary:"Place an order."
+        @doc:"""
+          Accepts a new order and confirms it. Repeating the request with the same Idempotency-Key returns the
+          original confirmation rather than placing a second order.
+          """
         POST => !binding { method: place_order  status: 201
                            body: order  headers: { idempotency_key => "Idempotency-Key" } }
-        @doc:"Search orders."
+        @summary:"Search orders."
         GET  => !binding { method: list_orders }
       }
       "/orders/{id}" => !resource {

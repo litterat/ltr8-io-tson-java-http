@@ -18,6 +18,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The documents under {@code experiments/meta-service/examples/} resolve against the sketch, and the two apis
@@ -58,13 +59,26 @@ class ExamplesProbe {
 
     /** Resolves one example by identity and hands back its entries; the resolver's verdict must be clean. */
     static Routes routesOf(Tson tson, String file, String apiName) {
+        return Routes.of(apiName, apiOf(tson, file, apiName), tson.schemaRegistry().get(EXAMPLES + file)
+                .orElseThrow().schema().entries()::get);
+    }
+
+    static Api apiOf(Tson tson, String file, String apiName) {
         String id = EXAMPLES + file;
         List<Diagnostic> problems = tson.validateSchema(read(Path.of(System.getProperty("experiments.dir",
                 "../experiments")).resolve("meta-service/examples").resolve(file)));
         assertEquals(List.of(), problems, () -> file + ": " + problems);
         var entries = tson.schemaRegistry().get(id).orElseThrow().schema().entries();
-        Api api = assertInstanceOf(Api.class, entries.get(apiName).body());
-        return Routes.of(apiName, api, entries::get);
+        return assertInstanceOf(Api.class, entries.get(apiName).body());
+    }
+
+    /** Documentation is annotation on the key: {@code @summary} the short form, {@code @doc} the long. */
+    @Test
+    void anEndpointsSummaryAndDocRideOnItsKey() {
+        Api api = apiOf(tson(), "orders-api-1.tn", "orders_api");
+        var post = api.resources().get("/orders").endpoints().getAnnotations("POST");
+        assertEquals("Place an order.", post.value("summary", String.class).orElseThrow());
+        assertTrue(post.value("doc", String.class).orElseThrow().startsWith("Accepts a new order"));
     }
 
     @Test
