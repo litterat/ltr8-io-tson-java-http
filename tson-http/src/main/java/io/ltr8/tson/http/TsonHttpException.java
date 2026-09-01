@@ -35,9 +35,9 @@ import java.util.List;
  *
  * <p><b>That row is now reached mostly at startup.</b> Every read through {@link TsonHttpCodec} collects, so a
  * fetch failure during a request is reported as a {@code SCHEMA_UNAVAILABLE} diagnostic rather than thrown --
- * leaving this branch to {@code preload} and {@code prepareToRead}, which do fail fast. The two channels
- * therefore answer differently for one failure, because the diagnostic keeps no {@code Reason}; {@link
- * #invalidDocument} says what it does about that and {@code UPSTREAM.md} carries the ask.
+ * leaving this branch to {@code preload} and {@code prepareToRead}, which do fail fast. The diagnostic carries
+ * the same {@code Reason} ({@code Diagnostic.fetchReason}), {@link #invalidDocument} routes on it, and the tests
+ * assert that the two channels agree rather than asserting either status on its own.
  *
  * <p><b>The last row cannot be written as a {@code catch} here.</b> A document that fails before any reader sees
  * a value throws rather than reporting, and two of the three exception types involved live in {@code

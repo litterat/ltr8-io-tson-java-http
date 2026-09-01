@@ -77,11 +77,11 @@
     A position is "line:column:byte_offset", all three 1-based except byte_offset, which counts
     UTF-8 bytes from 0 ([TSON-DATA] §8.1). The offsets are into the request body as sent.
 
-    unicode_data_version is present for the three name-hygiene codes and no others. §8.2 requires a
-    refusal to name the Unicode data it was computed against, because §8.3 marks all three rules
-    unstable across releases -- two conforming processors may legitimately disagree about one name, and
-    the version is the only thing that explains the disagreement. It is the one fact about a refusal a
-    client cannot recover from the document plus the schema, since which rule fired is the code.
+    A refusal under a §8.2 policy (CONFUSABLE_NAMES, RESTRICTED_CHARACTER, RESTRICTED_SCRIPT) carries
+    nothing beyond its code. The level and the Unicode data version it was judged under are properties
+    of the processor, not of the problem -- constant for the life of the process -- so they are stated
+    once, in the deployment's published acceptance profile, rather than on every refusal, where they
+    would arrive only after the fact. Which rule fired is the code, one per rule.
     """
   diagnostic => {
     path: text?
@@ -94,7 +94,6 @@
     data_position: text?
     schema_position: text?
     fetch_reason: fetch_reason?
-    unicode_data_version: text?
   }
   @doc:"""
     RFC 9457's five members, plus errors.

@@ -37,8 +37,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * that is wrong under concurrency would pass all of the rest of the suite -- every other test here drives it
  * from one thread.
  *
- * <p>It is also the evidence attached to {@code UPSTREAM.md} #1, which asks tson-java to state the contract its
- * own classes only imply. Asking for a guarantee is worth more when you have measured whether it holds.
+ * <p>It is also this project's own measurement of the contract {@code Tson}'s Javadoc states -- concurrent reads
+ * through one instance are safe -- taken from the consumer's side, where such a claim is worth checking rather
+ * than trusting.
  *
  * <p><b>Correctness, not just absence of exceptions.</b> Each task checks its own result, because the failure
  * this is looking for is a torn read or a crossed binding -- a value that is wrong rather than a call that

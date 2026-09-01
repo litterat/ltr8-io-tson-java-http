@@ -285,7 +285,7 @@ Claiming by name sidesteps it entirely.
 `fetch => <T> !operation { … }` now declares and resolves, but `getOrder => fetch<order>` is refused: naming
 an application means writing an alias, an alias names a type, and the entry the application materialises is
 `kind: DATA`. So the CRUD-family payoff is visible and not yet reachable, and the longhand below is not a
-style choice. `UPSTREAM.md` #2, pinned at both stages by `UpstreamGapsTest`.
+style choice. `UPSTREAM.md` #1, pinned at both stages by `UpstreamGapsTest`.
 
 **A choice of applications does resolve**, though, and used to be the other half of this — `(resp<order, 201>
 | resp<problem, 400>)` lifts each application to its own synthetic entry, carries each value argument as a
@@ -521,11 +521,16 @@ similar: a consumer routes on the code, and a second enum would restate what the
 being free to disagree with it. The three want three different fixes — rename one of a colliding pair, change
 a character, or relax the level — so the code has to carry enough to say which.
 
-**A refusal names the Unicode data it was computed against** (`Diagnostic.unicodeDataVersion`, present for
-these three codes and no others), because §8.3 marks all three rules unstable across releases: two conforming
-processors may legitimately disagree about one name, and the version is the only thing that explains it. The
-**level** is not carried and reaches a client only as prose — `UPSTREAM.md` #3 for why that is a decision
-rather than an omission, and `deployment-1.tn`'s profile is where a deployment states it.
+**A refusal carries its code and nothing about the policy that judged it.** The level, the unit and the
+Unicode data version are properties of the processor, constant for its life, and tson-java states them once —
+`Tson.processorPolicy()` returns a `TsonUnicodeProcessorPolicy` (both policies plus `unicodeDataVersion`), and a
+derived reader answers for itself — rather than on each refusal; `Diagnostic` carries no per-refusal version.
+Over HTTP the once-statement is `deployment-1.tn`'s acceptance profile at `/.well-known/tson-deployment`. §8.3
+is why any of it matters: all three rules are unstable across Unicode releases, so two conforming processors
+may legitimately disagree about one name and the version is what explains it. **Open:** an error body carries
+no policy, so a client that never fetched the profile learns the level only from `message` prose. tson-cli's
+envelopes now carry `policy` on every run; whether a refusal's `problem` should carry the profile is a decision
+not yet taken here.
 
 **The defaults are opposite on purpose**, and a server inherits both: `TsonConfig.identifierPolicy` defaults
 to Highly Restrictive over *declared names*, so a schema a request body names is refused for a homograph;
@@ -555,9 +560,11 @@ shape is:
 > handler.
 
 A schema arriving at runtime (an unknown `!!schema` URL) must go through a single guarded resolution
-path, not a concurrent one. Treat this as an invariant to be pinned by a test, and see `UPSTREAM.md` #1 —
-the upstream contract is still inferred from scattered class Javadoc rather than stated on the types a server
-actually holds.
+path, not a concurrent one. The contract is now stated where a server reads it — `Tson`'s class Javadoc
+(concurrent reads through one instance are safe; on a race work may be duplicated but state never is;
+`resolve`/`validateSchema` and mutating a `DataBindContext` under live reads are outside the guarantee) and
+`TsonConfig.dataBindContext` — and pinned upstream by `ReadPathConcurrencyTest` and
+`SharedInstanceConcurrencyTest`. `TsonHttpCodecConcurrencyTest` is the same claim measured from this end.
 
 ## Traps — read before touching the code involved
 
@@ -584,8 +591,9 @@ Each cost a debugging cycle here and is pinned by a test.
   in its compact constructor, as `RecordBody`, `TypeDefinition` and `TypeRef` all do. `Operation` guards
   `parameters` for that reason. A **required** list is deliberately not guarded: it never reaches a
   constructor, because the reader reports `FIELD_REQUIRED` and abandons the construction first, so a guard
-  there would mask a real violation. Getting this wrong inside a `Data` body's `references()` is an NPE out
-  of `Tson.resolve` that reads as a library fault.
+  there would mask a real violation. A `references()` that returns such a `null` is refused by name — a
+  `TsonBindMismatchException` naming the class — rather than being an NPE out of `Tson.resolve`; the guard is
+  still the class's job, the failure just no longer reads as a library fault.
 - **A bound class must be public.** tson-java declares no `opens` and binding only ever touches public
   constructors and methods, so a package-private record fails analysis with a bare `DataBindException:
   Failed to resolve` that names nothing useful.
@@ -750,7 +758,7 @@ second demo, on the JDK adapter only.
 **The third artifact kind**, beside a schema (what a document must be) and an API description (what an
 endpoint offers): how *one instance* is configured. Revision 34 added the §8.2 policies as a security control
 with no artifact, and this is a proposal for where it lives. The full argument is in `deployment-1.tn`'s own
-`@doc` and in `UPSTREAM.md`'s staged spec feedback; the short form:
+`@doc` and, as filed, in tson-java's `SPEC-FEEDBACK.md`; the short form:
 
 - **Not a schema.** An artifact declaring its own strictness chooses its own check, and §3.5's immutability
   means raising a level mints a new identity, so every document pinning the old one keeps the old policy.

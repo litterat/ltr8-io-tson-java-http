@@ -7,8 +7,8 @@
 
   [TSON-DATA] §8.2 introduced a security control with no artifact -- a restriction level, a unit and an
   optional script set, enforced by default, with nothing said about where the configuration lives. This is a
-  proposal for where. UPSTREAM.md carries the argument; the short form is that the two obvious homes are both
-  wrong, and for reasons stronger than the decision being orthogonal:
+  proposal for where. tson-java's SPEC-FEEDBACK.md carries the argument as filed; the short form is that the
+  two obvious homes are both wrong, and for reasons stronger than the decision being orthogonal:
 
   A SCHEMA cannot hold it. An artifact that declared its own strictness would choose its own check, and a
   document carrying homographs would simply declare the level that admits them. §3.5 also makes a published
@@ -135,14 +135,17 @@
     It is DERIVED from a descriptor rather than written beside one. The fetch allow-list is internal
     topology, and two documents maintained by hand drift.
 
-    A PROFILE IS A HINT AND THE REFUSAL IS THE AUTHORITY. This can be cached, and a policy can change under
-    it; only the 4xx a request actually receives says what applied to that request. §8.2 is why -- it puts
-    the policy in the refusal, "under a stated policy and a stated data version".
+    A PROFILE IS A HINT AND THE VERDICT IS THE AUTHORITY. This can be cached, and a policy can change under
+    it; only the 4xx a request actually receives says what applied to that request. The refusal itself
+    carries only its code: the library states the policy once per processor (Tson.processorPolicy())
+    rather than on every refusal, and this profile is that statement for a counterparty. §8.2 asks that a
+    refusal be reported "under a stated policy and a stated data version"; the profile is where a
+    deployment states both.
 
     `unicode_data_version` is that second half. §8.3 marks all three rules unstable across Unicode
     releases, so a refusal is only interpretable against the data that produced it, and two conforming
-    processors may legitimately disagree about one name. A refusal names it too; this states it once, for
-    a client that would rather know before it sends than after it is refused.
+    processors may legitimately disagree about one name. Stated here, once, for a client that would rather
+    know before it sends than after it is refused.
     """
   acceptance_profile => {
     name:                 text

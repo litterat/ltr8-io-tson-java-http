@@ -266,11 +266,8 @@ class ValidatorServerTest {
         assertFalse(mixed.conforming());
         assertEquals(List.of(Diagnostic.Code.RESTRICTED_SCRIPT),
                 mixed.diagnostics().stream().map(TsonProblemDiagnostic::code).toList());
-        // And it names the data it was judged against, which is the half of §8.2 that used to reach a client
-        // nowhere: §8.3 marks the rule unstable across Unicode releases, so a refusal without it cannot be
-        // told from another processor's disagreement.
-        assertTrue(mixed.diagnostics().getFirst().unicodeDataVersion().isPresent(),
-                () -> "a refusal states its data version: " + mixed.diagnostics());
+        // The refusal carries its code and nothing about the policy: the level and the Unicode data version
+        // are the processor's, stated once at /.well-known/tson-deployment rather than on each refusal.
 
         // Wholly Cyrillic is one script, so it is admitted -- the rule is about mixing, not about Cyrillic.
         assertTrue(resultOf(validate(null, "{ display: \"\u0430\u0434\u043c\u0438\u043d\" }")).conforming());
