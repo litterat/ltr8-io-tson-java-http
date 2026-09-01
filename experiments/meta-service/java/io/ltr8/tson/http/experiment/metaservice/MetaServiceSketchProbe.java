@@ -18,14 +18,12 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code meta-service-1.tn} resolves, and the constructs it leans on behave as the sketch assumes.
- *
- * <p>Four things a reader of the sketch would otherwise have to take on trust: a {@code ~data} constructor with
- * a record mixin and no trailing body ({@code method => ~data & signature}); a tightening in the constructor's
- * own body ({@code request_stream: = false}) that a governed schema cannot override; a {@code [type_ref]} slot
- * that resolves per element; and an annotation type declared in the meta layer ({@code @interface}) read back
- * from the entry it was written on. Plus the rule the whole design bends around: a {@code ~data} instance is not
- * a type, and naming one where a type is expected is refused at load.
+ * {@code meta-service-1.tn} resolves, and the constructs it leans on behave as the sketch assumes: a {@code ~data}
+ * constructor with a record mixin and no trailing body ({@code method => ~data & signature}); a tightening in a
+ * constructor's own body ({@code request_stream: = false}) that a governed schema cannot override; a
+ * {@code [type_ref]} slot that resolves per element; an error type's fixed {@code status} readable from the
+ * resolved schema. Plus the rule the whole design bends around: a {@code ~data} instance is not a type, and
+ * naming one where a type is expected is refused at load.
  */
 class MetaServiceSketchProbe {
 
@@ -52,8 +50,7 @@ class MetaServiceSketchProbe {
             {
               order       => { sku: text  quantity: int32 }
               order_ref   => { id: text }
-              plan        => { steps: [text] }
-              plan_result => { outcomes: [text] }
+              schema_ref  => { schemaPath: text }
             %s
             }""".formatted(DOC_ID, Experiment.META_ID, ERR_ID, entries);
     }
@@ -67,26 +64,22 @@ class MetaServiceSketchProbe {
         return Experiment.bindVocabulary(Tson.builder().schemaSource(TsonSchemaSource.ofMap(lib))).build();
     }
 
-    /** The "both" shape: operations where a method is bound to HTTP, methods where it is not, one document. */
+    /** The "both" shape: an interface, and an api implementing it with one operation left inline. */
     static final String BOTH = """
-              @interface:orders
-              @doc:"Accept an order and confirm it with the quantity doubled."
-              place_order => !operation {
-                verb: POST  path: "/orders"  status: 201
-                request: order  response: order  errors: [sku_not_found]
+              orders => !interface {
+                @doc:"Accept an order and confirm it with the quantity doubled."
+                place_order  => { request: order  response: order  errors: [sku_not_found] }
+                @doc:"Cancel an order."
+                cancel_order => { request: order_ref  errors: [order_not_found]  idempotent: true }
               }
 
-              @interface:orders
-              @doc:"Cancel an order. No route of its own yet."
-              cancel_order => !method { request: order_ref  errors: [order_not_found]  idempotent: true }
-
-              @interface:agent
-              invoke => !operation { verb: POST  path: "/invoke"  request: plan  response: plan_result }
-
-              get_schema => !operation {
-                verb: GET  path: "/{schemaPath}"  safe: true  idempotent: true
-                parameters: [ !parameter { name: "schemaPath"  in: PATH  type: text  required: true } ]
-                errors: [order_not_found]
+              orders_api => !api {
+                implements: [orders]
+                resources: {
+                  "/orders"        => !resource { POST   => !operation { method: place_order  status: 201 } }
+                  "/orders/{id}"   => !resource { DELETE => !operation { method: cancel_order  status: 204 } }
+                  "/{schemaPath}"  => !resource { GET    => !operation { request: schema_ref  safe: true } }
+                }
               }
             """;
 
@@ -100,22 +93,22 @@ class MetaServiceSketchProbe {
         assertEquals(List.of(), problems, () -> "expected a clean resolution, got " + problems);
         var entries = tson.schemaRegistry().get(DOC_ID).orElseThrow().schema().entries();
 
-        Operation place = assertInstanceOf(Operation.class, entries.get("place_order").body());
-        assertEquals(201, place.status());
-        assertFalse(place.safe());
-        assertFalse(place.request_stream());
+        Interface orders = assertInstanceOf(Interface.class, entries.get("orders").body());
+        Method place = orders.methods().get("place_order");
         assertEquals("sku_not_found", place.errors().getFirst().name());
-        assertEquals("orders", entries.getAnnotations("place_order").value("interface", String.class).orElseThrow());
-        assertTrue(entries.getAnnotations("place_order").value("doc", String.class).isPresent());
+        assertFalse(place.request_stream());
+        assertTrue(orders.methods().get("cancel_order").idempotent());
+        assertEquals("Cancel an order.",
+                orders.methods().getAnnotations("cancel_order").value("doc", String.class).orElseThrow());
 
-        Method cancel = assertInstanceOf(Method.class, entries.get("cancel_order").body());
-        assertTrue(cancel.idempotent());
-        assertTrue(cancel.response().isEmpty());
-
-        Operation schema = assertInstanceOf(Operation.class, entries.get("get_schema").body());
-        assertEquals(200, schema.status());
-        assertEquals(HttpVerb.GET, schema.verb());
-        assertEquals(1, schema.parameters().size());
+        Api api = assertInstanceOf(Api.class, entries.get("orders_api").body());
+        assertEquals(List.of("orders"), api.implemented());
+        Operation post = api.resources().get("/orders").operations().get("POST");
+        assertEquals(201, post.status());
+        assertFalse(post.isInline());
+        Operation get = api.resources().get("/{schemaPath}").operations().get("GET");
+        assertTrue(get.isInline());
+        assertTrue(get.safe());
 
         // The status an error carries is readable from its type: REQUIRED_FIXED 404.
         var errEntries = tson.schemaRegistry().get(ERR_ID).orElseThrow().schema().entries();
@@ -128,7 +121,8 @@ class MetaServiceSketchProbe {
     /** {@code request_stream: = false} in the constructor body is a fixed value a governed schema cannot lift. */
     @Test
     void anOperationCannotLiftThePinnedStream() {
-        String doc = doc("  x => !operation { verb: POST  path: \"/x\"  request_stream: true }");
+        String doc = doc(
+                "  x => !api { \"/x\" => !resource { POST => !operation { request: order  request_stream: true } } }");
         List<Diagnostic> problems = tson(doc).validateSchema(doc);
 
         assertEquals(1, problems.size(), () -> "" + problems);
@@ -136,7 +130,7 @@ class MetaServiceSketchProbe {
                 problems.getFirst().message());
     }
 
-    /** §4.1: a {@code kind: DATA} entry is declared and applied, never named where a type is expected. */
+    /** §4.1: a {@code kind: DATA} instance is declared and applied, never named where a type is expected. */
     @Test
     void aMethodIsNotAType() {
         String doc = doc("  m => !method { request: order }\n  x => { s: m }");

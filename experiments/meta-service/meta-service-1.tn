@@ -20,23 +20,36 @@
   is its methods plus its operations with those fields dropped. A developer offering both never
   writes a method twice, and the two cannot disagree because there is one declaration.
 
-  Three ways to use it:
-    interface only    entries are `!method { ... }`; nothing HTTP is in the document.
-    web service only  entries are `!operation { ... }`.
-    both              `!operation` where a method is bound to HTTP and `!method` where it is not;
-                      the interface is the whole document. An operation's name is its method's
-                      name -- there is no separate operationId.
+  Two entries a governed schema writes, and both are MAPS:
 
-  An interface is the schema document. §2.2.3 already supplies what an `interface` record would have
-  restated: `name` is the `!!id`; `extends` is `!!import`, transitive, with a diamond unifying; and
-  "two interfaces may not declare one method" is the import closure's collision rule. `@interface`
-  exists for a document holding several groups that wants to say which method is in which. It does
-  not list methods, because it cannot: a list of method names would be a list of DATA references.
+    orders     => !interface { methods: { place_order => !method { ... }  ... } }
+    orders_api => !api { implements: [orders]
+                         resources: { "/orders" => !resource { POST => !operation { method: place_order ... } } } }
+
+  Methods are keys inside their interface, and operations are values two maps down -- keyed by path,
+  then by verb -- so neither is a global entry. That is what the flat namespace was costing: two
+  interfaces may both declare `place_order`, an api needs no invented operation names, and an
+  interface is one entry with a name, a `@doc` and an `extends`. It works today because the
+  implementation admits a DATA CONSTRUCTOR as a map's value type (an INSTANCE is still refused at a type
+  position); [TSON-SCHEMA] §4.1's text reads as if it should not, and the experiment's README records
+  that as the question to settle before building on it.
+
+  Three ways to use it:
+    interface only    an `!interface`; nothing HTTP in the document.
+    web service only  an `!api` whose operations carry their signatures INLINE.
+    both              an `!interface`, and an `!api` that `implements` it, its operations naming methods.
+                      An operation names a method OR carries a signature, never both.
+
+  Everything that relates the two -- a `method` name, an `implements`, a `{segment}` in a path -- is an
+  identifier the resolver does not check: a DATA entry cannot be referenced, and a map key is data. The
+  description reader checks all of it at startup in the merged namespace (`Routes`, in the experiment's
+  Java), which is the same tier as coverage. When the kernel grows a reference form for data entries,
+  those slots change type and that half of the check deletes.
   """
 {
   @doc:"""
-    The transport-neutral contract of one callable thing. A plain record on purpose: it is what both
-    constructors share, and the only kind of entry a DATA constructor may compose with.
+    The transport-neutral contract of one callable thing. A plain record on purpose: it is what `method`
+    and an inline `operation` share, and the only kind of entry a DATA constructor may compose with.
 
     `request` absent means the call takes nothing; `response` absent means it returns nothing (an HTTP
     204). `errors` lists BUSINESS errors -- the request was schema-valid and the domain said no -- each
@@ -48,9 +61,21 @@
     `safe` implies `idempotent`. The HTTP projection CHECKS its verb against them (GET must be safe;
     PUT and DELETE idempotent); it never derives one from the other.
 
-    Streams are declared here because an interface may ride a transport that has them. This version's
-    `operation` pins both false; lifting that is a later meta version, once a framing for a stream of
-    TSON documents over HTTP is specified.
+    `request_stream` and `response_stream` say that the request or the response is a SEQUENCE of
+    documents of the declared type -- count unknown in advance, each one complete and actionable as it
+    arrives -- rather than one document. Together they encode the four call shapes: unary, server
+    streaming, client streaming, bidirectional. A stream is a property of the CALL, not of the type:
+    `response: order  response_stream: true` is not `response: [order]`. A list is one value that
+    arrives whole and has a length; a stream's element boundaries are interaction boundaries, which is
+    the one thing a type cannot say and the reason the flags live here rather than in the types. Nor is
+    it chunked transfer or a large document read incrementally -- every call has that, and it is the
+    transport's.
+
+    What the format lacks for a stream to be real is a framing for a sequence of documents: a TSON
+    document is one value and a reader rejects trailing content. Until one exists `operation` pins
+    both false; the candidate framings are recorded in the experiment's README rather than decided
+    here. A transport with no framing question -- an in-process plan executor -- may honour the flags
+    today.
     """
   signature => {
     request:          type_ref?
@@ -62,81 +87,101 @@
     response_stream:  boolean ~ false
   }
 
-  @doc:"A method: a signature and nothing more. The entry's name is the method's name."
+  @doc:"A method: a signature and nothing more. Its NAME is the key it sits under in an interface."
   method => ~data & signature
 
-  @doc:"Verb, not method: `method` is the constructor above, and `!method { method: POST }` helps nobody."
+  @doc:"""
+    An interface: a named, documented map of methods. A method is a map VALUE under its name, so its
+    name is scoped to the interface and a `@doc` written before the key documents it.
+
+    `extends` names other interfaces, whose methods this one also has; the reader walks it and refuses
+    a cycle or a name that is not an interface. It is not `!!import`: importing a document brings its
+    entries into the namespace, where extending an interface says whose methods are also mine.
+    """
+  interface => ~data & {
+    extends:  [type_name]?
+    methods:  {type_name => method}
+  }
+
+  @doc:"Verb, not method: `method` is the constructor above, and `{ method: POST }` helps nobody."
   http_verb => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
 
   @doc:"Refined, so 42 is not a status."
   status_code => !integer ^ { min: 100  max: 599 }
 
-  parameter_location => !enum [PATH QUERY HEADER]
-
   @doc:"""
-    A parameter carried outside the body. `type` names a scalar and nothing here enforces that: a URL
-    segment cannot carry a record. `description` is a field because a parameter is a VALUE inside an
-    operation's payload, with nothing for an annotation to attach to.
+    Where a request record's fields go, and the place where an interface and the web service over it
+    are allowed to look different. The verb and the path are not here: they are the keys an operation
+    sits under, in its resource and its api.
+
+    A method has one request record, and the operation distributes that record's fields across the HTTP
+    request: a `{segment}` in the resource's path binds the field of that name; `query` names fields
+    carried as query parameters; `headers` maps a field to the header that carries it; `body` names ONE
+    field carried as the whole body, unwrapped. Whatever is left is the remainder, and the remainder is
+    the body -- unless the verb is GET or HEAD, or `body` already named a field, in which case it is the
+    query. Every field lands in exactly one place, and a field carried in the path, the query or a
+    header must be a scalar -- a URL segment cannot carry a record. That is what makes the mapping
+    checkable: a field placed twice, a name the request does not declare, or a container in the path is
+    a bad operation rather than a surprise.
+
+    There is no parameter list. A parameter-only endpoint declares a one-field request record
+    (`schema_ref => { schemaPath: text }`) and binds it from the path -- every method has a request
+    record, which is what lets one rule serve every endpoint and the check see every field.
     """
-  parameter => {
-    name:        text
-    in:          parameter_location
-    type:        type_ref
-    required:    boolean
-    description: text?
+  placement => {
+    query:    [field_name]?
+    headers:  {field_name => text}?
+    body:     field_name?
   }
 
   @doc:"""
-    A method with an HTTP binding.
+    One HTTP operation: a value under its verb, under its path, in an api. It has a signature ONE of two
+    ways -- `method` names one declared on an interface the api implements (or the one `interface`
+    names, when two implemented interfaces declare the name), or the signature is written inline for an
+    api with no interface behind it. Both at once, or neither, is a bad operation; the reader refuses it.
 
     `status` is the status of `response`; there is no list of responses, because a method has one
     response type. An error's status is the `status` member its own type pins --
     `sku_not_found => problem & { status: = 404  sku: text }` -- so an error type an operation names
-    MUST fix it. That is a conformance check on the service, not a resolver check: this vocabulary
-    cannot see into a referenced type's field states, and an interface-only service has no reason to
-    pin one.
+    MUST fix it. That is a conformance check on the service, not a resolver check.
 
-    Long description is the entry's @doc; `summary` is the short form. Lifecycle is meta's own
-    `@deprecated` on the entry, not a field.
+    Long description is a `@doc` before the verb key; `summary` is the short form. The two stream flags
+    are pinned false here: the format has no framing for a sequence of documents yet.
 
     Deliberately absent, each a decision: security schemes, response headers, links, callbacks,
     examples, tags, servers, multi-media-type negotiation, and more than one success response. Adding
     one is a later version under §3.5 once this is published, never an edit.
     """
-  operation => ~data & signature & {
-    verb:             http_verb
-    path:             text
-    parameters:       [parameter]?
+  operation => ~data & signature & placement & {
+    method:           type_name?
+    interface:        type_name?
     status:           status_code ~ 200
     summary:          text?
     request_stream:   = false
     response_stream:  = false
   }
 
-  @doc:"""
-    An HTTP binding for a method declared ELSEWHERE -- on an interface this document imports, or earlier
-    in this one. `method` names it by identifier, and the resolver does not check that name: a `kind: DATA`
-    entry can be declared and applied but never referenced, so there is no slot type that would make it
-    a checked reference today. The check is the description reader's, at startup, in the merged
-    namespace -- the same tier as coverage. When the kernel grows a reference form for data entries, this
-    slot changes type and that check deletes.
-
-    `operation` is the one-declaration form (method and binding in one entry); `binding` is the
-    two-declaration form. A service uses whichever its authorship needs, and a reader treats a
-    `binding` as the operation whose signature is the named method's.
-    """
-  binding => ~data & {
-    method:      type_name
-    verb:        http_verb
-    path:        text
-    parameters:  [parameter]?
-    status:      status_code ~ 200
-    summary:     text?
+  @doc:"One path: its operations, keyed by verb. `!resource { POST => !operation { ... } }`."
+  resource => ~data & {
+    operations: {http_verb => operation}
   }
 
   @doc:"""
-    Names the interface a method belongs to. Written before the entry's name, so it is metadata about
-    the declaration and is read back from the entry's annotations, beside @doc. Grouping only.
+    A web service: resources keyed by path template, each holding operations keyed by verb -- the shape
+    OpenAPI's `paths` has, arrived at from the key types rather than copied. A path key is DATA (a text),
+    which is why an operation needs no invented name and why `/orders/{id}` needs no identifier minted
+    from it.
+
+    `implements` names the interfaces this api binds, and is a CLAIM the reader checks: every method of
+    every implemented interface (through `extends`) has an operation naming it, or an entry in
+    `not_bound` giving the reason it does not -- an operation documented ahead of being built, or served
+    by another process behind the same proxy. The reason is required because an exemption somebody has
+    to justify is a decision, where a boolean is a hole. An api with no `implements` is a web service on
+    its own terms, its operations inline.
     """
-  interface => @annotation identifier
+  api => ~data & {
+    implements:  [type_name]?
+    not_bound:   {type_name => text}?
+    resources:   {text => resource}
+  }
 }
