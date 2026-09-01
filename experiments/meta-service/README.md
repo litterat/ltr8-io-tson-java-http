@@ -79,6 +79,11 @@ computes its `Placement`, and holds the `implements` claim. The three probes:
 - `SupertypeProbe` -- the mechanism `!binding` rides on: a derived constructor's instance admitted at its
   base-typed slot, the base abstract for free, its constraints inherited.
 - `NameRoleProbe` -- what a naming role buys at a map key, and the hygiene gap below.
+- `RpcProbe` -- `rpc-1.tn` and the wire schema resolve; a call is typed by the interface's own types and a bad
+  request is refused at its field; a return carries the declared response or error with its status pin enforced,
+  and exactly one outcome.
+- `AgentProbe` -- both agent layers resolve; a plan of references and a compiled agent read, the `@disjoint`
+  instruction tag-free; a constant is the same gap; a malformed step name is refused by the `name` role.
 
 **Two binder facts met on the way**, both worth knowing before writing a bound record for a `~data`
 constructor: the binder finds a class by PascalCasing the type name (`interface_of_methods` →
@@ -203,7 +208,117 @@ slash); and a data document can bind only the type namespace (`!!schema`, `!name
 tag a step `!place_order` -- it writes `method: place_order` as data, which is the one-hop rule doing exactly
 what it says.
 
+## Direction: interface, api, agent
+
+Three projections of one interface, and the order they arrive in.
+
+- **The interface is the canonical layer, and its wire form is the RPC packet.** [`rpc-1.tn`](rpc-1.tn):
+  `call => <Req> { … }` -- address `(interface !!id, method key)`, correlation `id`, `deadline`, opaque `meta`,
+  the method's `request` -- and `return => <Resp, Err> { … }`, exactly one of `response`, a declared `error` (a
+  typed value composing `problem`, its status pinned on the type) or a `fault` (the transport's or processor's
+  own `problem`, its `type` from the same closed set the HTTP problem types use). Both are **templates, closed
+  once per method by a wire schema derived from the interface** -- `place_order_call => call<new_order>`,
+  `place_order_return => return<order, sku_not_found>`, a choice of errors where a method declares several
+  ([`examples/orders-wire-1.tn`](examples/orders-wire-1.tn), written by hand to show what a generator emits) --
+  so a packet is `!place_order_call { … }`, a fully typed document whose request the resolver checks against the
+  interface's own types. In-process Java dispatch is the first transport: an `Orders` implementation wires to
+  the interface once, and everything else translates into a call.
+- **The api is a gateway.** An `!api` describes a translator, not a server: `Routes` is its table, and
+  `Placement` run in reverse -- `id` from the path segment, `order_query` from the query string, `order` from
+  the body beside `Idempotency-Key` -- is its request path, producing a `call`. Which is why a generic gateway
+  process can read an `!api` and an RPC address and need no code per service.
+- **The agent is three layers, as a compiler has** -- [`agent-1.tn`](agent-1.tn) and
+  [`agent-vm-1.tn`](agent-vm-1.tn), below. A plan SOURCE (a surface grammar, still to write) is read to a
+  `plan` (the AST: steps in order, references parsed to selectors, constants folded, `or` a field because it
+  is executed), which compiles deterministically to an `agent` (a constant pool, write-once memory slots, and
+  straight-line stack code with no jumps) that a server admits, verifies in one forward pass against the
+  pinned interface, and executes -- each CALL being one `call` of rpc-1.tn. The likely deployment is a
+  gateway agent processor whose calls are RPC to the box hosting each interface; the api gateway does the same
+  for one call.
+
+### The agent: three layers
+
+`agent-1.tn` is the plan, resolved -- named as a resolved schema is named against its source: the surface is
+plan source, this is the plan, and an `agent` is what it compiles to. Everything the surface leaves implicit is
+structural here: a reference is a `selector` (a step, then `segment`s -- `field`, `index`, or a `filter`),
+distinguished from a constant by shape; an argument is an `arg` tree whose canonical form folds constants
+maximally, so `record` and `array` appear only on the spine above a reference; `or` is a step's failure
+substitute, a field because it is executed. `agent-vm-1.tn` is the lowering: memory slots are step indices, so
+flattening is slot assignment; the pool interns names, constants, types and methods, kind-checked by index; the
+`instruction` choice is `@disjoint` -- a bare mnemonic beside a labelled operand record -- and reads tag-free.
+Admission is one forward pass in both layers: straight-line code has no merge points, so checking and
+inference coincide, and the return's inferred type is the derived response contract, known before execution.
+
+This is the dataflow design the README argued for by another route -- Cap'n Proto's promised answers as the
+precedent -- arrived at as a compiler rather than a packet, and it supersedes the `plan`/`step` sketch rpc-1.tn
+briefly carried. `rpc-1.tn` is now `call` and `return` only.
+
+**Brought to fit, mechanically** (measured by `AgentProbe`): both at Revision 34 under this repo's identities,
+`…/ltr8/http/agent-1.tn` and `agent-vm-1.tn`, with no placeholder pins -- a malformed `?sha256=` is refused
+outright; `token`, which is not in core, replaced by a `name` role declared once in `agent-1.tn` (the identifier
+grammar as a pattern, since a user schema cannot reach `identifier`) and imported by the VM; the inline
+`filter` record at a group-member position named, as §5.2 requires; `value`, which is the kernel's and not
+core's, replaced by `constant => unknown`; and the AST's top type renamed `plan`, since the VM imports the AST
+and two `agent`s collide in a flat namespace.
+
+**Decisions this leaves, in the order I would take them:**
+
+1. **One interface per plan, or several?** Both layers carry one `interface: uri`, where the direction above
+   has an agent calling across interfaces. The reconciliation that changes nothing here: the gateway publishes
+   an interface that `extends` the ones it fronts, and a plan names that. `extends` was built for exactly this.
+2. **Business errors.** A failed call without `or` aborts with `agent_error`, whose `detail` is text. The
+   interface declared that call's errors as typed values composing `problem`; the abort should carry the one
+   that occurred, and `agent_error` should compose `problem` like every other error here, so the api gateway
+   and the agent processor answer failures in one shape.
+3. **`version: uint8 = 2`** on the agent duplicates what the identity `agent-vm-1.tn` already says (§3.5); keep
+   it only if the binary form wants a magic byte, and say so.
+4. **The surface grammar reads schemaless**, method names as preserved unknown type refs and `@or`/`@interface`
+   as preserved annotations -- which sidesteps "which namespace may a document bind" rather than answering it.
+   One hazard to design out: a schemaless read resolves built-ins first, so a method named `date`, `uuid` or
+   `text` would be parsed as the built-in, not preserved. The surface needs to reserve those or qualify method
+   names.
+5. `name` is a pattern over `text`, so §8.2's hygiene does not reach it (nor would it reach a map key); the
+   admission verifier refuses confusable step names, as `agent-1.tn` now says.
+
+**What the precedents contributed.** gRPC: the closed set of transport-level statuses, the deadline, and
+frames-plus-end-status for a stream -- but no self-contained packet, its outcome in HTTP/2 trailers. JSON-RPC
+2.0: the self-contained envelope, the correlation id, and batch -- but an unnamespaced `method`, untyped
+`params`, and no dataflow between batched calls. Cap'n Proto RPC: promised answers -- a call may name an
+earlier call's result by question id and a path of field reads into it -- which is the plan's wiring as a
+shipped protocol. Avro RPC: errors declared per method and returned as typed values, not codes. Connect/Twirp:
+the HTTP/1.1-friendly unary shape and an enveloped end-of-stream frame. Taken from none of them: numeric
+method ids -- the identity URI plus key carries more for the same purpose.
+
+**Two things TSON has that they lack, and the packet leans on both.** Templates closed per method give a typed
+envelope with no per-service code: `rpc-1.tn` imports no service's types, the wire schema closes its templates
+over them, and the packet is checked end to end by the resolver -- `quantity: two` in a call is an `int32`
+violation at `/request/order/quantity`, an error's fixed `status` is enforced, and where a method declares several
+errors the value carries the error's tag. (An earlier draft scoped the payload in place with `!!schema` at an
+`unknown` slot; the templates are better and need no reader the library lacks.) And a method's address is a
+content-addressed identity -- versioned, unambiguous across every service a gateway fronts, with no registry.
+
+**Where it lives.** The packet, dispatch and the processor are transport-neutral; `tson-http` is the wrong home.
+A `tson-service` module (or repo) for interface + packet + dispatch + agent, with `tson-http`'s adapters
+becoming the api gateway over it -- and the RPC transport over HTTP is then itself one `!api` with a single
+endpoint, described in the same vocabulary.
+
+**Order:** swap the meta layer (three decisions first: the transport's 400 is not declared per endpoint;
+`Routes` checks the verb against `@safe`/`@idempotent`; the map-key hygiene gap is filed) → packet schema and
+in-process dispatch, the `Orders` interface and implementation, a Java method-naming rule, errors as thrown
+bound classes with fixed statuses → the JDK adapter as api gateway, hand-written handlers gone → remote RPC
+over HTTP and the other two adapters → `plan` and the processor.
+
 ## Open questions, kept here
+
+**`unknown` has no reader, and the agent's constants lean on it.** `AgentProbe` shows any constant in a plan or
+an agent (`constant => unknown`) reporting `NOT_IMPLEMENTED`: the library has no compiled reader for `unknown`
+(nor `extern`), the gap the tson-java skill lists. The RPC packet no longer depends on it -- its templates are
+closed per method, so the payload is typed -- but a plan's literals cannot be given a type the same way, since a
+generic plan schema cannot be closed per plan. Until the reader lands, a plan carrying a literal cannot be read.
+The probe is written to flip when it does. **Not filed** -- confined here with the rest, though it is the first of
+these that is a library ask
+rather than a spec question.
+
 
 **Which namespace may a document bind?** `!!schema` binds the type namespace and `!name` resolves against it,
 one hop. A plan or batch document wants to bind an *interface* -- to say `!place_order { request: { … } }` and
@@ -213,6 +328,13 @@ or more than one, is a spec question; the URL namespace being hierarchical (`/or
 `/orders/{id}`) while a resource key is a flat template is the same question as `orders.place_order`, and one
 answer should serve both.
 
+
+**A disjoint choice with an enum variant is not read tag-free.** `agent-vm-1.tn`'s `instruction => ( simple_op
+| op )` is `@disjoint` -- string class beside brace class -- and the resolver accepts the assertion, but the
+reader refuses a bare `RET` at that position and asks for a tag. Measured precisely in `AgentProbe`: `(text |
+integer)` reads untagged, so tag-free dispatch exists; an enum variant is what it does not cover. Until it
+does, a compiled agent writes `!simple_op RET` and `!op { make: 0 }`, and the VM's "tag-free" claim describes
+the schema rather than the implementation. **Not filed** -- a library ask, like the `unknown` reader above.
 
 **Streams are not modelled, until a use arrives.** An earlier sketch carried `request_stream`/`response_stream`
 on the signature, meaning a *sequence* of documents of the declared type -- count unknown, each complete as it
@@ -244,6 +366,9 @@ when either lands. **Not filed** -- confined here with the rest.
 ## Files
 
 - `meta-service-1.tn` -- the sketch, its reasoning in its own `@doc`s.
+- `rpc-1.tn` -- the wire form: `call` and `return` as templates; the direction above, in its own `@doc`s.
+- `examples/orders-wire-1.tn` -- the templates closed per method of the orders interface: what a generator emits.
+- `agent-1.tn`, `agent-vm-1.tn` -- the plan (AST) and the agent (bytecode) it compiles to; the section above.
 - `examples/` -- real documents: the shared types and errors, the interface only, the web service only, and
   both, each at its own `!!id`; `examples.md` is the guide to them and the placement table. `ExamplesProbe`
   resolves every file and runs both apis through `Routes`.

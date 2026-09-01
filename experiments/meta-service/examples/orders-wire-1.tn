@@ -1,0 +1,26 @@
+!!id:"https://schemas.example.com/2026/34/experiment/meta-service/orders-wire-1.tn"
+!!meta:"https://tson.io/2026/34/m/meta.tn"
+!!import:"https://tson.io/2026/34/m/core.tn"
+!!import:"https://tson.io/2026/34/ltr8/http/rpc-1.tn"
+!!import:"https://schemas.example.com/2026/34/experiment/meta-service/orders-types-1.tn"
+!!import:"https://schemas.example.com/2026/34/experiment/meta-service/orders-errors-1.tn"
+@doc:"""
+  The wire schema of the orders interface: rpc-1.tn's templates closed once per method, so a packet is a
+  fully typed document -- `!place_order_call { ... }`, `!get_order_return { ... }`. Deterministic in
+  orders-1.tn (one `_call` and one `_return` per method, the errors choice per method), so this is what a
+  generator produces from the interface; it is written by hand here to show the shape. A method with no
+  declared errors closes `return_plain`; one with several closes `return` over a choice of them.
+  """
+{
+  place_order_call    => call<new_order>
+  place_order_return  => return<order, sku_not_found>
+
+  get_order_call      => call<order_ref>
+  get_order_return    => return<order, order_not_found>
+
+  list_orders_call    => call<order_query>
+  list_orders_return  => return_plain<order_page>
+
+  cancel_order_call   => call<order_ref>
+  cancel_order_return => return_plain<void>
+}

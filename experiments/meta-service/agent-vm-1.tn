@@ -1,0 +1,140 @@
+!!id:"https://tson.io/2026/34/ltr8/http/agent-vm-1.tn"
+!!meta:"https://tson.io/2026/34/m/meta.tn"
+!!import:"https://tson.io/2026/34/m/core.tn"
+!!import:"https://tson.io/2026/34/ltr8/http/agent-1.tn"
+@doc:"""
+  TSON Agent VM — the resolved form of an agent plan
+  (draft 2, brought to 2026 Revision 34; companion to agent-1.tn, whose `name` and `constant` it imports).
+
+  An agent is what a plan compiles to: the plan reading's resolved
+  output, as a resolved schema is to its source. Compilation is
+  deterministic and canonical — pool entries intern in first-use
+  order, one memory slot per step in document order — so one plan
+  yields one agent and content addressing composes: a server MAY
+  accept a plan (compile, verify, execute, cache the agent under the
+  plan's hash) or an agent directly (resolution and budgets are
+  precomputed; admission re-checks them). Verification is one
+  forward pass in both cases: straight-line code has no merge
+  points, so checking and inference coincide; type transitions
+  against the pinned interface are always the server's work.
+
+  Execution model: a value stack bounded by `max_stack`; write-once
+  memory of `slots` slots, assigned in order by STORE; instructions
+  execute in sequence; no jumps. Selection instructions are
+  absence-absorbing: if the operand consumed is the absent
+  sentinel, the result is the absent sentinel. Unhandled call
+  failure aborts with agent_error (agent-1.tn), reported in source
+  terms via `debug`.
+  """
+{
+  @doc:"Index into `agent.pool`. Varint-friendly in the binary form."
+  pool_index => uint32
+
+  @doc:"Index into agent memory; slots are assigned by STORE in order."
+  slot_index => uint32
+
+  @doc:"""
+    Operand-free operations. Stack effects:
+    STORE ( a -- )   pop, assign next free slot
+    RET   ( a -- )   the popped value is the agent's response; MUST
+                     be the final instruction, reached at depth 1
+    """
+  simple_op => !enum [STORE RET]
+
+  @doc:"""
+    CALL payload. `method` MUST index a `method` pool entry; `or`,
+    when present, indexes a `value` entry validated at admission
+    against the method's response type — on call failure it replaces
+    the response (the lowering of agent.tn's @or). A CALL without
+    `or` that fails aborts the plan.
+    """
+  call_op => {
+    method: pool_index
+    or:     pool_index?
+  }
+
+  @doc:"""
+    FILTER payload: pop an array, push the elements whose field
+    `field` equals pool value `value` — total, empty in, empty out.
+    `field` MUST index a `name` entry declared by the element type;
+    `value` MUST index a `value` entry conforming to that field's
+    type; equality is over value spaces.
+    """
+  filter_op => {
+    field: pool_index
+    value: pool_index
+  }
+
+  @doc:"""
+    Operand-bearing operations, one label per mnemonic; exactly one
+    is present (REQUIRED field group). Stack effects:
+    const k  ( -- pool[k] )      k MUST be a `value` entry
+    load s   ( -- memory[s] )    s MUST be already assigned
+    get f    ( a -- a.f )        field selection; f MUST be a `name`
+                                 entry; absence-absorbing
+    index n  ( a -- a[n] )       element selection; total where the
+                                 source floor proves n, else out of
+                                 bounds yields the absent sentinel
+    filter p ( a -- a' )         see filter_op
+    make t   ( -- {} )           empty instance of `type` entry t,
+                                 fields unbound
+    set f    ( r v -- r' )       bind field f of record r to v
+    pack n   ( a1 .. an -- [a1 .. an] )
+    call c   ( req -- resp )     see call_op; req MUST be complete:
+                                 every REQUIRED field bound,
+                                 defaults injected
+    """
+  op => {
+    ( const:  pool_index
+    | load:   slot_index
+    | get:    pool_index
+    | index:  uint32
+    | filter: filter_op
+    | make:   pool_index
+    | set:    pool_index
+    | pack:   uint8
+    | call:   call_op )
+  }
+
+  @doc:"""
+    One instruction: a bare mnemonic or a labelled operand record —
+    two discrimination classes, so the choice is tag-free.
+    """
+  @disjoint
+  instruction => ( simple_op | op )
+
+  @doc:"""
+    One constant-pool entry. Kinds are explicit so every index is
+    kind-checked at admission: `name` for GET/SET/FILTER fields,
+    `value` for CONST, FILTER constants, and @or substitutes,
+    `type` for MAKE (a request/response type in the interface's
+    schema), `method` for CALL.
+    """
+  pool_entry => {
+    ( name:   name
+    | value:  constant
+    | type:   name
+    | method: name )
+  }
+
+  @doc:"""
+    A compiled agent. Admission, in order: resolve `interface`
+    (pin-checked) and its schema chain; kind-check every pool
+    index; run the forward pass — per-instruction type transitions,
+    selection through OPTIONAL positions only where the target
+    admits absence, request completeness at each CALL, declared
+    `max_stack` and `slots` exact, RET final at depth 1. The RET
+    operand's inferred type is the derived response contract, known
+    before execution. `debug` maps memory slots to source step
+    names for agent_error reporting.
+    """
+  agent => {
+    version:    uint8 = 2
+    interface:  uri
+    pool:       [pool_entry; 1..]
+    max_stack:  uint16
+    slots:      uint16
+    code:       [instruction; 1..]
+    debug:      {slot_index => name}?
+  }
+}

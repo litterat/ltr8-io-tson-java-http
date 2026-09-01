@@ -1,0 +1,74 @@
+!!id:"https://tson.io/2026/34/ltr8/http/rpc-1.tn"
+!!meta:"https://tson.io/2026/34/m/meta.tn"
+!!import:"https://tson.io/2026/34/m/core.tn"
+!!import:"https://tson.io/2026/34/ltr8/http/problem-1.tn"
+@doc:"""
+  The wire form of an interface: one method call and its return. A packet is DATA, so this is a user
+  schema, not part of the meta layer -- the meta layer says what an interface IS; this says what calling
+  one looks like on a wire.
+
+  Both templates are CLOSED PER METHOD by a wire schema derived from the interface -- one entry per method,
+  `place_order_call => call<new_order>`, `place_order_return => return<order, place_order_errors>` -- and a
+  packet names the closed type: `!place_order_call { ... }`. That is what makes a packet fully typed: its
+  request and response are checked against the interface's own types by the resolver, an error arm is one
+  of the method's declared errors with its status fixed, and this schema imports no service's types. The
+  wire schema is deterministic in the interface, so it is generated, published at its own identity, and
+  fetched like any other; examples/orders-wire-1.tn is one written by hand to show the shape.
+
+  Both gateways translate INTO this. An api gateway turns an HTTP request into a call by the binding's
+  placement run in reverse; an agent processor executes a compiled agent (agent-vm-1.tn), each of whose
+  CALL instructions is one of these. In-process Java dispatch is the first transport; a remote one is one
+  more. Several calls in one request, with data flowing between them, is the agent's business: a plan
+  (agent-1.tn) is the AST that compiles to it.
+
+  The method's address is a content-addressed identity: the interface's `!!id` and the method's key,
+  unambiguous across every service a gateway fronts, versioned by the identity, with no registry and no
+  numeric ids -- and redundant with the closed type's name, kept because a packet should say where it is
+  going without anyone parsing a type name.
+
+  Precedents, and what each contributed: gRPC's closed set of transport-level statuses, its deadline, and
+  its frames-plus-end-status model for a stream; JSON-RPC 2.0's self-contained envelope and correlation
+  id; Avro's per-method declared errors, returned as typed values rather than codes. (Cap'n Proto's
+  promised answers -- a call naming an earlier call's result by id and a path into it -- are the agent's
+  precedent, in agent-1.tn's selectors.)
+  """
+{
+  @doc:"""
+    One method call. `interface` and `method` are the address; `id` correlates a return with its call
+    where a transport multiplexes, and is redundant over unary HTTP; `deadline` is the one piece of
+    transport metadata a callee must know about, since it decides whether to start; `meta` is everything
+    else -- tracing, credentials -- which this schema deliberately does not describe.
+
+    `Req` is the method's request record. A method that takes nothing closes it with `void`.
+    """
+  call => <Req> {
+    interface: uri
+    method:    text
+    id:        text?
+    deadline:  duration?
+    meta:      {text => text}?
+    request:   Req?
+  }
+
+  @doc:"""
+    One outcome, and exactly one: the method's `response`, one of the `error`s its signature declared, or
+    a `fault`. `Resp` is the response type; `Err` is the declared error type, or a choice of them when the
+    method declares several -- a choice of records, so the value carries the error's tag, which is the
+    discriminator a caller wants. An error is a typed value composing `problem`, its status pinned on the
+    type, and the resolver enforces the pin. A `fault` is the transport's or the processor's own failure,
+    a `problem` whose `type` comes from the same small closed set the HTTP problem types use, so an api
+    gateway maps by table rather than by translation. The group is what keeps business errors and faults
+    apart, which is the distinction gRPC's single status channel blurs and the one a caller deciding
+    whether to retry needs.
+    """
+  return => <Resp, Err> {
+    id: text?
+    ( response: Resp | error: Err | fault: problem )
+  }
+
+  @doc:"The return of a method that declares no errors: a response, or a fault."
+  return_plain => <Resp> {
+    id: text?
+    ( response: Resp | fault: problem )
+  }
+}

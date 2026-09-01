@@ -12,6 +12,7 @@ its signature inline, or a `!binding` naming a method's.
 | [`orders-1.tn`](examples/orders-1.tn) | **interface only** | `orders` as a map of methods with per-method `@doc`; `orders_v2` extending it |
 | [`orders-api-inline-1.tn`](examples/orders-api-inline-1.tn) | **web service only** | an api with no interface behind it, every endpoint an `!operation` with its signature inline; a parameter-only endpoint as a one-field record placed from the path |
 | [`orders-api-1.tn`](examples/orders-api-1.tn) | **both** | an api that `implements` `orders`, every endpoint a `!binding` with its placement |
+| [`orders-wire-1.tn`](examples/orders-wire-1.tn) | wire | `rpc-1.tn`'s `call`/`return` templates closed once per method of `orders` -- what a generator emits from the interface |
 
 ## The placement, for `orders-api-1.tn`
 

@@ -1,0 +1,163 @@
+!!id:"https://tson.io/2026/34/ltr8/http/agent-1.tn"
+!!meta:"https://tson.io/2026/34/m/meta.tn"
+!!import:"https://tson.io/2026/34/m/core.tn"
+@doc:"""
+  TSON Agent AST — the structured middle representation
+  (draft 2, brought to 2026 Revision 34 in the meta-service experiment).
+
+  Three representations, as in any modern compiler: the PLAN is the
+  user grammar — an ordinary TSON map document, `name => !method
+  { request }` entries and a final `return`, references written as
+  path tokens (`login.user.id`, `"orders.items[0].name"`), failure
+  substitutes as `@or`, the interface as `@interface`. This module
+  is the AST the plan reading produces: everything the surface left
+  implicit is structural here — paths parsed to segment lists,
+  references distinguished from constants by shape, `or` a field
+  (it is a required action, so it cannot ride as annotation
+  metadata), step order an array, the interface a field. The
+  BYTECODE (agent-vm.tn) is what the AST lowers to; memory slots
+  are step indices, so the flattening IS the slot assignment.
+
+  Plan-reading rules (surface layer): entries in document order;
+  step names MUST be identifiers; `return` reserved and final; a
+  string-class token whose head segment names a prior step is a
+  path, totally, with rename-not-quote as the collision resolution;
+  request completeness, REQUIRED_DEFAULT injection, and positional
+  sugar follow constructor application. `[*]` is reserved in the
+  path grammar and has no AST form in this revision — additive
+  when fan-out lands.
+
+  Partiality, three layers, one severity each: a partial selection
+  yields the absent sentinel, which propagates along the selector
+  and MUST land where absence is admitted; a failed call with `or`
+  substitutes the declared value; a failed call without it aborts
+  with agent_error, discriminated from the derived success contract
+  by transport status. Plans cannot branch on values.
+  """
+{
+  @doc:"""
+    A name in one of the namespaces a plan borrows -- a step, a method, a field. Not `identifier`, which a
+    user schema cannot reach, and not `text`, which admits anything: the identifier grammar as a pattern.
+    (§8.2's name hygiene does not reach map keys or atom values, so confusable step names are the
+    admission verifier's to refuse.)
+    """
+  name => !text ^ { pattern: "[\\p{L}_][\\p{L}\\p{N}_-]*" }
+
+  @doc:"""
+    A constant, of any shape: core's escape hatch, and the one thing this schema needs from the library
+    that it does not have yet -- `unknown` has no compiled reader, so a plan carrying a constant cannot be
+    read until it does. The same gap gates rpc-1.tn's payload slot.
+    """
+  constant => unknown
+
+  @doc:"""
+    Source spelling of a selection, as the surface writes it: a
+    string-class token, `step ( .field | [n] | [f = v] )*`. Kept as
+    a named atom for surfaces that speak in source terms —
+    agent_error reporting, bindings, rename bridges. Enforcement is
+    the admission verifier's (Unicode identifiers put a faithful
+    I-Regexp facet out of reach); segment-wise `.` to `/` is the
+    RFC 6901 bijection, escape-free by identifier hygiene.
+    """
+  path => !text ^ { min_length: 1 }
+
+  @doc:"""
+    One parsed selection step. Exactly one member (REQUIRED field
+    group), by kind:
+    field  — record field selection; absence-absorbing
+    index  — element selection; total where the source floor proves
+             the index, else out of bounds yields the absent
+             sentinel
+    filter — keep elements whose `field` equals `value`; total,
+             empty in, empty out; equality over value spaces
+    """
+  @doc:"A filter's terms: keep elements whose `field` equals `value`."
+  filter => {
+    field: name
+    value: constant
+  }
+
+  segment => {
+    ( field:  name
+    | index:  uint32
+    | filter: filter )
+  }
+
+  @doc:"""
+    A parsed reference: the source step it reads, then the segments
+    applied in order. An empty or absent `segments` list references
+    the step's whole response.
+    """
+  selector => {
+    step:     name
+    segments: [segment]?
+  }
+
+  @doc:"""
+    One argument position: a constant, a reference, or structure
+    above references. Canonical-form rule: a subtree containing no
+    selector MUST be a single `value` (constants fold maximally),
+    so `record` and `array` appear only on the spine above a
+    reference — one spelling per tree, and compilation stays
+    canonical. This is the completed typed quotation of value
+    construction: constants, holes, and every recursive position —
+    finished, per the structure-templates addendum's lesson that a
+    quotation typed slot-by-slot must be finished or not begun. The
+    plan source is the held form of the same tree; the layers get
+    one outcome each.
+    """
+  arg => {
+    ( value:  constant
+    | ref:    selector
+    | record: {name => arg}
+    | array:  [arg] )
+  }
+
+  @doc:"""
+    One compiled step: apply `method` to the record built from
+    `input`. `or`, when present, is the failure substitute — a
+    constant that MUST validate against the method's declared
+    response type, so downstream typing is unchanged. Structural,
+    not an annotation: it is executed, not read.
+    """
+  step => {
+    name:    name
+    method:  name
+    input:   {name => arg}
+    or:      constant?
+  }
+
+  @doc:"""
+    A complete plan, resolved -- the AST, named as a resolved schema is named against its source: the
+    surface is plan SOURCE, this is the plan, and an `agent` (agent-vm-1.tn) is what it compiles to.
+    `steps` order is document order, is
+    def-before-use order, and is slot assignment for the lowering;
+    the step count is the budget. Admission verification is one
+    forward pass: resolve `interface` (pin-checked) and its schema
+    chain; type each step's input against its method's request
+    type; type each selector against its source step's response
+    type, partial transitions only where the target admits absence;
+    check each `or` against its response type; derive the return
+    contract from `return`. The derived contract is known before
+    execution.
+    """
+  plan => {
+    interface: uri
+    steps:     [step; 1..]
+    return:    arg
+  }
+
+  @doc:"""
+    Abort payload for an unhandled step failure. `step` names the
+    failing entry, `at` the source-spelled selection when the
+    failure was a partial selection landing where absence is not
+    admitted, `call` the method when the call itself failed,
+    `detail` the categorized diagnostic.
+    """
+  agent_error => {
+    step:   name?
+    at:     path?
+    call:   name?
+    detail: text?
+  }
+}
