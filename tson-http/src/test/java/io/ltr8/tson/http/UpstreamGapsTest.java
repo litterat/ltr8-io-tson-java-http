@@ -398,11 +398,11 @@ class UpstreamGapsTest {
         assertInstanceOf(TypeRef.class, TypeRef.of("op"));
     }
 
-    // ── staged spec feedback: no template-application sugar at a `type_ref` slot in data ─────────
+    // ── filed spec feedback: no template-application sugar at a `type_ref` slot in data ──────────
 
     /**
-     * <b>Not a gap — the spec's design, pinned because {@code UPSTREAM.md} stages feedback about what it
-     * costs (see "Spec feedback to file").</b> [TSON-SCHEMA] §8.1 gives {@code type_ref} a positional form at every {@code type_ref}-typed
+     * <b>Not a gap — the spec's design, pinned because what it costs is filed as spec feedback (tson-java's
+     * {@code SPEC-FEEDBACK.md}, the entry on a template application at a {@code type_ref} slot in data).</b> [TSON-SCHEMA] §8.1 gives {@code type_ref} a positional form at every {@code type_ref}-typed
      * position: a bare token fills {@code name}, and the braced record is the explicit form, canonical only
      * where {@code arguments} is present. A <em>schema</em> may therefore write {@code page<order>}; a
      * <em>data</em> payload at such a slot — an {@code !operation { … }} governed by a consumer's meta layer

@@ -21,7 +21,7 @@ import java.util.Optional;
  *
  * <p>The third artifact kind, beside a schema (what a document must be) and an API description (what an
  * endpoint offers). {@code deployment-1.tn} carries the argument for why the [TSON-DATA] §8.2 policies can
- * live in neither of the other two; {@code UPSTREAM.md} carries the version staged for the spec author.
+ * live in neither of the other two; tson-java's {@code SPEC-FEEDBACK.md} carries the version filed with the spec author.
  *
  * <p><b>Two rules this class exists to enforce by shape rather than by documentation.</b>
  *
@@ -203,8 +203,9 @@ public record TsonDeployment(String name, Optional<Listener> listener,
      *
      * <p>It is in the profile because §8.3 marks all three rules unstable across Unicode releases, so two
      * conforming processors may legitimately disagree about one name and the version is what explains the
-     * disagreement. A refusal carries it too ({@code Diagnostic.unicodeDataVersion}); this states it once
-     * for a client that wants to know before it sends rather than after it is refused.
+     * disagreement. A refusal does not carry it: the library states it once per processor, from {@code
+     * Tson.processorPolicy()}, and this is that statement for a client -- what it needs before it sends,
+     * not after it is refused.
      */
     private static Optional<String> unicodeDataVersion() {
         return Optional.of(TsonUnicodePolicy.dataVersion());

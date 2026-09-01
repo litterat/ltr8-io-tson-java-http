@@ -490,8 +490,7 @@ class TsonHttpCodecTest {
     private static Diagnostic withReason(Diagnostic d, Diagnostic.Code code,
                                          TsonSchemaFetchException.Reason reason) {
         return new Diagnostic(d.path(), d.schemaPointer(), d.schemaId(), code, d.message(), d.expected(),
-                d.actual(), d.dataPosition(), d.schemaPosition(), Optional.ofNullable(reason),
-                Optional.empty());
+                d.actual(), d.dataPosition(), d.schemaPosition(), Optional.ofNullable(reason));
     }
 
 }

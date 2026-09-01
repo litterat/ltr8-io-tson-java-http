@@ -103,8 +103,8 @@ class TsonDeploymentTest {
     /**
      * <b>The profile states the data version, read from the library rather than copied.</b> §8.3 marks all
      * three of §8.2's rules unstable across Unicode releases, so two conforming processors may legitimately
-     * disagree about one name and the version is what explains it. A refusal names it too; the profile states
-     * it once, for a client that would rather know before it sends than after it is refused.
+     * disagree about one name and the version is what explains it. A refusal does not name it; the profile
+     * states it once, for a client that would rather know before it sends than after it is refused.
      *
      * <p>This test was the flipped assertion of a gap: it asserted the version was <em>unavailable</em>, so
      * that the day it became obtainable it would say so by failing. It did.

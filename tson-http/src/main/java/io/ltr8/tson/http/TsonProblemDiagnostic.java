@@ -27,10 +27,12 @@ import java.util.Optional;
  * compresses it -- {@code NOT_PERMITTED} and {@code NOT_FOUND} share a 400, {@code TRANSPORT} and {@code
  * TOO_LARGE} a 502 -- and a client that wants to log or retry intelligently should not have to infer which.
  *
- * <p><b>{@code unicode_data_version} is the other, present for the three name-hygiene codes.</b> §8.2
- * requires a refusal to name the data it was computed against, and §8.3 is why: all three rules are unstable
- * across Unicode releases, so two conforming processors may legitimately disagree about one name and the
- * version is what explains it. Which rule fired needs no field — it is the code, one per rule.
+ * <p><b>A §8.2 refusal carries its code and nothing about the policy that judged it.</b> Which rule fired is
+ * the code, one per rule ({@code CONFUSABLE_NAMES}, {@code RESTRICTED_CHARACTER}, {@code RESTRICTED_SCRIPT}).
+ * The level, the unit and the Unicode data version are properties of the processor, constant for its life,
+ * and are stated once rather than on every refusal -- {@code Tson.processorPolicy()} in process, and the
+ * deployment's acceptance profile at {@code /.well-known/tson-deployment} over the wire -- because a sender
+ * needs them before it writes, not after it is refused.
  *
  * <p>Not held to {@code tson-cli}'s {@code CliDiagnostic}, which it began as a copy of: a CLI reports on files
  * and a server reports on requests, so the two are free to diverge. What it must stay in step with is
@@ -44,8 +46,7 @@ public record TsonProblemDiagnostic(Optional<String> path, @Field("schema_pointe
                                     @Field("data_position") Optional<String> dataPosition,
                                     @Field("schema_position") Optional<String> schemaPosition,
                                     @Field("fetch_reason")
-                                    Optional<TsonSchemaFetchException.Reason> fetchReason,
-                                    @Field("unicode_data_version") Optional<String> unicodeDataVersion) {
+                                    Optional<TsonSchemaFetchException.Reason> fetchReason) {
 
     /** {@code diagnostic} as it goes on the wire. */
     public static TsonProblemDiagnostic from(Diagnostic diagnostic) {
@@ -55,7 +56,7 @@ public record TsonProblemDiagnostic(Optional<String> path, @Field("schema_pointe
                 diagnostic.expectedIfStated(), diagnostic.actualIfStated(),
                 diagnostic.dataPosition().map(TsonProblemDiagnostic::render),
                 diagnostic.schemaPosition().map(TsonProblemDiagnostic::render),
-                diagnostic.fetchReason(), diagnostic.unicodeDataVersion());
+                diagnostic.fetchReason());
     }
 
     /** The position format {@code problem-1.tn} states for consumers. */
