@@ -449,6 +449,12 @@ class TsonHttpCodecTest {
      * raised policy is refused by this deployment, as one over a size limit is, and it is still the client's
      * to fix; neither code says anything went unchecked, which is what the three 5xx codes have in common
      * and these two do not.
+     *
+     * <p><b>But a 400 of its own type, one per code</b> -- the fix may be a rename, a character, or a look at
+     * what this deployment admits, and the type is what tells a client which. The body carries nothing about
+     * the policy: that is stated once at {@code /.well-known/tson-deployment}, where the type's documentation
+     * points. A refusal beside an ordinary violation takes the refusal's type, being the one class whose fix
+     * may not be in the document.
      */
     @Test
     void nameHygieneIsAVerdictOnTheDocument() {
@@ -457,8 +463,13 @@ class TsonHttpCodecTest {
             TsonHttpException thrown = TsonHttpException.invalidDocument(List.of(withCode(anOrdinaryProblem(), code)));
 
             assertEquals(TsonHttpException.BAD_REQUEST, thrown.status(), code::name);
-            assertTrue(thrown.type().endsWith("invalid-document"), thrown.type());
+            assertEquals(TsonHttpException.TYPES + code.name().toLowerCase().replace('_', '-'), thrown.type());
         }
+
+        TsonHttpException mixed = TsonHttpException.invalidDocument(List.of(anOrdinaryProblem(),
+                withCode(anOrdinaryProblem(), Diagnostic.Code.RESTRICTED_SCRIPT)));
+        assertEquals(TsonHttpException.TYPES + "restricted-script", mixed.type());
+        assertTrue(mixed.getMessage().contains("the other 1 problem(s) reported are real"), mixed.getMessage());
     }
 
     /**
@@ -473,6 +484,7 @@ class TsonHttpCodecTest {
                 () -> codec.readTree(body("{ admin: 1  \u0430dmin: 2 }"), "application/tson"));
 
         assertEquals(TsonHttpException.BAD_REQUEST, rejected.status());
+        assertEquals(TsonHttpException.TYPES + "confusable-names", rejected.type());
         assertTrue(rejected.diagnostics().stream().anyMatch(d -> d.code() == Diagnostic.Code.CONFUSABLE_NAMES),
                 () -> "expected a CONFUSABLE_NAMES diagnostic, got " + rejected.diagnostics());
     }

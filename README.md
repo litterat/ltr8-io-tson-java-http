@@ -51,11 +51,13 @@ Both problems, in one response — a client fixing one error per round trip need
 ### Problem types
 
 `type` is the member to match on: it is stable where `title` is prose. Every failure this project produces
-carries one of these, under `https://tson.io/2026/34/ltr8/http/problems/`.
+carries one of these, under `https://ltr8.io/2026/34/http/problems/` — the implementation's own host, kept apart
+from the specification's `tson.io`, where schema identities live.
 
 | `type` | Status | Raised when |
 |---|---|---|
 | `invalid-document` | 400 | the body was read against its schema and broke it |
+| `confusable-names`, `restricted-character`, `restricted-script` | 400 | refused under this deployment's [TSON-DATA] §8.2 name policy, one type per rule; what the deployment admits is published at `/.well-known/tson-deployment` |
 | `malformed-document` | 400 | the body does not lex, does not parse, or is not data |
 | `invalid-schema` | 400 | the schema the body names is itself wrong |
 | `unusable-schema-reference` | 400 | the body names a schema this server will not load, or nothing serves |

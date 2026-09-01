@@ -7,6 +7,7 @@ import io.ltr8.tson.compiler.TsonSchemaFetchException;
 import io.ltr8.tson.schema.TsonSchemaValidationException;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * A request that cannot be fulfilled, carrying the status it earns and the diagnostics that produced it. An
@@ -91,8 +92,12 @@ public final class TsonHttpException extends RuntimeException {
     /**
      * Where this project's problem-type identifiers live. They dereference to nothing yet; the point today is
      * that they are stable and matchable where a title is prose.
+     *
+     * <p>Under {@code ltr8.io}, not {@code tson.io}: a problem type is a fact about this implementation's
+     * behaviour, where a schema identity under {@code tson.io} is a fact about the format. The two hosts keep
+     * that apart -- the specification's, and the implementation resource that stands beside it.
      */
-    public static final String TYPES = "https://tson.io/2026/34/ltr8/http/problems/";
+    public static final String TYPES = "https://ltr8.io/2026/34/http/problems/";
 
     /** RFC 9457's own default: no semantics beyond the status code. */
     public static final String ABOUT_BLANK = "about:blank";
@@ -175,6 +180,13 @@ public final class TsonHttpException extends RuntimeException {
      * is unknown -- but a reference this deployment refuses is still the sender's to fix, where a host that
      * timed out is not. It ranks below a gap on upstream's own precedent: the CLI takes the most permanent of
      * three, 70 over 69 over 1, since retrying reaches a gap again where an origin may recover.
+     *
+     * <p><b>A [TSON-DATA] §8.2 refusal is a 400 of its own type</b>, one per code, ranked below those three
+     * and above an ordinary violation. It is still the sender's to fix, but the fix may be a rename, a
+     * character, or a look at what this deployment admits -- and the type is what tells a client which. The
+     * body carries nothing about the policy itself, for the reason the diagnostic carries no data version:
+     * the level and the version are the processor's, stated once at {@code /.well-known/tson-deployment},
+     * which is where the type's documentation sends a client. {@link #policyRefusal} carries it out.
      */
     public static TsonHttpException invalidDocument(List<Diagnostic> diagnostics) {
         return invalidDocument(diagnostics, diagnostics.size() == 1 ? "the request body has 1 problem"
@@ -216,8 +228,50 @@ public final class TsonHttpException extends RuntimeException {
         if (!unavailable.isEmpty()) {
             return schemaUnavailable(unavailable, diagnostics, cause);
         }
+        List<Diagnostic> refused = diagnostics.stream().filter(d -> isRefusal(d.code())).toList();
+        if (!refused.isEmpty()) {
+            return policyRefusal(refused, diagnostics, cause);
+        }
         return new TsonHttpException(BAD_REQUEST, TYPES + "invalid-document", "Invalid TSON document", detail,
                 diagnostics, cause);
+    }
+
+    /** [TSON-DATA] §8.2's three refusal codes -- one per rule, which is what lets each have a type of its own. */
+    private static boolean isRefusal(Diagnostic.Code code) {
+        return switch (code) {
+            case CONFUSABLE_NAMES, RESTRICTED_CHARACTER, RESTRICTED_SCRIPT -> true;
+            default -> false;
+        };
+    }
+
+    /**
+     * A refusal under this deployment's §8.2 policy, typed by the rule that fired.
+     *
+     * <p>The type is the code's own name in the {@link #TYPES} namespace ({@code …/restricted-script}), so
+     * a client matching on it matches on the same three-way split it would route on in the body. <b>The
+     * first refusal found decides</b>, as the first fetch reason does in {@link #schemaUnavailable}: two rules
+     * firing on one document is possible and there is no ranking between them that is right in general. A
+     * mixed list -- a refusal beside ordinary violations -- takes the refusal's type, since it is the one class
+     * where the fix may not be in the document, and says in {@code detail} that the rest are real.
+     */
+    private static TsonHttpException policyRefusal(List<Diagnostic> refused, List<Diagnostic> diagnostics,
+                                                   Throwable cause) {
+        Diagnostic.Code code = refused.getFirst().code();
+        String detail = "refused under this deployment's name policy, published at /.well-known/tson-deployment: "
+                + refused.stream().map(Diagnostic::message).toList()
+                + (refused.size() == diagnostics.size() ? ""
+                : "; the other " + (diagnostics.size() - refused.size()) + " problem(s) reported are real");
+        return new TsonHttpException(BAD_REQUEST, TYPES + code.name().toLowerCase(Locale.ROOT).replace('_', '-'),
+                refusalTitle(code), detail, diagnostics, cause);
+    }
+
+    private static String refusalTitle(Diagnostic.Code code) {
+        return switch (code) {
+            case CONFUSABLE_NAMES -> "Names refused as confusable";
+            case RESTRICTED_CHARACTER -> "Name refused: character outside the identifier profile";
+            case RESTRICTED_SCRIPT -> "Name refused under script policy";
+            default -> throw new IllegalArgumentException(code + " is not a refusal");
+        };
     }
 
     /**
