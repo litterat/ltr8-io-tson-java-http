@@ -114,7 +114,9 @@ each other.
 - `TsonHttpCodec` — reads bodies (tree or bound, self-describing or against a stated schema and type),
   writes bodies, and gates on `Content-Type` and `Accept`.
 - `TsonHttpException` — status plus diagnostics. **`from(RuntimeException)` is the entire status policy**;
-  put nothing status-shaped anywhere else.
+  put nothing status-shaped anywhere else. Problem `type` URIs live under `https://ltr8.io/2026/34/http/problems/`
+  — `ltr8.io` is the implementation resource, kept apart from the specification's `tson.io`, where schema
+  identities live. The revision rides in it too, so a spec bump moves it with everything else.
 - `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem-1.tn` — the error body, its schema,
   and the reader that proves the two agree. **This project's own schema, maintained here** — it began as a copy
   of `tson-cli`'s `diagnostics.tn` and has diverged on purpose: a CLI reports on files and a server reports on
@@ -527,10 +529,17 @@ Unicode data version are properties of the processor, constant for its life, and
 derived reader answers for itself — rather than on each refusal; `Diagnostic` carries no per-refusal version.
 Over HTTP the once-statement is `deployment-1.tn`'s acceptance profile at `/.well-known/tson-deployment`. §8.3
 is why any of it matters: all three rules are unstable across Unicode releases, so two conforming processors
-may legitimately disagree about one name and the version is what explains it. **Open:** an error body carries
-no policy, so a client that never fetched the profile learns the level only from `message` prose. tson-cli's
-envelopes now carry `policy` on every run; whether a refusal's `problem` should carry the profile is a decision
-not yet taken here.
+may legitimately disagree about one name and the version is what explains it.
+
+**A refusal is a 400 of its own problem `type`, one per code, and the body carries no policy.** tson-cli's
+envelopes carry `policy` on every run because a report file has nothing to dereference; an HTTP response does,
+and RFC 9457's own pointer from a problem to deployment-scoped documentation is `type`. So
+`TsonHttpException.policyRefusal` types a refusal `…/problems/restricted-script` (the code's name, kebab-cased)
+and that documentation is where a client is sent to `/.well-known/tson-deployment`. Embedding the profile in
+every refusal would be the constant-restated-N-times mistake upstream just removed from the diagnostic, one
+level up. Not adding a `policy` member was therefore a layering decision, not an RFC 9457 constraint — extension
+members are the standard's own growth mechanism and `errors` already is one. If a client ever needs to know
+*which version* of the profile judged it, the answer is a `Link` header plus the profile's `name`, added then.
 
 **The defaults are opposite on purpose**, and a server inherits both: `TsonConfig.identifierPolicy` defaults
 to Highly Restrictive over *declared names*, so a schema a request body names is refused for a homograph;
