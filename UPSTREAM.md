@@ -76,11 +76,6 @@ and `path` live one hop away on the instantiation. `TsonApiDescription` does not
 That costs a full record per endpoint where the template would have cost an application, and it is the cost
 the `data` base kind otherwise removes.
 
-**Reproducing it needs the generated-name gap dodged.** A templated operation with a realistic path fails
-earlier, on the generated entry name — a `/` spliced into a synthetic name, tracked in tson-java's own
-`BACKLOG.md` now — rather than on its kind, so the fixture that shows this gap carries a slash-free path.
-The measurement above is unaffected — `page<order>` generates a punctuation-free name.
-
 **Priority: low** — a description is written once and read often, so verbosity there is cheap. Recorded
 because the remaining step is small enough to look already done, and because the framing above took a
 measurement to arrive at. Pinned at both stages by
