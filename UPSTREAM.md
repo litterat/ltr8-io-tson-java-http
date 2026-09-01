@@ -218,8 +218,8 @@ Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. T
 each time a revision closes, and its convention is *cite the spec, not the argument that got it there* — so
 re-check every `SPEC-FEEDBACK.md #N` in this repo after a revision bump. Revision 34 carried fourteen of the
 seventeen entries that register held and renumbered the survivors from #1; nothing here cites it by number any
-more. None of the three below has been filed there yet; Revision 34 addressed neither of the first two, and
-the third is a consequence of what it added.
+more. None of the four below has been filed there yet; Revision 34 addressed neither of the first two, the
+third is a consequence of what it added, and the fourth is a design proposal rather than a defect.
 
 ### To file: §8.2's policy has no artifact, and the two obvious homes are both wrong (§8.2, §3.5, §2.2.1)
 
@@ -384,3 +384,130 @@ the entry the template materialised (`'array_no_such_eb84587b' element_type has 
 'no_such'`), where the inline form names the operation. If (2) is the recommended spelling, that message is
 the one to improve — the author wrote `order_page => page<no_such>` and is shown a synthetic name they have
 never seen.
+
+### To file: a namespace should be a value — the kernel's 2×2 has an empty cell ([TSON-SCHEMA] §2.1, §2.2.3, §4.1)
+
+**Section:** [TSON-SCHEMA] §2.1 (the schema body is `map<type_name, type_definition>`), §2.2.3 (the flat
+namespace), §4.1 (kinds, and the `data` kind's motivating case), §5.7–§5.9 (the three operators), §5.10
+(templates), §8 (resolver output); [TSON-DATA] §2.6 (map keys are values), §7.7 (identifier grammar).
+
+**Status: a proposal, not a defect report.** Everything below is a design the author may well not take; it is
+recorded because it was arrived at by measurement in this repo, it explains three open items here at once (#2
+and #5 above, and the `data` kind's lack of a reference form), and the argument is easier to weigh written
+down than reconstructed. The spec is internally consistent on every point this touches.
+
+**The hit.** A service wants to declare a method once, on an interface, and bind it to HTTP in a separate
+declaration — possibly a separate document — that *refers* to it:
+
+```
+orders-1.tn      place_order  => !method { request: order  response: order }
+orders-api-1.tn  create_order => !binding { method: place_order  verb: POST  path: "/orders" }
+```
+
+That second line needs one entry to name another, and §4.1 makes a `kind: DATA` entry something that can be
+declared and applied but never named — field type, element type, variant, argument, composition operand,
+refinement source, all refused. So the kind introduced for exactly this case (§4.1: "an HTTP operation binding
+request and response types by name is the motivating case") has no reference form, and the binding above can
+only name its method as a `type_name` token the resolver treats as data. Measured: `method: plaec_order`
+resolves clean and is caught by nothing but the consumer. That is the same tier of check as `TsonApiCoverage`,
+which is tolerable, and it is the symptom that led to the rest.
+
+**A method is better as a type, and that is the first sign.** Modelled under plain `meta.tn`, with no meta
+layer and no `~` at all:
+
+```
+service-1.tn   method => <Req, Resp> { request: Req  response: Resp?  safe: boolean ~ false  idempotent: boolean ~ false }
+               http   => { verb: http_verb  path: text  status: status_code ~ 200 }
+orders-1.tn    place_order  => method<order, order> & { errors: [sku_not_found]? }
+               cancel_order => method<order_ref, void> & { idempotent: = true }
+orders-api.tn  create_order => place_order & http & { verb: = POST  path: = "/orders"  status: = 201 }
+```
+
+Measured: `create_order` resolves with `supertypes: [place_order, method<order, order>, http]` and `verb`,
+`path`, `status` as `REQUIRED_FIXED`; `!create_order { request: { sku: A-100  quantity: 2 } }` reads as a
+valid value; the same value with `verb: GET` is refused — *"'verb' is fixed on 'create_order'"*. The operation
+IS-A its method, the compiler checks the reference, and a plan step is a value of the method type — the thing
+a `data` entry can never be. (One rule met on the way, correct and worth a sentence in §5.8: `place_order =>
+method<order, order>` alone is an alias to an instantiation and has no vocabulary body to compose with; give
+it a trailing `& { … }`.)
+
+So the motivating case for `data` is served *better* by a record type. Either the kind needs a reference form
+(#2's smallest fix), or the case does not need the kind — and the second reading opens onto something larger.
+
+**The missing primitive, in a 2×2 the kernel already three-quarters fills.**
+
+| | values are **data** | values are **declarations** |
+|---|---|---|
+| keys are **names** | record — `{ name: value }` | schema — `{ name => type }` |
+| keys are **data** | map — `{ key => value }` | **empty** — `{ "/orders" => type }` |
+
+The kernel has three of the four as distinct constructs with distinct machinery. What a service description
+wants is the fourth: a **keyed set of declarations whose keys are values**:
+
+```
+!interface { place_order => method<order, order>   cancel_order => method<order_ref, void> }
+!api       { "/orders" => !resource { POST => place_order & http & { status: = 201 } } }
+```
+
+The first is the top-right cell *nested* — a schema-shaped set inside an entry rather than being the
+document. The second is the empty cell. The primitive both need is one thing: **a namespace is a value**, with
+a key type, a member bound, and a scope, of which `schema` is the instance with key type `type_name`, member
+bound `top`, and the document as its scope. Something like `namespace => ~scope & { key_type: type_ref ~
+type_name  member: type_ref ~ top }` in the kernel, then `schema => !namespace {}`, `interface => !namespace {
+member: method }`, `resource => !namespace { key_type: http_verb  member: operation }`, `api => !namespace {
+key_type: route  member: resource }` — OpenAPI's paths → verbs → operation structure arrived at from the key
+types rather than copied. A body would then be a record, a binding, a choice, *or a namespace*: a new body
+kind, not a new entry kind.
+
+**Four things fall out, and together they are the argument.**
+
+1. **Referenceability follows the key type, not the kind.** A member of a `type_name`-keyed namespace is a type
+   one can name (`orders.place_order`); a member of a route-keyed one is anonymous and does not need a name —
+   HTTP addresses it by route, and a plan step instantiates the method, never the api member. That removes the
+   invented operation name (`create_order` beside `place_order`) and dissolves #5: a key that is data was never
+   required to be an identifier, so nothing needs minting from a path.
+2. **The three operators already mean the right things.** `&` on records is "merge disjoint keyed sets, then
+   add" — on namespaces that is `extends` (`orders_v2 => orders & !interface { refund => … }`). `^` is "tighten
+   members in place" — pin `idempotent` across an interface. `-` is "remove members" — `public_api => orders -
+   { cancel_order }`, a subset exposure that today has no spelling at all. When all three acquire an obvious,
+   useful meaning on a construct without being redefined, the construct is usually right. A record is the
+   namespace whose key type is `field_name`.
+3. **Templates over namespaces are #2's payoff at the right level.** `crud => <T> !interface { create =>
+   method<T, T>  get => method<id, T>  delete => method<id, void> }` and `orders => crud<order>` — legal
+   because the members are types and the application materialises a namespace. The repetition an API
+   description suffers is per *interface*, and that is where the template belongs.
+4. **The `data` kind may have nothing left to do.** With methods and operations as types (a call record; an
+   exchange record) and groupings as namespaces, the one case §4.1 names for `data` is covered. Worth confirming
+   as a consequence rather than assuming as a premise — it is the part of this most likely to be wrong.
+
+**The costs, each a decision only the author can make.**
+
+- **A third grammar recursion point.** §1 says the schema grammar imports the value grammar at exactly two
+  points, deliberately. A constructor payload admitting a declaration block is a third, in the other
+  direction. Worth stating as a principle change rather than letting in quietly.
+- **Scoping.** Lexical resolution outward (block → enclosing → imports), qualified names inward. [TSON-DATA]
+  §7.7's identifier grammar admits no `.` (`identifier-continue = XID_Continue / "-"`); a `qualified-name`
+  production at type-ref and `!name` positions is the small version. §2.2.3's flat rule becomes "one qualified
+  name denotes one type"; §8.2's skeleton distinctness becomes per-scope, which [TSON-DATA] §8.3 already
+  half-says by declining to compose it across `!!import`.
+- **Imports: flat or named?** The minimal design keeps `!!import` flat and scopes only declared blocks — an
+  imported document's interfaces arrive as top-level entries, their members protected inside. The full design
+  makes every import a named namespace, which is a module system and a separate decision. §2.2.3's two stated
+  costs of flatness are real, but this proposal does not need to pay for them.
+- **Resolver output goes recursive.** A Class 2 consumer walks nesting, or output flattens under qualified
+  keys. Keep the nesting: a router iterating a route-keyed map *is* the point, and the closed-entry guarantee
+  (§1.3) holds per scope as it holds per document today.
+- **What is a route key?** A structured key (`[POST "/orders"]` — [TSON-DATA] §2.6 already admits any value)
+  or two nested levels with simple key types. Nested is cleaner and matches how HTTP is organised. It also
+  means `http` loses `verb` and `path` as fields, because the keys carry them — which answers the one smell
+  the method-as-type measurement showed: schema facts declared as fields are injected into every instance, and
+  a plan step should not carry its own URL.
+
+**What this project does meanwhile.** Nothing that presumes the answer. The description stays a schema under a
+`~data &` meta layer; a two-declaration binding names its method by `type_name` and the reader checks it at
+startup; the method-as-type shape is measured and kept as a probe, not adopted. If the proposal is taken even
+in part, the consumer here becomes iteration over the api namespace — the route table this project has not
+built, because until now nothing in the description was shaped like one.
+
+**Priority: none — a direction, not a request.** Filed so the 2×2 and the operator argument are on record
+where the next revision is designed; the two are what make the primitive look inevitable rather than added.
