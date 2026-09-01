@@ -299,6 +299,11 @@ has to.
 Still not built: the route table proper (registering from the description rather than claiming against it),
 which is where that per-adapter path seam would finally have to exist.
 
+**Interfaces beside operations — explored, not adopted.** `experiments/meta-service/` sketches one meta layer for
+methods (transport-neutral) and operations (HTTP-bound), and finds the real obstacle: an operation binding a
+method declared *elsewhere* must refer to it, and a `kind: DATA` entry cannot be referred to. The two shapes
+that work today and the spec change that would settle it are measured and written up there.
+
 **An operation's long description is its `@doc`**, read back with `TsonApiDescription.doc(name)`; `summary` is
 the short form. A response and a parameter carry a `description` *field* instead, for a permanent reason —
 they are values inside a payload, with nothing for an annotation to attach to.
@@ -901,6 +906,11 @@ request exercises that.
 - `tson-http/src/main/resources/meta-http-1.tn` — the meta layer an API description names. Picked out of four
   designs explored side by side (three as schemas, one as data); the comparison is in git history, and why this
   one won is in "Describing an API" above.
+- `experiments/` — design explorations kept compiling and passing rather than archived: each in its own directory
+  with the schema, examples and a README stating the question and what was learned, and its probe tests joined to
+  `tson-http`'s test source set from there (`demo/schemas/`'s pattern applied to design work). Not a commitment
+  — nothing ships from one, and a probe failing after a library change is information, not a regression.
+  `experiments/README.md` indexes them.
 - `scratchpad/` — where a standalone reproducer for an upstream item goes, written to drop straight into the
   sibling's own test tree. Empty when nothing is open enough to need one; a reproducer for a gap that has since
   closed is deleted with its `UPSTREAM.md` entry. **Never copy one into `../ltr8-io-tson-java` and leave it
