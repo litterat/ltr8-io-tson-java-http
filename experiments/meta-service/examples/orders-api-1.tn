@@ -1,0 +1,35 @@
+!!id:"https://schemas.example.com/2026/34/experiment/meta-service/orders-api-1.tn"
+!!meta:"https://tson.io/2026/34/ltr8/http/meta-service-1.tn"
+!!import:"https://schemas.example.com/2026/34/experiment/meta-service/orders-1.tn"
+@doc:"""
+  Both: the interface of orders-1.tn, and the api that implements it. Every endpoint is a `!binding`
+  naming a method and borrowing its signature; what a binding adds is the placement of that method's one
+  request record over the HTTP request, which is where the two views are allowed to look different:
+
+    POST   /orders        new_order   { order  idempotency_key }  order unwrapped as the body,
+                                                                  idempotency_key as Idempotency-Key
+    GET    /orders/{id}   order_ref   { id }                      id from the path
+    GET    /orders        order_query { status  page  page_size } all three in the query (a GET's remainder)
+    DELETE /orders/{id}   order_ref   { id }                      id from the path; nothing left over
+
+  `implements: [orders]` is a claim the reader holds this api to: every method of `orders` has a binding
+  here, or an entry in `not_bound` giving the reason it does not.
+  """
+{
+  orders_api => !api {
+    implements: [orders]
+    resources: {
+      "/orders" => !resource {
+        @doc:"Place an order."
+        POST => !binding { method: place_order  status: 201
+                           body: order  headers: { idempotency_key => "Idempotency-Key" } }
+        @doc:"Search orders."
+        GET  => !binding { method: list_orders }
+      }
+      "/orders/{id}" => !resource {
+        GET    => !binding { method: get_order }
+        DELETE => !binding { method: cancel_order  status: 204 }
+      }
+    }
+  }
+}

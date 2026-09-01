@@ -9,23 +9,23 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The sketch's {@code resource}: one path's operations, keyed by verb.
+ * The sketch's {@code resource}: one path's endpoints, keyed by verb.
  *
  * <p>The keys are {@code String}, not {@link HttpVerb}, although the schema types them {@code http_verb}: the
  * binder hands a map's keys back as text whatever the key type, so a {@code Map<HttpVerb, …>} component would
  * hold strings and lie about it. {@link Routes} converts, and a key that is not a verb is refused there.
  */
 @Typename(name = "resource")
-public record Resource(AnnotatedMap<String, Operation> operations) implements Data {
+public record Resource(AnnotatedMap<String, Endpoint> endpoints) implements Data {
 
     public Resource {
-        operations = operations == null ? new AnnotatedMap<>() : operations;
+        endpoints = endpoints == null ? new AnnotatedMap<>() : endpoints;
     }
 
     @Override
     public List<TypeRef> references() {
         List<TypeRef> all = new ArrayList<>();
-        operations.values().forEach(o -> all.addAll(o.references()));
+        endpoints.values().forEach(e -> all.addAll(e.references()));
         return all;
     }
 }

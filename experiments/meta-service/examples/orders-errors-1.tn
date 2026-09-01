@@ -1,0 +1,14 @@
+!!id:"https://schemas.example.com/2026/34/experiment/meta-service/orders-errors-1.tn"
+!!meta:"https://tson.io/2026/34/m/meta.tn"
+!!import:"https://tson.io/2026/34/m/core.tn"
+!!import:"https://tson.io/2026/34/ltr8/http/problem-1.tn"
+@doc:"""
+  Business errors, each composing `problem` and PINNING the status it inherits from it. That fixed
+  `status` is how an endpoint's `errors` get an HTTP status without a list of responses: the status is a
+  property of the error type, readable from the resolved schema, and a document writing another value is
+  a validation error.
+  """
+{
+  sku_not_found   => problem & { status: = 404  sku: text }
+  order_not_found => problem & { status: = 404 }
+}

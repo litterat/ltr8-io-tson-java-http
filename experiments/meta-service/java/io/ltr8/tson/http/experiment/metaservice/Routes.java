@@ -16,17 +16,17 @@ import java.util.function.Function;
  * An {@code api} read into its route table -- the reader-side half of the map design, and every check the
  * resolver cannot make because the api relates things by identifier.
  *
- * <p>For each path and verb: the operation's signature is resolved -- inline, or from the method it names on an
- * implemented interface (walking {@code extends}; {@code interface} disambiguates when two declare the name) --
- * and its {@link Placement} computed against that signature's request record. An operation with both a method
- * and an inline signature, or neither, is refused; so is a method name no implemented interface declares.
+ * <p>For each path and verb: the endpoint's signature is resolved -- an {@link Operation}'s is inline, a
+ * {@link Binding}'s is the method it names on an implemented interface (walking {@code extends};
+ * {@code interface} disambiguates when two declare the name) -- and its {@link Placement} computed against that
+ * signature's request record. A method name no implemented interface declares is refused.
  *
  * <p>{@link #requireComplete()} holds the api to its {@code implements} claim: every method of every implemented
- * interface is bound by some operation, or exempted in {@code not_bound} with a reason.
+ * interface is bound by some binding, or exempted in {@code not_bound} with a reason.
  */
 record Routes(String apiName, List<Route> routes, Set<String> claimed, Map<String, String> notBound) {
 
-    /** One resolved operation. {@code method} is empty for an inline one. */
+    /** One resolved endpoint. {@code method} is empty for an {@link Operation}. */
     record Route(HttpVerb verb, String path, Optional<String> method, Optional<TypeRef> request,
                  Optional<TypeRef> response, List<TypeRef> errors, int status, Placement placement) {
     }
@@ -37,7 +37,7 @@ record Routes(String apiName, List<Route> routes, Set<String> claimed, Map<Strin
             collect(apiName, name, entries, interfaces, new LinkedHashSet<>());
         }
         List<Route> routes = new ArrayList<>();
-        api.resources().forEach((path, resource) -> resource.operations().forEach((verbKey, op) -> {
+        api.resources().forEach((path, resource) -> resource.endpoints().forEach((verbKey, endpoint) -> {
             String label = apiName + " " + verbKey + " " + path;
             HttpVerb verb;
             try {
@@ -45,22 +45,29 @@ record Routes(String apiName, List<Route> routes, Set<String> claimed, Map<Strin
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException("'" + label + "': '" + verbKey + "' is not an HTTP verb", e);
             }
-            if (op.method().isPresent() == op.isInline()) {
-                throw new IllegalArgumentException("'" + label + "' must name a method or carry a signature "
-                        + "inline, and not both: method=" + op.method() + ", inline request=" + op.request());
+            // The tag decided which this is; the sealed type carries that decision here.
+            Optional<String> method;
+            Optional<TypeRef> request;
+            Optional<TypeRef> response;
+            List<TypeRef> errors;
+            switch (endpoint) {
+                case Operation op -> {
+                    method = Optional.empty();
+                    request = op.request();
+                    response = op.response();
+                    errors = op.errors();
+                }
+                case Binding b -> {
+                    Method m = methodNamed(label, b, interfaces);
+                    method = Optional.of(b.method());
+                    request = m.request();
+                    response = m.response();
+                    errors = m.errors();
+                }
             }
-            Optional<TypeRef> request = op.request();
-            Optional<TypeRef> response = op.response();
-            List<TypeRef> errors = op.errors();
-            if (op.method().isPresent()) {
-                Method method = methodNamed(label, op, interfaces);
-                request = method.request();
-                response = method.response();
-                errors = method.errors();
-            }
-            Placement placement = Placement.of(label, verb, path, op.query(), op.headers(), op.body(), request,
-                    entries);
-            routes.add(new Route(verb, path, op.method(), request, response, errors, op.status(), placement));
+            Placement placement = Placement.of(label, verb, path, endpoint.query(), endpoint.headers(),
+                    endpoint.body(), request, entries);
+            routes.add(new Route(verb, path, method, request, response, errors, endpoint.status(), placement));
         }));
         Set<String> claimed = new LinkedHashSet<>();
         interfaces.values().forEach(i -> claimed.addAll(i.methods().keySet()));
@@ -75,7 +82,7 @@ record Routes(String apiName, List<Route> routes, Set<String> claimed, Map<Strin
                 .filter(m -> !bound.contains(m) && !notBound.containsKey(m)).toList();
         if (!missing.isEmpty()) {
             throw new IllegalStateException("'" + apiName + "' implements interfaces declaring " + missing
-                    + " but binds no operation to them; bind each, or exempt it in not_bound with a reason");
+                    + " but has no binding for them; bind each, or exempt it in not_bound with a reason");
         }
         return this;
     }
@@ -104,12 +111,12 @@ record Routes(String apiName, List<Route> routes, Set<String> claimed, Map<Strin
         into.put(name, iface);
     }
 
-    private static Method methodNamed(String label, Operation op, Map<String, Interface> interfaces) {
-        String name = op.method().orElseThrow();
+    private static Method methodNamed(String label, Binding binding, Map<String, Interface> interfaces) {
+        String name = binding.method();
         Map<String, Method> found = new LinkedHashMap<>();
         interfaces.forEach((ifaceName, iface) -> {
             Method m = iface.methods().get(name);
-            if (m != null && op.owner().map(ifaceName::equals).orElse(true)) {
+            if (m != null && binding.owner().map(ifaceName::equals).orElse(true)) {
                 found.put(ifaceName, m);
             }
         });

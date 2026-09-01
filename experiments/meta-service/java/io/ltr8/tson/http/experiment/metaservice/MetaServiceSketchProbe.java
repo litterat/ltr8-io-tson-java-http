@@ -64,7 +64,7 @@ class MetaServiceSketchProbe {
         return Experiment.bindVocabulary(Tson.builder().schemaSource(TsonSchemaSource.ofMap(lib))).build();
     }
 
-    /** The "both" shape: an interface, and an api implementing it with one operation left inline. */
+    /** The "both" shape: an interface, and an api implementing it with bindings, plus one inline operation. */
     static final String BOTH = """
               orders => !interface {
                 @doc:"Accept an order and confirm it with the quantity doubled."
@@ -76,8 +76,8 @@ class MetaServiceSketchProbe {
               orders_api => !api {
                 implements: [orders]
                 resources: {
-                  "/orders"        => !resource { POST   => !operation { method: place_order  status: 201 } }
-                  "/orders/{id}"   => !resource { DELETE => !operation { method: cancel_order  status: 204 } }
+                  "/orders"        => !resource { POST   => !binding { method: place_order  status: 201 } }
+                  "/orders/{id}"   => !resource { DELETE => !binding { method: cancel_order  status: 204 } }
                   "/{schemaPath}"  => !resource { GET    => !operation { request: schema_ref  safe: true } }
                 }
               }
@@ -103,11 +103,10 @@ class MetaServiceSketchProbe {
 
         Api api = assertInstanceOf(Api.class, entries.get("orders_api").body());
         assertEquals(List.of("orders"), api.implemented());
-        Operation post = api.resources().get("/orders").operations().get("POST");
+        Binding post = assertInstanceOf(Binding.class, api.resources().get("/orders").endpoints().get("POST"));
         assertEquals(201, post.status());
-        assertFalse(post.isInline());
-        Operation get = api.resources().get("/{schemaPath}").operations().get("GET");
-        assertTrue(get.isInline());
+        assertEquals("place_order", post.method());
+        Operation get = assertInstanceOf(Operation.class, api.resources().get("/{schemaPath}").endpoints().get("GET"));
         assertTrue(get.safe());
 
         // The status an error carries is readable from its type: REQUIRED_FIXED 404.

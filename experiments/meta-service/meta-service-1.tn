@@ -24,7 +24,7 @@
 
     orders     => !interface { methods: { place_order => !method { ... }  ... } }
     orders_api => !api { implements: [orders]
-                         resources: { "/orders" => !resource { POST => !operation { method: place_order ... } } } }
+                         resources: { "/orders" => !resource { POST => !binding { method: place_order ... } } } }
 
   Methods are keys inside their interface, and operations are values two maps down -- keyed by path,
   then by verb -- so neither is a global entry. That is what the flat namespace was costing: two
@@ -36,9 +36,9 @@
 
   Three ways to use it:
     interface only    an `!interface`; nothing HTTP in the document.
-    web service only  an `!api` whose operations carry their signatures INLINE.
-    both              an `!interface`, and an `!api` that `implements` it, its operations naming methods.
-                      An operation names a method OR carries a signature, never both.
+    web service only  an `!api` of `!operation`s, each carrying its signature INLINE.
+    both              an `!interface`, and an `!api` that `implements` it with `!binding`s naming its methods.
+                      Both are `endpoint`s, and the tag says which each verb holds.
 
   Everything that relates the two -- a `method` name, an `implements`, a `{segment}` in a path -- is an
   identifier the resolver does not check: a DATA entry cannot be referenced, and a map key is data. The
@@ -100,7 +100,7 @@
     """
   interface => ~data & {
     extends:  [type_name]?
-    methods:  {type_name => method}
+    methods:  {method_name => method}
   }
 
   @doc:"Verb, not method: `method` is the constructor above, and `{ method: POST }` helps nobody."
@@ -110,11 +110,29 @@
   status_code => !integer ^ { min: 100  max: 599 }
 
   @doc:"""
+    The naming roles of the namespaces this layer borrows -- one per namespace, as the kernel declares
+    `type_name`, `field_name` and `param_name` over `identifier`. A map keyed by a role enforces that
+    namespace's grammar at the key and names the namespace in the refusal ("'method_name': 'place order':
+    U+0020 cannot appear in an identifier"), where a `text` key would accept anything and `type_name` would
+    misname the namespace doing the refusing. Where the authority's grammar is not TSON's identifier, it
+    rides as a `pattern`: I-Regexp, matched against the whole token, so no anchors.
+
+    A method's name: an identifier in its interface's namespace, not a type name.
+    """
+  method_name => identifier
+
+  @doc:"An api's key: an RFC 3986 path, absolute, whose `{segment}`s name fields of a request record."
+  path_template => !text ^ { pattern: "/|(/([^/{}]+|\\{[A-Za-z_][A-Za-z0-9_-]*\\}))+" }
+
+  @doc:"A header field name: an RFC 9110 token."
+  header_name => !text ^ { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+" }
+
+  @doc:"""
     Where a request record's fields go, and the place where an interface and the web service over it
     are allowed to look different. The verb and the path are not here: they are the keys an operation
     sits under, in its resource and its api.
 
-    A method has one request record, and the operation distributes that record's fields across the HTTP
+    A method has one request record, and the endpoint distributes that record's fields across the HTTP
     request: a `{segment}` in the resource's path binds the field of that name; `query` names fields
     carried as query parameters; `headers` maps a field to the header that carries it; `body` names ONE
     field carried as the whole body, unwrapped. Whatever is left is the remainder, and the remainder is
@@ -122,7 +140,7 @@
     query. Every field lands in exactly one place, and a field carried in the path, the query or a
     header must be a scalar -- a URL segment cannot carry a record. That is what makes the mapping
     checkable: a field placed twice, a name the request does not declare, or a container in the path is
-    a bad operation rather than a surprise.
+    a bad endpoint rather than a surprise.
 
     There is no parameter list. A parameter-only endpoint declares a one-field request record
     (`schema_ref => { schemaPath: text }`) and binds it from the path -- every method has a request
@@ -130,58 +148,77 @@
     """
   placement => {
     query:    [field_name]?
-    headers:  {field_name => text}?
+    headers:  {field_name => header_name}?
     body:     field_name?
   }
 
   @doc:"""
-    One HTTP operation: a value under its verb, under its path, in an api. It has a signature ONE of two
-    ways -- `method` names one declared on an interface the api implements (or the one `interface`
-    names, when two implemented interfaces declare the name), or the signature is written inline for an
-    api with no interface behind it. Both at once, or neither, is a bad operation; the reader refuses it.
+    What sits under a verb, under a path, in an api: the base of `operation` and `binding`, carrying what
+    both have -- the placement of a request record, the status of the response, a summary. It has no data of
+    its own to bind, so a value at an `endpoint`-typed slot must be tagged `!operation` or `!binding`; the
+    resolver refuses an untagged one naming both subtypes. That tag is the whole difference between the
+    one-declaration form and the two-declaration form, and it is read before anything else.
 
     `status` is the status of `response`; there is no list of responses, because a method has one
     response type. An error's status is the `status` member its own type pins --
-    `sku_not_found => problem & { status: = 404  sku: text }` -- so an error type an operation names
-    MUST fix it. That is a conformance check on the service, not a resolver check.
+    `sku_not_found => problem & { status: = 404  sku: text }` -- so an error type an endpoint names MUST
+    fix it. That is a conformance check on the service, not a resolver check.
 
-    Long description is a `@doc` before the verb key; `summary` is the short form. The two stream flags
-    are pinned false here: the format has no framing for a sequence of documents yet.
+    Long description is a `@doc` before the verb key; `summary` is the short form.
 
     Deliberately absent, each a decision: security schemes, response headers, links, callbacks,
     examples, tags, servers, multi-media-type negotiation, and more than one success response. Adding
-    one is a later version under §3.5 once this is published, never an edit.
+    one is a later version under §3.5 once this is published, never an edit -- and a new kind of endpoint
+    is a new constructor deriving from this one, admitted wherever an `endpoint` is.
     """
-  operation => ~data & signature & placement & {
-    method:           type_name?
-    interface:        type_name?
-    status:           status_code ~ 200
-    summary:          text?
+  endpoint => ~data & placement & {
+    status:   status_code ~ 200
+    summary:  text?
+  }
+
+  @doc:"""
+    An endpoint with its signature INLINE -- the one-declaration form, for an api with no interface behind
+    it. The two stream flags are pinned false here: the format has no framing for a sequence of documents
+    yet (the experiment's README records the candidates).
+    """
+  operation => ~endpoint & signature & {
     request_stream:   = false
     response_stream:  = false
   }
 
-  @doc:"One path: its operations, keyed by verb. `!resource { POST => !operation { ... } }`."
+  @doc:"""
+    An endpoint whose signature is a METHOD's -- the two-declaration form. `method` names one declared on an
+    interface the api implements; `interface` says which, when two implemented interfaces declare the name.
+    Both are identifiers the resolver does not check -- a `kind: DATA` entry cannot be referenced -- so the
+    description reader checks them at startup in the implemented interfaces. When the kernel grows a
+    reference form for data entries, `method` changes type and that check deletes.
+    """
+  binding => ~endpoint & {
+    method:     method_name
+    interface:  type_name?
+  }
+
+  @doc:"One path: its endpoints, keyed by verb. `!resource { POST => !binding { ... }  GET => !operation { ... } }`."
   resource => ~data & {
-    operations: {http_verb => operation}
+    endpoints: {http_verb => endpoint}
   }
 
   @doc:"""
     A web service: resources keyed by path template, each holding operations keyed by verb -- the shape
-    OpenAPI's `paths` has, arrived at from the key types rather than copied. A path key is DATA (a text),
-    which is why an operation needs no invented name and why `/orders/{id}` needs no identifier minted
-    from it.
+    OpenAPI's `paths` has, arrived at from the key types rather than copied. A path key is DATA -- a `path_template`,
+    the URL namespace's own grammar -- which is why an operation needs no invented name and why
+    `/orders/{id}` needs no identifier minted from it.
 
     `implements` names the interfaces this api binds, and is a CLAIM the reader checks: every method of
-    every implemented interface (through `extends`) has an operation naming it, or an entry in
-    `not_bound` giving the reason it does not -- an operation documented ahead of being built, or served
-    by another process behind the same proxy. The reason is required because an exemption somebody has
+    every implemented interface (through `extends`) has a `binding` naming it, or an entry in
+    `not_bound` giving the reason it does not -- a method documented ahead of being built, or served by
+    another process behind the same proxy. The reason is required because an exemption somebody has
     to justify is a decision, where a boolean is a hole. An api with no `implements` is a web service on
-    its own terms, its operations inline.
+    its own terms, its endpoints `!operation`s.
     """
   api => ~data & {
     implements:  [type_name]?
-    not_bound:   {type_name => text}?
-    resources:   {text => resource}
+    not_bound:   {method_name => text}?
+    resources:   {path_template => resource}
   }
 }

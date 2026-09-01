@@ -24,10 +24,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>The interface is a map of methods; the api is a map of paths, each a map of verbs. Every relation between
  * them is an identifier the resolver does not check (a method name, an {@code implements}, a {@code {segment}}),
- * so each probe here is one of the reader's checks: the placement of each method's request record, the
- * one-or-the-other rule for an operation's signature, a method no implemented interface declares, an ambiguous
- * name across two interfaces, a container in a path, and the {@code implements} claim held to -- every method
- * bound or exempted with a reason.
+ * so each probe here is one of the reader's checks: the placement of each method's request record, a method no
+ * implemented interface declares, an ambiguous name across two interfaces, a container in a path, and the
+ * {@code implements} claim held to -- every method bound or exempted with a reason. The one rule the reader no
+ * longer needs -- an endpoint is an {@code !operation} or a {@code !binding} -- is the resolver's, and pinned here.
  *
  * <p>The last probe is the alternative model kept for comparison: a method as a <em>type</em> under plain
  * {@code meta.tn}, composing into an operation with fixed binding fields, and the cost that shows in its values.
@@ -77,13 +77,13 @@ class ApiProbe {
             resources: {
               "/orders" => !resource {
                 @doc:"Place an order."
-                POST => !operation { method: place_order  status: 201
+                POST => !binding { method: place_order  status: 201
                                      body: order  headers: { idempotency_key => "Idempotency-Key" } }
-                GET  => !operation { method: list_orders }
+                GET  => !binding { method: list_orders }
               }
               "/orders/{id}" => !resource {
-                GET    => !operation { method: get_order }
-                DELETE => !operation { method: cancel_order  status: 204 }
+                GET    => !binding { method: get_order }
+                DELETE => !binding { method: cancel_order  status: 204 }
               }
             }
           }
@@ -122,7 +122,7 @@ class ApiProbe {
     }
 
     /**
-     * Where the flexibility lives: one request record per method, distributed by the operation. A body that is
+     * Where the flexibility lives: one request record per method, distributed by the binding. A body that is
      * one field unwrapped beside a header; a path segment; a GET whose remainder is the query string; a DELETE
      * with nothing left over. And the api's {@code implements} claim holds: all four methods are bound.
      */
@@ -149,7 +149,7 @@ class ApiProbe {
         assertEquals("order_not_found", cancel.errors().getFirst().name());
     }
 
-    /** A web service on its own terms: no interface, every operation's signature inline. */
+    /** A web service on its own terms: no interface, every endpoint an {@code !operation} with its signature inline. */
     @Test
     void anApiWithNoInterfaceCarriesItsSignaturesInline() {
         Routes routes = routes(api("""
@@ -167,7 +167,7 @@ class ApiProbe {
     void theImplementsClaimIsHeldTo() {
         String partial = api("""
               orders_api => !api { implements: [orders]
-                                   resources: { "/orders" => !resource { POST => !operation { method: place_order } } } }
+                                   resources: { "/orders" => !resource { POST => !binding { method: place_order } } } }
             """);
         String refused = assertThrows(IllegalStateException.class, () -> routes(partial).requireComplete())
                 .getMessage();
@@ -178,7 +178,7 @@ class ApiProbe {
               orders_api => !api { implements: [orders]
                                    not_bound: { get_order => "served by the read replica"  list_orders => "not built yet"
                                                 cancel_order => "not built yet" }
-                                   resources: { "/orders" => !resource { POST => !operation { method: place_order } } } }
+                                   resources: { "/orders" => !resource { POST => !binding { method: place_order } } } }
             """)).requireComplete();
     }
 
@@ -187,26 +187,34 @@ class ApiProbe {
     void extendsIsWalkedForTheClaim() {
         String refused = assertThrows(IllegalStateException.class, () -> routes(api("""
               v2 => !api { implements: [orders_v2]
-                           resources: { "/refunds/{id}" => !resource { POST => !operation { method: refund } } } }
+                           resources: { "/refunds/{id}" => !resource { POST => !binding { method: refund } } } }
             """)).requireComplete()).getMessage();
 
         assertTrue(refused.contains("place_order") && refused.contains("refund") == false, refused);
     }
 
-    /** An operation names a method OR carries a signature -- both, or neither, is refused by the reader. */
+    /**
+     * An endpoint is an {@code !operation} or a {@code !binding}, and the tag says which: the base has no data of
+     * its own, so an untagged value is refused by the resolver naming both subtypes, and a method on an
+     * {@code !operation} is a field it does not have. The one-or-the-other rule needs no reader.
+     */
     @Test
-    void anOperationHasItsSignatureOneWayOnly() {
-        String both = api("""
-              a => !api { "/orders" => !resource { POST => !operation { method: place_order  request: order } } }
-            """);
-        assertTrue(assertThrows(IllegalArgumentException.class, () -> routes(both)).getMessage()
-                .contains("not both"));
+    void anEndpointIsTaggedOperationOrBinding() {
+        String untagged = only(api("""
+              a => !api { "/orders" => !resource { POST => { method: place_order } } }
+            """));
+        assertTrue(untagged.contains("'endpoint' has no data of its own to bind")
+                && untagged.contains("[operation, binding]"), untagged);
 
-        String neither = api("""
-              a => !api { "/orders" => !resource { POST => !operation { status: 201 } } }
-            """);
-        assertTrue(assertThrows(IllegalArgumentException.class, () -> routes(neither)).getMessage()
-                .contains("must name a method or carry a signature"));
+        String methodOnAnOperation = only(api("""
+              a => !api { "/orders" => !resource { POST => !operation { method: place_order  request: order } } }
+            """));
+        assertTrue(methodOnAnOperation.contains("unknown field 'method' on 'operation'"), methodOnAnOperation);
+
+        String bareBase = only(api("""
+              a => !api { "/orders" => !resource { POST => !endpoint { status: 201 } } }
+            """));
+        assertTrue(bareBase.contains("has no data of its own to bind"), bareBase);
     }
 
     /** The cost of relating by identifier, measured: a typo resolves clean and only the reader catches it. */
@@ -214,7 +222,7 @@ class ApiProbe {
     void aMethodNoImplementedInterfaceDeclaresIsRefusedByTheReader() {
         String typo = api("""
               orders_api => !api { implements: [orders]
-                                   resources: { "/orders" => !resource { POST => !operation { method: plaec_order } } } }
+                                   resources: { "/orders" => !resource { POST => !binding { method: plaec_order } } } }
             """);
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(typo)).getMessage();
         assertTrue(refused.contains("'plaec_order'") && refused.contains("[orders]"), refused);
@@ -225,7 +233,7 @@ class ApiProbe {
     void anAmbiguousMethodNameNeedsItsInterface() {
         String ambiguous = api("""
               a => !api { implements: [orders billing]
-                          resources: { "/orders/{id}" => !resource { GET => !operation { method: get_order } } } }
+                          resources: { "/orders/{id}" => !resource { GET => !binding { method: get_order } } } }
             """);
         assertTrue(assertThrows(IllegalArgumentException.class, () -> routes(ambiguous)).getMessage()
                 .contains("say which with `interface:`"));
@@ -233,7 +241,7 @@ class ApiProbe {
         Routes routes = routes(api("""
               a => !api { implements: [orders billing]
                           resources: { "/orders/{id}" => !resource {
-                            GET => !operation { method: get_order  interface: billing } } } }
+                            GET => !binding { method: get_order  interface: billing } } } }
             """));
         assertEquals("order_ref", routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow().request().orElseThrow().name());
     }
@@ -243,10 +251,38 @@ class ApiProbe {
     void aContainerFieldCannotRideInThePath() {
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
               a => !api { implements: [bulk]
-                          resources: { "/orders/{items}" => !resource { GET => !operation { method: page_orders } } } }
+                          resources: { "/orders/{items}" => !resource { GET => !binding { method: page_orders } } } }
             """))).getMessage();
 
         assertTrue(refused.contains("'items'") && refused.contains("not a scalar"), refused);
+    }
+
+    /** The borrowed namespaces keep their grammars at the key: a path, a header name, a method name. */
+    @Test
+    void theBorrowedNamespacesKeepTheirGrammarsAtTheKey() {
+        String notAPath = only(api("""
+              a => !api { "orders" => !resource { GET => !operation { request: order_ref } } }
+            """));
+        assertTrue(notAPath.contains("'path_template'") && notAPath.contains("'orders'"), notAPath);
+
+        String notAToken = only(api("""
+              a => !api { "/orders" => !resource {
+                POST => !operation { request: new_order  headers: { idempotency_key => "Idempotency Key" } } } }
+            """));
+        assertTrue(notAToken.contains("'header_name'"), notAToken);
+
+        String notAMethodName = only(api("""
+              a => !api { implements: [orders]
+                          resources: { "/orders" => !resource { POST => !binding { method: "place order" } } } }
+            """));
+        assertTrue(notAMethodName.contains("'method_name': 'place order'"), notAMethodName);
+    }
+
+    /** The one diagnostic the resolver gives for {@code api}, or a failure naming them all. */
+    static String only(String api) {
+        List<Diagnostic> problems = tson(api).validateSchema(api);
+        assertEquals(1, problems.size(), () -> "" + problems);
+        return problems.getFirst().message();
     }
 
     // ── kept for comparison: a method as a TYPE, and the operation IS-A the method ──────────────

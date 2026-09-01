@@ -1,0 +1,26 @@
+!!id:"https://schemas.example.com/2026/34/experiment/meta-service/orders-api-inline-1.tn"
+!!meta:"https://tson.io/2026/34/ltr8/http/meta-service-1.tn"
+!!import:"https://schemas.example.com/2026/34/experiment/meta-service/orders-types-1.tn"
+!!import:"https://schemas.example.com/2026/34/experiment/meta-service/orders-errors-1.tn"
+@doc:"""
+  Web service only: an api on its own terms, with no interface behind it, so every endpoint is an
+  `!operation` carrying its signature inline. The verb and the path are the keys an endpoint sits under;
+  a path key is data, so `/orders/{id}` needs no identifier minted from it. A parameter-only endpoint is a
+  one-field request record placed from the path.
+  """
+{
+  orders_api => !api {
+    "/orders" => !resource {
+      @doc:"Place an order. The whole body is the order."
+      POST => !operation { request: order  response: order  errors: [sku_not_found]  status: 201 }
+    }
+    "/orders/{id}" => !resource {
+      @doc:"One order, by the id in the path."
+      GET => !operation { request: order_ref  response: order  errors: [order_not_found]  safe: true }
+    }
+    "/{schemaPath}" => !resource {
+      @doc:"Every schema this service names, at its own identity's path. The 200 is bytes, not TSON."
+      GET => !operation { request: schema_ref  safe: true  idempotent: true }
+    }
+  }
+}

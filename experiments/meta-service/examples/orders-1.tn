@@ -1,0 +1,31 @@
+!!id:"https://schemas.example.com/2026/34/experiment/meta-service/orders-1.tn"
+!!meta:"https://tson.io/2026/34/ltr8/http/meta-service-1.tn"
+!!import:"https://schemas.example.com/2026/34/experiment/meta-service/orders-types-1.tn"
+!!import:"https://schemas.example.com/2026/34/experiment/meta-service/orders-errors-1.tn"
+@doc:"""
+  Interface only: nothing HTTP in the document. An interface is a map of methods keyed by name -- a
+  method's name is the key it sits under, scoped to its interface, and a `@doc` before the key documents
+  it. The `!method` tag is optional under the typed slot. `extends` names other interfaces whose methods
+  this one also has; the reader walks it, not `!!import`.
+  """
+{
+  @doc:"The orders interface."
+  orders => !interface {
+    @doc:"Accept an order and confirm it with the quantity doubled."
+    place_order  => { request: new_order    response: order       errors: [sku_not_found] }
+    @doc:"One order, by reference."
+    get_order    => { request: order_ref    response: order       errors: [order_not_found]  safe: true }
+    @doc:"A page of orders, filtered by status."
+    list_orders  => { request: order_query  response: order_page  safe: true }
+    @doc:"Cancel an order. Cancelling twice is the same as cancelling once."
+    cancel_order => { request: order_ref    errors: [order_not_found]  idempotent: true }
+  }
+
+  @doc:"Everything orders has, and a refund."
+  orders_v2 => !interface {
+    extends: [orders]
+    methods: {
+      refund => { request: order_ref  idempotent: true }
+    }
+  }
+}

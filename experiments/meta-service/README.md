@@ -13,21 +13,27 @@ Can one meta layer hold all three, and what does the third actually need?
 
 ## The sketch
 
-[`meta-service-1.tn`](meta-service-1.tn), with three uses in [`examples.md`](examples.md). Two entries a governed
+[`meta-service-1.tn`](meta-service-1.tn), with three uses as real documents under [`examples/`](examples/)
+(guide: [`examples.md`](examples.md)). Two entries a governed
 schema writes, and both are **maps**:
 
-- `interface => ~data & { extends: [type_name]?  methods: {type_name => method} }` -- a named, documented map
+- `interface => ~data & { extends: [type_name]?  methods: {method_name => method} }` -- a named, documented map
   of methods. A method is a map *value* under its name, so the name is scoped to its interface (two interfaces
   may both declare `place_order`), a `@doc` before the key documents it, and the `!method` tag is optional under
   the typed slot. `extends` names other interfaces whose methods this one also has.
-- `api => ~data & { implements: [type_name]?  not_bound: {type_name => text}?  resources: {text => resource} }`
-  and `resource => ~data & { operations: {http_verb => operation} }` -- resources keyed by **path**, each holding
-  operations keyed by **verb**: OpenAPI's `paths`, arrived at from the key types. A path key is data, so
-  `/orders/{id}` needs no identifier minted from it and an operation needs no invented name.
-- `operation => ~data & signature & placement & { method: type_name?  interface: type_name?  status ~ 200 … }`
-  -- the one HTTP constructor. It has its signature *one* of two ways: `method` names one on an interface the
-  api implements (borrowing it), or the signature is inline for an api with no interface behind it. Both, or
-  neither, is refused. The verb and path are the keys it sits under.
+- `api => ~data & { implements: [type_name]?  not_bound: {method_name => text}?  resources: {path_template => resource} }`
+  and `resource => ~data & { endpoints: {http_verb => endpoint} }` -- resources keyed by **path**, each holding
+  endpoints keyed by **verb**: OpenAPI's `paths`, arrived at from the key types. A path key is data, so
+  `/orders/{id}` needs no identifier minted from it and an endpoint needs no invented name.
+- `endpoint => ~data & placement & { status ~ 200  summary? }`, with `operation => ~endpoint & signature & {…}`
+  and `binding => ~endpoint & { method: method_name  interface: type_name? }` deriving from it at constructor
+  level. An `!operation` carries its signature inline, for an api with no interface behind it; a `!binding`
+  borrows a method's. The tag says which, and it is not optional: the base has no data of its own to bind, so an
+  untagged value is refused by the resolver naming both subtypes -- the one-or-the-other rule with no reader
+  behind it. The verb and path are the keys an endpoint sits under. (A choice `(operation | binding)` and a field
+  group `( method | signature )` were both measured to work; the supertype won because the base is abstract for
+  free, shared vocabulary is inherited rather than composed twice, and a new kind of endpoint is one more
+  derivation.)
 - `signature` and `placement` are plain records composed into the constructors above. `signature` is the
   transport-neutral contract (request, response, errors, `safe`/`idempotent`, the two stream flags, defined
   below). `placement` is **where the interface and the web service over it are allowed to look different**: a
@@ -53,16 +59,23 @@ computes its `Placement`, and holds the `implements` claim. The three probes:
   schema cannot lift; an error type's `REQUIRED_FIXED` status readable from the resolved schema; and the rule the
   design bends around, a `~data` *instance* named as a type refused at load.
 - `InterfaceMapProbe` -- the finding the map design rests on, below.
+- `ExamplesProbe` -- the documents under `examples/` resolve against the sketch and both apis read into route tables.
 - `ApiProbe` -- an interface and the web service that maps it, through `Routes`: the placement of each request
-  record; an inline-only api; the `implements` claim failing and then exempted; `extends` walked; the
-  one-or-the-other rule; a typo the resolver passes and the reader catches; an ambiguous name needing
-  `interface:`; a container in a path; and the method-as-type alternative kept for comparison.
+  record; an inline-only api; the `implements` claim failing and then exempted; `extends` walked; the tag rule
+  the resolver enforces; a typo the resolver passes and the reader catches; an ambiguous name needing
+  `interface:`; a container in a path; the three borrowed grammars at their keys; and the method-as-type
+  alternative kept for comparison.
+- `SupertypeProbe` -- the mechanism `!binding` rides on: a derived constructor's instance admitted at its
+  base-typed slot, the base abstract for free, its constraints inherited.
+- `NameRoleProbe` -- what a naming role buys at a map key, and the hygiene gap below.
 
 **Two binder facts met on the way**, both worth knowing before writing a bound record for a `~data`
 constructor: the binder finds a class by PascalCasing the type name (`interface_of_methods` →
 `InterfaceOfMethods`), `@Typename` notwithstanding; and it hands a map's *keys* back as `String` whatever the
-schema's key type, so `{http_verb => operation}` binds to `Map<String, Operation>` and a `Map<HttpVerb, …>`
-component would hold strings and lie about it.
+schema's key type, so `{http_verb => endpoint}` binds to `Map<String, Endpoint>` and a `Map<HttpVerb, …>`
+component would hold strings and lie about it. A third: a slot typed by a constructor needs a Java type of that
+name even if nothing constructs it bare -- a sealed interface is the right thing to put there, and it makes the
+base as abstract in Java as it is in the schema.
 
 ## The real problem, and the two ways it can be modelled today
 
@@ -122,6 +135,31 @@ names under [TSON-DATA] §7.7's identifier grammar. An `!interface` and an `!api
 plainest in the api, where `"/orders"` is visibly a name in the URL path namespace. The map's key type is how a
 TSON document borrows a namespace it does not govern and says what lives at each name -- which is why
 `http_verb` is an enum copied from a registry and a path key is `text`: the discipline comes from outside.
+
+**Separating the names: one naming role per borrowed namespace.** The kernel already shows how: `type_name`,
+`field_name` and `param_name` are each `=> identifier` -- roles over one grammar, so a rule stated on a role
+reaches every position of that kind. The sketch declares one per namespace it borrows and uses it as the map's key
+type (`placement` already used the kernel's `field_name` for the record's; method names were filed under
+`type_name` until this was seen):
+
+```
+method_name   => identifier                                             an interface's keys
+path_template => !text ^ { pattern: "/([^/{}]+|\\{[A-Za-z_][A-Za-z0-9_]*\\})*" }
+                                                    an api's keys: an RFC 3986 path with {segments}
+header_name   => !text ^ { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+" }    a `headers` value: an RFC 9110 token
+
+interface => ~data & { extends: [type_name]?  methods: {method_name => method} }
+api       => ~data & { … resources: {path_template => resource} }
+```
+
+`NameRoleProbe` measures what a role buys at a map key, and `ApiProbe` pins the three in the sketch: the identifier
+grammar, enforced, with the refusal
+naming the role -- *"'method_name': 'place order': U+0020 at index 5 cannot appear in an identifier"* -- where a
+`text` key accepts anything and `type_name` enforces the same grammar while misnaming the namespace. For the
+URL and header namespaces the authority's grammar rides as a `pattern`, I-Regexp over the whole token, the
+same device `deployment-1.tn` uses for a script name. What stays a `type_name` honestly is the *interface's own*
+name (`orders`) and `implements`/`extends`: an interface is still an entry in the type namespace, which is the
+seam the `namespace` kind would move.
 
 Four things follow.
 
@@ -203,12 +241,24 @@ instances, so the implementation is consistent with the kernel; whether "entry" 
 constructor is what to ask. "What the maps are", above, is the argument for answering it with a `namespace`
 kind rather than by widening `data`. **Not filed** -- confined here with the rest.
 
+**Name hygiene does not reach map keys.** Measured in `NameRoleProbe`: two confusable method names in one
+interface (`admin`, `аdmin`), or a mixed-script one, are admitted under `type_name` and `method_name` alike,
+where the same names as two fields of a record or two declarations of a schema are refused under the default
+identifier policy. An interface's method map is a naming scope in every sense [TSON-DATA] §8.2 means -- names a
+reader must tell apart -- and once methods live in maps rather than as declarations, the spoofing surface §8.2
+exists for moves with them. Whether the fix is the implementation applying the identifier policy to
+identifier-role-keyed maps, or the spec naming such a map a scope, is the question; the probe is written to fail
+when either lands. **Not filed** -- confined here with the rest.
+
 ## Files
 
 - `meta-service-1.tn` -- the sketch, its reasoning in its own `@doc`s.
-- `examples.md` -- interface only, web service only, both.
+- `examples/` -- real documents: the shared types and errors, the interface only, the web service only, and
+  both, each at its own `!!id`; `examples.md` is the guide to them and the placement table. `ExamplesProbe`
+  resolves every file and runs both apis through `Routes`.
 - `java/…/experiment/metaservice/` -- the bound records the `~data` constructors need (`Method`, `Interface`,
-  `Operation`, `Resource`, `Api`, `HttpVerb`; `Signature` and `InterfaceOfSignatures` for the map probe),
-  `Placement` and `Routes` (the reader-side checks the maps need), and the three probes. Field names match the
+  `Endpoint` -- a sealed interface, the base -- `Operation`, `Binding`, `Resource`, `Api`, `HttpVerb`;
+  `Signature`, `InterfaceOfSignatures`, `ByTypeName`, `ByMethodName`, `ByText` for the probes that need their
+  own constructors), `Placement` and `Routes` (the reader-side checks the maps need), and five probes. Field names match the
   schema's exactly (`request_stream`), because binding does no case conversion; a Java keyword as a field name
   (`extends`, `interface`) is renamed with `@Field`.
