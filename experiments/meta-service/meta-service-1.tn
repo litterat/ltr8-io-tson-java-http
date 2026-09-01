@@ -7,8 +7,7 @@
   description, and its entries are methods, operations, or a mix.
 
   One vocabulary, two constructors, and the shared part is an ordinary record. `signature` is the
-  transport-neutral contract: request, response, errors, and the two facts a caller composing calls
-  needs and has no verb to read them from (safe, idempotent). `method` is a signature and nothing
+  transport-neutral contract: request, response, errors. `method` is a signature and nothing
   else; `operation` is a signature plus an HTTP binding. Both are `~data & signature ...`, the shape
   §4.2 sanctions -- a base kind seeds the constructor level and a record mixin lends vocabulary, as
   `uri_type => ~text_type & atom_specification & { ... }` does.
@@ -55,36 +54,11 @@
     204). `errors` lists BUSINESS errors -- the request was schema-valid and the domain said no -- each
     a type composing `problem`. A transport's own refusals (a body failing its schema, an Accept it
     cannot satisfy) are not listed: every call has them and the error boundary answers them.
-
-    `safe` and `idempotent` live here rather than being read off an HTTP verb because the caller that
-    needs them -- an agent planning a batch, deciding what may be retried or reordered -- has no verb.
-    `safe` implies `idempotent`. The HTTP projection CHECKS its verb against them (GET must be safe;
-    PUT and DELETE idempotent); it never derives one from the other.
-
-    `request_stream` and `response_stream` say that the request or the response is a SEQUENCE of
-    documents of the declared type -- count unknown in advance, each one complete and actionable as it
-    arrives -- rather than one document. Together they encode the four call shapes: unary, server
-    streaming, client streaming, bidirectional. A stream is a property of the CALL, not of the type:
-    `response: order  response_stream: true` is not `response: [order]`. A list is one value that
-    arrives whole and has a length; a stream's element boundaries are interaction boundaries, which is
-    the one thing a type cannot say and the reason the flags live here rather than in the types. Nor is
-    it chunked transfer or a large document read incrementally -- every call has that, and it is the
-    transport's.
-
-    What the format lacks for a stream to be real is a framing for a sequence of documents: a TSON
-    document is one value and a reader rejects trailing content. Until one exists `operation` pins
-    both false; the candidate framings are recorded in the experiment's README rather than decided
-    here. A transport with no framing question -- an in-process plan executor -- may honour the flags
-    today.
     """
   signature => {
     request:          type_ref?
     response:         type_ref?
     errors:           [type_ref]?
-    safe:             boolean ~ false
-    idempotent:       boolean ~ false
-    request_stream:   boolean ~ false
-    response_stream:  boolean ~ false
   }
 
   @doc:"A method: a signature and nothing more. Its NAME is the key it sits under in an interface."
@@ -188,14 +162,18 @@
   summary => @annotation text
 
   @doc:"""
-    An endpoint with its signature INLINE -- the one-declaration form, for an api with no interface behind
-    it. The two stream flags are pinned false here: the format has no framing for a sequence of documents
-    yet (the experiment's README records the candidates).
+    Two facts about a method that a caller composing calls needs -- an agent planning a batch, deciding
+    what may be retried or reordered -- and has no HTTP verb to read them from. Bare markers before the
+    method's key: `@safe get_order => { ... }`, `@idempotent cancel_order => { ... }`. `@safe` implies
+    `@idempotent`. Annotations rather than fields because they describe the method, not its request or
+    response; the HTTP projection CHECKS its verb against them (GET must be safe; PUT and DELETE
+    idempotent) and never derives one from the other.
     """
-  operation => ~endpoint & signature & {
-    request_stream:   = false
-    response_stream:  = false
-  }
+  safe       => @annotation void
+  idempotent => @annotation void
+
+  @doc:"An endpoint with its signature INLINE -- the one-declaration form, for an api with no interface behind it."
+  operation => ~endpoint & signature
 
   @doc:"""
     An endpoint whose signature is a METHOD's -- the two-declaration form. `method` names one declared on an

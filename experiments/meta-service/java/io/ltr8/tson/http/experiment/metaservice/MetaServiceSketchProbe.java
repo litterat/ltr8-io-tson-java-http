@@ -19,8 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * {@code meta-service-1.tn} resolves, and the constructs it leans on behave as the sketch assumes: a {@code ~data}
- * constructor with a record mixin and no trailing body ({@code method => ~data & signature}); a tightening in a
- * constructor's own body ({@code request_stream: = false}) that a governed schema cannot override; a
+ * constructor with a record mixin and no trailing body ({@code method => ~data & signature}); a
  * {@code [type_ref]} slot that resolves per element; an error type's fixed {@code status} readable from the
  * resolved schema. Plus the rule the whole design bends around: a {@code ~data} instance is not a type, and
  * naming one where a type is expected is refused at load.
@@ -69,8 +68,9 @@ class MetaServiceSketchProbe {
               orders => !interface {
                 @doc:"Accept an order and confirm it with the quantity doubled."
                 place_order  => { request: order  response: order  errors: [sku_not_found] }
+                @idempotent
                 @doc:"Cancel an order."
-                cancel_order => { request: order_ref  errors: [order_not_found]  idempotent: true }
+                cancel_order => { request: order_ref  errors: [order_not_found] }
               }
 
               orders_api => !api {
@@ -78,7 +78,7 @@ class MetaServiceSketchProbe {
                 resources: {
                   "/orders"        => !resource { POST   => !binding { method: place_order  status: 201 } }
                   "/orders/{id}"   => !resource { DELETE => !binding { method: cancel_order  status: 204 } }
-                  "/{schemaPath}"  => !resource { GET    => !operation { request: schema_ref  safe: true } }
+                  "/{schemaPath}"  => !resource { @safe GET => !operation { request: schema_ref } }
                 }
               }
             """;
@@ -96,8 +96,6 @@ class MetaServiceSketchProbe {
         Interface orders = assertInstanceOf(Interface.class, entries.get("orders").body());
         Method place = orders.methods().get("place_order");
         assertEquals("sku_not_found", place.errors().getFirst().name());
-        assertFalse(place.request_stream());
-        assertTrue(orders.methods().get("cancel_order").idempotent());
         assertEquals("Cancel an order.",
                 orders.methods().getAnnotations("cancel_order").value("doc", String.class).orElseThrow());
 
@@ -107,7 +105,6 @@ class MetaServiceSketchProbe {
         assertEquals(201, post.status());
         assertEquals("place_order", post.method());
         Operation get = assertInstanceOf(Operation.class, api.resources().get("/{schemaPath}").endpoints().get("GET"));
-        assertTrue(get.safe());
 
         // The status an error carries is readable from its type: REQUIRED_FIXED 404.
         var errEntries = tson.schemaRegistry().get(ERR_ID).orElseThrow().schema().entries();
@@ -115,18 +112,6 @@ class MetaServiceSketchProbe {
                 .filter(f -> f.name().equals("status")).findFirst().orElseThrow();
         assertEquals(FieldState.REQUIRED_FIXED, status.state());
         assertEquals("404", status.value().orElseThrow().text());
-    }
-
-    /** {@code request_stream: = false} in the constructor body is a fixed value a governed schema cannot lift. */
-    @Test
-    void anOperationCannotLiftThePinnedStream() {
-        String doc = doc(
-                "  x => !api { \"/x\" => !resource { POST => !operation { request: order  request_stream: true } } }");
-        List<Diagnostic> problems = tson(doc).validateSchema(doc);
-
-        assertEquals(1, problems.size(), () -> "" + problems);
-        assertTrue(problems.getFirst().message().contains("'request_stream' is fixed on 'operation'"),
-                problems.getFirst().message());
     }
 
     /** §4.1: a {@code kind: DATA} instance is declared and applied, never named where a type is expected. */

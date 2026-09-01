@@ -33,9 +33,7 @@ class NameRoleProbe {
         !!meta:"https://tson.io/2026/34/m/meta-kernel.tn"
         !!import:"https://tson.io/2026/34/m/meta.tn"
         {
-          signature   => { request: type_ref?  response: type_ref?  errors: [type_ref]?
-                           safe: boolean ~ false  idempotent: boolean ~ false
-                           request_stream: boolean ~ false  response_stream: boolean ~ false }
+          signature   => { request: type_ref?  response: type_ref?  errors: [type_ref]? }
           method      => ~data & signature
           method_name => identifier
           by_type_name   => ~data & { methods: {type_name => method} }

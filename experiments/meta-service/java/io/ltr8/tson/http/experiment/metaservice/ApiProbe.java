@@ -53,13 +53,13 @@ class ApiProbe {
           orders => !interface {
             @doc:"Accept an order and confirm it with the quantity doubled."
             place_order  => { request: new_order    response: order       errors: [sku_not_found] }
-            get_order    => { request: order_ref    response: order       errors: [order_not_found]  safe: true }
-            list_orders  => { request: order_query  response: order_page  safe: true }
-            cancel_order => { request: order_ref    errors: [order_not_found]  idempotent: true }
+            @safe get_order    => { request: order_ref    response: order       errors: [order_not_found] }
+            @safe list_orders  => { request: order_query  response: order_page }
+            @idempotent cancel_order => { request: order_ref    errors: [order_not_found] }
           }
 
           @doc:"Everything orders has, and a refund."
-          orders_v2 => !interface { extends: [orders]  methods: { refund => { request: order_ref  idempotent: true } } }
+          orders_v2 => !interface { extends: [orders]  methods: { @idempotent refund => { request: order_ref } } }
 
           @doc:"Declares a name orders also declares, to force `interface:` on a binding of it."
           billing => !interface { get_order => { request: order_ref  response: order } }

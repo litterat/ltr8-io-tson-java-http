@@ -15,12 +15,14 @@
       POST => !operation { request: order  response: order  errors: [sku_not_found]  status: 201 }
     }
     "/orders/{id}" => !resource {
+      @safe
       @doc:"One order, by the id in the path."
-      GET => !operation { request: order_ref  response: order  errors: [order_not_found]  safe: true }
+      GET => !operation { request: order_ref  response: order  errors: [order_not_found] }
     }
     "/{schemaPath}" => !resource {
       @doc:"Every schema this service names, at its own identity's path. The 200 is bytes, not TSON."
-      GET => !operation { request: schema_ref  safe: true  idempotent: true }
+      @safe
+      GET => !operation { request: schema_ref }
     }
   }
 }

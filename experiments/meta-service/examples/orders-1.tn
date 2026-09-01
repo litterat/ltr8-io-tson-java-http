@@ -14,19 +14,23 @@
     @summary:"Place an order."
     @doc:"Accept an order and confirm it with the quantity doubled."
     place_order  => { request: new_order    response: order       errors: [sku_not_found] }
+    @safe
     @doc:"One order, by reference."
-    get_order    => { request: order_ref    response: order       errors: [order_not_found]  safe: true }
+    get_order    => { request: order_ref    response: order       errors: [order_not_found] }
+    @safe
     @doc:"A page of orders, filtered by status."
-    list_orders  => { request: order_query  response: order_page  safe: true }
+    list_orders  => { request: order_query  response: order_page }
+    @idempotent
     @doc:"Cancel an order. Cancelling twice is the same as cancelling once."
-    cancel_order => { request: order_ref    errors: [order_not_found]  idempotent: true }
+    cancel_order => { request: order_ref    errors: [order_not_found] }
   }
 
   @doc:"Everything orders has, and a refund."
   orders_v2 => !interface {
     extends: [orders]
     methods: {
-      refund => { request: order_ref  idempotent: true }
+      @idempotent
+      refund => { request: order_ref }
     }
   }
 }

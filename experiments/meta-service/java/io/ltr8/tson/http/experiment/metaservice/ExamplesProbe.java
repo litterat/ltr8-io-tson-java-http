@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -96,6 +97,10 @@ class ExamplesProbe {
         assertEquals("Cancel an order. Cancelling twice is the same as cancelling once.",
                 orders.methods().getAnnotations("cancel_order").value("doc", String.class).orElseThrow());
         assertEquals(List.of("orders"), assertInstanceOf(Interface.class, entries.get("orders_v2").body()).extended());
+        // Facts about a method are bare annotations on its key, not fields of its signature.
+        assertTrue(orders.methods().getAnnotations("get_order").has("safe"));
+        assertTrue(orders.methods().getAnnotations("cancel_order").has("idempotent"));
+        assertFalse(orders.methods().getAnnotations("place_order").has("safe"));
     }
 
     @Test
@@ -106,6 +111,9 @@ class ExamplesProbe {
         Routes.Route schema = routes.route(HttpVerb.GET, "/{schemaPath}").orElseThrow();
         assertEquals(Map.of("schemaPath", Placement.Location.PATH), schema.placement().fields());
         assertEquals(201, routes.route(HttpVerb.POST, "/orders").orElseThrow().status());
+        // On an operation the marker sits before the verb key, the same way.
+        Api api = apiOf(tson(), "orders-api-inline-1.tn", "orders_api");
+        assertTrue(api.resources().get("/{schemaPath}").endpoints().getAnnotations("GET").has("safe"));
     }
 
     @Test

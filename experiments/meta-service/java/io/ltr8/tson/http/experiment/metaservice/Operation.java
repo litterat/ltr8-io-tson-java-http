@@ -11,7 +11,6 @@ import java.util.Optional;
 /** The sketch's {@code operation}: an endpoint with its signature inline. */
 @Typename(name = "operation")
 public record Operation(Optional<TypeRef> request, Optional<TypeRef> response, List<TypeRef> errors,
-                        boolean safe, boolean idempotent, boolean request_stream, boolean response_stream,
                         List<String> query, Map<String, String> headers, Optional<String> body,
                         int status) implements Endpoint {
 

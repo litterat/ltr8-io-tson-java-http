@@ -37,8 +37,11 @@ schema writes, and both are **maps**:
   declares `documentation`, and `@doc` the long -- not fields: an endpoint is a map value, and a map key carries
   annotations.
 - `signature` and `placement` are plain records composed into the constructors above. `signature` is the
-  transport-neutral contract (request, response, errors, `safe`/`idempotent`, the two stream flags, defined
-  below). `placement` is **where the interface and the web service over it are allowed to look different**: a
+  transport-neutral contract: request, response, errors. What a caller composing calls needs to know beyond that
+  -- `@safe`, `@idempotent` -- is a bare annotation on the method's key, declared here as the kernel declares
+  `annotation`, because it describes the method rather than its request or response; the HTTP projection checks
+  its verb against them and never derives one from the other. `placement` is **where the interface
+  and the web service over it are allowed to look different**: a
   method has one request record, and the operation distributes its fields -- a `{segment}` in the path binds a
   field, `query` names query fields, `headers` maps a field to its header, `body` names one field carried
   unwrapped as the whole body, and the remainder is the body (or the query, for a GET/HEAD or once `body` named
@@ -57,8 +60,8 @@ identifier the resolver does not check, because a `kind: DATA` entry cannot be r
 computes its `Placement`, and holds the `implements` claim. The three probes:
 
 - `MetaServiceSketchProbe` -- the sketch resolves and its constructs behave as assumed: a `~data` constructor
-  with a record mixin and no body; a fixed value in a constructor body (`request_stream: = false`) a governed
-  schema cannot lift; an error type's `REQUIRED_FIXED` status readable from the resolved schema; and the rule the
+  with a record mixin and no body; an error type's `REQUIRED_FIXED` status readable from the resolved schema; and the
+  rule the
   design bends around, a `~data` *instance* named as a type refused at load.
 - `InterfaceMapProbe` -- the finding the map design rests on, below.
 - `ExamplesProbe` -- the documents under `examples/` resolve against the sketch and both apis read into route tables.
@@ -204,31 +207,14 @@ or more than one, is a spec question; the URL namespace being hierarchical (`/or
 answer should serve both.
 
 
-**A framing for a stream of documents.** `signature` defines `request_stream`/`response_stream` as a sequence
-of documents of the declared type, count unknown, each complete as it arrives -- a property of the call, not of
-the type. The format has no spelling for that: a document is one value and the readers reject trailing content,
-so a stream needs an outer framing. Three candidates, in the order this experiment would rank them:
-
-1. **`application/tson-seq`, on RFC 7464's model** (`application/json-seq`: texts delimited by RS, U+001E). Each
-   element is a complete TSON document, self-describing or governed by the method's schema; truncation is
-   detectable per element; and an error mid-stream is a `problem` document in the sequence, so the interface's
-   `errors` apply per element with no new machinery. If streaming is in scope for the format at all, this is the
-   proposal, and [TSON-DATA] §7.1 -- where the media type lives -- is where it would be filed. **Not filed:**
-   the experiment is confined until that question is answered.
-2. **SSE or multipart** -- real HTTP framings, each element a document. `response_stream` only, and a second
-   specification's event model comes with it.
-3. **One array, consumed lazily** through the existing `TsonDataStream` events. No new format, but it is the
-   "a stream is a list" misreading made official: an incomplete stream is an invalid document, and nothing can
-   follow a failed element.
-
-What follows for the HTTP projection once a framing exists: `response_stream` is one media type on the
-response; `request_stream` over HTTP/1.1 is a chunked request body a server can only answer after; the
-bidirectional shape needs HTTP/2 or a WebSocket and is probably not `operation`'s business. `operation` pins
-both flags `false` in this version for that reason.
-
-A naming point recorded rather than taken: two booleans admit "both true" as the bidirectional shape by accident
-of encoding. If that shape is not meant to be expressible over HTTP, a `shape: UNARY | SERVER_STREAM |
-CLIENT_STREAM | BIDI` on the signature says which four and lets `operation` pin one field.
+**Streams are not modelled, until a use arrives.** An earlier sketch carried `request_stream`/`response_stream`
+on the signature, meaning a *sequence* of documents of the declared type -- count unknown, each complete as it
+arrives -- a property of the call, not of the type, and so not `[order]`. Removed because nothing here uses
+them and the format has no framing for a sequence of documents (a document is one value; readers reject
+trailing content). When a use arrives, the framing question comes with it: `application/tson-seq` on RFC 7464's
+model (an error mid-stream is a `problem` document in the sequence, so `errors` apply per element) over SSE,
+multipart, or a lazily-read array; and a `shape: UNARY | SERVER_STREAM | CLIENT_STREAM | BIDI` beats two booleans
+that admit the bidirectional shape by accident of encoding.
 
 **An interface as a map of methods works today -- and §4.1 reads as if it should not.** `InterfaceMapProbe`
 measures `interface => ~data & { methods: {type_name => method} }`, written `orders => !interface { place_order
@@ -262,5 +248,5 @@ when either lands. **Not filed** -- confined here with the rest.
   `Endpoint` -- a sealed interface, the base -- `Operation`, `Binding`, `Resource`, `Api`, `HttpVerb`;
   `Signature`, `InterfaceOfSignatures`, `ByTypeName`, `ByMethodName`, `ByText` for the probes that need their
   own constructors), `Placement` and `Routes` (the reader-side checks the maps need), and five probes. Field names match the
-  schema's exactly (`request_stream`), because binding does no case conversion; a Java keyword as a field name
+  schema's exactly (`idempotency_key`), because binding does no case conversion; a Java keyword as a field name
   (`extends`, `interface`) is renamed with `@Field`.

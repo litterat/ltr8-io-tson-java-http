@@ -101,10 +101,10 @@ class InterfaceMapProbe {
     void aMapOfSignatureRecordsResolvesPositionally() {
         var orders = assertInstanceOf(InterfaceOfSignatures.class, resolvedBody("""
                   orders => !interface_of_signatures { place_order  => { request: order  response: order }
-                                                       cancel_order => { request: order_ref  idempotent: true } }"""));
+                                                       cancel_order => { request: order_ref } }"""));
 
         assertEquals(List.of("place_order", "cancel_order"), List.copyOf(orders.methods().keySet()));
-        assertTrue(orders.methods().get("cancel_order").idempotent());
+        assertTrue(orders.methods().get("cancel_order").request().isPresent());
     }
 
     /** A method can be documented where it is declared: a {@code @doc} before the key survives the read. */
