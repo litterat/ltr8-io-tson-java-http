@@ -2,7 +2,6 @@ package io.ltr8.tson.http.experiment.metaservice;
 
 import io.ltr8.annotation.AnnotatedMap;
 import io.ltr8.annotation.Typename;
-import io.ltr8.tson.schema.meta.Data;
 import io.ltr8.tson.schema.meta.TypeRef;
 
 import java.util.ArrayList;
@@ -16,13 +15,13 @@ import java.util.List;
  * hold strings and lie about it. {@link Routes} converts, and a key that is not a verb is refused there.
  */
 @Typename(name = "resource")
-public record Resource(AnnotatedMap<String, Endpoint> endpoints) implements Data {
+public record Resource(AnnotatedMap<String, Endpoint> endpoints) {
 
     public Resource {
         endpoints = endpoints == null ? new AnnotatedMap<>() : endpoints;
     }
 
-    @Override
+    /** Every endpoint's references, handed on to the owning api. */
     public List<TypeRef> references() {
         List<TypeRef> all = new ArrayList<>();
         endpoints.values().forEach(e -> all.addAll(e.references()));

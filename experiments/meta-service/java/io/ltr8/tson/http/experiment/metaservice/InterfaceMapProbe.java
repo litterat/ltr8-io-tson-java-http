@@ -14,19 +14,19 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The finding the map design rests on: a meta layer may type a map's values with a {@code ~data} constructor --
- * {@code interface => ~data & { methods: {type_name => method} }} -- and the implementation builds the values.
+ * An interface as a map of methods: the values are built; a value under the typed slot needs no {@code !method}
+ * tag; an unresolved reference inside a value is caught at load, provided the owner's {@code references()} hands
+ * it on; and a {@code @doc} written before a map key survives into {@code AnnotatedMap.getAnnotations}.
  *
- * <p>Measured here on the sketch's own {@code interface} and on a probe-only variant whose value type is the plain
- * {@code signature} record: the values are built; a value under the typed slot needs no {@code !method} tag; an
- * unresolved reference inside a value is caught at load, provided the owner's {@code references()} hands it on;
- * and a {@code @doc} written before a map key survives into {@code AnnotatedMap.getAnnotations}.
- *
- * <p><b>Read [TSON-SCHEMA] §4.1 before relying on it.</b> The text refuses "naming a {@code kind: DATA} entry"
- * as an element type, and a map's value type is one; the implementation admits a DATA <em>constructor</em>
- * there and refuses only an <em>instance</em> ({@code MetaServiceSketchProbe.aMethodIsNotAType}). The kernel's
- * own {@code top}-typed slots hold DATA instances, so the implementation is consistent with the kernel; whether
- * §4.1 means "entry" to include a constructor is a question for the spec, recorded in the experiment's README.
+ * <p>Measured on the sketch's own {@code interface}, whose {@code method} is a plain record, and on two probe-only
+ * variants: the value type as the bare {@code signature} record, and the value type as a {@code ~data}
+ * <em>constructor</em>. The last is the finding the map design once rested on and no longer needs -- only
+ * {@code interface} and {@code api} are constructors now, and nothing names a DATA entry at a type slot -- but it
+ * stays pinned because it is a live question for the spec: [TSON-SCHEMA] §4.1 refuses "naming a {@code kind:
+ * DATA} entry" as an element type, and a map's value type is one; the implementation admits a DATA constructor
+ * there and refuses only an instance ({@code MetaServiceSketchProbe.anInterfaceIsNotAType}). The kernel's own
+ * {@code top}-typed slots hold DATA instances, so the implementation is consistent with the kernel; whether §4.1
+ * means "entry" to include a constructor is what to ask.
  */
 class InterfaceMapProbe {
 
@@ -37,7 +37,10 @@ class InterfaceMapProbe {
     static final String META = Experiment.metaServiceSource()
             .replace("https://tson.io/2026/34/ltr8/http/meta-service-1.tn", PROBE_META_ID)
             .replace("\n  api => ~data & {",
-                    "\n  interface_of_signatures => ~data & { methods: {type_name => signature} }\n\n  api => ~data & {");
+                    "\n  interface_of_signatures => ~data & { methods: {type_name => signature} }\n"
+                    + "  data_method => ~data & signature\n"
+                    + "  interface_of_data_methods => ~data & { methods: {type_name => data_method} }\n\n"
+                    + "  api => ~data & {");
 
     static String doc(String entries) {
         return """
@@ -66,14 +69,26 @@ class InterfaceMapProbe {
         return tson.schemaRegistry().get(DOC_ID).orElseThrow().schema().entries().get("orders").body();
     }
 
-    /** The literal question: a map whose value type is the {@code ~data} constructor, its values tagged. */
+    /** The sketch's own interface: a map of {@code method} records, tagged or not. */
     @Test
-    void aMapOfDataMethodsResolvesInTheImplementation() {
+    void aMapOfMethodRecordsResolves() {
         var orders = assertInstanceOf(Interface.class, resolvedBody(
                 "  orders => !interface { place_order => !method { request: order  response: order } }"));
 
         Method place = orders.methods().get("place_order");
         assertEquals("order", place.request().orElseThrow().name());
+    }
+
+    /**
+     * A map whose value type is a {@code ~data} CONSTRUCTOR also resolves, and its values are built -- the
+     * measurement the design once rested on, kept for the spec question in the class doc.
+     */
+    @Test
+    void aMapOfDataConstructorInstancesResolvesInTheImplementation() {
+        var orders = assertInstanceOf(InterfaceOfDataMethods.class, resolvedBody(
+                "  orders => !interface_of_data_methods { place_order => !data_method { request: order } }"));
+
+        assertEquals("order", orders.methods().get("place_order").request().orElseThrow().name());
     }
 
     /** The slot's type supplies the constructor, so the tag is optional -- as at any typed position. */

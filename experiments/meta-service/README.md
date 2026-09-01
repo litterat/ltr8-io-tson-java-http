@@ -25,15 +25,21 @@ schema writes, and both are **maps**:
   and `resource => ~data & { endpoints: {http_verb => endpoint} }` -- resources keyed by **path**, each holding
   endpoints keyed by **verb**: OpenAPI's `paths`, arrived at from the key types. A path key is data, so
   `/orders/{id}` needs no identifier minted from it and an endpoint needs no invented name.
-- `endpoint => ~data & placement & { status ~ 200 }`, with `operation => ~endpoint & signature & {…}`
-  and `binding => ~endpoint & { method: method_name  interface: type_name? }` deriving from it at constructor
-  level. An `!operation` carries its signature inline, for an api with no interface behind it; a `!binding`
-  borrows a method's. The tag says which, and it is not optional: the base has no data of its own to bind, so an
-  untagged value is refused by the resolver naming both subtypes -- the one-or-the-other rule with no reader
-  behind it. The verb and path are the keys an endpoint sits under. (A choice `(operation | binding)` and a field
-  group `( method | signature )` were both measured to work; the supertype won because the base is abstract for
-  free, shared vocabulary is inherited rather than composed twice, and a new kind of endpoint is one more
-  derivation.) Documentation is annotation on the verb key -- `@summary` the short form, declared here as the kernel
+- `endpoint => placement & { status ~ 200 }`, with `operation => endpoint & signature` and `binding =>
+  endpoint & { method: method_name  interface: type_name? }` composing it. An `!operation` carries its
+  signature inline, for an api with no interface behind it; a `!binding` borrows a method's. The tag says
+  which, and it is not optional: the base binds to a type with no bare form, so an untagged value is refused
+  naming both subtypes -- the one-or-the-other rule with no reader behind it. The verb and path are the keys an
+  endpoint sits under. (A choice `(operation | binding)` and a field group `( method | signature )` were both
+  measured to work; the supertype won because the base is abstract, shared vocabulary is inherited rather than
+  composed twice, and a new kind of endpoint is one more composition.)
+- **Only `interface` and `api` are `~data &` constructors** -- the two entries a governed schema writes, and
+  the only things that may head one (`x => !method { }` is refused: not a constructor). Everything inside them
+  is an ordinary record, because it only ever appears as a map value; `method => signature & {}` takes the empty
+  body to be a type of its own rather than an alias that would flatten to `signature`. So no `kind: DATA` entry
+  is named at a type slot anywhere in the design, §4.1 has nothing to say about it, and a `resource` needs no
+  tag under its path key. Documentation is annotation on the verb key -- `@summary` the short form, declared here as
+  the kernel
   declares `documentation`, and `@doc` the long -- not fields: an endpoint is a map value, and a map key carries
   annotations.
 - `signature` and `placement` are plain records composed into the constructors above. `signature` is the
@@ -171,8 +177,9 @@ Four things follow.
 **It says what the `data` kind was.** `operation => ~data & { … }` declared "an entry in the type namespace that
 is not a type": a foreign namespace's member filed in the wrong map, which is exactly why it could be declared
 but never referenced -- the type namespace has no reference form for non-types because it should hold none. The
-map shape moves the members out. What remains under `~data` is `orders` and `orders_api`, the *namespaces
-themselves*, and only because `data` is the one non-type kind there is. So the fifth kind the spec-feedback
+map shape moves the members out, and they are ordinary records there. What remains under `~data` is `orders` and
+`orders_api`, the *namespaces themselves*, and only because `data` is the one non-type kind there is. So the fifth
+  kind the spec-feedback
 proposal ("a namespace should be a value") reaches for is not `data` but `namespace`; `data`'s one surviving job
 is to hold one, and it retires the day `namespace` exists.
 
@@ -216,18 +223,14 @@ model (an error mid-stream is a `problem` document in the sequence, so `errors` 
 multipart, or a lazily-read array; and a `shape: UNARY | SERVER_STREAM | CLIENT_STREAM | BIDI` beats two booleans
 that admit the bidirectional shape by accident of encoding.
 
-**An interface as a map of methods works today -- and §4.1 reads as if it should not.** `InterfaceMapProbe`
-measures `interface => ~data & { methods: {type_name => method} }`, written `orders => !interface { place_order
-=> !method { … } }`: it resolves, the values are built as methods, the tag is optional under the typed slot, an
-unresolved reference inside a value is caught at load (through the owner's `references()`), and a `@doc` before
-a map key survives into `AnnotatedMap.getAnnotations`. That is most of what the flat namespace was costing --
-methods are keys inside their interface, so two interfaces may both declare `place_order`; the interface is one
-entry with a name and a doc -- with no reference to a data entry anywhere. The question for the spec: [TSON-SCHEMA]
-§4.1 refuses "naming a `kind: DATA` entry" as an element type, and a map's value type is one; the implementation
-admits the DATA *constructor* there and refuses only an *instance*. The kernel's own `top`-typed slots hold DATA
-instances, so the implementation is consistent with the kernel; whether "entry" was meant to include a
-constructor is what to ask. "What the maps are", above, is the argument for answering it with a `namespace`
-kind rather than by widening `data`. **Not filed** -- confined here with the rest.
+**A `~data` constructor as a map's value type is admitted, and §4.1 reads as if it should not.** No longer
+relied on -- the sketch's inner types are records now -- but still measured in `InterfaceMapProbe` on a probe-only
+`{type_name => data_method}`, because it is a live question for the spec: [TSON-SCHEMA] §4.1 refuses "naming a
+`kind: DATA` entry" as an element type, and a map's value type is one; the implementation admits the DATA
+*constructor* there and refuses only an *instance*. The kernel's own `top`-typed slots hold DATA instances, so the
+implementation is consistent with the kernel; whether "entry" was meant to include a constructor is what to ask.
+"What the maps are", above, is the argument for answering it with a `namespace` kind rather than by widening
+`data`. **Not filed** -- confined here with the rest.
 
 **Name hygiene does not reach map keys.** Measured in `NameRoleProbe`: two confusable method names in one
 interface (`admin`, `аdmin`), or a mixed-script one, are admitted under `type_name` and `method_name` alike,
@@ -246,7 +249,8 @@ when either lands. **Not filed** -- confined here with the rest.
   resolves every file and runs both apis through `Routes`.
 - `java/…/experiment/metaservice/` -- the bound records the `~data` constructors need (`Method`, `Interface`,
   `Endpoint` -- a sealed interface, the base -- `Operation`, `Binding`, `Resource`, `Api`, `HttpVerb`;
-  `Signature`, `InterfaceOfSignatures`, `ByTypeName`, `ByMethodName`, `ByText` for the probes that need their
-  own constructors), `Placement` and `Routes` (the reader-side checks the maps need), and five probes. Field names match the
+  `Signature`, `InterfaceOfSignatures`, `DataMethod`, `InterfaceOfDataMethods`, `ByTypeName`, `ByMethodName`,
+  `ByText` for the probes that need their own constructors), `Placement` and `Routes` (the reader-side checks the
+  maps need), and five probes. Field names match the
   schema's exactly (`idempotency_key`), because binding does no case conversion; a Java keyword as a field name
   (`extends`, `interface`) is renamed with `@Field`.

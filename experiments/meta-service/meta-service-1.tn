@@ -6,18 +6,14 @@
   and how one transport exposes that (HTTP operations). A schema governed by this one is a service
   description, and its entries are methods, operations, or a mix.
 
-  One vocabulary, two constructors, and the shared part is an ordinary record. `signature` is the
-  transport-neutral contract: request, response, errors. `method` is a signature and nothing
-  else; `operation` is a signature plus an HTTP binding. Both are `~data & signature ...`, the shape
-  §4.2 sanctions -- a base kind seeds the constructor level and a record mixin lends vocabulary, as
-  `uri_type => ~text_type & atom_specification & { ... }` does.
-
-  Why not `operation => method & { ... }`: `method` is `kind: DATA`, and §4.1 makes a DATA entry as a
-  composition operand a resolver error -- the same rule that refuses `getOrder => fetch<order>`.
-  A DATA entry can be declared and applied, never named. So the two views relate by ERASURE, not by
-  reference: an operation IS a method with binding fields added, and the interface view of a service
-  is its methods plus its operations with those fields dropped. A developer offering both never
-  writes a method twice, and the two cannot disagree because there is one declaration.
+  One vocabulary, two constructors -- and only two. `interface` and `api` are the entries a governed
+  schema writes, so they are `~data &` constructors (an entry that is not a type, §4.1). Everything
+  inside them -- `method`, `endpoint`, `operation`, `binding`, `resource` -- is an ordinary RECORD,
+  because it only ever appears as a map value: `{method_name => method}`, `{http_verb => endpoint}`,
+  `{path_template => resource}`. A record composes (`operation => endpoint & signature`), is admitted
+  as a subtype where its base is expected (§7.2), and is never a constructor anyone applies at entry
+  level. So no `kind: DATA` entry is named at a type slot anywhere in this design, and §4.1's rule --
+  a DATA entry may be declared and applied, never named -- has nothing left to say about it.
 
   Two entries a governed schema writes, and both are MAPS:
 
@@ -25,13 +21,10 @@
     orders_api => !api { implements: [orders]
                          resources: { "/orders" => !resource { POST => !binding { method: place_order ... } } } }
 
-  Methods are keys inside their interface, and operations are values two maps down -- keyed by path,
+  Methods are keys inside their interface, and endpoints are values two maps down -- keyed by path,
   then by verb -- so neither is a global entry. That is what the flat namespace was costing: two
   interfaces may both declare `place_order`, an api needs no invented operation names, and an
-  interface is one entry with a name, a `@doc` and an `extends`. It works today because the
-  implementation admits a DATA CONSTRUCTOR as a map's value type (an INSTANCE is still refused at a type
-  position); [TSON-SCHEMA] §4.1's text reads as if it should not, and the experiment's README records
-  that as the question to settle before building on it.
+  interface is one entry with a name, a `@doc` and an `extends`.
 
   Three ways to use it:
     interface only    an `!interface`; nothing HTTP in the document.
@@ -61,8 +54,13 @@
     errors:           [type_ref]?
   }
 
-  @doc:"A method: a signature and nothing more. Its NAME is the key it sits under in an interface."
-  method => ~data & signature
+  @doc:"""
+    A method: a signature and nothing more. Its NAME is the key it sits under in an interface. A record,
+    not a constructor: it is only ever a map value. The empty trailing body is what makes it a type of its
+    own -- `method => signature` would be an alias, and an alias flattens to its target, so the values
+    would read back as signatures.
+    """
+  method => signature & {}
 
   @doc:"""
     An interface: a named, documented map of methods. A method is a map VALUE under its name, so its
@@ -127,11 +125,12 @@
   }
 
   @doc:"""
-    What sits under a verb, under a path, in an api: the base of `operation` and `binding`, carrying what
-    both have -- the placement of a request record and the status of the response. It has no data of
-    its own to bind, so a value at an `endpoint`-typed slot must be tagged `!operation` or `!binding`; the
-    resolver refuses an untagged one naming both subtypes. That tag is the whole difference between the
-    one-declaration form and the two-declaration form, and it is read before anything else.
+    What sits under a verb, under a path, in an api: the base record of `operation` and `binding`,
+    carrying what both have -- the placement of a request record and the status of the response. A
+    value at an `endpoint`-typed slot is tagged `!operation` or `!binding` and admitted as the subtype it
+    names (§7.2); a reader binds the base to a type with no bare form, so an untagged value is refused
+    naming both subtypes. That tag is the whole difference between the one-declaration form and the
+    two-declaration form, and it is read before anything else.
 
     `status` is the status of `response`; there is no list of responses, because a method has one
     response type. An error's status is the `status` member its own type pins --
@@ -146,9 +145,9 @@
     Deliberately absent, each a decision: security schemes, response headers, links, callbacks,
     examples, tags, servers, multi-media-type negotiation, and more than one success response. Adding
     one is a later version under §3.5 once this is published, never an edit -- and a new kind of endpoint
-    is a new constructor deriving from this one, admitted wherever an `endpoint` is.
+    is a new record composing this one, admitted wherever an `endpoint` is.
     """
-  endpoint => ~data & placement & {
+  endpoint => placement & {
     status:   status_code ~ 200
   }
 
@@ -173,7 +172,7 @@
   idempotent => @annotation void
 
   @doc:"An endpoint with its signature INLINE -- the one-declaration form, for an api with no interface behind it."
-  operation => ~endpoint & signature
+  operation => endpoint & signature
 
   @doc:"""
     An endpoint whose signature is a METHOD's -- the two-declaration form. `method` names one declared on an
@@ -182,13 +181,16 @@
     description reader checks them at startup in the implemented interfaces. When the kernel grows a
     reference form for data entries, `method` changes type and that check deletes.
     """
-  binding => ~endpoint & {
+  binding => endpoint & {
     method:     method_name
     interface:  type_name?
   }
 
-  @doc:"One path: its endpoints, keyed by verb. `!resource { POST => !binding { ... }  GET => !operation { ... } }`."
-  resource => ~data & {
+  @doc:"""
+    One path: its endpoints, keyed by verb. A record, so the tag is optional under the path key --
+    `"/orders" => { POST => !binding { ... } }` and `"/orders" => !resource { ... }` read alike.
+    """
+  resource => {
     endpoints: {http_verb => endpoint}
   }
 

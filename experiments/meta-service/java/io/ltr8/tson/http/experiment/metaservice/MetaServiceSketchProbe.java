@@ -114,14 +114,29 @@ class MetaServiceSketchProbe {
         assertEquals("404", status.value().orElseThrow().text());
     }
 
-    /** §4.1: a {@code kind: DATA} instance is declared and applied, never named where a type is expected. */
+    /**
+     * §4.1: a {@code kind: DATA} instance is declared and applied, never named where a type is expected. The
+     * two instances this design has are an interface and an api; naming either as a field type is refused.
+     */
     @Test
-    void aMethodIsNotAType() {
-        String doc = doc("  m => !method { request: order }\n  x => { s: m }");
+    void anInterfaceIsNotAType() {
+        String doc = doc("  m => !interface { place_order => { request: order } }\n  x => { s: m }");
         List<Diagnostic> problems = tson(doc).validateSchema(doc);
 
         assertEquals(1, problems.size(), () -> "" + problems);
-        assertTrue(problems.getFirst().message().contains("is built with 'method' and describes something other "
+        assertTrue(problems.getFirst().message().contains("is built with 'interface' and describes something other "
                 + "than a data value"), problems.getFirst().message());
+    }
+
+    /** And the inner types are records, not constructors: none may head a schema entry. */
+    @Test
+    void anInnerRecordCannotHeadAnEntry() {
+        for (String ctor : List.of("method", "resource", "operation", "binding")) {
+            String doc = doc("  x => !" + ctor + " { }");
+            List<Diagnostic> problems = tson(doc).validateSchema(doc);
+            assertEquals(1, problems.size(), () -> ctor + ": " + problems);
+            assertTrue(problems.getFirst().message().contains("'!" + ctor + "' does not resolve to a constructor"),
+                    problems.getFirst().message());
+        }
     }
 }
