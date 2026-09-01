@@ -1,0 +1,142 @@
+!!id:"https://tson.io/2026/34/ltr8/http/meta-service-1.tn"
+!!meta:"https://tson.io/2026/34/m/meta-kernel.tn"
+!!import:"https://tson.io/2026/34/m/meta.tn"
+@doc:"""
+  A meta layer for describing a service: what it can be asked to do (methods, grouped into interfaces)
+  and how one transport exposes that (HTTP operations). A schema governed by this one is a service
+  description, and its entries are methods, operations, or a mix.
+
+  One vocabulary, two constructors, and the shared part is an ordinary record. `signature` is the
+  transport-neutral contract: request, response, errors, and the two facts a caller composing calls
+  needs and has no verb to read them from (safe, idempotent). `method` is a signature and nothing
+  else; `operation` is a signature plus an HTTP binding. Both are `~data & signature ...`, the shape
+  §4.2 sanctions -- a base kind seeds the constructor level and a record mixin lends vocabulary, as
+  `uri_type => ~text_type & atom_specification & { ... }` does.
+
+  Why not `operation => method & { ... }`: `method` is `kind: DATA`, and §4.1 makes a DATA entry as a
+  composition operand a resolver error -- the same rule that refuses `getOrder => fetch<order>`.
+  A DATA entry can be declared and applied, never named. So the two views relate by ERASURE, not by
+  reference: an operation IS a method with binding fields added, and the interface view of a service
+  is its methods plus its operations with those fields dropped. A developer offering both never
+  writes a method twice, and the two cannot disagree because there is one declaration.
+
+  Three ways to use it:
+    interface only    entries are `!method { ... }`; nothing HTTP is in the document.
+    web service only  entries are `!operation { ... }`.
+    both              `!operation` where a method is bound to HTTP and `!method` where it is not;
+                      the interface is the whole document. An operation's name is its method's
+                      name -- there is no separate operationId.
+
+  An interface is the schema document. §2.2.3 already supplies what an `interface` record would have
+  restated: `name` is the `!!id`; `extends` is `!!import`, transitive, with a diamond unifying; and
+  "two interfaces may not declare one method" is the import closure's collision rule. `@interface`
+  exists for a document holding several groups that wants to say which method is in which. It does
+  not list methods, because it cannot: a list of method names would be a list of DATA references.
+  """
+{
+  @doc:"""
+    The transport-neutral contract of one callable thing. A plain record on purpose: it is what both
+    constructors share, and the only kind of entry a DATA constructor may compose with.
+
+    `request` absent means the call takes nothing; `response` absent means it returns nothing (an HTTP
+    204). `errors` lists BUSINESS errors -- the request was schema-valid and the domain said no -- each
+    a type composing `problem`. A transport's own refusals (a body failing its schema, an Accept it
+    cannot satisfy) are not listed: every call has them and the error boundary answers them.
+
+    `safe` and `idempotent` live here rather than being read off an HTTP verb because the caller that
+    needs them -- an agent planning a batch, deciding what may be retried or reordered -- has no verb.
+    `safe` implies `idempotent`. The HTTP projection CHECKS its verb against them (GET must be safe;
+    PUT and DELETE idempotent); it never derives one from the other.
+
+    Streams are declared here because an interface may ride a transport that has them. This version's
+    `operation` pins both false; lifting that is a later meta version, once a framing for a stream of
+    TSON documents over HTTP is specified.
+    """
+  signature => {
+    request:          type_ref?
+    response:         type_ref?
+    errors:           [type_ref]?
+    safe:             boolean ~ false
+    idempotent:       boolean ~ false
+    request_stream:   boolean ~ false
+    response_stream:  boolean ~ false
+  }
+
+  @doc:"A method: a signature and nothing more. The entry's name is the method's name."
+  method => ~data & signature
+
+  @doc:"Verb, not method: `method` is the constructor above, and `!method { method: POST }` helps nobody."
+  http_verb => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
+
+  @doc:"Refined, so 42 is not a status."
+  status_code => !integer ^ { min: 100  max: 599 }
+
+  parameter_location => !enum [PATH QUERY HEADER]
+
+  @doc:"""
+    A parameter carried outside the body. `type` names a scalar and nothing here enforces that: a URL
+    segment cannot carry a record. `description` is a field because a parameter is a VALUE inside an
+    operation's payload, with nothing for an annotation to attach to.
+    """
+  parameter => {
+    name:        text
+    in:          parameter_location
+    type:        type_ref
+    required:    boolean
+    description: text?
+  }
+
+  @doc:"""
+    A method with an HTTP binding.
+
+    `status` is the status of `response`; there is no list of responses, because a method has one
+    response type. An error's status is the `status` member its own type pins --
+    `sku_not_found => problem & { status: = 404  sku: text }` -- so an error type an operation names
+    MUST fix it. That is a conformance check on the service, not a resolver check: this vocabulary
+    cannot see into a referenced type's field states, and an interface-only service has no reason to
+    pin one.
+
+    Long description is the entry's @doc; `summary` is the short form. Lifecycle is meta's own
+    `@deprecated` on the entry, not a field.
+
+    Deliberately absent, each a decision: security schemes, response headers, links, callbacks,
+    examples, tags, servers, multi-media-type negotiation, and more than one success response. Adding
+    one is a later version under §3.5 once this is published, never an edit.
+    """
+  operation => ~data & signature & {
+    verb:             http_verb
+    path:             text
+    parameters:       [parameter]?
+    status:           status_code ~ 200
+    summary:          text?
+    request_stream:   = false
+    response_stream:  = false
+  }
+
+  @doc:"""
+    An HTTP binding for a method declared ELSEWHERE -- on an interface this document imports, or earlier
+    in this one. `method` names it by identifier, and the resolver does not check that name: a `kind: DATA`
+    entry can be declared and applied but never referenced, so there is no slot type that would make it
+    a checked reference today. The check is the description reader's, at startup, in the merged
+    namespace -- the same tier as coverage. When the kernel grows a reference form for data entries, this
+    slot changes type and that check deletes.
+
+    `operation` is the one-declaration form (method and binding in one entry); `binding` is the
+    two-declaration form. A service uses whichever its authorship needs, and a reader treats a
+    `binding` as the operation whose signature is the named method's.
+    """
+  binding => ~data & {
+    method:      type_name
+    verb:        http_verb
+    path:        text
+    parameters:  [parameter]?
+    status:      status_code ~ 200
+    summary:     text?
+  }
+
+  @doc:"""
+    Names the interface a method belongs to. Written before the entry's name, so it is metadata about
+    the declaration and is read back from the entry's annotations, beside @doc. Grouping only.
+    """
+  interface => @annotation identifier
+}
