@@ -148,9 +148,74 @@ public final class TsonHttpException extends RuntimeException {
         return diagnostics;
     }
 
-    /** This failure as the body to write. */
+    /**
+     * <b>This failure as the body a client may see</b>, which is not always all of it. There is no unredacted
+     * overload on purpose: an adapter that had a choice here is an adapter that can make the wrong one, and
+     * this filter would then be three near-copies of one security decision. What a boundary logs it takes from
+     * the exception itself, which keeps everything.
+     *
+     * <p><b>Redacted by content, not by status.</b> The thing being withheld is text that describes <em>this
+     * deployment</em> -- a bound Java class, an internal host reached through {@code mapHost}, a path or a
+     * query -- and a client is not the audience for any of it. Which failures those are is a property of what
+     * the message says, so cutting on {@code >= 500} both over- and under-shoots: it drops a
+     * {@code NOT_IMPLEMENTED} whose message upstream writes as a workaround for the author to read, while it
+     * would keep every diagnostic on a 4xx that ever came to carry one.
+     *
+     * <p><b>The filter runs at two levels</b>, because a failure and the diagnostics under it can differ.
+     * {@link #describesThisDeployment} asks whether this failure's own account is about the deployment -- a
+     * 500 is our wiring and a 502/504 is our dependency, so both answer with status, type and title alone --
+     * and {@link #disclosable} then drops the individual diagnostics that describe the deployment from
+     * whatever is left. Both are needed: a 501 outranks a fetch failure, so a gap's diagnostics can carry a
+     * {@code SCHEMA_UNREACHABLE} naming a host beside the violations that are the client's to fix.
+     *
+     * <p><b>A 501 is the case this exists for.</b> It says the request was fine and this server could not
+     * check it; before, it also said nothing else, so the violations the read genuinely found never reached
+     * the sender and the next request was byte-for-byte the same one. A gap does not make the other problems
+     * untrue -- upstream states that it does not -- it only means the list is incomplete, which is what the
+     * status and the detail say.
+     */
     public TsonProblem problem() {
-        return TsonProblem.of(type, status, title, getMessage(), diagnostics);
+        return describesThisDeployment()
+                ? TsonProblem.of(type, status, title, null, List.of())
+                : TsonProblem.of(type, status, title, getMessage(), disclosable(diagnostics));
+    }
+
+    /**
+     * Whether this failure's own account is about this deployment rather than about the request.
+     *
+     * <p>A 500 is this server's wiring or a fault in it; a 502 or 504 is its dependency, and the message names
+     * the host -- which under a {@code mapHost} is not even the identity the sender wrote. A 501 is the one
+     * 5xx that is not: it describes a construct in the request body that this library cannot handle, and
+     * saying which is the whole use a client has for it.
+     */
+    private boolean describesThisDeployment() {
+        return status >= INTERNAL_SERVER_ERROR && status != NOT_IMPLEMENTED;
+    }
+
+    /**
+     * The diagnostics a client may see: everything except the three whose message describes this deployment
+     * rather than the request.
+     *
+     * <p>{@code BIND_MISMATCH} names a bound Java class. {@code SCHEMA_UNREACHABLE} and {@code SCHEMA_TIMEOUT}
+     * name the host that failed. The other two fetch codes are <em>not</em> on this list and are disclosed:
+     * {@code SCHEMA_NOT_PERMITTED} and {@code SCHEMA_NOT_FOUND} are about a reference the sender wrote, which
+     * is why they are 400s in the first place.
+     *
+     * <p><b>Not keyed on {@link Diagnostic.Code#verdict()}</b>, though it is the near-miss and reads like the
+     * right answer. That asks whether the document was judged; this asks who the message is about, and the two
+     * cut differently in both directions -- {@code SCHEMA_NOT_FOUND} is not a verdict and is disclosed,
+     * {@code NOT_IMPLEMENTED} is not a verdict and is disclosed. Keying on it would withhold exactly the
+     * message this change exists to deliver.
+     *
+     * <p>Applied at every status, not only above 500. It is a no-op below that today -- a diagnostic on this
+     * list forces a 5xx, so none can reach a 4xx body -- and it is written unconditionally so that stays true
+     * by construction rather than by the ranking happening to hold.
+     */
+    private static List<Diagnostic> disclosable(List<Diagnostic> diagnostics) {
+        return diagnostics.stream().filter(d -> switch (d.code()) {
+            case BIND_MISMATCH, SCHEMA_UNREACHABLE, SCHEMA_TIMEOUT -> false;
+            default -> true;
+        }).toList();
     }
 
     /**

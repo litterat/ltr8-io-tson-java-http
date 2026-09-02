@@ -141,12 +141,23 @@ no TSON knowledge of its own; what it *does* own is the error boundary, and that
 3. **Never overwrite a committed response.** Status and headers go out together, so after a handler has
    answered, a later failure cannot become a 500 — attempting it throws inside the boundary and loses the
    original. Log it and close instead. `TsonExchange.committed()` is how the boundary knows.
-4. **A 5xx body carries status and title and no detail** — and no diagnostics either, which is what keeps a
-   bind mismatch's message (it names a bound Java class) off the wire. Routing the status is therefore the
-   whole of that fix; no filtering is needed. An internal message can name a class, a path, an
-   internal host or a query, and a client is not the audience. The exception goes to a `System.Logger` — which
-   keeps this module dependency-free, since it may not take a logging dependency. A 4xx is the opposite: its
-   detail and diagnostics are the entire point.
+4. **Write what `TsonHttpException.problem()` returns, and make no judgement of your own.** An internal
+   message can name a bound Java class, a path, an internal host or a query, and a client is not the audience —
+   but **that is a rule about content, and it lives in `tson-http`**, because an adapter that decided it would
+   be one security filter existing as three near-copies, free for one of them to drift lenient. There is no
+   unredacted overload for the same reason. The exception goes to a `System.Logger` — which keeps that module
+   dependency-free, since it may not take a logging dependency.
+
+   **Not a rule about 5xx**, which is the shortcut it used to be and got a 501 wrong: that status says the
+   request was fine and this server could not check it, so the violations the read *did* find are the client's
+   to act on and are carried, with the detail saying the list is incomplete. Dropping them left a sender
+   nothing to act on, so the next request was byte-for-byte the same one. A 500 (our wiring) and a 502/504
+   (our dependency) do answer with status, type and title alone. The filter runs at two levels — the failure's
+   own account, then each diagnostic — because a gap outranks a fetch failure, so a 501's list can carry a
+   `SCHEMA_UNREACHABLE` naming a host beside violations that are the sender's. **Do not key it on
+   `Diagnostic.Code.verdict()`**: that asks whether the document was judged, this asks whom the message is
+   about, and they cut differently in both directions — `NOT_IMPLEMENTED` is not a verdict and is disclosed.
+   A 4xx is the opposite throughout: its detail and diagnostics are the entire point.
 
 A handler that returns without answering is a bug in the handler, so it is a 500 rather than a silent 200.
 
