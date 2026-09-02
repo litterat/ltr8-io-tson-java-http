@@ -4,6 +4,8 @@ import io.ltr8.tson.Tson;
 import io.ltr8.tson.compiler.Diagnostic;
 import io.ltr8.tson.compiler.TsonSchemaFetchException;
 import io.ltr8.tson.schema.meta.EnumBody;
+import io.ltr8.tson.schema.meta.RecordBody;
+import io.ltr8.tson.schema.meta.RecordField;
 import io.ltr8.tson.schema.meta.TypeDefinition;
 import org.junit.jupiter.api.Test;
 
@@ -14,6 +16,8 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -136,24 +140,24 @@ class TsonProblemSchemaTest {
     }
 
     /**
-     * The same discipline for {@code fetch_reason}, which copies {@link TsonSchemaFetchException.Reason}.
-     * It is a smaller enum and a stabler one, but it is on the wire for the same reason
-     * {@code diagnostic_code} is, and a member added upstream would be emitted against a schema that rejects
-     * it in exactly the same way.
+     * <b>The schema declares no reason enum beside the codes, and must not grow one.</b> Why a schema could
+     * not be obtained is carried by the code, one per reason, so a body cannot state a code and a reason that
+     * contradict each other -- a shape a second enum would make representable and this schema would call
+     * valid. The five {@code SCHEMA_*} members of {@code diagnostic_code} are what
+     * {@link #everyDiagnosticCodeIsDeclaredInTheSchema} already holds to the Java enum.
      */
     @Test
-    void everyFetchReasonIsDeclaredInTheSchema() {
-        List<String> declared = membersOf("fetch_reason");
-        for (TsonSchemaFetchException.Reason reason : TsonSchemaFetchException.Reason.values()) {
-            assertTrue(declared.contains(reason.name()),
-                    () -> "TsonSchemaFetchException.Reason." + reason + " is missing from problem-1.tn's "
-                            + "fetch_reason: " + declared);
-        }
-        List<String> known = Arrays.stream(TsonSchemaFetchException.Reason.values()).map(Enum::name).toList();
-        for (String reason : declared) {
-            assertTrue(known.contains(reason),
-                    () -> "problem-1.tn declares '" + reason + "', which is not a Reason: " + known);
-        }
+    void theSchemaCarriesNoSecondCarrierForAFetchFailure() {
+        assertNull(TsonProblemSchema.compiled().schema().entries().get("fetch_reason"),
+                "problem-1.tn declares a fetch_reason enum: the reason is the code, and two carriers for one "
+                        + "fact are free to disagree");
+
+        TypeDefinition diagnostic = TsonProblemSchema.compiled().schema().entries().get("diagnostic");
+        List<String> fields = assertInstanceOf(RecordBody.class, diagnostic.body(), "diagnostic is a record")
+                .fields().stream().map(RecordField::name).toList();
+        assertFalse(fields.contains("fetch_reason"),
+                () -> "diagnostic carries a fetch_reason field: every member is a location or the problem "
+                        + "itself, and this one would be a payload for five codes out of " + fields);
     }
 
     @Test

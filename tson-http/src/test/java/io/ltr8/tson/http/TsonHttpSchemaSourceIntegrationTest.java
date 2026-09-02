@@ -89,14 +89,21 @@ class TsonHttpSchemaSourceIntegrationTest {
     }
 
     /**
-     * <b>A fetch failure splits by whose fault it is.</b> A document naming a schema this server will not load,
-     * or one that does not exist, is the document's problem: 400. A permitted origin that is unreachable,
-     * oversized or slow is this server's dependency failing while the request was perfectly good, which is what
-     * 502 and 504 are for -- and the retry advice differs, so collapsing them would either blame a client for
-     * an outage or hide an outage as a client error.
+     * <b>A fetch failure splits by who must act.</b> A document naming a schema this server will not load, one
+     * that does not exist, or one whose document is larger than a schema may be, is the document's problem:
+     * the sender named it and the sender can name something else, so all three are 400. A permitted origin
+     * that is unreachable or slow is this server's dependency failing while the request was perfectly good,
+     * which is what 502 and 504 are for -- and the retry advice differs, so collapsing them would either blame
+     * a client for an outage or hide an outage as a client error.
      *
-     * <p>Exhaustive over {@link Reason} on purpose: the mapping lives in a switch over that enum, so a member
-     * added upstream must be given a status here rather than defaulting to one.
+     * <p><b>{@code TOO_LARGE} sits with the first group, not the second.</b> It reads like an origin failure
+     * and it is not one worth retrying: rerunning shrinks a schema no more than it conjures a missing one, so
+     * a 502 here would advertise a retry that cannot help. That nothing was checked is true of all five and
+     * does not settle the status -- {@link Diagnostic.Code#verdict()} answers whether the document was judged,
+     * this answers who must act, and for a bad reference the two differ.
+     *
+     * <p>Exhaustive over {@link Reason} on purpose: the mapping lives in a switch over the codes those reasons
+     * map to, so a member added upstream must be given a status here rather than defaulting to one.
      */
     @Test
     void anUnfetchableSchemaReferenceBecomesTheRightStatus() {
@@ -104,17 +111,18 @@ class TsonHttpSchemaSourceIntegrationTest {
         assertEquals(TsonHttpException.BAD_REQUEST, statusFor(Reason.NOT_FOUND));
         assertEquals(TsonHttpException.GATEWAY_TIMEOUT, statusFor(Reason.TIMEOUT));
         assertEquals(TsonHttpException.BAD_GATEWAY, statusFor(Reason.TRANSPORT));
-        assertEquals(TsonHttpException.BAD_GATEWAY, statusFor(Reason.TOO_LARGE));
+        assertEquals(TsonHttpException.BAD_REQUEST, statusFor(Reason.TOO_LARGE));
         assertEquals(Reason.values().length, 5, "a new Reason needs a status, not a default");
     }
 
     /**
      * <b>And the collecting path is the one that actually fires, so it has to give the same answer.</b> Every
      * read through the codec collects, so an unfetchable {@code !!schema} essentially never arrives as {@link
-     * TsonSchemaFetchException} and essentially always as a {@code SCHEMA_UNAVAILABLE} diagnostic. The two
-     * channels used to disagree for one underlying failure -- the diagnostic kept no {@code Reason}, so the
-     * whole class rounded to 502 while {@code statusFor(NOT_PERMITTED)} said 400 -- and
-     * {@link Diagnostic#fetchReason()} is what closed that.
+     * TsonSchemaFetchException} and essentially always as one of the five {@code SCHEMA_*} diagnostics. The two
+     * channels used to disagree for one underlying failure -- the diagnostic kept no reason at all, so the
+     * whole class rounded to 502 while {@code statusFor(NOT_PERMITTED)} said 400 -- and carrying the reason in
+     * the code is what closed it for good: there is one status table now, and this channel reaches it by
+     * mapping its {@code Reason} through {@link Diagnostic.Code#of} first.
      *
      * <p><b>Asserted as agreement, not as a status.</b> Writing 400 here would pass just as well if both
      * channels drifted together, and the invariant is that they answer alike, not what they answer. A source
@@ -133,11 +141,9 @@ class TsonHttpSchemaSourceIntegrationTest {
 
             assertEquals(statusFor(Reason.NOT_PERMITTED), thrown.status(),
                     "the collected diagnostic and the thrown exception must answer one failure alike");
-            assertEquals(List.of(Diagnostic.Code.SCHEMA_UNAVAILABLE),
-                    thrown.diagnostics().stream().map(Diagnostic::code).toList());
-            assertEquals(List.of(Reason.NOT_PERMITTED),
-                    thrown.diagnostics().stream().flatMap(d -> d.fetchReason().stream()).toList(),
-                    "the reason survives the receiver, which is what makes the two agree");
+            assertEquals(List.of(Diagnostic.Code.of(Reason.NOT_PERMITTED)),
+                    thrown.diagnostics().stream().map(Diagnostic::code).toList(),
+                    "the reason survives the receiver as the code, which is what makes the two agree");
         }
     }
 
