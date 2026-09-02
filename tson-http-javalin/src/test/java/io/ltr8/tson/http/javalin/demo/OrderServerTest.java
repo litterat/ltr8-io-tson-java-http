@@ -130,8 +130,8 @@ class OrderServerTest {
      * <p>Two upstream changes had to land for this to be answerable. {@code TsonSchemaSource.ofMap} refuses by
      * the contract, where a {@code Map::get} returning {@code null} reached the registry and threw a
      * {@code NullPointerException} the boundary could only read as an internal fault. And
-     * {@code Diagnostic.fetchReason} survives the collecting receiver, where before the reason was gone by the
-     * time a status was chosen and the whole class rounded to 502.
+     * the reason survives the collecting receiver as the diagnostic's own code -- one per reason -- where
+     * before it was gone by the time a status was chosen and the whole class rounded to 502.
      */
     @Test
     void aDocumentNamingAnUnknownSchemaIsTheSendersMistake() throws Exception {

@@ -309,10 +309,15 @@ function requestBody(data, schema) {
 const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
-// The three codes that are not a verdict on the document: nothing was checked, so they are shown as a
-// caution rather than an error. The server answers 5xx for these when they arrive through a read; here they
-// are the answer to a question, so they arrive as data.
-const GAPS = new Set(['NOT_IMPLEMENTED', 'BIND_MISMATCH', 'SCHEMA_UNAVAILABLE']);
+// The codes that are not a verdict on the document: nothing was checked, so they are shown as a caution
+// rather than an error. When one of these arrives through a read the server answers 4xx or 5xx by who must
+// act; here they are the answer to a question, so they arrive as data and only the caution matters.
+//
+// Mirrors Diagnostic.Code.verdict() -- a hand-written copy for the same reason problem-1.tn's
+// diagnostic_code is one, this page having no way to ask the Java enum. A code added upstream and forgotten
+// here is shown as an error, which reads as a verdict the run never reached.
+const GAPS = new Set(['NOT_IMPLEMENTED', 'BIND_MISMATCH', 'SCHEMA_NOT_PERMITTED', 'SCHEMA_NOT_FOUND',
+                      'SCHEMA_UNREACHABLE', 'SCHEMA_TIMEOUT', 'SCHEMA_TOO_LARGE']);
 
 function positionLabel(d) {
   const p = d.data_position || d.schema_position;

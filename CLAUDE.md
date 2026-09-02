@@ -124,9 +124,9 @@ each other.
   follows **RFC 9457**; `diagnostic` stays close to what a TSON read produces, because that is what it
   reports.
 - `io.ltr8.tson.TsonHttpSchemaSource` / `TsonSchemaFetchException` — **upstream's, not this module's** (see
-  above). What stays here is the half upstream cannot know: `TsonHttpException.from` maps a fetch `Reason` to a
-  status, and `TsonHttpSchemaSourceIntegrationTest` pins that mapping and the codec's end-to-end read of a
-  document whose schema arrived over the wire. The policy itself is upstream's suite — do not retest it here.
+  above). What stays here is the half upstream cannot know: `TsonHttpException.from` maps a fetch `Reason`
+  through `Diagnostic.Code.of` into the one fetch status table, and `TsonHttpSchemaSourceIntegrationTest` pins
+  that mapping and the codec's end-to-end read of a document whose schema arrived over the wire. The policy itself is upstream's suite — do not retest it here.
   Read the class notes before relying on anything in it; every rule there is load-bearing.
 
 ### What an adapter owes the codec
@@ -469,41 +469,64 @@ which is the one verdict this policy may never give. `TsonHttpException.invalidD
 `from` routes every `TsonReadException` through it, so both channels answer alike. Upstream states the rule
 as *"asking by code rather than by exception type is the stated policy"*.
 
-**Three codes are not verdicts on the document, and they differ by who could not give one** — this library, the
-reading application, whoever was to serve the schema. None may be a 4xx, because in each case the body went
-unchecked and "invalid" is not something this server learned:
+**Seven codes are not verdicts on the document, and they differ by who could not give one** — this library, the
+reading application, whoever was to serve the schema. `Diagnostic.Code.verdict()` is that set, stated
+upstream so no consumer keeps a private copy; **use it rather than listing them**.
 
 | Code | Who | Status |
 |---|---|---|
 | `NOT_IMPLEMENTED` | this library has not built it | 501 |
 | `BIND_MISMATCH` | this server's own wiring | 500 |
-| `SCHEMA_UNAVAILABLE` | nobody would supply the schema | 400/502/504, by `fetchReason` |
+| `SCHEMA_UNREACHABLE` | the origin could not be reached | 502 |
+| `SCHEMA_TIMEOUT` | the origin did not answer in time | 504 |
+| `SCHEMA_NOT_PERMITTED` | policy refused the reference | 400 |
+| `SCHEMA_NOT_FOUND` | nothing serves the reference | 400 |
+| `SCHEMA_TOO_LARGE` | the document exceeds what a schema may be | 400 |
 
-`BIND_MISMATCH` outranks, being the one an operator has to fix; then `NOT_IMPLEMENTED` over
-`SCHEMA_UNAVAILABLE`, taking upstream's own precedent that the CLI ranks by permanence (70 over 69 over 1),
-since retrying reaches a gap again where an origin may recover.
+**Not being a verdict does not settle the status**, and the fetch codes are where that shows. `verdict()`
+answers *was the document judged*; a status answers *who must act*. For a reference this deployment will not
+fetch, cannot find, or finds too large, the body went unchecked **and** the sender still holds the fix — so
+those are 400s. The invariant that does hold is the other direction, and `TsonHttpCodecTest`.
+`everyCodeEarnsAStatusAndNoVerdictBecomesAServerFault` pins it: **a code `verdict()` calls true may never be
+answered 5xx.** That is the failure the classification exists to prevent — telling a sender the server broke
+when their document really was wrong sends them round a loop that cannot terminate.
 
-**`SCHEMA_UNAVAILABLE` is one code and three statuses, and `Diagnostic.fetchReason` is what picks.**
-`NOT_PERMITTED` and `NOT_FOUND` are the document's doing — it named a reference this deployment will not
-fetch, or one nothing serves — so they are 400; `TIMEOUT` is 504 and `TRANSPORT`/`TOO_LARGE` are 502, the
-reference having been fine and the world not. Only one of those is worth retrying, which is the whole reason
-for splitting them.
+Ranking, most-inward actor first: `BIND_MISMATCH` (an operator has to fix it, and until they do nothing else
+is evaluated) → `NOT_IMPLEMENTED` → `SCHEMA_UNREACHABLE` → `SCHEMA_TIMEOUT` → the three 400 fetch codes → §8.2
+refusals → ordinary violations. The two world's-doing fetch codes come before the three document's-doing ones
+so a mixed failure is never blamed on the client; between them, an origin answering with something that is not
+a document is less likely to right itself than one that was slow. `TsonHttpException.FETCH_RANKING` states it.
+**This is a scan in rank order, not a first-match on the diagnostic list** — the status used to come from
+whichever fetch reason was reported first, so document ordering decided whether the sender or the dependency
+was blamed.
 
-**Both channels must answer alike, and that is the invariant to protect.** One fetch failure reaches a
-consumer two ways: thrown as `TsonSchemaFetchException` (now essentially startup-only, since **every read
-through the codec collects**) and collected as a diagnostic, which is the common path. They diverged for a
-while — the diagnostic kept no reason, so the whole class rounded to 502 while `from` answered 400 for
-`NOT_PERMITTED` — and the tests now assert the *agreement* rather than the statuses, so the two cannot drift
-apart or drift together unnoticed (`TsonHttpCodecTest.aSchemaUnavailableDiagnosticIsAnsweredByItsReason`,
-`TsonHttpSchemaSourceIntegrationTest.bothChannelsAnswerAnUnfetchableSchemaAlike`). A diagnostic stating no
-reason keeps 502, which rounds away from the client on purpose. Do not try to recover the reason by parsing
-the message; it is a typed field precisely so nobody does.
+**`SCHEMA_TOO_LARGE` is a 400 and reads like a 502.** Retrying shrinks a schema no more than it conjures a
+missing one, so a 502 there would advertise a retry that cannot help. It goes with `SCHEMA_NOT_PERMITTED` and
+`SCHEMA_NOT_FOUND` under `unusable-schema-reference` — a size cap is exactly a reference this deployment will
+not fetch. The CLI reaches the same place from the other side, ranking it permanent.
 
-`Diagnostic.Code` is the detail vocabulary — mostly 4xx, but see the table above for the three that are not:
+**Both channels must answer alike, and there is now one table rather than two held together.** One fetch
+failure reaches a consumer two ways: thrown as `TsonSchemaFetchException` (essentially startup-only, since
+**every read through the codec collects**) and collected as a diagnostic, the common path. The two speak
+different enums — thrown carries a `Reason`, collected a `Code` — so `TsonHttpException.from` maps through
+`Diagnostic.Code.of(reason)` into `fetchFailure`, which is the only fetch status table. Do not add a second
+switch over `Reason`: that is what they were before, and they diverged, `NOT_PERMITTED` answering 400 thrown
+and 502 collected. The agreement tests stay
+(`TsonHttpCodecTest.aFetchDiagnosticIsAnsweredByItsCode`,
+`TsonHttpSchemaSourceIntegrationTest.bothChannelsAnswerAnUnfetchableSchemaAlike`).
+
+**The reason is the code, and must not also be a field.** `Diagnostic.fetchReason` is gone upstream and
+`problem-1.tn` no longer declares a `fetch_reason` enum or field. A second carrier for one fact is free to
+disagree with the first — on the wire that means a body stating a code and a reason that contradict each
+other, which the schema would still call valid. Pinned by
+`TsonProblemSchemaTest.theSchemaCarriesNoSecondCarrierForAFetchFailure`.
+
+`Diagnostic.Code` is the detail vocabulary — mostly 4xx, but see the table above for the seven that are not:
 `FIELD_REQUIRED`, `FIELD_FIXED`, `TYPE_MISMATCH`, `WRONG_ARITY`, `UNKNOWN_TYPE_REF`,
 `ATOM_CONSTRAINT_VIOLATION`, `UNRECOGNIZED_FIELD`, `DUPLICATE_MAP_KEY`, `DUPLICATE_FIELD`, `CONFUSABLE_NAMES`,
 `RESTRICTED_CHARACTER`, `RESTRICTED_SCRIPT`, `SCHEMA_ERROR`, `UNKNOWN_TYPE`, `VALIDATION_ERROR`,
-`NOT_IMPLEMENTED`, `BIND_MISMATCH`, `SCHEMA_UNAVAILABLE`.
+`NOT_IMPLEMENTED`, `BIND_MISMATCH`, `SCHEMA_NOT_PERMITTED`, `SCHEMA_NOT_FOUND`, `SCHEMA_UNREACHABLE`,
+`SCHEMA_TIMEOUT`, `SCHEMA_TOO_LARGE`.
 
 **`TsonSchemaFetchException` lives in `io.ltr8.tson.compiler`**, beside the `TsonSchemaSource` interface whose
 contract it is — `fetch` names it as the one way a source says "cannot supply this", which is what lets the

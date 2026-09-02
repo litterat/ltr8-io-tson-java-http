@@ -15,8 +15,14 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -193,6 +199,37 @@ class ValidatorServerTest {
     }
 
     /**
+     * <b>The page's own copy of the non-verdict set is held to {@link Diagnostic.Code#verdict()}.</b> The
+     * browser shows those codes as a caution rather than an error, because nothing was checked and there is
+     * no verdict to report -- and it has to name them itself, having no way to ask a Java enum.
+     *
+     * <p>Nothing else would catch a stale copy. A code added upstream and forgotten here renders as an error,
+     * which tells someone comparing two implementations that this one reached a verdict it never reached --
+     * the one claim this whole service exists not to make. The same discipline {@code problem-1.tn}'s
+     * {@code diagnostic_code} gets, for the same reason and with the same failure if it lapses.
+     *
+     * <p>Read out of the page rather than duplicated here: a third copy would only prove two of them agree.
+     */
+    @Test
+    void thePagesNonVerdictSetMatchesTheEnum() throws Exception {
+        String page = new String(Objects.requireNonNull(
+                ValidatorServer.class.getResourceAsStream("/validator.html"),
+                "validator.html is not on the demo classpath").readAllBytes(), StandardCharsets.UTF_8);
+
+        Matcher declaration = Pattern.compile("const GAPS = new Set\\(\\[(.*?)]\\);", Pattern.DOTALL)
+                .matcher(page);
+        assertTrue(declaration.find(), "validator.html no longer declares a GAPS set");
+        Set<String> shown = Pattern.compile("'([A-Z_]+)'").matcher(declaration.group(1)).results()
+                .map(m -> m.group(1)).collect(Collectors.toSet());
+
+        Set<String> nonVerdicts = Arrays.stream(Diagnostic.Code.values()).filter(c -> !c.verdict())
+                .map(Enum::name).collect(Collectors.toSet());
+        assertEquals(nonVerdicts, shown,
+                "validator.html's GAPS must be exactly the codes Diagnostic.Code.verdict() reports as "
+                        + "non-verdicts, or the page calls an unchecked document rejected");
+    }
+
+    /**
      * <b>The service fetches nothing.</b> A schema identity in a submitted document is an untrusted URL, so a
      * document naming a schema the caller did not paste is reported as unavailable rather than resolved off
      * the network. An endpoint that fetched it would be a request forger for anyone who could reach it.
@@ -203,8 +240,10 @@ class ValidatorServerTest {
                 !!schema:"https://example.com/somewhere-else.tn"
                 !employee { id: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6" }"""));
 
-        assertEquals(List.of(Diagnostic.Code.SCHEMA_UNAVAILABLE),
-                result.diagnostics().stream().map(TsonProblemDiagnostic::code).toList());
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_NOT_FOUND),
+                result.diagnostics().stream().map(TsonProblemDiagnostic::code).toList(),
+                "ofMap holds only the submitted schema, so any other identity is a miss it refuses by "
+                        + "contract -- nothing here goes to the network to find out");
     }
 
     /**

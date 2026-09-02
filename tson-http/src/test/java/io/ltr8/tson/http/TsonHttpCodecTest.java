@@ -395,34 +395,43 @@ class TsonHttpCodecTest {
     }
 
     /**
-     * <b>A diagnostic stating no reason keeps the conservative 502.</b> Every diagnostic the library builds
-     * carries one, so this is the hand-assembled case -- and given one status for a class it cannot tell
-     * apart, the wrong one to pick is the one that tells a client with a perfectly good document to go and
-     * fix it because a host did not answer. It rounds away from the client, deliberately.
+     * <b>A mixed fetch failure is never blamed on the client.</b> Two bad references in one document -- one
+     * this deployment will not fetch, one whose origin hung -- and the status comes from the ranking rather
+     * than from whichever the reader reached first. Written with the 400-earning code first, so a first-wins
+     * pick would answer 400 and this would fail.
+     *
+     * <p>That is exactly what it used to do: the status came from the first {@code fetchReason} found, so a
+     * document's ordering decided whether this server blamed the sender or its own dependency.
      */
     @Test
-    void aSchemaUnavailableDiagnosticWithNoReasonRoundsAwayFromTheClient() {
-        TsonHttpException thrown = TsonHttpException.invalidDocument(
-                List.of(withCode(aGap(), Diagnostic.Code.SCHEMA_UNAVAILABLE)));
+    void aMixedFetchFailureRanksRatherThanTakingTheFirst() {
+        TsonHttpException thrown = TsonHttpException.invalidDocument(List.of(
+                withCode(aGap(), Diagnostic.Code.SCHEMA_NOT_PERMITTED),
+                withCode(aGap(), Diagnostic.Code.SCHEMA_TIMEOUT)));
 
-        assertEquals(TsonHttpException.BAD_GATEWAY, thrown.status());
-        assertTrue(thrown.type().endsWith("schema-origin-failed"), thrown.type());
+        assertEquals(TsonHttpException.GATEWAY_TIMEOUT, thrown.status());
+        assertTrue(thrown.type().endsWith("schema-origin-timeout"), thrown.type());
     }
 
     /**
-     * <b>The reason decides the status, and the collected channel answers exactly as the thrown one does.</b>
-     * That agreement is the whole value of {@code Diagnostic.fetchReason}: one failure reaches a consumer two
-     * ways -- thrown at startup, collected on every read through this codec -- and the collected one used to
-     * lose the reason and round the lot to 502, so {@code NOT_PERMITTED} was a 400 thrown and a 502 collected.
+     * <b>The code decides the status, and the collected channel answers exactly as the thrown one does.</b>
+     * One failure reaches a consumer two ways -- thrown at startup, collected on every read through this codec
+     * -- and they must not diverge. The collected one used to lose the reason entirely and round the lot to
+     * 502, so {@code NOT_PERMITTED} was a 400 thrown and a 502 collected.
+     *
+     * <p><b>Now there is one table and this pins that there is.</b> The two channels no longer speak the same
+     * enum -- thrown carries a {@link TsonSchemaFetchException.Reason}, collected carries a {@link
+     * Diagnostic.Code} -- so the agreement rests on {@code from} mapping through {@link Diagnostic.Code#of}
+     * into the same switch, rather than on two switches being kept in step.
      *
      * <p>Asserted against {@link TsonHttpException#from}'s own answer rather than against literal statuses,
      * so the invariant under test is that the two channels agree rather than what they happen to agree on.
      */
     @Test
-    void aSchemaUnavailableDiagnosticIsAnsweredByItsReason() {
+    void aFetchDiagnosticIsAnsweredByItsCode() {
         for (TsonSchemaFetchException.Reason reason : TsonSchemaFetchException.Reason.values()) {
             TsonHttpException collected = TsonHttpException.invalidDocument(
-                    List.of(withReason(aGap(), Diagnostic.Code.SCHEMA_UNAVAILABLE, reason)));
+                    List.of(withCode(aGap(), Diagnostic.Code.of(reason))));
             TsonHttpException thrown = TsonHttpException.from(
                     new TsonSchemaFetchException("https://example.com/x.tn", reason, "test", null));
 
@@ -435,7 +444,7 @@ class TsonHttpCodecTest {
     @Test
     void aGapOutranksAnUnavailableSchema() {
         TsonHttpException thrown = TsonHttpException.invalidDocument(
-                List.of(withCode(aGap(), Diagnostic.Code.SCHEMA_UNAVAILABLE), aGap()));
+                List.of(withCode(aGap(), Diagnostic.Code.SCHEMA_UNREACHABLE), aGap()));
 
         assertEquals(TsonHttpException.NOT_IMPLEMENTED, thrown.status());
     }
@@ -473,6 +482,36 @@ class TsonHttpCodecTest {
     }
 
     /**
+     * <b>Every code earns a status, and no verdict is ever laundered into a 5xx.</b> That direction is the
+     * load-bearing one: a 5xx tells a client the request was fine and this server was not, so answering it
+     * for a document that really was checked and really was wrong sends a sender away from the fix and round
+     * a retry loop that cannot terminate. It is the failure the whole classification exists to prevent.
+     *
+     * <p><b>The converse is deliberately not asserted</b>, because it is false and the falseness is the
+     * design. {@link Diagnostic.Code#verdict()} reports the five {@code SCHEMA_*} codes as non-verdicts --
+     * correctly, nothing was read against a schema -- and three of them are 400s anyway. {@code verdict()}
+     * answers <em>was the document judged</em>; a status answers <em>who must act</em>; for a reference this
+     * deployment will not fetch, cannot find, or finds too large, those differ.
+     *
+     * <p>Exhaustive over {@link Diagnostic.Code} on purpose. A code added upstream lands here rather than
+     * falling into the trailing 400, which is the one outcome that would be silent -- an unclassified code
+     * would simply be reported as the sender's fault.
+     */
+    @Test
+    void everyCodeEarnsAStatusAndNoVerdictBecomesAServerFault() {
+        for (Diagnostic.Code code : Diagnostic.Code.values()) {
+            TsonHttpException thrown =
+                    TsonHttpException.invalidDocument(List.of(withCode(anOrdinaryProblem(), code)));
+
+            assertTrue(thrown.status() >= 400, () -> code + " earned " + thrown.status());
+            if (code.verdict()) {
+                assertEquals(TsonHttpException.BAD_REQUEST, thrown.status(),
+                        () -> code + " is a verdict on the document and must never be answered 5xx");
+            }
+        }
+    }
+
+    /**
      * The same rule reached the way a client reaches it: a schemaless record whose two field names a reader
      * cannot tell apart -- Latin {@code admin} beside a Cyrillic-{@code \u0430} one. §8.2 names the record's own
      * field set as the one naming scope at the data layer, and a Class 1 record is where it has to be caught,
@@ -489,20 +528,14 @@ class TsonHttpCodecTest {
                 () -> "expected a CONFUSABLE_NAMES diagnostic, got " + rejected.diagnostics());
     }
 
-    /** Rebuilds a diagnostic under {@code code} -- the factories fix theirs, and this needs BIND_MISMATCH. */
-    private static Diagnostic withCode(Diagnostic d, Diagnostic.Code code) {
-        return withReason(d, code, null);
-    }
-
     /**
-     * The same, stating a fetch reason -- which is what a {@code SCHEMA_UNAVAILABLE}'s status turns on. A
-     * {@code null} reason is the hand-assembled diagnostic the library itself never produces, and is what the
-     * conservative 502 rounding is for.
+     * Rebuilds a diagnostic under {@code code} -- the factories fix theirs, and these tests need codes no
+     * fixture produces. It is the whole of what a status turns on now: a fetch failure carries its reason as
+     * its code, so there is no second component to set.
      */
-    private static Diagnostic withReason(Diagnostic d, Diagnostic.Code code,
-                                         TsonSchemaFetchException.Reason reason) {
+    private static Diagnostic withCode(Diagnostic d, Diagnostic.Code code) {
         return new Diagnostic(d.path(), d.schemaPointer(), d.schemaId(), code, d.message(), d.expected(),
-                d.actual(), d.dataPosition(), d.schemaPosition(), Optional.ofNullable(reason));
+                d.actual(), d.dataPosition(), d.schemaPosition());
     }
 
 }

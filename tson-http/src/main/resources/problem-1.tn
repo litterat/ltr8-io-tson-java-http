@@ -27,13 +27,19 @@
     A hand-written copy of io.ltr8.tson.compiler.Diagnostic.Code, which is the source of truth;
     TsonProblemSchemaTest is the only thing that checks the two agree.
 
-    Three members are not a verdict on the request, and all three are answered 5xx rather than 400.
-    They differ by who could not give a verdict. NOT_IMPLEMENTED: this library could not check a
-    construct the body uses -- the same split the CLI rides its exit codes on (70, not 1).
-    BIND_MISMATCH: a schema and the Java class bound to it disagree, which is this server's own
-    wiring; its message names a server class, so it is a 500 and the boundary drops it from the body
-    entirely. SCHEMA_UNAVAILABLE: nobody would supply the schema, so the body was never read against
-    one and whether it would have passed is unknown -- a 502.
+    Seven members are not a verdict on the request: the body went unchecked, so "invalid" is not
+    something this server learned. They differ by who could not give one. NOT_IMPLEMENTED: this library
+    could not check a construct the body uses -- the same split the CLI rides its exit codes on (70, not
+    1) -- a 501. BIND_MISMATCH: a schema and the Java class bound to it disagree, which is this server's
+    own wiring; its message names a server class, so it is a 500 and the boundary drops it from the body
+    entirely. The five SCHEMA_* codes: nobody would supply the schema, one code per reason.
+
+    Not being a verdict does not settle the status, and the SCHEMA_* five are where that shows.
+    SCHEMA_UNREACHABLE is a 502 and SCHEMA_TIMEOUT a 504 -- the reference was fine and the world was
+    not. SCHEMA_NOT_PERMITTED (a reference this deployment will not fetch), SCHEMA_NOT_FOUND (one
+    nothing serves) and SCHEMA_TOO_LARGE (one whose document exceeds the bytes a schema may be) are the
+    document's own doing and are 400s, because the sender is who can name something else. Nothing was
+    checked in any of the five; only two of them are worth retrying.
 
     They are declared here even though a client should never see the first two, because this enum
     copies Diagnostic.Code rather than the subset one server happens to emit.
@@ -54,20 +60,8 @@
     FIELD_REQUIRED FIELD_FIXED TYPE_MISMATCH WRONG_ARITY UNKNOWN_TYPE_REF ATOM_CONSTRAINT_VIOLATION
     UNRECOGNIZED_FIELD DUPLICATE_MAP_KEY DUPLICATE_FIELD CONFUSABLE_NAMES RESTRICTED_CHARACTER
     RESTRICTED_SCRIPT SCHEMA_ERROR UNKNOWN_TYPE VALIDATION_ERROR NOT_IMPLEMENTED BIND_MISMATCH
-    SCHEMA_UNAVAILABLE
+    SCHEMA_NOT_PERMITTED SCHEMA_NOT_FOUND SCHEMA_UNREACHABLE SCHEMA_TIMEOUT SCHEMA_TOO_LARGE
   ]
-  @doc:"""
-    Why a schema could not be obtained, for the one code that says so.
-
-    A hand-written copy of io.ltr8.tson.compiler.TsonSchemaFetchException.Reason, checked against the
-    Java enum by TsonProblemSchemaTest for the same reason diagnostic_code is.
-
-    It splits SCHEMA_UNAVAILABLE by WHOSE doing it was, which the status compresses: NOT_PERMITTED
-    (a reference this deployment will not fetch) and NOT_FOUND (one nothing serves) are the sender's
-    and share a 400, while TIMEOUT is a 504 and TRANSPORT and TOO_LARGE a 502 -- the reference was
-    fine and the world was not. Only one of those is worth retrying.
-    """
-  fetch_reason => !enum [NOT_PERMITTED NOT_FOUND TRANSPORT TIMEOUT TOO_LARGE]
 
   @doc:"""
     One problem, located at up to two ends: the value in the data (path, data_position) and the rule
@@ -76,6 +70,10 @@
 
     A position is "line:column:byte_offset", all three 1-based except byte_offset, which counts
     UTF-8 bytes from 0 ([TSON-DATA] §8.1). The offsets are into the request body as sent.
+
+    Every member here is a location or the problem itself; nothing is a payload meaningful to one code.
+    Why a schema could not be obtained is the code, one per reason, so a body cannot state a code and a
+    reason that contradict each other.
 
     A refusal under a §8.2 policy (CONFUSABLE_NAMES, RESTRICTED_CHARACTER, RESTRICTED_SCRIPT) carries
     nothing beyond its code. The level and the Unicode data version it was judged under are properties
@@ -93,7 +91,6 @@
     actual: text?
     data_position: text?
     schema_position: text?
-    fetch_reason: fetch_reason?
   }
   @doc:"""
     RFC 9457's five members, plus errors.
