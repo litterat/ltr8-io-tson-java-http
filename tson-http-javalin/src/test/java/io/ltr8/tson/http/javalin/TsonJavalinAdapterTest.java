@@ -6,11 +6,13 @@ import io.ltr8.bind.DataBindContext;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.compiler.Diagnostic;
+import io.ltr8.tson.compiler.TsonSchemaFetchException;
 import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
 import io.ltr8.tson.compiler.config.TsonAtomContext;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonProblem;
+import io.ltr8.tson.http.TsonProblemDiagnostic;
 import io.ltr8.tson.http.TsonProblemSchema;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -189,6 +191,63 @@ class TsonJavalinAdapterTest {
         assertEquals(500, response.statusCode());
         assertFalse(response.body().contains("db-primary.internal"), response.body());
         assertEquals(Optional.empty(), problemFrom(response).detail(), "a 5xx carries no detail");
+    }
+
+    /**
+     * <b>A 501 carries the violations the read did find.</b> The status says this server could not check the
+     * body; it does not say nothing was learned about it. Dropping the real problems left a sender with
+     * nothing to act on, so the next request was byte-for-byte the same one -- a loop that cannot terminate,
+     * which is the failure a 501 exists to prevent rather than cause.
+     *
+     * <p><b>And the {@code SCHEMA_UNREACHABLE} beside them is still withheld</b>, host and all. That is the
+     * pair that shows the rule is about content: three diagnostics, one status, and what reaches the client is
+     * decided per diagnostic by whom the message describes -- not by the status they arrived under. A gap
+     * outranks a fetch failure, so this mixture is reachable and not contrived.
+     */
+    @Test
+    void aGapStillReportsTheProblemsItDidFind() throws Exception {
+        app.post("/mixed", TsonHandler.asHandler(codec, tson -> {
+            throw TsonHttpException.invalidDocument(java.util.List.of(
+                    Diagnostic.ofSchemaGap(SCHEMA_ID, "order", "generic templates are not implemented yet",
+                            Optional.empty()),
+                    Diagnostic.ofSchemaError(SCHEMA_ID, "order", "'quantity' is required", Optional.empty()),
+                    Diagnostic.ofSchemaUnavailable(SCHEMA_ID, "order", new TsonSchemaFetchException(
+                            "https://mirror.internal/x.tn", TsonSchemaFetchException.Reason.TRANSPORT,
+                            "connect to mirror.internal failed", null), Optional.empty())));
+        }));
+
+        HttpResponse<String> response = post("/mixed", "{ a: 1 }");
+
+        assertEquals(501, response.statusCode());
+        TsonProblem problem = problemFrom(response);
+        assertEquals(java.util.List.of(Diagnostic.Code.NOT_IMPLEMENTED, Diagnostic.Code.SCHEMA_ERROR),
+                problem.errors().stream().map(TsonProblemDiagnostic::code).toList(),
+                "the gap and the violation are the client's to see; the unreachable host is not");
+        assertFalse(response.body().contains("mirror.internal"), response.body());
+        assertTrue(problem.detail().orElseThrow().contains("could not be checked"), problem.detail().toString());
+    }
+
+    /**
+     * <b>A schema origin that failed still says nothing about itself.</b> The half of the rule that does not
+     * change: the message names a host, which under a {@code mapHost} is not even the identity the sender
+     * wrote, so status, type and title are the whole body.
+     */
+    @Test
+    void aSchemaOriginFailureNamesNoHost() throws Exception {
+        app.post("/origin", TsonHandler.asHandler(codec, tson -> {
+            throw TsonHttpException.invalidDocument(java.util.List.of(
+                    Diagnostic.ofSchemaUnavailable(SCHEMA_ID, "order", new TsonSchemaFetchException(
+                            "https://mirror.internal/x.tn", TsonSchemaFetchException.Reason.TRANSPORT,
+                            "connect to mirror.internal failed", null), Optional.empty())));
+        }));
+
+        HttpResponse<String> response = post("/origin", "{ a: 1 }");
+
+        assertEquals(502, response.statusCode());
+        assertFalse(response.body().contains("mirror.internal"), response.body());
+        TsonProblem problem = problemFrom(response);
+        assertEquals(Optional.empty(), problem.detail());
+        assertEquals(java.util.List.of(), problem.errors());
     }
 
     @Test

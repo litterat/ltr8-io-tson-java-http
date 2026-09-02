@@ -5,7 +5,6 @@ import io.javalin.http.Context;
 import io.javalin.http.Handler;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
-import io.ltr8.tson.http.TsonProblem;
 
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
@@ -23,10 +22,11 @@ import java.util.List;
  *
  * <p>The boundary does the same four things as {@code tson-http-jdk}'s, and for the same reasons: it checks
  * {@code Accept} <b>before</b> the handler runs, maps a failure through {@link TsonHttpException#from} and
- * nowhere else, never overwrites a response the handler has already sent, and gives a 5xx a body carrying
- * status and title and no detail -- an internal message can name a class, a path or an internal host, and a
- * client is not the audience. The exception goes to a {@link System.Logger}, so this module needs no logging
- * dependency of its own beyond the one Javalin already brings.
+ * nowhere else, never overwrites a response the handler has already sent, and writes whatever
+ * {@link TsonHttpException#problem()} returns -- which withholds what describes this deployment rather than
+ * what carries a 5xx status, so a 500 and a 502/504 answer with status, type and title alone while a 501
+ * still carries the violations the read found. The exception goes to a {@link System.Logger}, so this module
+ * needs no logging dependency of its own beyond the one Javalin already brings.
  *
  * <p><b>{@link #install} is for the routes that are not written this way.</b> A real application mixes TSON
  * routes with plain Javalin ones, and a {@link TsonHttpException} thrown from a service layer inside a plain
@@ -86,7 +86,7 @@ public interface TsonHandler {
             if (mapped.status() >= 500) {
                 LOG.log(Level.ERROR, mapped.status() + " handling " + tson.path(), failure);
             }
-            tson.respondBytes(mapped.status(), codec.writeProblem(bodyFor(mapped)));
+            tson.respondBytes(mapped.status(), codec.writeProblem(mapped.problem()));
         }
 
         /**
@@ -110,15 +110,6 @@ public interface TsonHandler {
         private static TsonHttpException internal(Throwable cause) {
             return new TsonHttpException(TsonHttpException.INTERNAL_SERVER_ERROR, "Internal error", null,
                     List.of(), cause);
-        }
-
-        /** A 5xx body carries status and title only -- see the interface note on why the detail is dropped. */
-        private static TsonProblem bodyFor(TsonHttpException failure) {
-            // The type survives redaction: it classifies the failure and carries nothing internal, so a client
-            // can still tell a schema-origin outage from a bug in this server.
-            return failure.status() >= 500
-                    ? TsonProblem.of(failure.type(), failure.status(), failure.title(), null, List.of())
-                    : failure.problem();
         }
     }
 }

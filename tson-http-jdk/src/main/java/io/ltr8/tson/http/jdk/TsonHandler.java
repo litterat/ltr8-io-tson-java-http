@@ -4,7 +4,6 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
-import io.ltr8.tson.http.TsonProblem;
 
 import java.io.IOException;
 import java.lang.System.Logger;
@@ -40,13 +39,20 @@ import java.util.List;
  *   <li><b>Closes the exchange</b>, always.</li>
  * </ul>
  *
- * <h2>A 5xx says nothing about why</h2>
+ * <h2>A body says nothing about this deployment</h2>
  *
- * <p>A problem body for a server error carries the status and title and no detail. An internal message can
- * name a class, a path, an internal host or a query, and a client is not the audience for any of it. The full
- * exception goes to a {@link System.Logger} named after this class, which is where an operator should look --
- * and using {@code System.Logger} keeps that true without this module taking a logging dependency, which it is
- * not allowed to have.
+ * <p>An internal message can name a bound Java class, a path, an internal host or a query, and a client is not
+ * the audience for any of it. <b>That is a rule about content and {@link TsonHttpException#problem()} applies
+ * it</b> -- this boundary writes whatever it returns and makes no judgement of its own, which is what stops
+ * one security decision existing as three near-copies, one per adapter.
+ *
+ * <p>It is not a rule about 5xx, which is the tempting shortcut and gets a 501 wrong: that status says the
+ * request was fine and this server could not check it, so the violations the read <em>did</em> find are the
+ * client's to act on and are carried. A 500 and a 502/504 do answer with status, type and title alone.
+ *
+ * <p>The full exception goes to a {@link System.Logger} named after this class either way, which is where an
+ * operator should look -- and using {@code System.Logger} keeps that true without this module taking a logging
+ * dependency, which it is not allowed to have.
  *
  * <p>A 4xx is the opposite: its detail and diagnostics are the entire point, since the client is the one who
  * can act on them.
@@ -104,7 +110,7 @@ public interface TsonHandler {
             if (mapped.status() >= 500) {
                 LOG.log(Level.ERROR, mapped.status() + " handling " + exchange.uri(), failure);
             }
-            exchange.respondBytes(mapped.status(), codec.writeProblem(bodyFor(mapped)));
+            exchange.respondBytes(mapped.status(), codec.writeProblem(mapped.problem()));
         }
 
         /**
@@ -128,15 +134,6 @@ public interface TsonHandler {
         private static TsonHttpException internal(Throwable cause) {
             return new TsonHttpException(TsonHttpException.INTERNAL_SERVER_ERROR, "Internal error", null,
                     List.of(), cause);
-        }
-
-        /** A 5xx body carries status and title only -- see the class note on why the detail is dropped. */
-        private static TsonProblem bodyFor(TsonHttpException failure) {
-            // The type survives redaction: it classifies the failure and carries nothing internal, so a client
-            // can still tell a schema-origin outage from a bug in this server.
-            return failure.status() >= 500
-                    ? TsonProblem.of(failure.type(), failure.status(), failure.title(), null, List.of())
-                    : failure.problem();
         }
     }
 }
