@@ -34,14 +34,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ApiProbe {
 
-    static final String IFACE_ID = "https://schemas.example.com/2026/34/app/orders-1.tn";
-    static final String API_ID = "https://schemas.example.com/2026/34/app/orders-api-1.tn";
+    static final String IFACE_ID = "https://schemas.example.com/2026/35/app/orders-1.tn";
+    static final String API_ID = "https://schemas.example.com/2026/35/app/orders-api-1.tn";
 
     /** The interface: four methods over four request records, nothing HTTP in sight. */
     static final String IFACE = """
         !!id:"%s"
         !!meta:"%s"
-        !!import:"https://tson.io/2026/34/m/core.tn"
+        !!import:"https://tson.io/2026/35/m/core.tn"
         !!import:"%s"
         {
           order       => { sku: text  quantity: int32 }
@@ -93,7 +93,7 @@ class ApiProbe {
         return """
         !!id:"%s"
         !!meta:"%s"
-        !!import:"https://tson.io/2026/34/m/core.tn"
+        !!import:"https://tson.io/2026/35/m/core.tn"
         !!import:"%s"
         {
         %s
@@ -287,12 +287,12 @@ class ApiProbe {
 
     // ── kept for comparison: a method as a TYPE, and the operation IS-A the method ──────────────
 
-    static final String LIB_ID = "https://tson.io/2026/34/ltr8/http/service-1.tn";
+    static final String LIB_ID = "https://tson.io/2026/35/ltr8/http/service-1.tn";
 
     static final String LIB_B = """
         !!id:"%s"
-        !!meta:"https://tson.io/2026/34/m/meta.tn"
-        !!import:"https://tson.io/2026/34/m/core.tn"
+        !!meta:"https://tson.io/2026/35/m/meta.tn"
+        !!import:"https://tson.io/2026/35/m/core.tn"
         {
           method      => <Req, Resp> { request: Req  response: Resp?  safe: boolean ~ false  idempotent: boolean ~ false }
           http_verb   => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
@@ -306,8 +306,8 @@ class ApiProbe {
      */
     static final String IFACE_B = """
         !!id:"%s"
-        !!meta:"https://tson.io/2026/34/m/meta.tn"
-        !!import:"https://tson.io/2026/34/m/core.tn"
+        !!meta:"https://tson.io/2026/35/m/meta.tn"
+        !!import:"https://tson.io/2026/35/m/core.tn"
         !!import:"%s"
         {
           order     => { sku: text  quantity: int32 }
@@ -318,8 +318,8 @@ class ApiProbe {
 
     static final String API_B = """
         !!id:"%s"
-        !!meta:"https://tson.io/2026/34/m/meta.tn"
-        !!import:"https://tson.io/2026/34/m/core.tn"
+        !!meta:"https://tson.io/2026/35/m/meta.tn"
+        !!import:"https://tson.io/2026/35/m/core.tn"
         !!import:"%s"
         !!import:"%s"
         {

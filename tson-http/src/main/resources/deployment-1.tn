@@ -1,6 +1,6 @@
-!!id:"https://tson.io/2026/34/ltr8/http/deployment-1.tn"
-!!meta:"https://tson.io/2026/34/m/meta.tn"
-!!import:"https://tson.io/2026/34/m/core.tn"
+!!id:"https://tson.io/2026/35/ltr8/http/deployment-1.tn"
+!!meta:"https://tson.io/2026/35/m/meta.tn"
+!!import:"https://tson.io/2026/35/m/core.tn"
 @doc:"""
   A deployment descriptor: how ONE INSTANCE is configured, as against what a document must be (a schema)
   or what an endpoint offers (an API description).
@@ -97,6 +97,23 @@
     permitting: [script_name]?
   }
 
+  @doc:"""
+    [TSON-DATA] §9.1's resource limits: what this processor will SPEND reading a document, where
+    `unicode_policy` above is what it will ADMIT as a name. Two settings and not one, because they answer
+    two questions and a deployment changing one has said nothing about the other.
+
+    `max_depth` is the nesting bound, §9.1's own default being 64 -- the tightest in common use, so a
+    document that fits travels. It is the only limit stated here because it is the only one the library
+    enforces; §9.1 states twelve, and the rest arrive as this schema's successor rather than as a member
+    nothing reads.
+
+    Absent means the library's default, as with the two policies above: a descriptor that says nothing has
+    not asked for no limit.
+    """
+  limits => {
+    max_depth: positive_integer?
+  }
+
   @doc:"Where this instance listens. Absent members leave the caller's own defaults alone."
   listener => {
     host: text?
@@ -121,6 +138,7 @@
     listener:     listener?
     identifiers:  unicode_policy?
     tokens:       unicode_policy?
+    limits:       limits?
     schema_hosts: [text]?
   }
 
@@ -146,11 +164,17 @@
     releases, so a refusal is only interpretable against the data that produced it, and two conforming
     processors may legitimately disagree about one name. Stated here, once, for a client that would rather
     know before it sends than after it is refused.
+
+    `limits` is here for the same reason and not for a different one: a 413 says a document went past a
+    bound, and a sender that read the bound first never writes past it. The fetch allow-list stays out
+    because it is topology; a limit is not -- it is the shape of what this endpoint accepts, which is the
+    whole subject of this projection.
     """
   acceptance_profile => {
     name:                 text
     identifiers:          unicode_policy?
     tokens:               unicode_policy?
+    limits:               limits?
     unicode_data_version: text?
   }
 }

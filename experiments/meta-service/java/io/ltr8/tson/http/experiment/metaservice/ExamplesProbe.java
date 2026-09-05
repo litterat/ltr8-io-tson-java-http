@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ExamplesProbe {
 
-    static final String EXAMPLES = "https://schemas.example.com/2026/34/experiment/meta-service/";
+    static final String EXAMPLES = "https://schemas.example.com/2026/35/experiment/meta-service/";
 
     static Tson tson() {
         Map<String, String> lib = new LinkedHashMap<>();

@@ -254,12 +254,36 @@ public final class TsonHttpCodec {
     }
 
     /**
-     * A codec that also reads an {@code application/json} body. [TSON-DATA] §6 makes every valid JSON document
-     * a valid TSON document, so the reader needs no help -- what this changes is only whether the endpoint
-     * admits the media type.
+     * A codec that also admits an {@code application/json} body, <b>read by the TSON reader</b>.
+     *
+     * <p><b>Read the divergences below before enabling this.</b> [TSON-DATA] §6 used to make every valid JSON
+     * document a valid TSON document, and this method was a media-type gate over that guarantee. Revision 35
+     * withdrew it: TSON is JSON-<em>like</em> and is not a superset, and §6 now puts JSON compatibility in a
+     * separate <b>JSON reader</b> -- a second encoding of the same model, which tson-java has not built. Until
+     * it exists there is no reader here that implements §6's mapping, so what this gate admits is JSON as the
+     * TSON reader happens to read it, which is neither all of JSON nor JSON's meaning.
+     *
+     * <p><b>Four divergences, and the first is silent.</b> Each is pinned by {@code
+     * TsonHttpCodecJsonTest.theTsonReaderIsNotAJsonReader}, which is written to fail when a real JSON reader
+     * lands -- that failure is the feature arriving, not a regression.
+     *
+     * <ul>
+     *   <li><b>{@code null} reads as the four-character string {@code "null"}</b>, not as absence. §4.4 removed
+     *       the null keyword, so the token is text like any other, and §6's reader is what maps JSON's
+     *       {@code null} to absence (§2.9). At a {@code text?} field a JSON {@code null} therefore binds a
+     *       string, with no diagnostic. This is the one that corrupts data rather than refusing it.</li>
+     *   <li><b>A key that is not an identifier is a parse error.</b> §2.5 makes a field name an identifier at
+     *       every layer, whichever spelling carried it, so {@code {"first name": 1}} and {@code {"a.b": 1}} are
+     *       refused. §6's reader maps such an object to a map instead.</li>
+     *   <li><b>A surrogate-pair escape is a parse error.</b> §7.2.2 asks whether the value denoted is a Unicode
+     *       scalar value, so {@code "\uD83D\uDE00"} -- how JSON must write a non-BMP character -- refuses on
+     *       the first half.</li>
+     *   <li><b>There is no {@code \/} escape.</b> RFC 8259 permits it and TSON's escape table does not.</li>
+     * </ul>
      *
      * <p><b>Opt-in, because "reads TSON" and "reads JSON" are different promises.</b> An endpoint that wants
-     * only TSON should go on answering 415, and does by default.
+     * only TSON should go on answering 415, and does by default. On the evidence above, an endpoint whose
+     * clients send real JSON should go on answering 415 as well, until §6's reader exists.
      *
      * <p><b>A JSON body names neither its schema nor its root type.</b> It cannot: directive syntax is not JSON.
      * So the schema comes from the {@code TSON-Schema} header ({@link TsonSchemaHeader}) and the root type from

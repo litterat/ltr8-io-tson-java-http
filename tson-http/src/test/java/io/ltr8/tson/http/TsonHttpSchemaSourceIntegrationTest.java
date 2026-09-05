@@ -38,10 +38,19 @@ class TsonHttpSchemaSourceIntegrationTest {
 
     private static final String SCHEMA = """
             !!id:"%s"
-            !!meta:"https://tson.io/2026/34/m/meta.tn"
-            !!import:"https://tson.io/2026/34/m/core.tn"
+            !!meta:"https://tson.io/2026/35/m/meta.tn"
+            !!import:"https://tson.io/2026/35/m/core.tn"
             {
                 order => { sku: text  quantity: int32 }
+            }""";
+
+    /** A schema with a {@code scoped} field, so a body may push a foreign scope where this one opted into it. */
+    private static final String ENVELOPE = """
+            !!id:"%s"
+            !!meta:"https://tson.io/2026/35/m/meta.tn"
+            !!import:"https://tson.io/2026/35/m/core.tn"
+            {
+                envelope => { attachment: extern  note: text? }
             }""";
 
     /** The identity host schemas are named by -- never where they are fetched from. §2.2.1 forbids a port here. */
@@ -144,6 +153,57 @@ class TsonHttpSchemaSourceIntegrationTest {
             assertEquals(List.of(Diagnostic.Code.of(Reason.NOT_PERMITTED)),
                     thrown.diagnostics().stream().map(Diagnostic::code).toList(),
                     "the reason survives the receiver as the code, which is what makes the two agree");
+        }
+    }
+
+    /**
+     * <b>[TSON-DATA] §7.8's scope push is a second way a request body can name a schema, and it goes through
+     * the same allow-list.</b> Revision 35 gave a {@code scoped} position a real reader: at an {@code extern}
+     * field the value carries its own nested {@code !!schema} and a type-ref resolved there, loaded as the
+     * value arrives rather than from the document header. That is a URL out of an untrusted body at a
+     * <em>value</em> position, so the question this pins is whether the policy that guards {@code !!schema}
+     * guards this too -- and it does: the push resolves through the configured {@link
+     * io.ltr8.tson.compiler.TsonSchemaSource}, so an origin the source will not serve is refused there.
+     *
+     * <p>Both directions, because only the pair says the gate is a gate. A permitted origin reads and the
+     * foreign type is validated in full; a source that permits nothing answers {@code SCHEMA_NOT_PERMITTED},
+     * which is a fetch code and so never a verdict on the document.
+     */
+    @Test
+    void aScopePushInARequestBodyIsGatedByTheSameAllowList() {
+        String envelopeUri = reference("/envelope-1.tn");
+        String orderUri = reference("/order-1.tn");
+        serve("/envelope-1.tn", ENVELOPE.formatted(envelopeUri));
+        serve("/order-1.tn", schemaAt("/order-1.tn"));
+        String document = """
+                !!schema:"%s"
+                !envelope { attachment: !!schema:"%s" !order { sku: "ABC-1"  quantity: 3 } }"""
+                .formatted(envelopeUri, orderUri);
+
+        try (TsonHttpSchemaSource source = allowingThisServer()) {
+            Tson tson = Tson.builder().schemaSource(source).build();
+            tson.resolve(source.fetch(envelopeUri));
+            TsonValue read = new TsonHttpCodec(tson).readTree(body(document), "application/tson");
+
+            assertEquals("ABC-1", read.at("/attachment/sku").asString().orElseThrow(),
+                    "a permitted origin reads, and the foreign type is validated where it stands");
+        }
+
+        // The envelope is served from a map so it still resolves; every other identity -- which is only the
+        // pushed one -- goes to a source that permits no host at all.
+        try (TsonHttpSchemaSource denyAll = TsonHttpSchemaSource.builder().build()) {
+            String envelopeSource = ENVELOPE.formatted(envelopeUri);
+            Tson gated = Tson.builder().schemaSource(
+                    uri -> uri.equals(envelopeUri) ? envelopeSource : denyAll.fetch(uri)).build();
+            gated.resolve(envelopeSource);
+
+            TsonHttpException refused = assertThrows(TsonHttpException.class,
+                    () -> new TsonHttpCodec(gated).readTree(body(document), "application/tson"));
+
+            assertEquals(List.of(Diagnostic.Code.SCHEMA_NOT_PERMITTED),
+                    refused.diagnostics().stream().map(Diagnostic::code).toList(),
+                    "a scope push at a value position is refused by the same policy as a !!schema directive");
+            assertEquals(statusFor(Reason.NOT_PERMITTED), refused.status());
         }
     }
 

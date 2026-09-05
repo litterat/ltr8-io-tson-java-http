@@ -8,7 +8,7 @@ import io.ltr8.tson.schema.meta.TypeRef;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Probe-only ({@code InterfaceMapProbe}): an interface whose map's value type is the {@code ~data} constructor. */
+/** Probe-only ({@code InterfaceMapProbe}): an interface whose map's value type is the {@code data} constructor. */
 @Typename(name = "interface_of_data_methods")
 public record InterfaceOfDataMethods(AnnotatedMap<String, DataMethod> methods) implements Data {
     public InterfaceOfDataMethods {

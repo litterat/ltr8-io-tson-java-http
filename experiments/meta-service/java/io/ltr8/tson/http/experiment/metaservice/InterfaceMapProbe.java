@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * it on; and a {@code @doc} written before a map key survives into {@code AnnotatedMap.getAnnotations}.
  *
  * <p>Measured on the sketch's own {@code interface}, whose {@code method} is a plain record, and on two probe-only
- * variants: the value type as the bare {@code signature} record, and the value type as a {@code ~data}
+ * variants: the value type as the bare {@code signature} record, and the value type as a {@code data}
  * <em>constructor</em>. The last is the finding the map design once rested on and no longer needs -- only
  * {@code interface} and {@code api} are constructors now, and nothing names a DATA entry at a type slot -- but it
  * stays pinned because it is a live question for the spec: [TSON-SCHEMA] §4.1 refuses "naming a {@code kind:
@@ -30,23 +30,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class InterfaceMapProbe {
 
-    static final String PROBE_META_ID = "https://tson.io/2026/34/ltr8/http/meta-probe.tn";
-    static final String DOC_ID = "https://schemas.example.com/2026/34/app/probe-1.tn";
+    static final String PROBE_META_ID = "https://tson.io/2026/35/ltr8/http/meta-probe.tn";
+    static final String DOC_ID = "https://schemas.example.com/2026/35/app/probe-1.tn";
 
     /** The sketch, plus one probe-only constructor. */
     static final String META = Experiment.metaServiceSource()
-            .replace("https://tson.io/2026/34/ltr8/http/meta-service-1.tn", PROBE_META_ID)
-            .replace("\n  api => ~data & {",
-                    "\n  interface_of_signatures => ~data & { methods: {type_name => signature} }\n"
-                    + "  data_method => ~data & signature\n"
-                    + "  interface_of_data_methods => ~data & { methods: {type_name => data_method} }\n\n"
-                    + "  api => ~data & {");
+            .replace("https://tson.io/2026/35/ltr8/http/meta-service-1.tn", PROBE_META_ID)
+            .replace("\n  api => data & {",
+                    "\n  interface_of_signatures => data & { methods: {type_name => signature} }\n"
+                    + "  data_method => data & signature\n"
+                    + "  interface_of_data_methods => data & { methods: {type_name => data_method} }\n\n"
+                    + "  api => data & {");
 
     static String doc(String entries) {
         return """
         !!id:"%s"
         !!meta:"%s"
-        !!import:"https://tson.io/2026/34/m/core.tn"
+        !!import:"https://tson.io/2026/35/m/core.tn"
         {
           order     => { sku: text  quantity: int32 }
           order_ref => { id: text }
@@ -80,7 +80,7 @@ class InterfaceMapProbe {
     }
 
     /**
-     * A map whose value type is a {@code ~data} CONSTRUCTOR also resolves, and its values are built -- the
+     * A map whose value type is a {@code data} CONSTRUCTOR also resolves, and its values are built -- the
      * measurement the design once rested on, kept for the spec question in the class doc.
      */
     @Test
@@ -111,7 +111,7 @@ class InterfaceMapProbe {
                 problems.getFirst().message());
     }
 
-    /** The plain-record variant: the same shape with no {@code ~data} in the value type at all. */
+    /** The plain-record variant: the same shape with no {@code data} in the value type at all. */
     @Test
     void aMapOfSignatureRecordsResolvesPositionally() {
         var orders = assertInstanceOf(InterfaceOfSignatures.class, resolvedBody("""

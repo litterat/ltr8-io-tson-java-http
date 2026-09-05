@@ -1,7 +1,7 @@
-!!id:"https://schemas.example.com/2026/34/app/orders-errors-1.tn"
-!!meta:"https://tson.io/2026/34/m/meta.tn"
-!!import:"https://tson.io/2026/34/m/core.tn"
-!!import:"https://tson.io/2026/34/ltr8/http/problem-1.tn"
+!!id:"https://schemas.example.com/2026/35/app/orders-errors-1.tn"
+!!meta:"https://tson.io/2026/35/m/meta.tn"
+!!import:"https://tson.io/2026/35/m/core.tn"
+!!import:"https://tson.io/2026/35/ltr8/http/problem-1.tn"
 @doc:"Business errors: the request was schema-valid, and the domain still said no."
 {
     sku_not_found => problem & { sku: text }

@@ -28,13 +28,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TsonSchemaHandlerTest {
 
     private static final String HOST = "schemas.example.com";
-    private static final String SCHEMA_ID = "https://schemas.example.com/2026/34/app/order-1.tn";
-    private static final String SCHEMA_PATH = "/2026/34/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://schemas.example.com/2026/35/app/order-1.tn";
+    private static final String SCHEMA_PATH = "/2026/35/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/34/app/order-1.tn"
-            !!meta:"https://tson.io/2026/34/m/meta.tn"
-            !!import:"https://tson.io/2026/34/m/core.tn"
+            !!id:"https://schemas.example.com/2026/35/app/order-1.tn"
+            !!meta:"https://tson.io/2026/35/m/meta.tn"
+            !!import:"https://tson.io/2026/35/m/core.tn"
             {
                 order => { sku: text  quantity: int32 }
             }""";
@@ -68,7 +68,7 @@ class TsonSchemaHandlerTest {
     /** The path is the identity's path, taken from the document -- never chosen by whoever registered it. */
     @Test
     void servesEachSchemaAtItsOwnIdentityPath() throws Exception {
-        assertEquals(Set.of(SCHEMA_PATH, "/2026/34/ltr8/http/problem-1.tn"),
+        assertEquals(Set.of(SCHEMA_PATH, "/2026/35/ltr8/http/problem-1.tn"),
                 TsonSchemaHandler.of(SCHEMA, TsonProblemSchema.source()).paths());
 
         HttpResponse<String> response = get(SCHEMA_PATH);
@@ -109,7 +109,7 @@ class TsonSchemaHandlerTest {
 
     @Test
     void anUnknownPathIs404() throws Exception {
-        assertEquals(404, get("/2026/34/app/nope-1.tn").statusCode());
+        assertEquals(404, get("/2026/35/app/nope-1.tn").statusCode());
     }
 
     @Test
@@ -126,7 +126,7 @@ class TsonSchemaHandlerTest {
     void refusesASchemaWithNoIdentityToServeItAt() {
         IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
                 () -> TsonSchemaHandler.of("""
-                        !!meta:"https://tson.io/2026/34/m/meta.tn"
+                        !!meta:"https://tson.io/2026/35/m/meta.tn"
                         { thing => { a: text } }"""));
         assertTrue(refused.getMessage().contains("!!id"), refused.getMessage());
     }

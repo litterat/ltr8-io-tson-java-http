@@ -32,8 +32,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class RpcProbe {
 
-    static final String RPC_ID = "https://tson.io/2026/34/ltr8/http/rpc-1.tn";
-    static final String EXAMPLES = "https://schemas.example.com/2026/34/experiment/meta-service/";
+    static final String RPC_ID = "https://tson.io/2026/35/ltr8/http/rpc-1.tn";
+    static final String EXAMPLES = "https://schemas.example.com/2026/35/experiment/meta-service/";
     static final String WIRE_ID = EXAMPLES + "orders-wire-1.tn";
     static final String ORDERS_ID = EXAMPLES + "orders-1.tn";
 
@@ -101,7 +101,7 @@ class RpcProbe {
                 "!place_order_return { id: c1  response: { sku: A-100  quantity: 4 } }")));
         assertEquals(List.of(), tson.validate(packet("""
             !place_order_return { id: c1
-              error: { type: "https://ltr8.io/2026/34/http/problems/sku-not-found"  title: "No such SKU"
+              error: { type: "https://ltr8.io/2026/35/http/problems/sku-not-found"  title: "No such SKU"
                        status: 404  sku: A-100  errors: [] } }""")));
 
         List<Diagnostic> wrongStatus = tson.validate(packet(

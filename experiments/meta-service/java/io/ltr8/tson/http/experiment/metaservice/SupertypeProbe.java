@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the subtypes; a wrong shape under a tag is the closed-record rule; and the base's vocabulary
  * ({@code status: status_code ~ 200}) is inherited and enforced on the subtypes. The abstractness is the
  * binder's: the base binds to a sealed interface, found by name, permitting the two records, and the schema
- * alone would admit a bare endpoint. The same held when the inner types were {@code ~data} constructors deriving
+ * alone would admit a bare endpoint. The same held when the inner types were {@code data} constructors deriving
  * at constructor level; a choice {@code (operation | binding)} was measured to work too and gives the weaker
  * guarantee -- the tag mandatory only because two records cannot be told apart, and shared vocabulary composed
  * twice.
@@ -35,14 +35,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class SupertypeProbe {
 
-    static final String DOC_ID = "https://schemas.example.com/2026/34/app/probe-s-1.tn";
+    static final String DOC_ID = "https://schemas.example.com/2026/35/app/probe-s-1.tn";
 
     /** Resolves {@code r => !api { "/o" => <resource> }} and hands back the resource, or the problems. */
     static List<Diagnostic> problems(String resource, Object[] resourceOut) {
         String doc = """
             !!id:"%s"
             !!meta:"%s"
-            !!import:"https://tson.io/2026/34/m/core.tn"
+            !!import:"https://tson.io/2026/35/m/core.tn"
             {
               order => { sku: text }
               r => !api { "/o" => %s }

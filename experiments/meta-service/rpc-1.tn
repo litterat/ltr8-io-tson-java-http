@@ -1,7 +1,7 @@
-!!id:"https://tson.io/2026/34/ltr8/http/rpc-1.tn"
-!!meta:"https://tson.io/2026/34/m/meta.tn"
-!!import:"https://tson.io/2026/34/m/core.tn"
-!!import:"https://tson.io/2026/34/ltr8/http/problem-1.tn"
+!!id:"https://tson.io/2026/35/ltr8/http/rpc-1.tn"
+!!meta:"https://tson.io/2026/35/m/meta.tn"
+!!import:"https://tson.io/2026/35/m/core.tn"
+!!import:"https://tson.io/2026/35/ltr8/http/problem-1.tn"
 @doc:"""
   The wire form of an interface: one method call and its return. A packet is DATA, so this is a user
   schema, not part of the meta layer -- the meta layer says what an interface IS; this says what calling

@@ -57,7 +57,7 @@ defined as pointing at a *type* and the target here is `kind: DATA`.
 refinement source" — and **a reference target is not among them**. But §4.1's own definition of the REFERENCE
 kind, and §8.3, both say a reference points at a type. Which reading governs decides whether this is a spec
 change or an implementation one, and it is worth settling either way: once `data` entries became full citizens
-of resolution — namespace membership, `type_ref` slots that flatten and carry `@alias`, templates, structural
+of resolution — namespace membership, `type_ref` slots whose references are walked, templates, structural
 identity — "reference" quietly stopped meaning "reference to a type", and the definition did not move with it.
 
 **Change**, in preference order:
@@ -82,6 +82,38 @@ measurement to arrive at. Pinned at both stages by
 `UpstreamGapsTest.aTemplatedDataConstructorDeclaresButItsApplicationCannotBeNamed`: asserting only the throw
 would go on passing if the declaration regressed to a parse error, which is a different gap wearing the same
 red.
+
+---
+
+## 2. §6's JSON reader does not exist, and `acceptingJson()` is what notices
+
+**Hit:** `TsonHttpCodec.acceptingJson()`, the opt-in that admits an `application/json` request body. It was a
+media-type gate over a guarantee: [TSON-DATA] §6 made every valid JSON document a valid TSON document, so the
+TSON reader needed no help. Revision 35 withdrew that. TSON is JSON-*like* and is not a superset, and §6 now
+puts JSON compatibility in a separate **JSON reader** — "a second encoding of the same model rather than a mode
+of this notation" — which tson-java has not built (its own `CLAUDE.md`: *"a whole separate stack … Not started,
+not backlogged"*).
+
+**What the gate admits meanwhile** is JSON as the *TSON* reader reads it, which is neither all of JSON nor
+JSON's meaning. Measured, not inferred, and pinned by `TsonHttpCodecJsonTest.theTsonReaderIsNotAJsonReader`:
+
+- **JSON `null` reads as the four-character string `"null"`, with no diagnostic.** §4.4 removed the null
+  keyword, so the token is text like any other, and §6's reader is what maps JSON's `null` to absence (§2.9).
+  At a `text?` field a JSON `null` therefore binds a string. **This is the one that corrupts rather than
+  refuses**, and it is why the item is worth filing rather than living in a Javadoc.
+- A key that is not an identifier is a parse error (§2.5), where §6's reader gives a map: `{"first name": 1}`
+  and `{"a.b": 1}` are refused.
+- A surrogate-pair escape is a parse error (§7.2.2) — which is how JSON must write any non-BMP character.
+- There is no `\/` escape, which RFC 8259 permits.
+
+Shared shapes — identifier-keyed objects, arrays, strings, numbers, booleans — read as they look.
+
+**Change:** build §6's JSON reader, or say it is not coming. Both are answers this project can act on; the
+present state is the one it cannot, because the method's contract is a guarantee the spec no longer makes.
+
+**Workaround in place:** the method stays, its Javadoc states all four divergences, and the test is written to
+fail when a real reader lands — that failure being the feature arriving. `CLAUDE.md`'s "Traps" carries the same
+warning where someone would meet it. An endpoint whose clients send real JSON should go on answering 415.
 
 ---
 

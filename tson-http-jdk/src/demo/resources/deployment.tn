@@ -1,4 +1,4 @@
-!!schema:"https://tson.io/2026/34/ltr8/http/deployment-1.tn"
+!!schema:"https://tson.io/2026/35/ltr8/http/deployment-1.tn"
 @doc:"""
   The validator demo's own deployment descriptor.
 
@@ -31,6 +31,18 @@
       name is fine, and a Latin word with one Cyrillic letter in it is not.
       """
     { level: SINGLE_SCRIPT }
+
+  limits: @doc:"""
+      [TSON-DATA] §9.1's resource limits, stated at the library's own default rather than left absent. A
+      validator is exactly the service that should bound what it reads -- both the schema and the document
+      come from the request -- so the posture is worth writing down even where it changes nothing.
+
+      64 and not less, deliberately. This demo is a conformance tool: it runs the same scenarios the
+      TypeScript implementation runs in a browser so the two verdicts can be compared, and a bound tighter
+      than §9.1's default would make them disagree about a deep document for a reason that is this
+      deployment's and not the format's.
+      """
+    { max_depth: 64 }
 
   schema_hosts: @doc:"Empty, and a real posture: this service resolves only the schema sent with a request." []
 }

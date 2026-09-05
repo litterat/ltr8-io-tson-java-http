@@ -1,9 +1,9 @@
-!!id:"https://tson.io/2026/34/ltr8/http/agent-1.tn"
-!!meta:"https://tson.io/2026/34/m/meta.tn"
-!!import:"https://tson.io/2026/34/m/core.tn"
+!!id:"https://tson.io/2026/35/ltr8/http/agent-1.tn"
+!!meta:"https://tson.io/2026/35/m/meta.tn"
+!!import:"https://tson.io/2026/35/m/core.tn"
 @doc:"""
   TSON Agent AST — the structured middle representation
-  (draft 2, brought to 2026 Revision 34 in the meta-service experiment).
+  (draft 2, brought to 2026 Revision 35 in the meta-service experiment).
 
   Three representations, as in any modern compiler: the PLAN is the
   user grammar — an ordinary TSON map document, `name => !method
@@ -44,11 +44,13 @@
   name => !text ^ { pattern: "[\\p{L}_][\\p{L}\\p{N}_-]*" }
 
   @doc:"""
-    A constant, of any shape: core's escape hatch, and the one thing this schema needs from the library
-    that it does not have yet -- `unknown` has no compiled reader, so a plan carrying a constant cannot be
-    read until it does. The same gap gates rpc-1.tn's payload slot.
+    A constant, of any shape: core's escape hatch. `dynamic` is §7.8's widest scoped instance and the
+    successor to what earlier revisions spelled `unknown` -- the value names its own type, from this
+    schema's namespace or from a foreign one it names with a nested !!schema, and is validated in full
+    against whatever it named. A value naming no type at all is a validation error here, so this is not
+    an `any` that goes unchecked. rpc-1.tn's payload slot is the same slot.
     """
-  constant => unknown
+  constant => dynamic
 
   @doc:"""
     Source spelling of a selection, as the surface writes it: a

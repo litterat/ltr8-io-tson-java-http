@@ -7,7 +7,7 @@ import io.ltr8.tson.schema.meta.TypeRef;
 import java.util.List;
 
 /**
- * A minimal operation shape, bound by {@code UpstreamGapsTest}'s probes so they can drive a {@code ~data &}
+ * A minimal operation shape, bound by {@code UpstreamGapsTest}'s probes so they can drive a {@code data &}
  * constructor without depending on {@code meta-http-1.tn}'s real one: responses as bare type references,
  * rather than as the {@code !response { status: … body: … }} data records the shipped meta layer declares.
  *

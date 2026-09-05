@@ -50,12 +50,12 @@ class TsonHttpCodecConcurrencyTest {
     private static final int THREADS = Math.max(8, Runtime.getRuntime().availableProcessors() * 2);
     private static final int ITERATIONS = 150;
 
-    private static final String SCHEMA_ID = "https://schemas.example.com/2026/34/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://schemas.example.com/2026/35/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/34/app/order-1.tn"
-            !!meta:"https://tson.io/2026/34/m/meta.tn"
-            !!import:"https://tson.io/2026/34/m/core.tn"
+            !!id:"https://schemas.example.com/2026/35/app/order-1.tn"
+            !!meta:"https://tson.io/2026/35/m/meta.tn"
+            !!import:"https://tson.io/2026/35/m/core.tn"
             {
                 order => { sku: text  quantity: int32 }
             }""";

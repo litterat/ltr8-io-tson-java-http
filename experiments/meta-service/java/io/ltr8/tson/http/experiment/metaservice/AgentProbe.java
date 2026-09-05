@@ -20,20 +20,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The agent's two resolved layers -- {@code agent-1.tn}, the plan a surface grammar reads to, and
- * {@code agent-vm-1.tn}, the agent it compiles to -- resolve at Revision 34 and read, up to one gap.
+ * {@code agent-vm-1.tn}, the agent it compiles to -- resolve at Revision 35 and read, up to one gap.
  *
  * <p>Read here: a plan whose arguments are references only ({@code arg} recursing through {@code record} to a
  * {@code selector}); a compiled agent whose pool holds names, a type and a method, and whose {@code code} mixes
  * bare mnemonics with labelled operands -- the {@code @disjoint} choice read tag-free, an enum beside a record.
- * Not readable yet: any constant. {@code constant => unknown}, core's escape hatch, has no compiled reader, so a
- * plan or an agent carrying one reports {@code NOT_IMPLEMENTED} at the constant -- the same gap that gates
- * {@code rpc-1.tn}'s payload slot. Pinned to flip.
+ * And a constant, which Revision 35 closed: {@code constant => dynamic} is [TSON-DATA] §7.8's scope push, so a
+ * literal argument names its own type -- from this schema's namespace, or from a foreign one it names with a
+ * nested {@code !!schema} -- and is validated in full against whatever it named. The same slot serves
+ * {@code rpc-1.tn}'s payload.
  */
 class AgentProbe {
 
-    static final String PLAN_ID = "https://tson.io/2026/34/ltr8/http/agent-1.tn";
-    static final String AGENT_ID = "https://tson.io/2026/34/ltr8/http/agent-vm-1.tn";
-    static final String ORDERS_ID = "https://schemas.example.com/2026/34/experiment/meta-service/orders-1.tn";
+    static final String PLAN_ID = "https://tson.io/2026/35/ltr8/http/agent-1.tn";
+    static final String AGENT_ID = "https://tson.io/2026/35/ltr8/http/agent-vm-1.tn";
+    static final String ORDERS_ID = "https://schemas.example.com/2026/35/experiment/meta-service/orders-1.tn";
+    static final String ORDER_TYPES_ID =
+            "https://schemas.example.com/2026/35/experiment/meta-service/orders-types-1.tn";
 
     static String read(String file) {
         try {
@@ -48,6 +51,8 @@ class AgentProbe {
         Map<String, String> lib = new LinkedHashMap<>();
         lib.put(PLAN_ID, read("agent-1.tn"));
         lib.put(AGENT_ID, read("agent-vm-1.tn"));
+        // A constant may name a foreign type, so the schema declaring it has to be reachable from here.
+        lib.put(ORDER_TYPES_ID, read("examples/orders-types-1.tn"));
         return Tson.builder().schemaSource(TsonSchemaSource.ofMap(lib)).build();
     }
 
@@ -126,23 +131,49 @@ class AgentProbe {
                 && d.message().contains("requires an explicit type annotation")), () -> "" + problems);
     }
 
-    /** The gap: a constant anywhere -- an `or`, a CONST pool entry, a literal argument -- is unreadable today. */
+    /**
+     * A constant -- an `or`, a CONST pool entry, a literal argument -- reads, and the interesting half is that
+     * the type it names is a foreign schema's. {@code constant => dynamic} admits both scopes, so the value
+     * carries a nested {@code !!schema} and a {@code !order} resolved there ([TSON-DATA] §7.8), and is checked
+     * against that record in full. Earlier revisions spelled this slot {@code unknown} and had no reader for
+     * it; the plan is unchanged, only the constant's spelling.
+     */
     @Test
-    void aConstantIsTheLibrarysGap() {
+    void aConstantNamesItsOwnTypeAcrossSchemas() {
         String withConstant = """
             !!schema:"%s"
             !plan {
               interface: "%s"
-              steps: [ { name: a  method: place_order  input: { order => { value: { sku: A-100  quantity: 2 } } } } ]
+              steps: [ { name: a  method: place_order
+                         input: { order => { value: !!schema:"%s" !order { sku: A-100  quantity: 2 } } } } ]
+              return: { ref: { step: a } }
+            }""".formatted(PLAN_ID, ORDERS_ID, ORDER_TYPES_ID);
+        var problems = TsonDiagnosticsReceiver.collecting();
+        TsonValue value = tson().treeReader().withDiagnostics(problems).read(withConstant);
+
+        assertEquals(List.of(), problems.diagnostics());
+        assertEquals("A-100", value.at("/steps/0/input/order/value/sku").asString().orElseThrow());
+    }
+
+    /**
+     * The other half of the same rule: a constant that names no type at all is a validation error, not an
+     * unchecked {@code any}. That is what keeps `dynamic` a scope and not an escape from validation.
+     */
+    @Test
+    void aConstantNamingNoTypeIsRefused() {
+        String untyped = """
+            !!schema:"%s"
+            !plan {
+              interface: "%s"
+              steps: [ { name: a  method: place_order  input: { order => { value: { sku: A-100 } } } } ]
               return: { ref: { step: a } }
             }""".formatted(PLAN_ID, ORDERS_ID);
         var problems = TsonDiagnosticsReceiver.collecting();
-        tson().treeReader().withDiagnostics(problems).read(withConstant);
+        tson().treeReader().withDiagnostics(problems).read(untyped);
 
-        List<Diagnostic> reported = problems.diagnostics();
-        assertEquals(1, reported.size(), () -> "" + reported);
-        assertEquals(Diagnostic.Code.NOT_IMPLEMENTED, reported.getFirst().code());
-        assertEquals("/steps/0/input/order/value", reported.getFirst().path().orElseThrow());
+        assertTrue(problems.diagnostics().stream()
+                        .anyMatch(d -> d.path().orElse("").equals("/steps/0/input/order/value")),
+                () -> "" + problems.diagnostics());
     }
 
     /** A malformed step name is refused by the `name` role -- the identifier grammar as a pattern. */

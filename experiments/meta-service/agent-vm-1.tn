@@ -1,10 +1,10 @@
-!!id:"https://tson.io/2026/34/ltr8/http/agent-vm-1.tn"
-!!meta:"https://tson.io/2026/34/m/meta.tn"
-!!import:"https://tson.io/2026/34/m/core.tn"
-!!import:"https://tson.io/2026/34/ltr8/http/agent-1.tn"
+!!id:"https://tson.io/2026/35/ltr8/http/agent-vm-1.tn"
+!!meta:"https://tson.io/2026/35/m/meta.tn"
+!!import:"https://tson.io/2026/35/m/core.tn"
+!!import:"https://tson.io/2026/35/ltr8/http/agent-1.tn"
 @doc:"""
   TSON Agent VM — the resolved form of an agent plan
-  (draft 2, brought to 2026 Revision 34; companion to agent-1.tn, whose `name` and `constant` it imports).
+  (draft 2, brought to 2026 Revision 35; companion to agent-1.tn, whose `name` and `constant` it imports).
 
   An agent is what a plan compiles to: the plan reading's resolved
   output, as a resolved schema is to its source. Compilation is
