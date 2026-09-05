@@ -13,8 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TsonSchemaHeaderTest {
 
-    private static final String V1 = "https://schemas.example.com/2026/34/app/order-1.tn";
-    private static final String V2 = "https://schemas.example.com/2026/34/app/order-2.tn";
+    private static final String V1 = "https://schemas.example.com/2026/35/app/order-1.tn";
+    private static final String V2 = "https://schemas.example.com/2026/35/app/order-2.tn";
 
     private static InputStream body(String document) {
         return new ByteArrayInputStream(document.getBytes(StandardCharsets.UTF_8));
@@ -140,12 +140,12 @@ class TsonSchemaHeaderTest {
     @Test
     void aBodyWithNoMarkSupportIsStillReadableAfterTheLook() throws Exception {
         String document = """
-                !!schema:"https://schemas.example.com/2026/34/app/order-1.tn"
+                !!schema:"https://schemas.example.com/2026/35/app/order-1.tn"
                 !order { sku: "ABC-1"  quantity: 3 }""";
 
         TsonSchemaHeader.Governing governing = TsonSchemaHeader.resolve(oneShot(document), null);
 
-        assertEquals(Optional.of("https://schemas.example.com/2026/34/app/order-1.tn"), governing.schema());
+        assertEquals(Optional.of("https://schemas.example.com/2026/35/app/order-1.tn"), governing.schema());
         assertEquals(document, new String(governing.body().readAllBytes(), StandardCharsets.UTF_8),
                 "the document, from its first byte -- directives included");
     }

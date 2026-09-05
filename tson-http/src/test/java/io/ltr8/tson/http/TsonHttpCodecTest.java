@@ -30,12 +30,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TsonHttpCodecTest {
 
-    private static final String SCHEMA_ID = "https://example.com/2026/34/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://example.com/2026/35/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://example.com/2026/34/app/order-1.tn"
-            !!meta:"https://tson.io/2026/34/m/meta.tn"
-            !!import:"https://tson.io/2026/34/m/core.tn"
+            !!id:"https://example.com/2026/35/app/order-1.tn"
+            !!meta:"https://tson.io/2026/35/m/meta.tn"
+            !!import:"https://tson.io/2026/35/m/core.tn"
             {
                 order => { sku: text  quantity: int32 }
             }""";
@@ -299,8 +299,8 @@ class TsonHttpCodecTest {
     void aTypeNothingBindsIsAServerFaultNotALibraryGap() {
         String schema = """
                 !!id:"https://example.test/thing-1.tn"
-                !!meta:"https://tson.io/2026/34/m/meta.tn"
-                !!import:"https://tson.io/2026/34/m/core.tn"
+                !!meta:"https://tson.io/2026/35/m/meta.tn"
+                !!import:"https://tson.io/2026/35/m/core.tn"
                 { thing => { a: text } }""";
         Tson tson = Tson.builder().schemaSource(uri -> schema).bindings(Map.of()).build();
         tson.resolve(schema);
@@ -513,14 +513,23 @@ class TsonHttpCodecTest {
 
     /**
      * The same rule reached the way a client reaches it: a schemaless record whose two field names a reader
-     * cannot tell apart -- Latin {@code admin} beside a Cyrillic-{@code \u0430} one. §8.2 names the record's own
+     * cannot tell apart -- Latin {@code pass} beside its all-Cyrillic spelling. §8.2 names the record's own
      * field set as the one naming scope at the data layer, and a Class 1 record is where it has to be caught,
      * no declaration standing behind those names.
+     *
+     * <p><b>Each name is single-script, and that is what makes the fixture isolate this rule.</b> A field name
+     * is a name and meets all three of §8.2's rules, so a within-word homograph -- Latin {@code admin} beside
+     * a Cyrillic-{@code \u0430} one -- is refused as a restricted script first, per name, before the set is
+     * looked at. The look-alike rule is a property of a *set*, so reaching it needs two names each of which
+     * the identifier policy admits on its own.
      */
     @Test
     void twoConfusableFieldNamesInASchemalessBodyAreABadRequest() {
+        // `pass` written р а ѕ ѕ -- single-script Cyrillic, so Highly Restrictive admits it, and
+        // skeleton-equal to the Latin spelling beside it.
+        String cyrillicPass = new String(new int[] {0x0440, 0x0430, 0x0455, 0x0455}, 0, 4);
         TsonHttpException rejected = assertThrows(TsonHttpException.class,
-                () -> codec.readTree(body("{ admin: 1  \u0430dmin: 2 }"), "application/tson"));
+                () -> codec.readTree(body("{ pass: 1  " + cyrillicPass + ": 2 }"), "application/tson"));
 
         assertEquals(TsonHttpException.BAD_REQUEST, rejected.status());
         assertEquals(TsonHttpException.TYPES + "confusable-names", rejected.type());

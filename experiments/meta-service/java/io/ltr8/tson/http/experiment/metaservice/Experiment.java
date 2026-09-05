@@ -14,7 +14,7 @@ import java.util.Set;
 final class Experiment {
 
     /** The meta layer under test, read from {@code experiments/meta-service/} rather than copied into a string. */
-    static final String META_ID = "https://tson.io/2026/34/ltr8/http/meta-service-1.tn";
+    static final String META_ID = "https://tson.io/2026/35/ltr8/http/meta-service-1.tn";
 
     private Experiment() {
     }
@@ -29,7 +29,7 @@ final class Experiment {
         }
     }
 
-    /** The bound classes for the sketch's {@code ~data} constructors, as {@code TsonApiSchema.metaNameBinder()} does. */
+    /** The bound classes for the sketch's {@code data} constructors, as {@code TsonApiSchema.metaNameBinder()} does. */
     static TsonConfig bindVocabulary(TsonConfig config) {
         return config.metaNameBinder(new DataNameBinder.DefaultDataNameBinder(
                 Set.of("io.ltr8.tson.http.experiment.metaservice"), Map.of()));

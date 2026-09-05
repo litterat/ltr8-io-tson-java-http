@@ -1,6 +1,6 @@
-!!id:"https://schemas.example.com/2026/34/experiment/meta-service/orders-types-1.tn"
-!!meta:"https://tson.io/2026/34/m/meta.tn"
-!!import:"https://tson.io/2026/34/m/core.tn"
+!!id:"https://schemas.example.com/2026/35/experiment/meta-service/orders-types-1.tn"
+!!meta:"https://tson.io/2026/35/m/meta.tn"
+!!import:"https://tson.io/2026/35/m/core.tn"
 @doc:"""
   The types the orders examples share. Every method takes exactly one request record, which is what lets
   a binding distribute its fields over the HTTP request -- so a parameter-only endpoint has a one-field

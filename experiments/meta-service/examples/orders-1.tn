@@ -1,7 +1,7 @@
-!!id:"https://schemas.example.com/2026/34/experiment/meta-service/orders-1.tn"
-!!meta:"https://tson.io/2026/34/ltr8/http/meta-service-1.tn"
-!!import:"https://schemas.example.com/2026/34/experiment/meta-service/orders-types-1.tn"
-!!import:"https://schemas.example.com/2026/34/experiment/meta-service/orders-errors-1.tn"
+!!id:"https://schemas.example.com/2026/35/experiment/meta-service/orders-1.tn"
+!!meta:"https://tson.io/2026/35/ltr8/http/meta-service-1.tn"
+!!import:"https://schemas.example.com/2026/35/experiment/meta-service/orders-types-1.tn"
+!!import:"https://schemas.example.com/2026/35/experiment/meta-service/orders-errors-1.tn"
 @doc:"""
   Interface only: nothing HTTP in the document. An interface is a map of methods keyed by name -- a
   method's name is the key it sits under, scoped to its interface, and a `@doc` before the key documents

@@ -25,27 +25,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class NameRoleProbe {
 
-    static final String META_ID = "https://tson.io/2026/34/ltr8/http/meta-probe-n.tn";
-    static final String DOC_ID = "https://schemas.example.com/2026/34/app/probe-n-1.tn";
+    static final String META_ID = "https://tson.io/2026/35/ltr8/http/meta-probe-n.tn";
+    static final String DOC_ID = "https://schemas.example.com/2026/35/app/probe-n-1.tn";
 
     static final String META = """
         !!id:"%s"
-        !!meta:"https://tson.io/2026/34/m/meta-kernel.tn"
-        !!import:"https://tson.io/2026/34/m/meta.tn"
+        !!meta:"https://tson.io/2026/35/m/meta-kernel.tn"
+        !!import:"https://tson.io/2026/35/m/meta.tn"
         {
           signature   => { request: type_ref?  response: type_ref?  errors: [type_ref]? }
-          method      => ~data & signature
+          method      => data & signature
           method_name => identifier
-          by_type_name   => ~data & { methods: {type_name => method} }
-          by_method_name => ~data & { methods: {method_name => method} }
-          by_text        => ~data & { methods: {text => method} }
+          by_type_name   => data & { methods: {type_name => method} }
+          by_method_name => data & { methods: {method_name => method} }
+          by_text        => data & { methods: {text => method} }
         }""".formatted(META_ID);
 
     static List<Diagnostic> problems(String entries) {
         String doc = """
             !!id:"%s"
             !!meta:"%s"
-            !!import:"https://tson.io/2026/34/m/core.tn"
+            !!import:"https://tson.io/2026/35/m/core.tn"
             {
               order => { sku: text }
             %s

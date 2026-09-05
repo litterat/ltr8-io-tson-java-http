@@ -17,12 +17,12 @@ Can one meta layer hold all three, and what does the third actually need?
 (guide: [`examples.md`](examples.md)). Two entries a governed
 schema writes, and both are **maps**:
 
-- `interface => ~data & { extends: [type_name]?  methods: {method_name => method} }` -- a named, documented map
+- `interface => data & { extends: [type_name]?  methods: {method_name => method} }` -- a named, documented map
   of methods. A method is a map *value* under its name, so the name is scoped to its interface (two interfaces
   may both declare `place_order`), a `@doc` before the key documents it, and the `!method` tag is optional under
   the typed slot. `extends` names other interfaces whose methods this one also has.
-- `api => ~data & { implements: [type_name]?  not_bound: {method_name => text}?  resources: {path_template => resource} }`
-  and `resource => ~data & { endpoints: {http_verb => endpoint} }` -- resources keyed by **path**, each holding
+- `api => data & { implements: [type_name]?  not_bound: {method_name => text}?  resources: {path_template => resource} }`
+  and `resource => data & { endpoints: {http_verb => endpoint} }` -- resources keyed by **path**, each holding
   endpoints keyed by **verb**: OpenAPI's `paths`, arrived at from the key types. A path key is data, so
   `/orders/{id}` needs no identifier minted from it and an endpoint needs no invented name.
 - `endpoint => placement & { status ~ 200 }`, with `operation => endpoint & signature` and `binding =>
@@ -33,10 +33,10 @@ schema writes, and both are **maps**:
   endpoint sits under. (A choice `(operation | binding)` and a field group `( method | signature )` were both
   measured to work; the supertype won because the base is abstract, shared vocabulary is inherited rather than
   composed twice, and a new kind of endpoint is one more composition.)
-- **Only `interface` and `api` are `~data &` constructors** -- the two entries a governed schema writes, and
+- **Only `interface` and `api` are `data &` constructors** -- the two entries a governed schema writes, and
   the only things that may head one (`x => !method { }` is refused: not a constructor). Everything inside them
   is an ordinary record, because it only ever appears as a map value; `method => signature & {}` takes the empty
-  body to be a type of its own rather than an alias that would flatten to `signature`. So no `kind: DATA` entry
+  body to be a type of its own rather than an alias that would be a hop to `signature`. So no `kind: DATA` entry
   is named at a type slot anywhere in the design, §4.1 has nothing to say about it, and a `resource` needs no
   tag under its path key. Documentation is annotation on the verb key -- `@summary` the short form, declared here as
   the kernel
@@ -65,10 +65,10 @@ identifier the resolver does not check, because a `kind: DATA` entry cannot be r
 `Routes` in the Java is the reader that checks all of it at startup: it resolves each operation's signature,
 computes its `Placement`, and holds the `implements` claim. The three probes:
 
-- `MetaServiceSketchProbe` -- the sketch resolves and its constructs behave as assumed: a `~data` constructor
+- `MetaServiceSketchProbe` -- the sketch resolves and its constructs behave as assumed: a `data` constructor
   with a record mixin and no body; an error type's `REQUIRED_FIXED` status readable from the resolved schema; and the
   rule the
-  design bends around, a `~data` *instance* named as a type refused at load.
+  design bends around, a `data` *instance* named as a type refused at load.
 - `InterfaceMapProbe` -- the finding the map design rests on, below.
 - `ExamplesProbe` -- the documents under `examples/` resolve against the sketch and both apis read into route tables.
 - `ApiProbe` -- an interface and the web service that maps it, through `Routes`: the placement of each request
@@ -85,7 +85,7 @@ computes its `Placement`, and holds the `implements` claim. The three probes:
 - `AgentProbe` -- both agent layers resolve; a plan of references and a compiled agent read, the `@disjoint`
   instruction tag-free; a constant is the same gap; a malformed step name is refused by the `name` role.
 
-**Two binder facts met on the way**, both worth knowing before writing a bound record for a `~data`
+**Two binder facts met on the way**, both worth knowing before writing a bound record for a `data`
 constructor: the binder finds a class by PascalCasing the type name (`interface_of_methods` →
 `InterfaceOfMethods`), `@Typename` notwithstanding; and it hands a map's *keys* back as `String` whatever the
 schema's key type, so `{http_verb => endpoint}` binds to `Map<String, Endpoint>` and a `Map<HttpVerb, …>`
@@ -164,8 +164,8 @@ path_template => !text ^ { pattern: "/([^/{}]+|\\{[A-Za-z_][A-Za-z0-9_]*\\})*" }
                                                     an api's keys: an RFC 3986 path with {segments}
 header_name   => !text ^ { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+" }    a `headers` value: an RFC 9110 token
 
-interface => ~data & { extends: [type_name]?  methods: {method_name => method} }
-api       => ~data & { … resources: {path_template => resource} }
+interface => data & { extends: [type_name]?  methods: {method_name => method} }
+api       => data & { … resources: {path_template => resource} }
 ```
 
 `NameRoleProbe` measures what a role buys at a map key, and `ApiProbe` pins the three in the sketch: the identifier
@@ -179,10 +179,10 @@ seam the `namespace` kind would move.
 
 Four things follow.
 
-**It says what the `data` kind was.** `operation => ~data & { … }` declared "an entry in the type namespace that
+**It says what the `data` kind was.** `operation => data & { … }` declared "an entry in the type namespace that
 is not a type": a foreign namespace's member filed in the wrong map, which is exactly why it could be declared
 but never referenced -- the type namespace has no reference form for non-types because it should hold none. The
-map shape moves the members out, and they are ordinary records there. What remains under `~data` is `orders` and
+map shape moves the members out, and they are ordinary records there. What remains under `data` is `orders` and
 `orders_api`, the *namespaces themselves*, and only because `data` is the one non-type kind there is. So the fifth
   kind the spec-feedback
 proposal ("a namespace should be a value") reaches for is not `data` but `namespace`; `data`'s one surviving job
@@ -253,12 +253,12 @@ This is the dataflow design the README argued for by another route -- Cap'n Prot
 precedent -- arrived at as a compiler rather than a packet, and it supersedes the `plan`/`step` sketch rpc-1.tn
 briefly carried. `rpc-1.tn` is now `call` and `return` only.
 
-**Brought to fit, mechanically** (measured by `AgentProbe`): both at Revision 34 under this repo's identities,
+**Brought to fit, mechanically** (measured by `AgentProbe`): both at Revision 35 under this repo's identities,
 `…/ltr8/http/agent-1.tn` and `agent-vm-1.tn`, with no placeholder pins -- a malformed `?sha256=` is refused
 outright; `token`, which is not in core, replaced by a `name` role declared once in `agent-1.tn` (the identifier
 grammar as a pattern, since a user schema cannot reach `identifier`) and imported by the VM; the inline
 `filter` record at a group-member position named, as §5.2 requires; `value`, which is the kernel's and not
-core's, replaced by `constant => unknown`; and the AST's top type renamed `plan`, since the VM imports the AST
+core's, replaced by `constant => dynamic`; and the AST's top type renamed `plan`, since the VM imports the AST
 and two `agent`s collide in a flat namespace.
 
 **Decisions this leaves, in the order I would take them:**
@@ -294,7 +294,8 @@ envelope with no per-service code: `rpc-1.tn` imports no service's types, the wi
 over them, and the packet is checked end to end by the resolver -- `quantity: two` in a call is an `int32`
 violation at `/request/order/quantity`, an error's fixed `status` is enforced, and where a method declares several
 errors the value carries the error's tag. (An earlier draft scoped the payload in place with `!!schema` at an
-`unknown` slot; the templates are better and need no reader the library lacks.) And a method's address is a
+`unknown` slot -- which Revision 35 makes readable as `dynamic`; the templates are still better, being typed at
+the schema rather than by each document.) And a method's address is a
 content-addressed identity -- versioned, unambiguous across every service a gateway fronts, with no registry.
 
 **Where it lives.** The packet, dispatch and the processor are transport-neutral; `tson-http` is the wrong home.
@@ -310,14 +311,14 @@ over HTTP and the other two adapters → `plan` and the processor.
 
 ## Open questions, kept here
 
-**`unknown` has no reader, and the agent's constants lean on it.** `AgentProbe` shows any constant in a plan or
-an agent (`constant => unknown`) reporting `NOT_IMPLEMENTED`: the library has no compiled reader for `unknown`
-(nor `extern`), the gap the tson-java skill lists. The RPC packet no longer depends on it -- its templates are
-closed per method, so the payload is typed -- but a plan's literals cannot be given a type the same way, since a
-generic plan schema cannot be closed per plan. Until the reader lands, a plan carrying a literal cannot be read.
-The probe is written to flip when it does. **Not filed** -- confined here with the rest, though it is the first of
-these that is a library ask
-rather than a spec question.
+**Closed: constants read.** This was the one library ask on the list -- `constant => unknown` had no compiled
+reader, so any literal in a plan or an agent reported `NOT_IMPLEMENTED`. Revision 35 removed `unknown` and put
+§7.8's scoped family in its place, and `dynamic` is its named successor: the value carries its own type, a bare
+`!type-ref` resolved in the governing schema or a nested `!!schema` plus a type-ref resolved there, and is
+validated in full against whatever it named. A value naming *no* type is a validation error, so this is not an
+unchecked `any`. `AgentProbe` now reads a plan whose literal argument is an `!order` from a foreign schema, and
+asserts the untyped spelling is still refused. The generic-plan problem the gap posed is gone with it: a plan
+schema does not have to be closed per plan, because the type travels with the value.
 
 
 **Which namespace may a document bind?** `!!schema` binds the type namespace and `!name` resolves against it,
@@ -334,7 +335,7 @@ answer should serve both.
 reader refuses a bare `RET` at that position and asks for a tag. Measured precisely in `AgentProbe`: `(text |
 integer)` reads untagged, so tag-free dispatch exists; an enum variant is what it does not cover. Until it
 does, a compiled agent writes `!simple_op RET` and `!op { make: 0 }`, and the VM's "tag-free" claim describes
-the schema rather than the implementation. **Not filed** -- a library ask, like the `unknown` reader above.
+the schema rather than the implementation. **Not filed** -- a library ask, and now the only one on this list.
 
 **Streams are not modelled, until a use arrives.** An earlier sketch carried `request_stream`/`response_stream`
 on the signature, meaning a *sequence* of documents of the declared type -- count unknown, each complete as it
@@ -345,7 +346,7 @@ model (an error mid-stream is a `problem` document in the sequence, so `errors` 
 multipart, or a lazily-read array; and a `shape: UNARY | SERVER_STREAM | CLIENT_STREAM | BIDI` beats two booleans
 that admit the bidirectional shape by accident of encoding.
 
-**A `~data` constructor as a map's value type is admitted, and §4.1 reads as if it should not.** No longer
+**A `data` constructor as a map's value type is admitted, and §4.1 reads as if it should not.** No longer
 relied on -- the sketch's inner types are records now -- but still measured in `InterfaceMapProbe` on a probe-only
 `{type_name => data_method}`, because it is a live question for the spec: [TSON-SCHEMA] §4.1 refuses "naming a
 `kind: DATA` entry" as an element type, and a map's value type is one; the implementation admits the DATA
@@ -372,7 +373,7 @@ when either lands. **Not filed** -- confined here with the rest.
 - `examples/` -- real documents: the shared types and errors, the interface only, the web service only, and
   both, each at its own `!!id`; `examples.md` is the guide to them and the placement table. `ExamplesProbe`
   resolves every file and runs both apis through `Routes`.
-- `java/…/experiment/metaservice/` -- the bound records the `~data` constructors need (`Method`, `Interface`,
+- `java/…/experiment/metaservice/` -- the bound records the `data` constructors need (`Method`, `Interface`,
   `Endpoint` -- a sealed interface, the base -- `Operation`, `Binding`, `Resource`, `Api`, `HttpVerb`;
   `Signature`, `InterfaceOfSignatures`, `DataMethod`, `InterfaceOfDataMethods`, `ByTypeName`, `ByMethodName`,
   `ByText` for the probes that need their own constructors), `Placement` and `Routes` (the reader-side checks the

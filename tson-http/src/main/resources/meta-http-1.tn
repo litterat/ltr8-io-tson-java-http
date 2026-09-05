@@ -1,6 +1,6 @@
-!!id:"https://tson.io/2026/34/ltr8/http/meta-http-1.tn"
-!!meta:"https://tson.io/2026/34/m/meta-kernel.tn"
-!!import:"https://tson.io/2026/34/m/meta.tn"
+!!id:"https://tson.io/2026/35/ltr8/http/meta-http-1.tn"
+!!meta:"https://tson.io/2026/35/m/meta-kernel.tn"
+!!import:"https://tson.io/2026/35/m/meta.tn"
 @doc:"""
   A meta layer adding HTTP operations to the type system: a schema governed by this one describes an
   HTTP API, and its request and response payloads are type references the compiler resolves.
@@ -11,19 +11,21 @@
   needs its own resolver -- forty lines that reimplemented an upstream namespace bug twice before
   they were right.
 
-  `~data &` is the base kind for an entry that is not a type: an operation describes an endpoint,
+  `data &` is the base kind for an entry that is not a type: an operation describes an endpoint,
   and no data value ever has one as its type. §4.1 declares that kind and gives this exact
   composition as its worked example -- an HTTP operation binding request and response types by name
   is what it calls the motivating case -- and makes naming a DATA-kinded entry where a type is
   expected a resolver error, so the misuse is caught at schema load rather than at read.
 
-  `~` is still required, and the reason is worth stating: it is the permission for a SCHEMA to write
-  `!operation { ... }` (§3.3.1/§5.6), not a claim that the thing is a type. Without it the
-  declaration resolves and a schema applying it is told the name does not resolve to a constructor.
+  Composing with `data` is itself the permission for a SCHEMA to write `!operation { ... }`
+  (§3.3.1/§5.6), and it is not a claim that the thing is a type. What makes an entry a constructor
+  is that it IS-A `top` (§4.1) -- it composes, transitively, with a base kind -- which the supertype
+  chain records, so no separate marker asserts it. Declaring one is permitted only in a
+  meta-kernel-governed schema, which is why this document's own !!meta is the kernel.
 
   request/response are `type_ref`, not `type_name` or text, and §9 makes that a MUST for an extension
-  meta-schema: `type_ref` is the slot that participates in flattening, @alias recording and structural
-  identity, where a `type_name` slot carries a bare token the resolver treats as data, invisible to
+  meta-schema: `type_ref` is the slot that participates in reference walking and structural identity,
+  where a `type_name` slot carries a bare token the resolver treats as data, invisible to
   every reference mechanism. Concretely here, a Data body hands its references to the linker, so a
   name that resolves to nothing is an author error at schema load.
 
@@ -83,7 +85,7 @@
     links, callbacks, examples, tags, servers, and multi-media-type content negotiation. Adding one is
     meta-http-2.tn under §3.5 once this is published, never an edit.
     """
-  operation => ~data & {
+  operation => data & {
     method:      http_method
     path:        text
     summary:     text?

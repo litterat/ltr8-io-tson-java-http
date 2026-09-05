@@ -1,6 +1,6 @@
-!!id:"https://tson.io/2026/34/ltr8/http/problem-1.tn"
-!!meta:"https://tson.io/2026/34/m/meta.tn"
-!!import:"https://tson.io/2026/34/m/core.tn"
+!!id:"https://tson.io/2026/35/ltr8/http/problem-1.tn"
+!!meta:"https://tson.io/2026/35/m/meta.tn"
+!!import:"https://tson.io/2026/35/m/core.tn"
 @doc:"""
   The error body this project writes when a request cannot be fulfilled.
 
@@ -60,7 +60,7 @@
     FIELD_REQUIRED FIELD_FIXED TYPE_MISMATCH WRONG_ARITY UNKNOWN_TYPE_REF ATOM_CONSTRAINT_VIOLATION
     UNRECOGNIZED_FIELD DUPLICATE_MAP_KEY DUPLICATE_FIELD CONFUSABLE_NAMES RESTRICTED_CHARACTER
     RESTRICTED_SCRIPT SCHEMA_ERROR UNKNOWN_TYPE VALIDATION_ERROR NOT_IMPLEMENTED BIND_MISMATCH
-    SCHEMA_NOT_PERMITTED SCHEMA_NOT_FOUND SCHEMA_UNREACHABLE SCHEMA_TIMEOUT SCHEMA_TOO_LARGE
+    LIMIT_EXCEEDED SCHEMA_NOT_PERMITTED SCHEMA_NOT_FOUND SCHEMA_UNREACHABLE SCHEMA_TIMEOUT SCHEMA_TOO_LARGE
   ]
 
   @doc:"""
@@ -74,6 +74,10 @@
     Every member here is a location or the problem itself; nothing is a payload meaningful to one code.
     Why a schema could not be obtained is the code, one per reason, so a body cannot state a code and a
     reason that contradict each other.
+
+    LIMIT_EXCEEDED is the same shape one layer out: a §9.1 bound this deployment reads within, so
+    `expected` and `actual` carry the depth admitted against the depth reached and nothing states the
+    policy, which is published once at /.well-known/tson-deployment.
 
     A refusal under a §8.2 policy (CONFUSABLE_NAMES, RESTRICTED_CHARACTER, RESTRICTED_SCRIPT) carries
     nothing beyond its code. The level and the Unicode data version it was judged under are properties

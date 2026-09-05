@@ -40,8 +40,8 @@ class ValidatorServerTest {
     /** The schema a caller submits. Deliberately not this server's own — it arrives in the body like any. */
     private static final String PEOPLE = """
             !!id:"https://example.com/people.tn"
-            !!meta:"https://tson.io/2026/34/m/meta.tn"
-            !!import:"https://tson.io/2026/34/m/core.tn"
+            !!meta:"https://tson.io/2026/35/m/meta.tn"
+            !!import:"https://tson.io/2026/35/m/core.tn"
             {
               employee => { id: uuid  name: non_empty_text  age: uint8 }
             }""";
@@ -145,8 +145,8 @@ class ValidatorServerTest {
     void aBrokenSchemaIsReportedAndTheDataIsNotChecked() throws Exception {
         ValidationResult result = resultOf(validate("""
                 !!id:"https://example.com/people.tn"
-                !!meta:"https://tson.io/2026/34/m/meta.tn"
-                !!import:"https://tson.io/2026/34/m/core.tn"
+                !!meta:"https://tson.io/2026/35/m/meta.tn"
+                !!import:"https://tson.io/2026/35/m/core.tn"
                 { employee => { name: no_such_type } }""", CONFORMING));
 
         assertEquals(ValidatorServer.Phase.SCHEMA, result.phase());
@@ -178,13 +178,13 @@ class ValidatorServerTest {
     void twoCallersSharingASchemaIdDoNotSeeEachOther() throws Exception {
         String mine = """
                 !!id:"https://example.com/people.tn"
-                !!meta:"https://tson.io/2026/34/m/meta.tn"
-                !!import:"https://tson.io/2026/34/m/core.tn"
+                !!meta:"https://tson.io/2026/35/m/meta.tn"
+                !!import:"https://tson.io/2026/35/m/core.tn"
                 { employee => { handle: text } }""";
         String theirs = """
                 !!id:"https://example.com/people.tn"
-                !!meta:"https://tson.io/2026/34/m/meta.tn"
-                !!import:"https://tson.io/2026/34/m/core.tn"
+                !!meta:"https://tson.io/2026/35/m/meta.tn"
+                !!import:"https://tson.io/2026/35/m/core.tn"
                 { employee => { nickname: text } }""";
         String document = """
                 !!schema:"https://example.com/people.tn"
@@ -284,7 +284,7 @@ class ValidatorServerTest {
     @Test
     void theEnvelopeIsPublishedAtItsOwnIdentityPath() throws Exception {
         HttpResponse<String> response = client.send(HttpRequest.newBuilder(
-                        URI.create(base + "/2026/34/app/validate-1.tn")).GET().build(),
+                        URI.create(base + "/2026/35/app/validate-1.tn")).GET().build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         assertEquals(200, response.statusCode());
@@ -342,6 +342,9 @@ class ValidatorServerTest {
         assertEquals(200, response.statusCode());
         assertEquals("application/tson", response.headers().firstValue("Content-Type").orElse(""));
         assertTrue(response.body().contains("SINGLE_SCRIPT"), response.body());
+        // §9.1's limits go out for the same reason the policies do: a sender that reads the bound first
+        // never writes past it, where a 413 tells it only after the fact.
+        assertTrue(response.body().contains("max_depth"), response.body());
         // Self-describing, and the schema it names is published, so a client can check what it got.
         assertTrue(response.body().contains(TsonDeployment.ID), response.body());
         assertFalse(response.body().contains("schema_hosts"), response.body());
@@ -352,7 +355,7 @@ class ValidatorServerTest {
     @Test
     void theDescriptorIsNeverServed() throws Exception {
         HttpResponse<String> schema = client.send(HttpRequest.newBuilder(
-                        URI.create(base + "/2026/34/ltr8/http/deployment-1.tn")).GET().build(),
+                        URI.create(base + "/2026/35/ltr8/http/deployment-1.tn")).GET().build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         assertEquals(200, schema.statusCode(), "the schema is published, so a profile can be validated");
 

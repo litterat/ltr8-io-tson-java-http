@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/** Probe-only ({@code InterfaceMapProbe}): a method as a {@code ~data} constructor, the shape the sketch no longer uses. */
+/** Probe-only ({@code InterfaceMapProbe}): a method as a {@code data} constructor, the shape the sketch no longer uses. */
 @Typename(name = "data_method")
 public record DataMethod(Optional<TypeRef> request, Optional<TypeRef> response, List<TypeRef> errors) implements Data {
     public DataMethod {

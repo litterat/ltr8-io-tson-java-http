@@ -1,7 +1,7 @@
-!!id:"https://schemas.example.com/2026/34/experiment/meta-service/orders-api-inline-1.tn"
-!!meta:"https://tson.io/2026/34/ltr8/http/meta-service-1.tn"
-!!import:"https://schemas.example.com/2026/34/experiment/meta-service/orders-types-1.tn"
-!!import:"https://schemas.example.com/2026/34/experiment/meta-service/orders-errors-1.tn"
+!!id:"https://schemas.example.com/2026/35/experiment/meta-service/orders-api-inline-1.tn"
+!!meta:"https://tson.io/2026/35/ltr8/http/meta-service-1.tn"
+!!import:"https://schemas.example.com/2026/35/experiment/meta-service/orders-types-1.tn"
+!!import:"https://schemas.example.com/2026/35/experiment/meta-service/orders-errors-1.tn"
 @doc:"""
   Web service only: an api on its own terms, with no interface behind it, so every endpoint is an
   `!operation` carrying its signature inline. The verb and the path are the keys an endpoint sits under;

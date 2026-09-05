@@ -14,7 +14,7 @@ import java.util.Optional;
  * that will not parse the body can still read it.
  *
  * <pre>{@code
- * TSON-Schema: "https://schemas.example.com/2026/34/app/order-1.tn"
+ * TSON-Schema: "https://schemas.example.com/2026/35/app/order-1.tn"
  * }</pre>
  *
  * <p><b>It is a projection of {@code !!schema}, not an alternative to it.</b> The body directive remains the

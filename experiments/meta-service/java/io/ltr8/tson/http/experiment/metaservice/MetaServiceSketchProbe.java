@@ -18,22 +18,22 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code meta-service-1.tn} resolves, and the constructs it leans on behave as the sketch assumes: a {@code ~data}
- * constructor with a record mixin and no trailing body ({@code method => ~data & signature}); a
+ * {@code meta-service-1.tn} resolves, and the constructs it leans on behave as the sketch assumes: a {@code data}
+ * constructor with a record mixin and no trailing body ({@code method => data & signature}); a
  * {@code [type_ref]} slot that resolves per element; an error type's fixed {@code status} readable from the
- * resolved schema. Plus the rule the whole design bends around: a {@code ~data} instance is not a type, and
+ * resolved schema. Plus the rule the whole design bends around: a {@code data} instance is not a type, and
  * naming one where a type is expected is refused at load.
  */
 class MetaServiceSketchProbe {
 
-    static final String ERR_ID = "https://schemas.example.com/2026/34/app/orders-errors-1.tn";
-    static final String DOC_ID = "https://schemas.example.com/2026/34/app/orders-1.tn";
+    static final String ERR_ID = "https://schemas.example.com/2026/35/app/orders-errors-1.tn";
+    static final String DOC_ID = "https://schemas.example.com/2026/35/app/orders-1.tn";
 
     /** An error type pins the status it inherits from {@code problem}, which is how an operation's errors get one. */
     static final String ERRORS = """
             !!id:"%s"
-            !!meta:"https://tson.io/2026/34/m/meta.tn"
-            !!import:"https://tson.io/2026/34/m/core.tn"
+            !!meta:"https://tson.io/2026/35/m/meta.tn"
+            !!import:"https://tson.io/2026/35/m/core.tn"
             !!import:"%s"
             {
               sku_not_found   => problem & { status: = 404  sku: text }
@@ -44,7 +44,7 @@ class MetaServiceSketchProbe {
         return """
             !!id:"%s"
             !!meta:"%s"
-            !!import:"https://tson.io/2026/34/m/core.tn"
+            !!import:"https://tson.io/2026/35/m/core.tn"
             !!import:"%s"
             {
               order       => { sku: text  quantity: int32 }
@@ -128,14 +128,20 @@ class MetaServiceSketchProbe {
                 + "than a data value"), problems.getFirst().message());
     }
 
-    /** And the inner types are records, not constructors: none may head a schema entry. */
+    /**
+     * And the inner types are records, not constructors: none may head a schema entry. The refusal now states
+     * the test it applies rather than the marker it used to look for -- Revision 35 dropped the {@code ~}
+     * marker, so what makes an entry applicable is that it IS-A {@code top} ([TSON-SCHEMA] §4.1), which its
+     * supertype chain already records. Same rule, same subjects; only the message moved.
+     */
     @Test
     void anInnerRecordCannotHeadAnEntry() {
         for (String ctor : List.of("method", "resource", "operation", "binding")) {
             String doc = doc("  x => !" + ctor + " { }");
             List<Diagnostic> problems = tson(doc).validateSchema(doc);
             assertEquals(1, problems.size(), () -> ctor + ": " + problems);
-            assertTrue(problems.getFirst().message().contains("'!" + ctor + "' does not resolve to a constructor"),
+            assertTrue(problems.getFirst().message().contains("'!" + ctor + "' is not applicable")
+                            && problems.getFirst().message().contains("not IS-A 'top'"),
                     problems.getFirst().message());
         }
     }

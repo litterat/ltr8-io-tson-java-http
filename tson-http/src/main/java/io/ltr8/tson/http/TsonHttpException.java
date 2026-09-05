@@ -77,6 +77,12 @@ public final class TsonHttpException extends RuntimeException {
     /** The client will not take an {@code application/tson} response. */
     public static final int NOT_ACCEPTABLE = 406;
 
+    /**
+     * The request body exceeded a bound this deployment reads within ([TSON-DATA] §9.1) -- the one status that
+     * is about what reading the body would <em>cost</em> rather than about what it says.
+     */
+    public static final int CONTENT_TOO_LARGE = 413;
+
     /** A fault in this server or the library under it. */
     public static final int INTERNAL_SERVER_ERROR = 500;
 
@@ -97,7 +103,7 @@ public final class TsonHttpException extends RuntimeException {
      * behaviour, where a schema identity under {@code tson.io} is a fact about the format. The two hosts keep
      * that apart -- the specification's, and the implementation resource that stands beside it.
      */
-    public static final String TYPES = "https://ltr8.io/2026/34/http/problems/";
+    public static final String TYPES = "https://ltr8.io/2026/35/http/problems/";
 
     /** RFC 9457's own default: no semantics beyond the status code. */
     public static final String ABOUT_BLANK = "about:blank";
@@ -247,6 +253,10 @@ public final class TsonHttpException extends RuntimeException {
      * 1, since retrying reaches a gap again where an origin may recover. Among themselves they rank by
      * {@link #FETCH_RANKING}.
      *
+     * <p><b>A [TSON-DATA] §9.1 limit refusal is a 413</b>, ranked below the fetch codes and above a §8.2
+     * refusal: nothing past the bound was read, where a refused name is a verdict on a document this reader
+     * did finish. {@link #limitExceeded} carries it out.
+     *
      * <p><b>A [TSON-DATA] §8.2 refusal is a 400 of its own type</b>, one per code, ranked below those three
      * and above an ordinary violation. It is still the sender's to fix, but the fix may be a rename, a
      * character, or a look at what this deployment admits -- and the type is what tells a client which. The
@@ -299,11 +309,45 @@ public final class TsonHttpException extends RuntimeException {
                         diagnostics, cause);
             }
         }
+        // Above a §8.2 refusal because nothing below the bound was read at all, where a refused name is a
+        // verdict on a document this reader did finish. Below the fetch codes for the reason those rank as
+        // they do: a limit is this deployment's own doing and the sender can act on it, so it goes with the
+        // three the sender holds the fix for rather than with a dependency's failure.
+        List<Diagnostic> overLimit = diagnostics.stream()
+                .filter(d -> d.code() == Diagnostic.Code.LIMIT_EXCEEDED).toList();
+        if (!overLimit.isEmpty()) {
+            return limitExceeded(overLimit, diagnostics, cause);
+        }
         List<Diagnostic> refused = diagnostics.stream().filter(d -> isRefusal(d.code())).toList();
         if (!refused.isEmpty()) {
             return policyRefusal(refused, diagnostics, cause);
         }
         return new TsonHttpException(BAD_REQUEST, TYPES + "invalid-document", "Invalid TSON document", detail,
+                diagnostics, cause);
+    }
+
+    /**
+     * A body this deployment declined to read to the end, under [TSON-DATA] §9.1's limits policy.
+     *
+     * <p><b>413 rather than 400, and the difference is one a client can act on without reading the body.</b>
+     * Every other 4xx here says something about what the document <em>means</em>; this one says only that
+     * reading it would have cost more than this server spends, which is exactly RFC 9110 §15.5.14's subject --
+     * content larger than the server is willing to process. Nesting depth is a dimension of larger, and the
+     * diagnostic carries the pair a sender needs: the depth admitted against the depth reached.
+     *
+     * <p><b>Not a verdict, and still the sender's to fix</b>, which is the same shape {@code SCHEMA_TOO_LARGE}
+     * has and the reason both are 4xx. {@link Diagnostic.Code#verdict()} reports it false and is right -- the
+     * body went unchecked past the point it was stopped, so any problem beyond that point is unknown and the
+     * detail says so. What it is not is a fault in this server: the bound is configuration, published in the
+     * acceptance profile at {@code /.well-known/tson-deployment} so a sender can read it before writing rather
+     * than after being refused.
+     */
+    private static TsonHttpException limitExceeded(List<Diagnostic> overLimit, List<Diagnostic> diagnostics,
+                                                   Throwable cause) {
+        return new TsonHttpException(CONTENT_TOO_LARGE, TYPES + "limit-exceeded", "Request body exceeds a read limit",
+                "read within this deployment's limits policy, published at /.well-known/tson-deployment: "
+                        + overLimit.stream().map(Diagnostic::message).toList()
+                        + "; the body past that point was not read, so it may hold problems not reported here",
                 diagnostics, cause);
     }
 

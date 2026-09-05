@@ -5,6 +5,7 @@ import io.ltr8.annotation.Typename;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.TsonConfig;
 import io.ltr8.tson.compiler.TsonCompiledSchema;
+import io.ltr8.tson.compiler.TsonLimitsPolicy;
 import io.ltr8.tson.compiler.TsonUnicodePolicy;
 
 import java.io.IOException;
@@ -42,11 +43,11 @@ import java.util.Optional;
  */
 @Typename(name = "deployment")
 public record TsonDeployment(String name, Optional<Listener> listener,
-                             Optional<Policy> identifiers, Optional<Policy> tokens,
+                             Optional<Policy> identifiers, Optional<Policy> tokens, Optional<Limits> limits,
                              @Field("schema_hosts") List<String> schemaHosts) {
 
     /** The schema a descriptor names. Published like any other, unlike the descriptors it governs. */
-    public static final String ID = "https://tson.io/2026/34/ltr8/http/deployment-1.tn";
+    public static final String ID = "https://tson.io/2026/35/ltr8/http/deployment-1.tn";
 
     private static final String SOURCE = readResource("/deployment-1.tn");
 
@@ -54,6 +55,7 @@ public record TsonDeployment(String name, Optional<Listener> listener,
             "deployment", TsonDeployment.class,
             "acceptance_profile", AcceptanceProfile.class,
             "unicode_policy", Policy.class,
+            "limits", Limits.class,
             "listener", Listener.class,
             "restriction_level", TsonUnicodePolicy.Level.class,
             "policy_unit", Unit.class);
@@ -64,6 +66,23 @@ public record TsonDeployment(String name, Optional<Listener> listener,
      */
     public TsonDeployment {
         schemaHosts = schemaHosts == null ? List.of() : List.copyOf(schemaHosts);
+    }
+
+    /**
+     * [TSON-DATA] §9.1's resource limits — what this processor will <em>spend</em> reading a document, where
+     * {@link Policy} is what it will <em>admit</em> as a name. Two settings because they answer two questions,
+     * and a deployment changing one has said nothing about the other.
+     *
+     * <p>{@code max_depth} is the only member because it is the only limit the library enforces. §9.1 states
+     * twelve; the rest arrive as {@code deployment-2.tn} rather than as a member nothing reads.
+     */
+    @Typename(name = "limits")
+    public record Limits(@Field("max_depth") Optional<Integer> maxDepth) {
+
+        /** This descriptor's limits policy, or empty where it states no member and the library's stands. */
+        public Optional<TsonLimitsPolicy> toPolicy() {
+            return maxDepth.map(depth -> TsonLimitsPolicy.defaults().withMaxDepth(depth));
+        }
     }
 
     /** Where this instance listens. Absent members leave the caller's own defaults alone. */
@@ -131,6 +150,7 @@ public record TsonDeployment(String name, Optional<Listener> listener,
      */
     @Typename(name = "acceptance_profile")
     public record AcceptanceProfile(String name, Optional<Policy> identifiers, Optional<Policy> tokens,
+                                    Optional<Limits> limits,
                                     @Field("unicode_data_version") Optional<String> unicodeDataVersion) {
     }
 
@@ -173,6 +193,14 @@ public record TsonDeployment(String name, Optional<Listener> listener,
     }
 
     /**
+     * The [TSON-DATA] §9.1 limits policy this descriptor states, or empty to leave the library's default
+     * alone — 64 levels of nesting, §9.1's own default.
+     */
+    public Optional<TsonLimitsPolicy> limitsPolicy() {
+        return limits.flatMap(Limits::toPolicy);
+    }
+
+    /**
      * Applies whatever this descriptor states to {@code config}, and returns it.
      *
      * <p>Only what it states: a descriptor with no {@code tokens} leaves the token policy at the library's
@@ -182,6 +210,7 @@ public record TsonDeployment(String name, Optional<Listener> listener,
     public TsonConfig applyTo(TsonConfig config) {
         identifierPolicy().ifPresent(config::identifierPolicy);
         tokenPolicy().ifPresent(config::tokenPolicy);
+        limitsPolicy().ifPresent(config::limits);
         return config;
     }
 
@@ -191,9 +220,13 @@ public record TsonDeployment(String name, Optional<Listener> listener,
      *
      * <p>{@code schema_hosts} and {@code listener} are dropped: which origins this deployment trusts is
      * nobody else's business, and where it listens is something a counterparty already knows.
+     *
+     * <p><b>{@code limits} is kept</b>, on the same argument that keeps the policies: a 413 says a document
+     * went past a bound, and a sender that read the bound first never writes past it. A limit is the shape of
+     * what this endpoint accepts, which is this projection's whole subject, where the allow-list is topology.
      */
     public AcceptanceProfile profile() {
-        return new AcceptanceProfile(name, identifiers, tokens, unicodeDataVersion());
+        return new AcceptanceProfile(name, identifiers, tokens, limits, unicodeDataVersion());
     }
 
     /**

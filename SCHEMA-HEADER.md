@@ -2,10 +2,14 @@
 
 A proposal, written up for the spec author. **Implemented in this repo** — see §6 for what it took.
 
-**Still open against 2026 Revision 34.** That revision left §6 untouched and rewrote §7.1 around the
-identifier layer rather than the media type, so neither gained a way to name a governing schema out of band.
-The gap this proposal answers is exactly where it was: a JSON body cannot carry `!!schema`, and an
-intermediary routing by schema cannot parse a compressed body to find one.
+**Still open against 2026 Revision 35, and that revision widened it.** §6 was rewritten — TSON is no longer a
+JSON superset, and JSON compatibility moves into a separate **JSON reader**, a second encoding of the same
+model. So a JSON body is now a document this series reads *deliberately* rather than incidentally, and the
+question of how it names its governing schema is that reader's to answer as much as this header's; §6 does not
+answer it, because directive syntax is still not JSON. Nothing in §7.1 gained an out-of-band naming mechanism
+either. The gap this proposal answers is therefore exactly where it was and applies to one more case: a JSON
+body cannot carry `!!schema`, and an intermediary routing by schema cannot parse a compressed body to find
+one.
 
 **Decided:**
 
@@ -39,7 +43,7 @@ intermediary routing by schema cannot parse a compressed body to find one.
 A header carrying the identity of the schema that governs the message body:
 
 ```
-TSON-Schema: "https://schemas.example.com/2026/34/app/order-1.tn"
+TSON-Schema: "https://schemas.example.com/2026/35/app/order-1.tn"
 ```
 
 **It is a projection of `!!schema`, not an alternative to it.** That framing is the whole proposal. The body
@@ -141,7 +145,8 @@ find out they are wrong.
 
 Not in the original rule set, and it is where the header earns the most.
 
-A JSON body cannot carry `!!schema` at all (§6 makes it valid TSON; TSON directive syntax is not valid JSON).
+A JSON body cannot carry `!!schema` at all: directive syntax is not valid JSON, and §6's JSON reader defines a
+mapping from JSON's constructs to this model without adding one for a directive.
 So for `Content-Type: application/json`, the header is not a projection of anything — it is the **only**
 channel, and the only way a JSON payload can say which TSON schema governs it. That is the structured-output
 case the format is aimed at.
@@ -151,7 +156,9 @@ Defined for any body, §3.2's matching rule simply never applies to JSON — the
 against — and the header is authoritative by necessity rather than by choice.
 
 A consequence worth stating in the spec: this makes `TSON-Schema` the JSON-compatibility story's missing half.
-§6 says every JSON document is valid TSON; this is how one says which schema it is valid *against*.
+§6 says a JSON reader validates on the same terms as this notation, under a schema; this is how a JSON body
+says *which* schema that is. Revision 35 sharpened the point rather than blunting it — the reader is now an
+explicit part of the series, and it still has no way to be told what governs the document it is reading.
 
 ## 4. Naming, and how one is meant to be named
 
@@ -181,7 +188,7 @@ field name alongside it is coherent rather than extra machinery.
 Define it as an RFC 9651 structured field: an **Item** whose bare-item is an **sf-string**.
 
 ```
-TSON-Schema: "https://schemas.example.com/2026/34/app/order-1.tn"
+TSON-Schema: "https://schemas.example.com/2026/35/app/order-1.tn"
 ```
 
 **DECIDED: sf-string, so the quotes are mandatory.** Which also matches the directive: `!!schema`'s argument
@@ -241,8 +248,8 @@ to hold one. Something has to say which version the reply is in, and only the cl
 as `Accept`'s quality values:
 
 ```
-TSON-Accept-Schema: "https://schemas.example.com/2026/34/app/order-2.tn",
-                    "https://schemas.example.com/2026/34/app/order-1.tn";q=0.5
+TSON-Accept-Schema: "https://schemas.example.com/2026/35/app/order-2.tn",
+                    "https://schemas.example.com/2026/35/app/order-1.tn";q=0.5
 ```
 
 The rules, each pinned by a test in `TsonSchemaVersionsTest`:

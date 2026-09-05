@@ -1,13 +1,13 @@
-!!id:"https://tson.io/2026/34/ltr8/http/meta-service-1.tn"
-!!meta:"https://tson.io/2026/34/m/meta-kernel.tn"
-!!import:"https://tson.io/2026/34/m/meta.tn"
+!!id:"https://tson.io/2026/35/ltr8/http/meta-service-1.tn"
+!!meta:"https://tson.io/2026/35/m/meta-kernel.tn"
+!!import:"https://tson.io/2026/35/m/meta.tn"
 @doc:"""
   A meta layer for describing a service: what it can be asked to do (methods, grouped into interfaces)
   and how one transport exposes that (HTTP operations). A schema governed by this one is a service
   description, and its entries are methods, operations, or a mix.
 
   One vocabulary, two constructors -- and only two. `interface` and `api` are the entries a governed
-  schema writes, so they are `~data &` constructors (an entry that is not a type, §4.1). Everything
+  schema writes, so they are `data &` constructors (an entry that is not a type, §4.1). Everything
   inside them -- `method`, `endpoint`, `operation`, `binding`, `resource` -- is an ordinary RECORD,
   because it only ever appears as a map value: `{method_name => method}`, `{http_verb => endpoint}`,
   `{path_template => resource}`. A record composes (`operation => endpoint & signature`), is admitted
@@ -57,7 +57,7 @@
   @doc:"""
     A method: a signature and nothing more. Its NAME is the key it sits under in an interface. A record,
     not a constructor: it is only ever a map value. The empty trailing body is what makes it a type of its
-    own -- `method => signature` would be an alias, and an alias flattens to its target, so the values
+    own -- `method => signature` would be an alias, and an alias is a hop to its target, so the values
     would read back as signatures.
     """
   method => signature & {}
@@ -70,7 +70,7 @@
     a cycle or a name that is not an interface. It is not `!!import`: importing a document brings its
     entries into the namespace, where extending an interface says whose methods are also mine.
     """
-  interface => ~data & {
+  interface => data & {
     extends:  [type_name]?
     methods:  {method_name => method}
   }
@@ -207,7 +207,7 @@
     to justify is a decision, where a boolean is a hole. An api with no `implements` is a web service on
     its own terms, its endpoints `!operation`s.
     """
-  api => ~data & {
+  api => data & {
     implements:  [type_name]?
     not_bound:   {method_name => text}?
     resources:   {path_template => resource}
