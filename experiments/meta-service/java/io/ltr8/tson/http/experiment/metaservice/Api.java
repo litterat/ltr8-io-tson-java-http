@@ -12,7 +12,8 @@ import java.util.Map;
 
 /** The sketch's {@code api}: resources keyed by path template, and the interfaces it claims to implement. */
 @Typename(name = "api")
-public record Api(@Field("implements") List<String> implemented, @Field("not_bound") Map<String, String> notBound,
+public record Api(@Field("implements") List<String> implemented,
+                  @Field("not_bound") Map<String, Exemption> notBound,
                   AnnotatedMap<String, Resource> resources) implements Data {
 
     public Api {

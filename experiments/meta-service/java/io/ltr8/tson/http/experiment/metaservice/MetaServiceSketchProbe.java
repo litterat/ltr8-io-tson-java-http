@@ -78,7 +78,8 @@ class MetaServiceSketchProbe {
                 resources: {
                   "/orders"        => !resource { POST   => !binding { method: place_order  status: 201 } }
                   "/orders/{id}"   => !resource { DELETE => !binding { method: cancel_order  status: 204 } }
-                  "/{schemaPath}"  => !resource { @safe GET => !operation { request: schema_ref } }
+                  "/{schemaPath}"  => !resource {
+                    @safe GET => !operation { request: schema_ref  response: order } }
                 }
               }
             """;

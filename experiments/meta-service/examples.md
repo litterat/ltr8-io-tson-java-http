@@ -14,6 +14,13 @@ its signature inline, or a `!binding` naming a method's.
 | [`orders-api-1.tn`](examples/orders-api-1.tn) | **both** | an api that `implements` `orders`, every endpoint a `!binding` with its placement |
 | [`orders-wire-1.tn`](examples/orders-wire-1.tn) | wire | `rpc-1.tn`'s `call`/`return` templates closed once per method of `orders` -- what a generator emits from the interface |
 
+**Both spellings of a map appear, deliberately.** `orders` and both apis write their sole required field
+positionally -- `!interface { place_order => … }` for `!interface { methods: { place_order => … } }`, which
+§5.6 admits because `interface`, `api` and `resource` each have exactly one bare required field -- while
+`orders_v2` writes `methods:` out, because it also sets `extends` and a body is a record or a map, never both.
+The sketch's header `@doc` says what the positional form costs: a second required field on any of those three
+types withdraws it, and every document written that way stops parsing.
+
 ## The placement, for `orders-api-1.tn`
 
 | binding | method's request | path | query | header | body |

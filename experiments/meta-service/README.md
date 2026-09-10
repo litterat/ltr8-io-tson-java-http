@@ -3,6 +3,13 @@
 **Status: experiment.** Nothing here is served, published or depended on. `meta-http-1.tn` remains the meta layer
 the demos use.
 
+**Scope: the descriptor, for RPC- and API-style endpoints.** `meta-service-1.tn` describing an interface, a web
+service over it, and the endpoints of both is the work in hand; `rpc-1.tn` is its wire form and belongs to that
+scope. **The agent is future work and is here only to shape the descriptor** -- a third consumer of an interface
+whose demands say whether the meta layer holds up, in the way a second implementation says whether an API does.
+Its layers are worth keeping resolved and probed for that reason and no other. Nothing in the order of work
+below waits on them, and a decision that is the agent's alone is not a reason to move the descriptor.
+
 ## The question
 
 `meta-http-1.tn` describes an HTTP API: a schema governed by it declares `!operation` entries whose `request`
@@ -63,7 +70,7 @@ schema writes, and both are **maps**:
 Everything that relates the two maps -- a method name, an `implements`, an `extends`, a `{segment}` -- is an
 identifier the resolver does not check, because a `kind: DATA` entry cannot be referenced and a map key is data.
 `Routes` in the Java is the reader that checks all of it at startup: it resolves each operation's signature,
-computes its `Placement`, and holds the `implements` claim. The three probes:
+computes its `Placement`, and holds the `implements` claim. The probes:
 
 - `MetaServiceSketchProbe` -- the sketch resolves and its constructs behave as assumed: a `data` constructor
   with a record mixin and no body; an error type's `REQUIRED_FIXED` status readable from the resolved schema; and the
@@ -74,8 +81,8 @@ computes its `Placement`, and holds the `implements` claim. The three probes:
 - `ApiProbe` -- an interface and the web service that maps it, through `Routes`: the placement of each request
   record; an inline-only api; the `implements` claim failing and then exempted; `extends` walked; the tag rule
   the resolver enforces; a typo the resolver passes and the reader catches; an ambiguous name needing
-  `interface:`; a container in a path; the three borrowed grammars at their keys; and the method-as-type
-  alternative kept for comparison.
+  `interface:`; a container in a path; a request that is not a record at all; the three borrowed grammars at
+  their keys; and the method-as-type alternative kept for comparison.
 - `SupertypeProbe` -- the mechanism `!binding` rides on: a derived constructor's instance admitted at its
   base-typed slot, the base abstract for free, its constraints inherited.
 - `NameRoleProbe` -- what a naming role buys at a map key, and the hygiene gap below.
@@ -210,7 +217,8 @@ what it says.
 
 ## Direction: interface, api, agent
 
-Three projections of one interface, and the order they arrive in.
+Three projections of one interface, and the order they arrive in. The first two are the current scope; the third
+is listed because what it needs of an interface is evidence about the descriptor, not because it is being built.
 
 - **The interface is the canonical layer, and its wire form is the RPC packet.** [`rpc-1.tn`](rpc-1.tn):
   `call => <Req> { … }` -- address `(interface !!id, method key)`, correlation `id`, `deadline`, opaque `meta`,
@@ -237,6 +245,11 @@ Three projections of one interface, and the order they arrive in.
   for one call.
 
 ### The agent: three layers
+
+**Future work, kept for what it says about the descriptor.** An agent executing a plan of calls is the consumer
+that presses hardest on an interface -- it needs a method addressable, its request and response typed, and its
+errors declared -- so sketching it is how the interface layer gets tested against something that is not HTTP.
+Building it is not on the order of work below.
 
 `agent-1.tn` is the plan, resolved -- named as a resolved schema is named against its source: the surface is
 plan source, this is the plan, and an `agent` is what it compiles to. Everything the surface leaves implicit is
@@ -303,11 +316,73 @@ A `tson-service` module (or repo) for interface + packet + dispatch + agent, wit
 becoming the api gateway over it -- and the RPC transport over HTTP is then itself one `!api` with a single
 endpoint, described in the same vocabulary.
 
-**Order:** swap the meta layer (three decisions first: the transport's 400 is not declared per endpoint;
-`Routes` checks the verb against `@safe`/`@idempotent`; the map-key hygiene gap is filed) → packet schema and
-in-process dispatch, the `Orders` interface and implementation, a Java method-naming rule, errors as thrown
-bound classes with fixed statuses → the JDK adapter as api gateway, hand-written handlers gone → remote RPC
-over HTTP and the other two adapters → `plan` and the processor.
+**Order:** swap the meta layer (the decisions below first) → packet schema and in-process dispatch, the
+`Orders` interface and implementation, a Java method-naming rule, errors as thrown bound classes with fixed
+statuses → the JDK adapter as api gateway, hand-written handlers gone → remote RPC over HTTP and the other two
+adapters. `plan` and the processor come after all of that, if at all; they are not part of this scope and
+nothing earlier in the order waits on them.
+
+## Before the swap
+
+A review of the sketch against the order above. What was unambiguous was fixed in place -- the wire example's
+`cancel_order_return` dropped the error its method declares, `Placement` let a non-record request fall through
+to an empty field set, the `placement` `@doc` claimed every method has a request record where `signature` makes
+it optional, and the positional form the examples are written in was undocumented. What is left is a decision,
+and each is cheaper now than once `tson-http` depends on the layer.
+
+**An endpoint has no name, and coverage claims by one.** The map design's whole point is that an endpoint needs
+no invented name -- it is a value under a verb under a path. But `TsonApiCoverage.serving(name)` claims a
+*declared operation by name*, and `CLAUDE.md` argues at length that claiming by name rather than by path is what
+keeps the check framework-agnostic: "comparing paths would need a translation table per framework, and a wrong
+entry there is a route that silently never matches". Under this layer a `!binding` can be claimed by
+`(interface, method)`, which is a better name than today's. An inline `!operation` has nothing, so its claim has
+to be `(verb, declared path template)` -- still not path *equality*, since the handler claims the string the
+description wrote and the framework's registered path stays free to differ, but a two-part claim, and the
+argument in `CLAUDE.md` has to be rewritten around it. **This decides the reader's public surface, so it comes
+first.**
+
+**The RPC address names a document, not an interface.** `rpc-1.tn`'s `call` addresses `(interface: uri, method:
+text)`, and this README calls that pair unambiguous across every service. It is not: `examples/orders-1.tn`
+declares two interfaces at one `!!id`, and two unrelated ones declaring `place_order` would be
+indistinguishable in a call. The wire schema has the same flaw a layer up -- `place_order_call` is a flat type
+name, so two interfaces per document collide there too. Either the address carries the interface's entry name,
+or one interface per document becomes a rule and `orders_v2` moves to its own file. Dispatch is the next item in
+the order, and this is what it dispatches on.
+
+**Still wanted:** the transport's own 400 is not declared per endpoint and should be stated somewhere once.
+
+### Done in the same pass
+
+Each was a decision with one answer, so it was taken rather than listed.
+
+- **Coverage is per (interface, method).** `Routes.Bound` is the unit throughout: two implemented interfaces may
+  both declare `list_orders`, and binding one says nothing about the other. `not_bound` takes an `exemption`
+  rather than bare text -- `reason` required, `interface` optional -- so an exemption disambiguates the way a
+  binding already could. `reason` being the sole required field keeps §5.6's short spelling,
+  `get_order => "served by the read replica"`. An exemption naming a method nothing declares is a typo the
+  reader catches, and an ambiguous one must say which.
+- **A query parameter or a header may repeat**, so either admits an array of scalars; a path segment carries
+  exactly one. An array of records still has no spelling anywhere.
+- **A verb is checked against what its method claims** -- GET, HEAD and OPTIONS safe; PUT and DELETE
+  idempotent; `@safe` implying `@idempotent` -- and a response-less endpoint must answer 204, 205 or 304
+  rather than the default 200.
+- **The wire schema is derived, not read.** `ExamplesProbe.theWireSchemaIsWhatTheInterfaceDetermines` closes
+  each of `orders`' methods over `call` and `return` itself and holds the file to it, reading which template an
+  entry closed and over what from the resolved schema rather than from the generated name. It fails on the
+  return type this review found wrong, and is the check a generator makes unnecessary.
+- **The inline example no longer serves schemas at their identity path.** That endpoint answers with bytes, and
+  `signature.response` names a type: the vocabulary cannot describe it, so the example says so and demonstrates
+  a nested path instead. Which is the absent-list item below, met in practice.
+
+**Recorded, not acted on.** `http_verb` is a closed enum, so no custom or WebDAV verb can be described. Two of
+an endpoint's errors may pin the same status, which is fine on the wire -- the value carries the error's tag --
+but means the gateway must set `type` rather than relying on the status to discriminate. And a route answering
+with something other than TSON has no spelling at all -- `signature.response` names a type, so serving a schema
+document at its identity path, which all three demos do, cannot be described. That is the
+"multi-media-type negotiation" exclusion, and it is a real endpoint of this project rather than a corner.
+
+**Not a gap, but part of the swap:** `referencedSchemas()` and `boundClasses()` need equivalents on this layer.
+`Interface.references()` and `Api.references()` already hand every reference up to the linker, so both derive.
 
 ## Open questions, kept here
 
@@ -362,7 +437,8 @@ identifier policy. An interface's method map is a naming scope in every sense [T
 reader must tell apart -- and once methods live in maps rather than as declarations, the spoofing surface §8.2
 exists for moves with them. Whether the fix is the implementation applying the identifier policy to
 identifier-role-keyed maps, or the spec naming such a map a scope, is the question; the probe is written to fail
-when either lands. **Not filed** -- confined here with the rest.
+when either lands. **Staged** in `UPSTREAM.md`'s "Spec feedback to file", since it is the one question here
+that outlives the experiment: any design putting members at identifier-keyed map keys inherits it.
 
 ## Files
 
