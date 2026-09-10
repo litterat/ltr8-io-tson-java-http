@@ -1,7 +1,7 @@
 package io.ltr8.tson.http;
 
 import io.ltr8.annotation.Typename;
-import io.ltr8.tson.compiler.Diagnostic;
+import io.ltr8.tson.base.Diagnostic;
 
 import java.util.List;
 import java.util.Optional;

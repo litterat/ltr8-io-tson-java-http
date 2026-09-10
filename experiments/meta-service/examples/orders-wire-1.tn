@@ -22,5 +22,5 @@
   list_orders_return  => return_plain<order_page>
 
   cancel_order_call   => call<order_ref>
-  cancel_order_return => return_plain<void>
+  cancel_order_return => return<void, order_not_found>
 }

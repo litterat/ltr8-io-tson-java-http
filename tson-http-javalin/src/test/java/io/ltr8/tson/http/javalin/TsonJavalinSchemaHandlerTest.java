@@ -2,8 +2,10 @@ package io.ltr8.tson.http.javalin;
 
 import io.javalin.Javalin;
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.HttpSchemaSource;
+import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.http.TsonHttpCodec;
-import io.ltr8.tson.TsonHttpSchemaSource;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.AfterEach;
@@ -42,7 +44,7 @@ class TsonJavalinSchemaHandlerTest {
 
     @BeforeEach
     void startServer() {
-        TsonHttpCodec codec = new TsonHttpCodec(Tson.builder().build());
+        TsonHttpCodec codec = new TsonHttpCodec(Tson.of(ProcessorConfig.defaults()));
         app = Javalin.create(config -> config.showJavalinBanner = false).start(0);
         // `<path>` rather than `{path}`: an identity path has slashes in it, and only the angle form matches
         // across them.
@@ -93,17 +95,17 @@ class TsonJavalinSchemaHandlerTest {
 
     /**
      * The whole loop, through Javalin this time: this server publishes a schema at its identity path,
-     * TsonHttpSchemaSource fetches it by that identity, and a document naming it resolves and validates.
+     * HttpSchemaSource fetches it by that identity, and a document naming it resolves and validates.
      * The same test passes against the JDK adapter, which is the point -- the client cannot tell them apart.
      */
     @Test
     void aServedSchemaIsOneAFetchingClientCanUse() {
-        try (TsonHttpSchemaSource source = TsonHttpSchemaSource.builder()
+        try (HttpSchemaSource source = HttpSchemaSource.builder()
                 .mapHost(HOST, base)
                 .timeout(Duration.ofSeconds(2))
                 .build()) {
 
-            Tson tson = Tson.builder().schemaSource(source).build();
+            Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(source)));
             tson.resolve(source.fetch(SCHEMA_ID));
             TsonHttpCodec codec = new TsonHttpCodec(tson);
 

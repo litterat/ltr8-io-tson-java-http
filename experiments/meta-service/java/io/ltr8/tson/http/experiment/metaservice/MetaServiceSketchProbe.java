@@ -1,8 +1,10 @@
 package io.ltr8.tson.http.experiment.metaservice;
 
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
-import io.ltr8.tson.compiler.TsonSchemaSource;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.schema.meta.FieldState;
 import io.ltr8.tson.schema.meta.RecordBody;
@@ -60,7 +62,8 @@ class MetaServiceSketchProbe {
         lib.put(TsonProblemSchema.ID, TsonProblemSchema.source());
         lib.put(ERR_ID, ERRORS);
         lib.put(DOC_ID, doc);
-        return Experiment.bindVocabulary(Tson.builder().schemaSource(TsonSchemaSource.ofMap(lib))).build();
+        return Tson.of(Experiment.bindVocabulary(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))));
     }
 
     /** The "both" shape: an interface, and an api implementing it with bindings, plus one inline operation. */
@@ -78,7 +81,8 @@ class MetaServiceSketchProbe {
                 resources: {
                   "/orders"        => !resource { POST   => !binding { method: place_order  status: 201 } }
                   "/orders/{id}"   => !resource { DELETE => !binding { method: cancel_order  status: 204 } }
-                  "/{schemaPath}"  => !resource { @safe GET => !operation { request: schema_ref } }
+                  "/{schemaPath}"  => !resource {
+                    @safe GET => !operation { request: schema_ref  response: order } }
                 }
               }
             """;

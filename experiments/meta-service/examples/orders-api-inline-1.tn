@@ -7,6 +7,13 @@
   `!operation` carrying its signature inline. The verb and the path are the keys an endpoint sits under;
   a path key is data, so `/orders/{id}` needs no identifier minted from it. A parameter-only endpoint is a
   one-field request record placed from the path.
+
+  A method's facts ride on its own key, so on an inline operation they sit before the verb: a GET must be
+  `@safe`, and the reader refuses one that is not.
+
+  This example used to serve every schema at its identity's path, which is a real endpoint of this project's
+  demos and the one thing this vocabulary cannot describe -- its 200 carries bytes rather than TSON, and
+  `signature.response` names a type. It was replaced rather than fudged; see the README's absent list.
   """
 {
   orders_api => !api {
@@ -19,10 +26,14 @@
       @doc:"One order, by the id in the path."
       GET => !operation { request: order_ref  response: order  errors: [order_not_found] }
     }
-    "/{schemaPath}" => !resource {
-      @doc:"Every schema this service names, at its own identity's path. The 200 is bytes, not TSON."
+    "/orders/{id}/items" => !resource {
       @safe
-      GET => !operation { request: schema_ref }
+      @doc:"""
+        The lines of one order: a second parameter-only endpoint, and a nested path written as a template of
+        its own -- the URL namespace is hierarchical and a resource key is flat over it, which is the
+        qualified-name question wearing a slash.
+        """
+      GET => !operation { request: order_ref  response: order_page }
     }
   }
 }

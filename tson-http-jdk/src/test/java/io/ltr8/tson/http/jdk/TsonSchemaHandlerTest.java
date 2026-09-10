@@ -2,8 +2,10 @@ package io.ltr8.tson.http.jdk;
 
 import com.sun.net.httpserver.HttpServer;
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.HttpSchemaSource;
+import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.http.TsonHttpCodec;
-import io.ltr8.tson.TsonHttpSchemaSource;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.AfterEach;
@@ -48,7 +50,7 @@ class TsonSchemaHandlerTest {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         base = "http://127.0.0.1:" + server.getAddress().getPort();
         client = HttpClient.newHttpClient();
-        TsonHttpCodec codec = new TsonHttpCodec(Tson.builder().build());
+        TsonHttpCodec codec = new TsonHttpCodec(Tson.of(ProcessorConfig.defaults()));
         server.createContext("/", TsonHandler.asHttpHandler(codec,
                 TsonSchemaHandler.of(SCHEMA, TsonProblemSchema.source())));
         server.start();
@@ -137,18 +139,18 @@ class TsonSchemaHandlerTest {
     }
 
     /**
-     * The whole loop: this server serves a schema at its identity path, TsonHttpSchemaSource fetches it by
+     * The whole loop: this server serves a schema at its identity path, HttpSchemaSource fetches it by
      * that identity, and a document naming it resolves and validates. Serving and fetching are the two halves
      * of the same contract, and only running them against each other shows they agree.
      */
     @Test
     void aServedSchemaIsOneAFetchingClientCanUse() {
-        try (TsonHttpSchemaSource source = TsonHttpSchemaSource.builder()
+        try (HttpSchemaSource source = HttpSchemaSource.builder()
                 .mapHost(HOST, base)
                 .timeout(Duration.ofSeconds(2))
                 .build()) {
 
-            Tson tson = Tson.builder().schemaSource(source).build();
+            Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(source)));
             tson.resolve(source.fetch(SCHEMA_ID));
             TsonHttpCodec codec = new TsonHttpCodec(tson);
 

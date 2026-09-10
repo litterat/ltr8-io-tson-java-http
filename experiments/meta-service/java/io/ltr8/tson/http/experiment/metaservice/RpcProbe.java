@@ -1,8 +1,10 @@
 package io.ltr8.tson.http.experiment.metaservice;
 
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
-import io.ltr8.tson.compiler.TsonSchemaSource;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.Test;
@@ -56,7 +58,7 @@ class RpcProbe {
         lib.put(EXAMPLES + "orders-types-1.tn", read("examples/orders-types-1.tn"));
         lib.put(EXAMPLES + "orders-errors-1.tn", read("examples/orders-errors-1.tn"));
         lib.put(WIRE_ID, read("examples/orders-wire-1.tn"));
-        return Tson.builder().schemaSource(TsonSchemaSource.ofMap(lib)).build();
+        return Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib))));
     }
 
     static String packet(String body) {
@@ -90,7 +92,9 @@ class RpcProbe {
         List<Diagnostic> problems = tson.validate(call.replace("quantity: 2", "quantity: two"));
         assertEquals(1, problems.size(), () -> "" + problems);
         assertEquals("/request/order/quantity", problems.getFirst().path().orElseThrow());
-        assertEquals(Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION, problems.getFirst().code());
+        // ATOM_FORM_INVALID rather than ATOM_CONSTRAINT_VIOLATION: `two` is a token int32's grammar
+        // rejects, which §5.2 files as a parse error, where a parsed value out of range is the other code.
+        assertEquals(Diagnostic.Code.ATOM_FORM_INVALID, problems.getFirst().code());
     }
 
     /** The error arm is the declared error, its fixed status enforced; the response arm the declared response. */

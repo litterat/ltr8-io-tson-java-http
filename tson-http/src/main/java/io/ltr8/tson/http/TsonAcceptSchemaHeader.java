@@ -1,6 +1,6 @@
 package io.ltr8.tson.http;
 
-import io.ltr8.tson.schema.TsonCanonicalIdentity;
+import io.ltr8.tson.base.CanonicalIdentity;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -128,8 +128,8 @@ public final class TsonAcceptSchemaHeader {
 
     private static boolean sameIdentity(String wanted, String candidate) {
         try {
-            return TsonCanonicalIdentity.canonicalize(wanted).equals(
-                    TsonCanonicalIdentity.canonicalize(candidate));
+            return CanonicalIdentity.canonicalize(wanted).equals(
+                    CanonicalIdentity.canonicalize(candidate));
         } catch (RuntimeException notAnIdentity) {
             // A reference that is not a legal identity names no version this server serves; it is simply not
             // a match. Refusing the whole header for one bad member would deny a client its other choices.

@@ -4,11 +4,15 @@ import io.ltr8.annotation.Typename;
 import io.ltr8.bind.DataBindContext;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
-import io.ltr8.tson.compiler.TsonReadException;
-import io.ltr8.tson.compiler.TsonSchemaFetchException;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.MissingBindingException;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.ReadException;
+import io.ltr8.tson.base.SchemaFetchException;
+import io.ltr8.tson.base.bind.AtomContext;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.compiler.TsonDiagnostics;
 import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
-import io.ltr8.tson.compiler.config.TsonAtomContext;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,8 +26,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -61,8 +65,10 @@ class TsonHttpCodecTest {
         DataNameBinder binder = name -> "order".equals(name) ? Order.class
                 : SchemaMetaNameBinder.INSTANCE.resolve(name);
         DataBindContext bind =
-                TsonAtomContext.registerDefaults(DataBindContext.builder().nameBinder(binder).build());
-        Tson tson = Tson.builder().schemaSource(uri -> SCHEMA).dataBindContext(bind).build();
+                DataBindContext.builder().nameBinder(binder).registerAtoms(AtomContext.hostTypes()).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(uri -> SCHEMA))
+                .withDataBindContext(bind));
         tson.resolve(SCHEMA);
         codec = new TsonHttpCodec(tson);
     }
@@ -236,12 +242,12 @@ class TsonHttpCodecTest {
     // ── a library gap inside a diagnostics list ──
 
     private static Diagnostic aGap() {
-        return Diagnostic.ofSchemaGap("s.example.com/x-1.tn", "op",
+        return TsonDiagnostics.ofSchemaGap("s.example.com/x-1.tn", "op",
                 "a container sugar form must be lifted to an entry before resolution", Optional.empty());
     }
 
     private static Diagnostic anOrdinaryProblem() {
-        return Diagnostic.ofSchemaError("s.example.com/x-1.tn", "y", "unresolved reference 'q'",
+        return TsonDiagnostics.ofSchemaError("s.example.com/x-1.tn", "y", "unresolved reference 'q'",
                 Optional.empty());
     }
 
@@ -289,7 +295,7 @@ class TsonHttpCodecTest {
      * <b>A type nothing binds is this server's misconfiguration, not a library gap.</b> It used to surface as
      * {@code UnsupportedOperationException: no usable compiled reader}, which the status policy faithfully
      * called 501 — telling a client the library could not do something, when a line of configuration was
-     * simply missing. It is now a {@code TsonMissingBindingException}, and 500 is the honest answer.
+     * simply missing. It is now a {@code MissingBindingException}, and 500 is the honest answer.
      *
      * <p>Deferred to the read of that specific type, deliberately: a schema legitimately declares types a
      * given consumer never binds — core.tn's forty of them — so failing the compile would make bind mode
@@ -302,7 +308,9 @@ class TsonHttpCodecTest {
                 !!meta:"https://tson.io/2026/35/m/meta.tn"
                 !!import:"https://tson.io/2026/35/m/core.tn"
                 { thing => { a: text } }""";
-        Tson tson = Tson.builder().schemaSource(uri -> schema).bindings(Map.of()).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(uri -> schema))
+                .withDataBindContext(TsonBindings.of(Map.of())));
         tson.resolve(schema);
         TsonHttpCodec bare = new TsonHttpCodec(tson);
         InputStream body = new ByteArrayInputStream(
@@ -318,7 +326,7 @@ class TsonHttpCodecTest {
     }
 
     private static Diagnostic aBindMismatch() {
-        return Diagnostic.ofSchemaError("s.example.com/x-1.tn", "order",
+        return TsonDiagnostics.ofSchemaError("s.example.com/x-1.tn", "order",
                 "'order' and com.example.OrderV1 do not agree: no component for field 'currency'",
                 Optional.empty());
     }
@@ -356,14 +364,14 @@ class TsonHttpCodecTest {
 
     /**
      * <b>The same rule reaches a gap that arrives fail-fast, not only one collected into a list.</b> A read
-     * gap is now reported rather than thrown, so it reaches a fail-fast caller as a {@code TsonReadException}
+     * gap is now reported rather than thrown, so it reaches a fail-fast caller as a {@code ReadException}
      * carrying {@code NOT_IMPLEMENTED} -- the very type a schema violation arrives as. Classifying by
      * exception type therefore answers 400 for a gap, which is the one verdict this policy may never give.
      * Only the code separates them, so {@code from} routes on it.
      */
     @Test
     void aFailFastReadGapIsAGapNotABadRequest() {
-        var thrown = TsonHttpException.from(new TsonReadException(withCode(aGap(),
+        var thrown = TsonHttpException.from(new ReadException(withCode(aGap(),
                 Diagnostic.Code.NOT_IMPLEMENTED)));
 
         assertEquals(TsonHttpException.NOT_IMPLEMENTED, thrown.status());
@@ -373,7 +381,7 @@ class TsonHttpCodecTest {
     /** And a fail-fast bind mismatch is this server's wiring, on the same reasoning as the collected one. */
     @Test
     void aFailFastBindMismatchDiagnosticIsAServerFault() {
-        var thrown = TsonHttpException.from(new TsonReadException(withCode(aBindMismatch(),
+        var thrown = TsonHttpException.from(new ReadException(withCode(aBindMismatch(),
                 Diagnostic.Code.BIND_MISMATCH)));
 
         assertEquals(TsonHttpException.INTERNAL_SERVER_ERROR, thrown.status());
@@ -385,7 +393,7 @@ class TsonHttpCodecTest {
      */
     @Test
     void anOrdinaryFailFastReadFailureIsStillABadRequest() {
-        var read = new TsonReadException(anOrdinaryProblem());
+        var read = new ReadException(anOrdinaryProblem());
         var thrown = TsonHttpException.from(read);
 
         assertEquals(TsonHttpException.BAD_REQUEST, thrown.status());
@@ -420,7 +428,7 @@ class TsonHttpCodecTest {
      * 502, so {@code NOT_PERMITTED} was a 400 thrown and a 502 collected.
      *
      * <p><b>Now there is one table and this pins that there is.</b> The two channels no longer speak the same
-     * enum -- thrown carries a {@link TsonSchemaFetchException.Reason}, collected carries a {@link
+     * enum -- thrown carries a {@link SchemaFetchException.Reason}, collected carries a {@link
      * Diagnostic.Code} -- so the agreement rests on {@code from} mapping through {@link Diagnostic.Code#of}
      * into the same switch, rather than on two switches being kept in step.
      *
@@ -429,11 +437,11 @@ class TsonHttpCodecTest {
      */
     @Test
     void aFetchDiagnosticIsAnsweredByItsCode() {
-        for (TsonSchemaFetchException.Reason reason : TsonSchemaFetchException.Reason.values()) {
+        for (SchemaFetchException.Reason reason : SchemaFetchException.Reason.values()) {
             TsonHttpException collected = TsonHttpException.invalidDocument(
                     List.of(withCode(aGap(), Diagnostic.Code.of(reason))));
             TsonHttpException thrown = TsonHttpException.from(
-                    new TsonSchemaFetchException("https://example.com/x.tn", reason, "test", null));
+                    new SchemaFetchException("https://example.com/x.tn", reason, "test", null));
 
             assertEquals(thrown.status(), collected.status(), reason::name);
             assertEquals(thrown.type(), collected.type(), reason::name);
@@ -452,7 +460,7 @@ class TsonHttpCodecTest {
     /**
      * <b>Name hygiene is a verdict on the document, so it stays a 400.</b> [TSON-DATA] §8.2's three codes --
      * one per rule -- are the first this project can meet because of its <em>own</em> configuration rather
-     * than the format's rules ({@code TsonConfig.tokenPolicy} decides which scripts a value may carry), and
+     * than the format's rules ({@code ProcessorConfig.tokenPolicy} decides which scripts a value may carry), and
      * that is
      * exactly why the status is worth pinning rather than left to the fall-through. A body refused under a
      * raised policy is refused by this deployment, as one over a size limit is, and it is still the client's

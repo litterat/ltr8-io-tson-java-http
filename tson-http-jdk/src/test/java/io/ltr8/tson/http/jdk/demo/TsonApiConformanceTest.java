@@ -2,7 +2,10 @@ package io.ltr8.tson.http.jdk.demo;
 
 import com.sun.net.httpserver.HttpServer;
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.compiler.TsonDocumentHeader;
+import io.ltr8.tson.compiler.TsonDocumentPeek;
 import io.ltr8.tson.http.api.HttpMethod;
 import io.ltr8.tson.http.api.Operation;
 import io.ltr8.tson.http.api.Parameter;
@@ -62,9 +65,9 @@ class TsonApiConformanceTest {
      */
     private Tson serverResolved() throws Exception {
         String description = get(URI.create(OrderServer.API_ID).getPath()).body();
-        Tson tson = Tson.builder()
-                .metaNameBinder(TsonApiSchema.metaNameBinder())
-                .schemaSource(uri -> {
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withMetaNameBinder(TsonApiSchema.metaNameBinder())
+                .withSchemaAccess(SchemaAccess.of(uri -> {
                     if (uri.startsWith(TsonApiSchema.ID)) {
                         return TsonApiSchema.source();
                     }
@@ -73,8 +76,7 @@ class TsonApiConformanceTest {
                     } catch (Exception e) {
                         throw new IllegalStateException("not published by this server: " + uri, e);
                     }
-                })
-                .build();
+                })));
         tson.resolve(description);
         return tson;
     }
@@ -168,7 +170,7 @@ class TsonApiConformanceTest {
                 () -> "the " + response.statusCode() + " body is not a " + type.get() + ": " + response.body());
 
         // And the schema it names must be one this server publishes -- fetched, not assumed.
-        TsonDocumentHeader header = TsonDocumentHeader.peek(response.body());
+        TsonDocumentHeader header = TsonDocumentPeek.of(response.body()).header();
         assertTrue(header.schema().isPresent(), () -> "a self-describing body: " + response.body());
         assertEquals(200, get(URI.create(header.schema().orElseThrow()).getPath()).statusCode(),
                 () -> "the " + response.statusCode() + " body names " + header.schema().orElseThrow()

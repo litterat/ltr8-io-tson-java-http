@@ -1,6 +1,8 @@
 package io.ltr8.tson.http;
 
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.Test;
 
@@ -29,7 +31,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class TsonHttpCodecJsonTest {
 
     private final TsonHttpCodec codec =
-            new TsonHttpCodec(Tson.builder().schemaSource(uri -> null).build()).acceptingJson();
+            new TsonHttpCodec(Tson.of(ProcessorConfig.defaults()
+                    .withSchemaAccess(SchemaAccess.of(uri -> null)))).acceptingJson();
 
     /** The four divergences, most dangerous first. */
     @Test
@@ -73,7 +76,8 @@ class TsonHttpCodecJsonTest {
     /** A body an endpoint that did not opt in never sees: the gate is still a gate. */
     @Test
     void aJsonBodyIsA415WithoutTheOptIn() {
-        TsonHttpCodec tsonOnly = new TsonHttpCodec(Tson.builder().schemaSource(uri -> null).build());
+        TsonHttpCodec tsonOnly = new TsonHttpCodec(Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(uri -> null))));
 
         assertEquals(TsonHttpException.UNSUPPORTED_MEDIA_TYPE,
                 assertThrows(TsonHttpException.class,

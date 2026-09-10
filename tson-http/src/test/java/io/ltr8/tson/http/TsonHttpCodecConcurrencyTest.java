@@ -4,9 +4,12 @@ import io.ltr8.annotation.Typename;
 import io.ltr8.bind.DataBindContext;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.bind.AtomContext;
+import io.ltr8.tson.base.source.HttpSchemaSource;
+import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
-import io.ltr8.tson.compiler.config.TsonAtomContext;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * One codec, many threads -- the shape every adapter in this project actually runs in, and the one every other
  * test in it avoids.
  *
- * <p><b>Why this exists.</b> `CLAUDE.md`, `TsonHttpCodec` and `TsonHttpSchemaSource` all state the same
+ * <p><b>Why this exists.</b> `CLAUDE.md`, `TsonHttpCodec` and `HttpSchemaSource` all state the same
  * invariant: resolve and compile every schema during single-threaded startup, then share the result for reads.
  * Until this test, that was an assertion. Three servers hold one codec across their request threads, so a codec
  * that is wrong under concurrency would pass all of the rest of the suite -- every other test here drives it
@@ -80,8 +83,10 @@ class TsonHttpCodecConcurrencyTest {
         DataNameBinder binder = name -> "order".equals(name) ? Order.class
                 : SchemaMetaNameBinder.INSTANCE.resolve(name);
         DataBindContext bind =
-                TsonAtomContext.registerDefaults(DataBindContext.builder().nameBinder(binder).build());
-        Tson tson = Tson.builder().schemaSource(uri -> SCHEMA).dataBindContext(bind).build();
+                DataBindContext.builder().nameBinder(binder).registerAtoms(AtomContext.hostTypes()).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(uri -> SCHEMA))
+                .withDataBindContext(bind));
         tson.resolve(SCHEMA);
         codec = new TsonHttpCodec(tson);
         codec.prepareToWrite(Order.class);

@@ -85,35 +85,36 @@ red.
 
 ---
 
-## 2. §6's JSON reader does not exist, and `acceptingJson()` is what notices
+## 2. The object reader cannot continue a peek against a stated type
 
-**Hit:** `TsonHttpCodec.acceptingJson()`, the opt-in that admits an `application/json` request body. It was a
-media-type gate over a guarantee: [TSON-DATA] §6 made every valid JSON document a valid TSON document, so the
-TSON reader needed no help. Revision 35 withdrew that. TSON is JSON-*like* and is not a superset, and §6 now
-puts JSON compatibility in a separate **JSON reader** — "a second encoding of the same model rather than a mode
-of this notation" — which tson-java has not built (its own `CLAUDE.md`: *"a whole separate stack … Not started,
-not backlogged"*).
+**Hit:** reading a body whose schema arrives in the `TSON-Schema` header rather than in a `!!schema` directive,
+in **bind** mode. `Tson.begin` hands back a `TsonDocumentPeek`, and the readers continue on one — but only some
+of them do:
 
-**What the gate admits meanwhile** is JSON as the *TSON* reader reads it, which is neither all of JSON nor
-JSON's meaning. Measured, not inferred, and pinned by `TsonHttpCodecJsonTest.theTsonReaderIsNotAJsonReader`:
+| | from a stream | continuing a peek |
+|---|---|---|
+| `TsonTreeReader.read` | yes | yes |
+| `TsonTreeReader.readAs(…, typeName)` | yes | **yes** |
+| `TsonObjectReader.read` | yes | yes |
+| `TsonObjectReader.readAs(…, typeName, targetClass)` | yes | **no** |
 
-- **JSON `null` reads as the four-character string `"null"`, with no diagnostic.** §4.4 removed the null
-  keyword, so the token is text like any other, and §6's reader is what maps JSON's `null` to absence (§2.9).
-  At a `text?` field a JSON `null` therefore binds a string. **This is the one that corrupts rather than
-  refuses**, and it is why the item is worth filing rather than living in a Javadoc.
-- A key that is not an identifier is a parse error (§2.5), where §6's reader gives a map: `{"first name": 1}`
-  and `{"a.b": 1}` are refused.
-- A surrogate-pair escape is a parse error (§7.2.2) — which is how JSON must write any non-BMP character.
-- There is no `\/` escape, which RFC 8259 permits.
+So the one combination a header-governed bind-mode read needs — schema from the field, root type from the
+route, body read once — is the missing cell. `TsonHttpCodec` mirrors the asymmetry rather than papering over
+it: it has `readTreeAs(peek, …)` and no `readObjectAs(peek, …)`.
 
-Shared shapes — identifier-keyed objects, arrays, strings, numbers, booleans — read as they look.
+**Why the workaround is unsatisfying rather than fatal.** Where the header is the *only* channel the body has —
+a JSON body, which can carry no directive — there is nothing for a peek to cross-check, so reading from the
+start costs nothing and that is what `TsonSchemaHeaderRoutingTest`'s JSON route now does. The gap bites where a
+body could carry a directive *and* a header: enforcing rule 3's agreement requires the peek, and bind mode then
+cannot use it, so such a route must read in tree mode or give up the check.
 
-**Change:** build §6's JSON reader, or say it is not coming. Both are answers this project can act on; the
-present state is the one it cannot, because the method's contract is a guarantee the spec no longer makes.
+**Change:** add `readAs(TsonDocumentPeek, String typeName, Class<T> targetClass)` to `TsonObjectReader`,
+matching the tree reader's own `readAs(TsonDocumentPeek, String)`. The private `readPeeked` and
+`readDocumentAs` machinery both already exist on that class; this is the entry point that was not written, not
+a capability that is absent.
 
-**Workaround in place:** the method stays, its Javadoc states all four divergences, and the test is written to
-fail when a real reader lands — that failure being the feature arriving. `CLAUDE.md`'s "Traps" carries the same
-warning where someone would meet it. An endpoint whose clients send real JSON should go on answering 415.
+**Workaround in place:** `TsonHttpCodec.readTreeAs(peek, …)` exists and its Javadoc names the gap; the JSON
+route reads from the start and says why.
 
 ---
 
@@ -123,7 +124,42 @@ Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. T
 each time a revision closes, and its convention is *cite the spec, not the argument that got it there* — so
 re-check every `SPEC-FEEDBACK.md #N` in this repo after a revision bump.
 
-**Nothing is staged.** The four entries this section held — §8.2's policy has no artifact; naming a schema for
+### To file: name hygiene does not reach a map key, where a naming scope now lives
+
+**Sections:** [TSON-DATA] §8.2 (confusable names, the identifier profile, restricted scripts), §8.3 (skeleton
+distinctness and what it composes over), §2.6 (map keys are values), §7.7 (the identifier grammar);
+[TSON-SCHEMA] §2.1 (the schema body as a name-keyed map).
+
+**The gap.** §8.2's three rules apply to *declared names* -- a schema's declarations, a record's fields -- and
+skeleton distinctness is stated over a scope those inhabit. A map key is data, so none of it reaches one. Two
+method names in one interface with equal UTS #39 skeletons (`admin` and `аdmin`, the second with U+0430) are
+admitted, as is a mixed-script one, where the same two names as two fields of a record or two declarations of a
+schema are refused under the default Highly Restrictive identifier policy. Measured both ways in
+`experiments/meta-service/java/…/NameRoleProbe.java`, under a key typed `type_name`, one typed `method_name`
+(a role over `identifier`) and one typed `text` alike -- the role changes the grammar enforced and the name in
+the refusal, and changes nothing about hygiene.
+
+**Why it is not merely an implementation choice.** An interface's method map is a naming scope in every sense
+§8.2 means: names a reader must tell apart, in one document, where confusing two of them is the attack. What
+moved is where such scopes live. Once a design puts members in a map keyed by an identifier role -- which is
+what a borrowed namespace looks like in TSON today, and what §4.1's `data` kind exists to make possible -- the
+spoofing surface §8.2 was written for moves with them, and the rules stay behind on the declaration map.
+
+**What this project does meanwhile:** nothing, and says so. The experiment's `Routes` could scan its own keys,
+but a check that lives in one consumer is exactly the shape this repo argues against for the schema-fetch
+policy -- one security rule with a second implementation free to drift lenient.
+
+**Two ways it could close, and the choice is the author's.** The implementation could apply the identifier
+policy to a map whose key type resolves to an identifier role, which needs no spec change and is invisible to a
+map keyed by `text`. Or §8.2 could name such a map a scope, which is the more honest fix and reaches the other
+implementations. Either would be caught by the probe, which is written to fail when hygiene starts applying.
+
+**Priority:** low against a shipped feature, higher against the meta-service direction, since that design puts
+every method and every route name at a map key.
+
+---
+
+**Nothing else is staged.** The four entries this section held — §8.2's policy has no artifact; naming a schema for
 a document that cannot carry `!!schema`; no shorthand for a template application at a `type_ref` slot in data;
 a namespace should be a value — were filed there on 2026-09-01 (#16–#19 at filing). Prose in this repo names
 each by its subject, not its number. A new finding goes here in the same shape: a `### To file:` heading naming

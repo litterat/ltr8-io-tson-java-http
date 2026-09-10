@@ -1,8 +1,10 @@
 package io.ltr8.tson.http.experiment.metaservice;
 
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
-import io.ltr8.tson.compiler.TsonSchemaSource;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.schema.meta.FieldState;
 import io.ltr8.tson.schema.meta.RecordBody;
@@ -62,9 +64,17 @@ class ApiProbe {
           orders_v2 => !interface { extends: [orders]  methods: { @idempotent refund => { request: order_ref } } }
 
           @doc:"Declares a name orders also declares, to force `interface:` on a binding of it."
-          billing => !interface { get_order => { request: order_ref  response: order } }
+          billing => !interface { @safe get_order => { request: order_ref  response: order } }
 
-          bulk => !interface { page_orders => { request: order_page } }
+          bulk => !interface { @safe page_orders => { request: order_page  response: order_page } }
+
+          order_search => { tags: [text]  status: text? }
+          @doc:"A repeatable query parameter, and a second declaration of `list_orders`."
+          search => !interface { @safe search_orders => { request: order_search  response: order_page }
+                                 @safe list_orders   => { request: order_query  response: order_page } }
+
+          @doc:"A request that is not a record at all, which the placement cannot distribute."
+          scalars => !interface { by_text => { request: text } }
         }""".formatted(IFACE_ID, Experiment.META_ID, MetaServiceSketchProbe.ERR_ID);
 
     /**
@@ -107,7 +117,8 @@ class ApiProbe {
         lib.put(MetaServiceSketchProbe.ERR_ID, MetaServiceSketchProbe.ERRORS);
         lib.put(IFACE_ID, IFACE);
         lib.put(API_ID, api);
-        return Experiment.bindVocabulary(Tson.builder().schemaSource(TsonSchemaSource.ofMap(lib))).build();
+        return Tson.of(Experiment.bindVocabulary(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))));
     }
 
     /** Resolves the api document and reads it into routes; the resolver's verdict is asserted clean first. */
@@ -132,7 +143,7 @@ class ApiProbe {
         assertEquals(4, routes.routes().size());
 
         Routes.Route create = routes.route(HttpVerb.POST, "/orders").orElseThrow();
-        assertEquals(Optional.of("place_order"), create.method());
+        assertEquals(Optional.of(new Routes.Bound("orders", "place_order")), create.method());
         assertEquals("new_order", create.request().orElseThrow().name());   // borrowed from the method
         assertEquals(201, create.status());
         assertEquals(List.of("order"), create.placement().at(Placement.Location.BODY));
@@ -154,7 +165,7 @@ class ApiProbe {
     void anApiWithNoInterfaceCarriesItsSignaturesInline() {
         Routes routes = routes(api("""
               standalone => !api { "/orders/{id}" => !resource {
-                GET => !operation { request: order_ref  response: order } } }
+                @safe GET => !operation { request: order_ref  response: order } } }
             """)).requireComplete();
 
         Routes.Route fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
@@ -171,7 +182,8 @@ class ApiProbe {
             """);
         String refused = assertThrows(IllegalStateException.class, () -> routes(partial).requireComplete())
                 .getMessage();
-        assertTrue(refused.contains("[get_order, list_orders, cancel_order]") && refused.contains("not_bound"),
+        assertTrue(refused.contains("[orders.get_order, orders.list_orders, orders.cancel_order]")
+                        && refused.contains("not_bound"),
                 refused);
 
         routes(api("""
@@ -187,10 +199,11 @@ class ApiProbe {
     void extendsIsWalkedForTheClaim() {
         String refused = assertThrows(IllegalStateException.class, () -> routes(api("""
               v2 => !api { implements: [orders_v2]
-                           resources: { "/refunds/{id}" => !resource { POST => !binding { method: refund } } } }
+                           resources: { "/refunds/{id}" => !resource {
+                             PUT => !binding { method: refund  status: 204 } } } }
             """)).requireComplete()).getMessage();
 
-        assertTrue(refused.contains("place_order") && refused.contains("refund") == false, refused);
+        assertTrue(refused.contains("orders.place_order") && refused.contains("refund") == false, refused);
     }
 
     /**
@@ -254,7 +267,112 @@ class ApiProbe {
                           resources: { "/orders/{items}" => !resource { GET => !binding { method: page_orders } } } }
             """))).getMessage();
 
-        assertTrue(refused.contains("'items'") && refused.contains("not a scalar"), refused);
+        assertTrue(refused.contains("'items'") && refused.contains("carries exactly one scalar"), refused);
+    }
+
+    /**
+     * A request is the record whose fields an endpoint distributes, so one that is not a record is refused where
+     * it is read. Left to fall through it places nothing and reads as a working endpoint carrying no data.
+     */
+    @Test
+    void aRequestThatIsNotARecordIsRefused() {
+        String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
+              a => !api { implements: [scalars]
+                          resources: { "/things" => !resource { POST => !binding { method: by_text } } } }
+            """))).getMessage();
+
+        assertTrue(refused.contains("'text'") && refused.contains("not a record"), refused);
+    }
+
+    /**
+     * A query parameter and a header may repeat, so either admits an array of scalars -- {@code ?tag=a&tag=b} is
+     * ordinary HTTP, and refusing it would push a multi-valued parameter into a body no GET can carry. An array
+     * of records still has no spelling, and neither has an array in a path segment.
+     */
+    @Test
+    void aRepeatedQueryValueIsAnArrayOfScalars() {
+        Routes routes = routes(api("""
+              a => !api { implements: [search]
+                          not_bound: { list_orders => "elsewhere" }
+                          resources: { "/search" => !resource { GET => !binding { method: search_orders } } } }
+            """)).requireComplete();
+        assertEquals(List.of("tags", "status"),
+                routes.route(HttpVerb.GET, "/search").orElseThrow().placement().at(Placement.Location.QUERY));
+
+        String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
+              a => !api { implements: [bulk]
+                          resources: { "/pages" => !resource { GET => !binding { method: page_orders } } } }
+            """))).getMessage();
+        assertTrue(refused.contains("'items'") && refused.contains("array of order"), refused);
+    }
+
+    /**
+     * The projection checks its verb against what the method claims, and never derives one from the other: a GET
+     * must be safe, a PUT or DELETE idempotent, and {@code @safe} implies {@code @idempotent}. The mismatch is
+     * the one a client cannot see and a cache will act on.
+     */
+    @Test
+    void aVerbMustAgreeWithWhatTheMethodClaims() {
+        String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
+              a => !api { implements: [orders]
+                          resources: { "/orders/{id}" => !resource { GET => !binding { method: cancel_order } } } }
+            """))).getMessage();
+        assertTrue(refused.contains("GET is safe") && refused.contains("@safe"), refused);
+
+        // A safe method is idempotent too, so DELETE takes one without saying so twice.
+        routes(api("""
+              a => !api { implements: [orders]
+                          resources: { "/orders/{id}" => !resource {
+                            DELETE => !binding { method: get_order  status: 204 } } } }
+            """));
+    }
+
+    /** A response-less endpoint answers with no body, and the default 200 says otherwise. */
+    @Test
+    void aResponselessEndpointCannotAnswer200() {
+        String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
+              a => !api { implements: [orders]
+                          resources: { "/orders/{id}" => !resource {
+                            DELETE => !binding { method: cancel_order } } } }
+            """))).getMessage();
+        assertTrue(refused.contains("declares no response") && refused.contains("204"), refused);
+    }
+
+    /**
+     * Coverage is per (interface, method): two implemented interfaces may both declare {@code list_orders}, and
+     * binding one says nothing about the other. An exemption is checked as hard as a binding -- one naming a
+     * method nothing declares is a typo, and an ambiguous one must say which interface it exempts.
+     */
+    @Test
+    void theClaimIsHeldPerInterfaceNotPerName() {
+        String bothClaimed = api("""
+              a => !api { implements: [orders search]
+                          not_bound: { place_order => "elsewhere"  get_order => "elsewhere"
+                                       cancel_order => "elsewhere"  search_orders => "elsewhere"
+                                       list_orders => { reason: "elsewhere"  interface: search } }
+                          resources: { "/orders" => !resource { GET => !binding { method: list_orders
+                                                                                  interface: orders } } } }
+            """);
+        // orders.list_orders is bound and search.list_orders exempted; neither stands in for the other.
+        routes(bothClaimed).requireComplete();
+
+        String ambiguous = api("""
+              a => !api { implements: [orders search]
+                          not_bound: { list_orders => "elsewhere" }
+                          resources: { "/orders" => !resource { POST => !binding { method: place_order } } } }
+            """);
+        String saidWhich = assertThrows(IllegalStateException.class, () -> routes(ambiguous).requireComplete())
+                .getMessage();
+        assertTrue(saidWhich.contains("[orders.list_orders, search.list_orders]")
+                && saidWhich.contains("`interface:`"), saidWhich);
+
+        String typo = api("""
+              a => !api { implements: [orders]
+                          not_bound: { plaec_order => "elsewhere" }
+                          resources: { "/orders" => !resource { POST => !binding { method: place_order } } } }
+            """);
+        String noSuch = assertThrows(IllegalStateException.class, () -> routes(typo).requireComplete()).getMessage();
+        assertTrue(noSuch.contains("exempts 'plaec_order'") && noSuch.contains("no implemented"), noSuch);
     }
 
     /** The borrowed namespaces keep their grammars at the key: a path, a header name, a method name. */
@@ -337,7 +455,7 @@ class ApiProbe {
         lib.put(LIB_ID, LIB_B);
         lib.put(IFACE_ID, IFACE_B);
         lib.put(API_ID, API_B);
-        Tson tson = Tson.builder().schemaSource(TsonSchemaSource.ofMap(lib)).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib))));
         List<Diagnostic> problems = tson.validateSchema(API_B);
         assertEquals(List.of(), problems, () -> "" + problems);
 

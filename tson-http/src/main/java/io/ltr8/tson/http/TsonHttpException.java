@@ -1,10 +1,11 @@
 package io.ltr8.tson.http;
 
-import io.ltr8.tson.compiler.Diagnostic;
-import io.ltr8.tson.compiler.TsonBindMismatchException;
-import io.ltr8.tson.compiler.TsonReadException;
-import io.ltr8.tson.compiler.TsonSchemaFetchException;
-import io.ltr8.tson.schema.TsonSchemaValidationException;
+import io.ltr8.tson.base.BindMismatchException;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.ReadException;
+import io.ltr8.tson.base.SchemaFetchException;
+import io.ltr8.tson.base.SchemaValidationException;
+import io.ltr8.tson.compiler.TsonDiagnostics;
 
 import java.util.List;
 import java.util.Locale;
@@ -19,13 +20,13 @@ import java.util.Locale;
  * <table border="1">
  * <caption>Library exception to HTTP status</caption>
  * <tr><th>Upstream</th><th>Means</th><th>Status</th></tr>
- * <tr><td>{@link TsonReadException}</td><td>this document breaks its schema, unless its code says
+ * <tr><td>{@link ReadException}</td><td>this document breaks its schema, unless its code says
  * otherwise</td><td>400</td></tr>
- * <tr><td>{@link TsonSchemaValidationException}</td><td>the schema it names is wrong or unavailable</td><td>400</td></tr>
+ * <tr><td>{@link SchemaValidationException}</td><td>the schema it names is wrong or unavailable</td><td>400</td></tr>
  * <tr><td>{@link UnsupportedOperationException}</td><td>the library hasn't implemented that yet</td><td>501</td></tr>
  * <tr><td>{@link IllegalStateException}</td><td>an internal invariant broke</td><td>500</td></tr>
  * <tr><td>a base-syntax failure</td><td>the body doesn't lex, doesn't parse, or isn't data</td><td>400</td></tr>
- * <tr><td>{@link TsonSchemaFetchException}</td><td>see below -- 400, 502 or 504 by code</td><td>4xx/5xx</td></tr>
+ * <tr><td>{@link SchemaFetchException}</td><td>see below -- 400, 502 or 504 by code</td><td>4xx/5xx</td></tr>
  * </table>
  *
  * <p><b>A fetch failure splits by whose fault it is.</b> A document naming a schema this server will not load, or
@@ -43,7 +44,7 @@ import java.util.Locale;
  * <p><b>The last row cannot be written as a {@code catch} here.</b> A document that fails before any reader sees
  * a value throws rather than reporting, and two of the three exception types involved live in {@code
  * tson-compiler}'s unexported {@code lexer} package -- no caller in another module can name them. {@link
- * Diagnostic#ofBaseSyntaxError} exists for exactly that reason: it classifies those three and rethrows anything
+ * TsonDiagnostics#ofBaseSyntaxError} exists for exactly that reason: it classifies those three and rethrows anything
  * else, which is also what keeps an unexpected fault from being laundered into a false verdict about the request.
  *
  * <p><b>A gap must never be reported as a client error.</b> That is the load-bearing row. tson-java's
@@ -55,9 +56,9 @@ import java.util.Locale;
  * <p><b>Which is why the exception type is not enough, and the row above carries a caveat.</b> A read gap no
  * longer travels as its own exception type: it is reported like any other problem, so it reaches a collecting
  * caller as a {@code NOT_IMPLEMENTED} diagnostic among the rest and a fail-fast one as a {@link
- * TsonReadException} carrying that same code. Both channels therefore hand this class a verdict and a gap in
+ * ReadException} carrying that same code. Both channels therefore hand this class a verdict and a gap in
  * one shape, and only {@link Diagnostic#code()} separates them -- so {@link #invalidDocument} asks the code,
- * and {@link #from} routes every {@code TsonReadException} through it rather than assuming a verdict. The
+ * and {@link #from} routes every {@code ReadException} through it rather than assuming a verdict. The
  * {@code UnsupportedOperationException} row survives for the gaps still raised outside a read.
  *
  * <p>Anything not in the table is not classified here at all -- {@link #from} rethrows it, so an unexpected fault
@@ -271,7 +272,7 @@ public final class TsonHttpException extends RuntimeException {
 
     /**
      * The rule itself, shared by both channels a diagnostic can arrive through: collected into a list, or
-     * carried by a single {@link TsonReadException} on a fail-fast read. Asking the <em>code</em> is what lets
+     * carried by a single {@link ReadException} on a fail-fast read. Asking the <em>code</em> is what lets
      * one rule serve both -- the exception type no longer distinguishes a gap from a verdict, because a read
      * gap now travels as a {@code NOT_IMPLEMENTED} diagnostic whichever receiver is in use.
      *
@@ -414,7 +415,7 @@ public final class TsonHttpException extends RuntimeException {
      *
      * <p><b>This is the only fetch-failure status table.</b> Both channels route through it: a collected
      * diagnostic arrives with its code already, and {@link #from} maps a thrown {@link
-     * TsonSchemaFetchException}'s {@code Reason} with {@link Diagnostic.Code#of}. One failure reaches a
+     * SchemaFetchException}'s {@code Reason} with {@link Diagnostic.Code#of}. One failure reaches a
      * consumer two ways -- thrown at startup, collected on every read through the codec -- and a consumer
      * picking a status has to get the same answer from both. Two tables over one vocabulary is how they
      * drifted before, {@code NOT_PERMITTED} answering 400 thrown and 502 collected.
@@ -466,19 +467,19 @@ public final class TsonHttpException extends RuntimeException {
         return switch (e) {
             // Through Code.of into fetchFailure, so this channel and the collected one read one table
             // rather than two that agree by test.
-            case TsonSchemaFetchException fetch -> fetchFailure(Diagnostic.Code.of(fetch.reason()),
+            case SchemaFetchException fetch -> fetchFailure(Diagnostic.Code.of(fetch.reason()),
                     fetch.getMessage(), List.of(), fetch);
             // A misconfiguration of this server, not a fault in the request: the schema is fine and the class
             // is fine, and they have been pointed at each other by mistake. The client's document may be
             // perfectly valid, so 400 would send them to fix something that is not wrong -- and the message
             // names a server class, which is not a client's business. 5xx carries no detail for that reason.
-            case TsonBindMismatchException mismatch -> new TsonHttpException(INTERNAL_SERVER_ERROR,
+            case BindMismatchException mismatch -> new TsonHttpException(INTERNAL_SERVER_ERROR,
                     TYPES + "internal-error", "Internal server error", null, List.of(), mismatch);
             // Not unconditionally a 400: a fail-fast read reports a library gap through this same type, with
             // the code as the only thing telling the two apart. Routing on it is what keeps the two channels
             // answering alike -- see invalidDocument.
-            case TsonReadException read -> invalidDocument(List.of(read.diagnostic()), read.getMessage(), read);
-            case TsonSchemaValidationException schema -> new TsonHttpException(BAD_REQUEST,
+            case ReadException read -> invalidDocument(List.of(read.diagnostic()), read.getMessage(), read);
+            case SchemaValidationException schema -> new TsonHttpException(BAD_REQUEST,
                     TYPES + "invalid-schema", "Invalid TSON schema", schema.getMessage(), List.of(), schema);
             case UnsupportedOperationException gap -> new TsonHttpException(NOT_IMPLEMENTED,
                     TYPES + "not-implemented", "Not implemented", gap.getMessage(), List.of(), gap);
@@ -487,7 +488,7 @@ public final class TsonHttpException extends RuntimeException {
             // Not a fallthrough: ofBaseSyntaxError classifies the three base-syntax failures and rethrows
             // anything else, so an unclassified fault still leaves here as itself.
             default -> {
-                Diagnostic syntax = Diagnostic.ofBaseSyntaxError(e);
+                Diagnostic syntax = TsonDiagnostics.ofBaseSyntaxError(e);
                 yield new TsonHttpException(BAD_REQUEST, TYPES + "malformed-document", "Malformed TSON document",
                         e.getMessage(), List.of(syntax), e);
             }

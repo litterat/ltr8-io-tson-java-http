@@ -5,9 +5,12 @@ import io.ltr8.annotation.Typename;
 import io.ltr8.bind.DataBindContext;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.TsonSchemaSource;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.bind.AtomContext;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.base.source.SchemaSource;
+import io.ltr8.tson.compiler.TsonContentHash;
 import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
-import io.ltr8.tson.compiler.config.TsonAtomContext;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,7 +52,7 @@ class TsonSchemaVersionsTest {
     private static final String V2_PROFILE = "orders-2";
 
     private static final Map<String, String> SCHEMAS = Map.of(V1_ID, V1, V2_ID, V2);
-    private static final TsonSchemaSource SOURCE = SCHEMAS::get;
+    private static final SchemaSource SOURCE = SCHEMAS::get;
 
     /** v1's shape exactly. */
     @Typename(name = "order")
@@ -148,7 +151,7 @@ class TsonSchemaVersionsTest {
         // is what keeps the class name off the wire -- it is here for the log.
         assertEquals(TsonHttpException.INTERNAL_SERVER_ERROR, refused.status());
         assertTrue(refused.diagnostics().stream()
-                        .anyMatch(d -> d.code() == io.ltr8.tson.compiler.Diagnostic.Code.BIND_MISMATCH),
+                        .anyMatch(d -> d.code() == io.ltr8.tson.base.Diagnostic.Code.BIND_MISMATCH),
                 () -> "expected a BIND_MISMATCH diagnostic, got " + refused.diagnostics());
     }
 
@@ -186,10 +189,17 @@ class TsonSchemaVersionsTest {
                 routed.codec().readObject(routed.body(), "application/tson", OrderV1.class));
     }
 
-    /** §2.2.1: scheme and a ?sha256= pin are not identity, so a reference carrying either still routes. */
+    /**
+     * §2.2.1: scheme and a {@code ?sha256=} pin are not identity, so a reference carrying either still routes.
+     *
+     * <p>The pin is the document's real content hash, because routing is not the only thing that reads it: the
+     * loader verifies a declared pin against what it fetched, so an invented one fails there instead -- which
+     * says nothing about whether routing ignored it.
+     */
     @Test
     void routesByCanonicalIdentityNotByReferenceSpelling() {
-        var pinned = versions.route(body(order(V1_ID + "?sha256=abc123", "{ sku: \"A\" quantity: 1 }")));
+        String pin = TsonContentHash.sha256(V1.getBytes(StandardCharsets.UTF_8));
+        var pinned = versions.route(body(order(V1_ID + "?sha256=" + pin, "{ sku: \"A\" quantity: 1 }")));
         assertEquals(V1_ID, pinned.schemaId(),
                 "the registered id, not the pinned reference the client wrote -- switching on it must be stable");
         assertEquals(new OrderV1("A", 1),
@@ -286,7 +296,7 @@ class TsonSchemaVersionsTest {
      */
     @Test
     void treeModeNeedsNoneOfThis() {
-        Tson tson = Tson.builder().schemaSource(SOURCE).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SOURCE)));
         tson.resolve(V1);
         tson.resolve(V2);
         TsonHttpCodec codec = new TsonHttpCodec(tson);
@@ -308,8 +318,10 @@ class TsonSchemaVersionsTest {
         DataNameBinder binder = name -> "order".equals(name) ? OrderV1.class
                 : SchemaMetaNameBinder.INSTANCE.resolve(name);
         DataBindContext context =
-                TsonAtomContext.registerDefaults(DataBindContext.builder().nameBinder(binder).build());
-        Tson tson = Tson.builder().schemaSource(SOURCE).dataBindContext(context).build();
+                DataBindContext.builder().nameBinder(binder).registerAtoms(AtomContext.hostTypes()).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SOURCE))
+                .withDataBindContext(context));
         tson.resolve(V1);
         tson.resolve(V2);
         TsonHttpCodec codec = new TsonHttpCodec(tson);

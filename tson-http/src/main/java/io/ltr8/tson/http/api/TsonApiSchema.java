@@ -2,6 +2,7 @@ package io.ltr8.tson.http.api;
 
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.base.ProcessorConfig;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -38,15 +39,14 @@ import java.util.Set;
  * <h2>Wiring</h2>
  *
  * <p>Three things, and there is nothing else: this schema reachable from the {@code schemaSource}, the bound
- * classes in this package, and {@link #metaNameBinder()} on the config — <em>not</em> {@code bindings}, which
- * binds the data a schema describes. A meta layer's own vocabulary is a separate namespace, because one
+ * classes in this package, and {@link #metaNameBinder()} on the config — <em>not</em> the data bind context,
+ * which binds the data a schema describes. A meta layer's own vocabulary is a separate namespace, because one
  * holding both would collide the first time a schema type and a constructor shared a name.
  *
  * <pre>{@code
- * Tson tson = Tson.builder()
- *         .schemaSource(source)
- *         .metaNameBinder(TsonApiSchema.metaNameBinder())
- *         .build();
+ * Tson tson = Tson.of(ProcessorConfig.defaults()
+ *         .withSchemaAccess(SchemaAccess.of(source))
+ *         .withMetaNameBinder(TsonApiSchema.metaNameBinder()));
  * tson.resolve(description);
  * }</pre>
  */
@@ -79,7 +79,7 @@ public final class TsonApiSchema {
      * The binder for this meta layer's own vocabulary — {@code operation} and the records it carries, mapped
      * to the classes in this package.
      *
-     * <p>Pass it to {@code TsonConfig.metaNameBinder}, which composes it over the kernel's own vocabulary
+     * <p>Pass it to {@code ProcessorConfig.metaNameBinder}, which composes it over the kernel's own vocabulary
      * rather than replacing it. A schema governed by this meta layer will not resolve without it: the
      * constructor is declared, and nothing can build the value it constructs.
      */

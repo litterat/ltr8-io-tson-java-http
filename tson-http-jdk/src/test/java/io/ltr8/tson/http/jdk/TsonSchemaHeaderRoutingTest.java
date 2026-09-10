@@ -5,9 +5,9 @@ import io.ltr8.annotation.Typename;
 import io.ltr8.bind.DataBindContext;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.TsonSchemaSource;
+import io.ltr8.tson.base.bind.AtomContext;
+import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
-import io.ltr8.tson.compiler.config.TsonAtomContext;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonSchemaHeader;
 import io.ltr8.tson.http.TsonSchemaVersions;
@@ -49,7 +49,7 @@ class TsonSchemaHeaderRoutingTest {
             !!import:"https://tson.io/2026/35/m/core.tn"
             { order => { sku: text  quantity: int32  currency: text } }""";
 
-    private static final TsonSchemaSource SOURCE = Map.of(V1_ID, V1, V2_ID, V2)::get;
+    private static final SchemaSource SOURCE = Map.of(V1_ID, V1, V2_ID, V2)::get;
 
     @Typename(name = "order")
     public record OrderV1(String sku, int quantity) {
@@ -99,11 +99,14 @@ class TsonSchemaHeaderRoutingTest {
         TsonHttpCodec json = versions.codecFor(V2_ID).acceptingJson();
         server.createContext("/orders-json", TsonHandler.asHttpHandler(boundary, exchange -> {
             exchange.requireMethod("POST");
-            var governing = TsonSchemaHeader.resolve(exchange.exchange().getRequestBody(),
-                    exchange.header(TsonSchemaHeader.NAME));
-            String schemaId = governing.schema().orElseThrow(() -> new IllegalStateException("no schema"));
-            OrderV2 order = json.readObjectAs(governing.body(), exchange.header("Content-Type"), schemaId,
-                    "order", OrderV2.class);
+            // The header alone, and no peek: a JSON body carries no directive for one to agree with, so
+            // there is nothing to cross-check and the body is read from its first byte. (Bind mode could not
+            // continue a peek in any case -- upstream's object reader has no readAs(peek, type, class); see
+            // UPSTREAM.md.)
+            String schemaId = TsonSchemaHeader.parse(exchange.header(TsonSchemaHeader.NAME))
+                    .orElseThrow(() -> new IllegalStateException("no schema"));
+            OrderV2 order = json.readObjectAs(exchange.exchange().getRequestBody(),
+                    exchange.header("Content-Type"), schemaId, "order", OrderV2.class);
             exchange.respondBytes(200,
                     ("json:" + order.sku() + ":" + order.quantity() + ":" + order.currency())
                             .getBytes(StandardCharsets.UTF_8));

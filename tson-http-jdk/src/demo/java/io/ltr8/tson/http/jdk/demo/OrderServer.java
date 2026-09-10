@@ -3,27 +3,29 @@ package io.ltr8.tson.http.jdk.demo;
 import com.sun.net.httpserver.HttpServer;
 import io.ltr8.annotation.Typename;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.TsonSchemaSource;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.base.source.SchemaSource;
+import io.ltr8.tson.http.TsonBindings;
 import io.ltr8.tson.http.TsonHttpCodec;
+import io.ltr8.tson.http.TsonHttpException;
+import io.ltr8.tson.http.TsonProblemDiagnostic;
+import io.ltr8.tson.http.TsonProblemSchema;
+import io.ltr8.tson.http.TsonSchemaCatalog;
+import io.ltr8.tson.http.TsonSchemaHeader;
 import io.ltr8.tson.http.api.Operation;
 import io.ltr8.tson.http.api.TsonApiCoverage;
 import io.ltr8.tson.http.api.TsonApiDescription;
 import io.ltr8.tson.http.api.TsonApiSchema;
-import io.ltr8.tson.http.TsonHttpException;
-import io.ltr8.tson.http.TsonProblemDiagnostic;
-import io.ltr8.tson.http.TsonSchemaHeader;
-import io.ltr8.tson.http.TsonProblemSchema;
-import io.ltr8.tson.http.TsonSchemaCatalog;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import io.ltr8.tson.http.jdk.TsonHandler;
 import io.ltr8.tson.http.jdk.TsonSchemaHandler;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * A runnable TSON server on the JDK's own {@code com.sun.net.httpserver}, with no external dependency of any
@@ -130,8 +132,10 @@ public final class OrderServer {
                 TsonApiSchema.ID, TsonApiSchema.source(), API_ID, API);
         // metaNameBinder, not bindings: one binds the data a schema describes, the other a governing meta's
         // own vocabulary. Without it the API schema below declares `operation` and nothing can build one.
-        Tson tson = Tson.builder().schemaSource(TsonSchemaSource.ofMap(schemas)).bindings(bindings)
-                .metaNameBinder(TsonApiSchema.metaNameBinder()).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(schemas)))
+                .withDataBindContext(TsonBindings.of(bindings))
+                .withMetaNameBinder(TsonApiSchema.metaNameBinder()));
         tson.resolve(SCHEMA);
         tson.resolve(ERRORS);
         // Resolving the description is what checks it: a payload type nothing declares fails startup here,

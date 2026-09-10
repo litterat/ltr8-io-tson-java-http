@@ -3,7 +3,7 @@ package io.ltr8.tson.http.jdk;
 import com.sun.net.httpserver.HttpServer;
 import io.ltr8.annotation.Typename;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.TsonSchemaSource;
+import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaCatalog;
@@ -47,7 +47,7 @@ class TsonVersionRoutingTest {
             !!import:"https://tson.io/2026/35/m/core.tn"
             { order => { sku: text  quantity: int32  currency: text } }""";
 
-    private static final TsonSchemaSource SOURCE = Map.of(V1_ID, V1, V2_ID, V2)::get;
+    private static final SchemaSource SOURCE = Map.of(V1_ID, V1, V2_ID, V2)::get;
 
     @Typename(name = "order")
     public record OrderV1(String sku, int quantity) {

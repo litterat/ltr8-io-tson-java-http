@@ -1,10 +1,16 @@
 package io.ltr8.tson.http.experiment.metaservice;
 
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonDocumentHeader;
-import io.ltr8.tson.compiler.TsonSchemaSource;
+import io.ltr8.tson.compiler.TsonDocumentPeek;
 import io.ltr8.tson.http.TsonProblemSchema;
+import io.ltr8.tson.schema.meta.RecordBody;
+import io.ltr8.tson.schema.meta.TypeDefinition;
+import io.ltr8.tson.schema.meta.TypeRef;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -19,6 +25,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -36,18 +43,25 @@ class ExamplesProbe {
         Map<String, String> lib = new LinkedHashMap<>();
         lib.put(Experiment.META_ID, Experiment.metaServiceSource());
         lib.put(TsonProblemSchema.ID, TsonProblemSchema.source());
+        // The wire example imports rpc-1.tn, which lives beside the sketch rather than under examples/.
+        lib.put(RpcProbe.RPC_ID, RpcProbe.read("rpc-1.tn"));
         Path dir = Path.of(System.getProperty("experiments.dir", "../experiments")).resolve("meta-service/examples");
         try (Stream<Path> files = Files.list(dir)) {
             files.filter(f -> f.toString().endsWith(".tn")).sorted().forEach(f -> {
                 String text = read(f);
-                String id = TsonDocumentHeader.peek(text).id()
+                String id = TsonDocumentPeek.of(text).header().id()
                         .orElseThrow(() -> new IllegalStateException(f + " declares no !!id"));
                 lib.put(id, text);
             });
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-        return Experiment.bindVocabulary(Tson.builder().schemaSource(TsonSchemaSource.ofMap(lib))).build();
+        return Tson.of(Experiment.bindVocabulary(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))));
+    }
+
+    static Path examples() {
+        return Path.of(System.getProperty("experiments.dir", "../experiments")).resolve("meta-service/examples");
     }
 
     static String read(Path file) {
@@ -108,12 +122,12 @@ class ExamplesProbe {
         Routes routes = routesOf(tson(), "orders-api-inline-1.tn", "orders_api").requireComplete();
 
         assertEquals(3, routes.routes().size());
-        Routes.Route schema = routes.route(HttpVerb.GET, "/{schemaPath}").orElseThrow();
-        assertEquals(Map.of("schemaPath", Placement.Location.PATH), schema.placement().fields());
+        Routes.Route items = routes.route(HttpVerb.GET, "/orders/{id}/items").orElseThrow();
+        assertEquals(Map.of("id", Placement.Location.PATH), items.placement().fields());
         assertEquals(201, routes.route(HttpVerb.POST, "/orders").orElseThrow().status());
-        // On an operation the marker sits before the verb key, the same way.
+        // On an operation the marker sits before the verb key, the same way -- and the reader checks it.
         Api api = apiOf(tson(), "orders-api-inline-1.tn", "orders_api");
-        assertTrue(api.resources().get("/{schemaPath}").endpoints().getAnnotations("GET").has("safe"));
+        assertTrue(api.resources().get("/orders/{id}/items").endpoints().getAnnotations("GET").has("safe"));
     }
 
     @Test
@@ -129,5 +143,54 @@ class ExamplesProbe {
                 routes.route(HttpVerb.GET, "/orders").orElseThrow().placement().at(Placement.Location.QUERY));
         assertEquals(Map.of("id", Placement.Location.PATH),
                 routes.route(HttpVerb.DELETE, "/orders/{id}").orElseThrow().placement().fields());
+    }
+
+    /**
+     * The wire schema is stated to be <b>deterministic in the interface</b>, so it is derived here rather than
+     * read: for every method of {@code orders}, {@code orders-wire-1.tn} must close {@code call} over its
+     * request and {@code return} over its response and its declared error -- {@code return_plain} only where a
+     * method declares none. Resolving the file says nothing about any of that, which is how it carried a return
+     * that could not hold the error its method declares. This is the check a generator makes unnecessary.
+     */
+    @Test
+    void theWireSchemaIsWhatTheInterfaceDetermines() {
+        Tson tson = tson();
+        // The wire schema does not import the interface -- it is derived from it -- so both are resolved here.
+        assertEquals(List.of(), tson.validateSchema(read(examples().resolve("orders-1.tn"))));
+        assertEquals(List.of(), tson.validateSchema(read(examples().resolve("orders-wire-1.tn"))));
+        var iface = assertInstanceOf(Interface.class, tson.schemaRegistry().get(EXAMPLES + "orders-1.tn")
+                .orElseThrow().schema().entries().get("orders").body());
+        var wire = tson.schemaRegistry().get(EXAMPLES + "orders-wire-1.tn").orElseThrow().schema().entries();
+
+        iface.methods().forEach((name, method) -> {
+            Map<String, String> call = closedOver(wire, name + "_call", "call");
+            assertEquals(method.request().map(TypeRef::name).orElse("void"), call.get("request"),
+                    name + "_call closes call over the wrong request");
+
+            boolean declaresErrors = !method.errors().isEmpty();
+            Map<String, String> ret = closedOver(wire, name + "_return", declaresErrors ? "return" : "return_plain");
+            assertEquals(method.response().map(TypeRef::name).orElse("void"), ret.get("response"),
+                    name + "_return closes its template over the wrong response");
+            if (method.errors().size() == 1) {
+                assertEquals(method.errors().getFirst().name(), ret.get("error"),
+                        name + "_return does not carry the error its method declares");
+            }
+        });
+    }
+
+    /**
+     * One closed template application, as its fields: the entry is a REFERENCE onto a synthetic instantiation
+     * whose own source is the template it closes, so both halves -- which template, over what -- are readable
+     * from the resolved schema without parsing the generated name.
+     */
+    static Map<String, String> closedOver(Map<String, TypeDefinition> wire, String entry, String template) {
+        TypeDefinition reference = wire.get(entry);
+        assertNotNull(reference, "the wire schema declares no '" + entry + "'");
+        TypeDefinition closed = wire.get(reference.source().orElseThrow().name());
+        assertEquals(template, closed.source().orElseThrow().name(), entry + " closes the wrong template");
+        Map<String, String> fields = new LinkedHashMap<>();
+        assertInstanceOf(RecordBody.class, closed.body()).fields()
+                .forEach(field -> fields.put(field.name(), field.type().name()));
+        return fields;
     }
 }

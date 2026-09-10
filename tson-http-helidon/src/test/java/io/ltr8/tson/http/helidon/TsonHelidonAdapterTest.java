@@ -6,10 +6,13 @@ import io.ltr8.annotation.Typename;
 import io.ltr8.bind.DataBindContext;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
-import io.ltr8.tson.compiler.TsonSchemaFetchException;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.SchemaFetchException;
+import io.ltr8.tson.base.bind.AtomContext;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.compiler.TsonDiagnostics;
 import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
-import io.ltr8.tson.compiler.config.TsonAtomContext;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonProblem;
@@ -65,8 +68,10 @@ class TsonHelidonAdapterTest {
         DataNameBinder binder = name -> "order".equals(name) ? Order.class
                 : SchemaMetaNameBinder.INSTANCE.resolve(name);
         DataBindContext bind =
-                TsonAtomContext.registerDefaults(DataBindContext.builder().nameBinder(binder).build());
-        Tson tson = Tson.builder().schemaSource(uri -> SCHEMA).dataBindContext(bind).build();
+                DataBindContext.builder().nameBinder(binder).registerAtoms(AtomContext.hostTypes()).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(uri -> SCHEMA))
+                .withDataBindContext(bind));
         tson.resolve(SCHEMA);
         codec = new TsonHttpCodec(tson);
         client = HttpClient.newHttpClient();
@@ -218,11 +223,11 @@ class TsonHelidonAdapterTest {
     void aGapStillReportsTheProblemsItDidFind() throws Exception {
         start(routing -> routing.post("/mixed", TsonHandler.asHandler(codec, tson -> {
             throw TsonHttpException.invalidDocument(java.util.List.of(
-                    Diagnostic.ofSchemaGap(SCHEMA_ID, "order", "generic templates are not implemented yet",
+                    TsonDiagnostics.ofSchemaGap(SCHEMA_ID, "order", "generic templates are not implemented yet",
                             Optional.empty()),
-                    Diagnostic.ofSchemaError(SCHEMA_ID, "order", "'quantity' is required", Optional.empty()),
-                    Diagnostic.ofSchemaUnavailable(SCHEMA_ID, "order", new TsonSchemaFetchException(
-                            "https://mirror.internal/x.tn", TsonSchemaFetchException.Reason.TRANSPORT,
+                    TsonDiagnostics.ofSchemaError(SCHEMA_ID, "order", "'quantity' is required", Optional.empty()),
+                    TsonDiagnostics.ofSchemaUnavailable(SCHEMA_ID, "order", new SchemaFetchException(
+                            "https://mirror.internal/x.tn", SchemaFetchException.Reason.TRANSPORT,
                             "connect to mirror.internal failed", null), Optional.empty())));
         })));
 
@@ -246,8 +251,8 @@ class TsonHelidonAdapterTest {
     void aSchemaOriginFailureNamesNoHost() throws Exception {
         start(routing -> routing.post("/origin", TsonHandler.asHandler(codec, tson -> {
             throw TsonHttpException.invalidDocument(java.util.List.of(
-                    Diagnostic.ofSchemaUnavailable(SCHEMA_ID, "order", new TsonSchemaFetchException(
-                            "https://mirror.internal/x.tn", TsonSchemaFetchException.Reason.TRANSPORT,
+                    TsonDiagnostics.ofSchemaUnavailable(SCHEMA_ID, "order", new SchemaFetchException(
+                            "https://mirror.internal/x.tn", SchemaFetchException.Reason.TRANSPORT,
                             "connect to mirror.internal failed", null), Optional.empty())));
         })));
 

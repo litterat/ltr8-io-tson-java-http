@@ -2,10 +2,12 @@ package io.ltr8.tson.http;
 
 import com.sun.net.httpserver.HttpServer;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
-import io.ltr8.tson.TsonHttpSchemaSource;
-import io.ltr8.tson.compiler.TsonSchemaFetchException;
-import io.ltr8.tson.compiler.TsonSchemaFetchException.Reason;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.SchemaFetchException.Reason;
+import io.ltr8.tson.base.SchemaFetchException;
+import io.ltr8.tson.base.source.HttpSchemaSource;
+import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * How this project uses {@link TsonHttpSchemaSource}, which is upstream's class rather than this module's.
+ * How this project uses {@link HttpSchemaSource}, which is upstream's class rather than this module's.
  *
  * <p><b>The policy is not retested here.</b> The allow-list, the refusal to follow a redirect, the caps on size
  * and time, the identity rules and the cache all belong to the class, and upstream's own suite covers them --
@@ -79,8 +81,8 @@ class TsonHttpSchemaSourceIntegrationTest {
     void aDocumentNamingAnHttpSchemaResolvesAndValidates() {
         String schemaUri = reference("/order-1.tn");
         serve("/order-1.tn", schemaAt("/order-1.tn"));
-        try (TsonHttpSchemaSource source = allowingThisServer()) {
-            Tson tson = Tson.builder().schemaSource(source).build();
+        try (HttpSchemaSource source = allowingThisServer()) {
+            Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(source)));
             tson.resolve(source.fetch(schemaUri));
             TsonHttpCodec codec = new TsonHttpCodec(tson);
 
@@ -127,7 +129,7 @@ class TsonHttpSchemaSourceIntegrationTest {
     /**
      * <b>And the collecting path is the one that actually fires, so it has to give the same answer.</b> Every
      * read through the codec collects, so an unfetchable {@code !!schema} essentially never arrives as {@link
-     * TsonSchemaFetchException} and essentially always as one of the five {@code SCHEMA_*} diagnostics. The two
+     * SchemaFetchException} and essentially always as one of the five {@code SCHEMA_*} diagnostics. The two
      * channels used to disagree for one underlying failure -- the diagnostic kept no reason at all, so the
      * whole class rounded to 502 while {@code statusFor(NOT_PERMITTED)} said 400 -- and carrying the reason in
      * the code is what closed it for good: there is one status table now, and this channel reaches it by
@@ -140,8 +142,9 @@ class TsonHttpSchemaSourceIntegrationTest {
      */
     @Test
     void bothChannelsAnswerAnUnfetchableSchemaAlike() {
-        try (TsonHttpSchemaSource denyAll = TsonHttpSchemaSource.builder().build()) {
-            TsonHttpCodec codec = new TsonHttpCodec(Tson.builder().schemaSource(denyAll).build());
+        try (HttpSchemaSource denyAll = HttpSchemaSource.builder().build()) {
+            TsonHttpCodec codec = new TsonHttpCodec(Tson.of(ProcessorConfig.defaults()
+                    .withSchemaAccess(SchemaAccess.of(denyAll))));
 
             TsonHttpException thrown = assertThrows(TsonHttpException.class, () -> codec.readTree(body("""
                     !!schema:"%s"
@@ -163,7 +166,7 @@ class TsonHttpSchemaSourceIntegrationTest {
      * value arrives rather than from the document header. That is a URL out of an untrusted body at a
      * <em>value</em> position, so the question this pins is whether the policy that guards {@code !!schema}
      * guards this too -- and it does: the push resolves through the configured {@link
-     * io.ltr8.tson.compiler.TsonSchemaSource}, so an origin the source will not serve is refused there.
+     * io.ltr8.tson.base.source.SchemaSource}, so an origin the source will not serve is refused there.
      *
      * <p>Both directions, because only the pair says the gate is a gate. A permitted origin reads and the
      * foreign type is validated in full; a source that permits nothing answers {@code SCHEMA_NOT_PERMITTED},
@@ -180,8 +183,8 @@ class TsonHttpSchemaSourceIntegrationTest {
                 !envelope { attachment: !!schema:"%s" !order { sku: "ABC-1"  quantity: 3 } }"""
                 .formatted(envelopeUri, orderUri);
 
-        try (TsonHttpSchemaSource source = allowingThisServer()) {
-            Tson tson = Tson.builder().schemaSource(source).build();
+        try (HttpSchemaSource source = allowingThisServer()) {
+            Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(source)));
             tson.resolve(source.fetch(envelopeUri));
             TsonValue read = new TsonHttpCodec(tson).readTree(body(document), "application/tson");
 
@@ -191,10 +194,10 @@ class TsonHttpSchemaSourceIntegrationTest {
 
         // The envelope is served from a map so it still resolves; every other identity -- which is only the
         // pushed one -- goes to a source that permits no host at all.
-        try (TsonHttpSchemaSource denyAll = TsonHttpSchemaSource.builder().build()) {
+        try (HttpSchemaSource denyAll = HttpSchemaSource.builder().build()) {
             String envelopeSource = ENVELOPE.formatted(envelopeUri);
-            Tson gated = Tson.builder().schemaSource(
-                    uri -> uri.equals(envelopeUri) ? envelopeSource : denyAll.fetch(uri)).build();
+            Tson gated = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(
+                    uri -> uri.equals(envelopeUri) ? envelopeSource : denyAll.fetch(uri))));
             gated.resolve(envelopeSource);
 
             TsonHttpException refused = assertThrows(TsonHttpException.class,
@@ -209,7 +212,7 @@ class TsonHttpSchemaSourceIntegrationTest {
 
     private static int statusFor(Reason reason) {
         return TsonHttpException.from(
-                new TsonSchemaFetchException("https://example.com/x.tn", reason, "test", null)).status();
+                new SchemaFetchException("https://example.com/x.tn", reason, "test", null)).status();
     }
 
     /** Serves {@code body} at {@code path}. */
@@ -234,8 +237,8 @@ class TsonHttpSchemaSourceIntegrationTest {
     }
 
     /** Names are on {@link #HOST}; the bytes come from the test server. That split is the point of mapHost. */
-    private TsonHttpSchemaSource allowingThisServer() {
-        return TsonHttpSchemaSource.builder().mapHost(HOST, base).timeout(Duration.ofSeconds(2)).build();
+    private HttpSchemaSource allowingThisServer() {
+        return HttpSchemaSource.builder().mapHost(HOST, base).timeout(Duration.ofSeconds(2)).build();
     }
 
     private static InputStream body(String document) {

@@ -1,8 +1,10 @@
 package io.ltr8.tson.http;
 
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
-import io.ltr8.tson.compiler.TsonSchemaFetchException;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.SchemaFetchException;
+import io.ltr8.tson.compiler.TsonDiagnostics;
 import io.ltr8.tson.schema.meta.EnumBody;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.RecordField;
@@ -17,8 +19,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TsonProblemSchemaTest {
@@ -32,7 +34,7 @@ class TsonProblemSchemaTest {
     /** On a clean instance -- {@link TsonProblemSchema#tson()} has already registered it, and registering twice is an error. */
     @Test
     void theSchemaResolves() {
-        assertEquals(List.of(), Tson.builder().build().validateSchema(TsonProblemSchema.source()));
+        assertEquals(List.of(), Tson.of(ProcessorConfig.defaults()).validateSchema(TsonProblemSchema.source()));
     }
 
     /**
@@ -44,7 +46,7 @@ class TsonProblemSchemaTest {
     void whatWriteProblemEmitsValidatesAgainstProblem1AndRoundTrips() {
         TsonHttpCodec codec = new TsonHttpCodec(TsonProblemSchema.tson());
         TsonProblem problem = TsonProblem.of(TsonHttpException.TYPES + "invalid-document", 400, "Invalid TSON document", "the request body has 1 problem",
-                List.of(Diagnostic.ofSchemaError("https://example.com/2026/35/app/order-1.tn", "order",
+                List.of(TsonDiagnostics.ofSchemaError("https://example.com/2026/35/app/order-1.tn", "order",
                         "missing required field 'sku'", Optional.empty())));
 
         byte[] written = codec.writeProblem(problem);
@@ -64,7 +66,7 @@ class TsonProblemSchemaTest {
     void anErrorBodySaysWhatGovernsItAndReadsBackWithNothingToldOutOfBand() {
         TsonHttpCodec codec = new TsonHttpCodec(TsonProblemSchema.tson());
         TsonProblem problem = TsonProblem.of(TsonHttpException.TYPES + "invalid-document", 400, "Invalid TSON document", "the request body has 1 problem",
-                List.of(Diagnostic.ofSchemaError("https://example.com/2026/35/app/order-1.tn", "order",
+                List.of(TsonDiagnostics.ofSchemaError("https://example.com/2026/35/app/order-1.tn", "order",
                         "missing required field 'sku'", Optional.empty())));
 
         String written = new String(codec.writeProblem(problem), StandardCharsets.UTF_8);

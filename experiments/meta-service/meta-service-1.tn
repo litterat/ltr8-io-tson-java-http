@@ -32,6 +32,15 @@
     both              an `!interface`, and an `!api` that `implements` it with `!binding`s naming its methods.
                       Both are `endpoint`s, and the tag says which each verb holds.
 
+  THE POSITIONAL FORM, AND WHAT IT COSTS. `interface`, `api` and `resource` each have exactly one bare
+  REQUIRED field, so §5.6 lets the map stand in for it: `!interface { place_order => ... }` is
+  `!interface { methods: { place_order => ... } }`, and `"/orders" => !resource { GET => ... }` is the
+  same trick one level down. It reads far better and the examples use it. The cost is a versioning one and
+  it is the reason this is written down: adding a SECOND required field to any of the three withdraws the
+  positional form from that type, and every document written in it stops parsing. So the deliberately-absent
+  list on `endpoint` is not only a §3.5 question about a new version -- for these three types it decides
+  whether existing documents survive at all, and a new field here is optional or it is a new type.
+
   Everything that relates the two -- a `method` name, an `implements`, a `{segment}` in a path -- is an
   identifier the resolver does not check: a DATA entry cannot be referenced, and a map key is data. The
   description reader checks all of it at startup in the merged namespace (`Routes`, in the experiment's
@@ -115,8 +124,11 @@
     a bad endpoint rather than a surprise.
 
     There is no parameter list. A parameter-only endpoint declares a one-field request record
-    (`schema_ref => { schemaPath: text }`) and binds it from the path -- every method has a request
-    record, which is what lets one rule serve every endpoint and the check see every field.
+    (`schema_ref => { schemaPath: text }`) and binds it from the path -- a method that takes anything
+    takes exactly ONE record, which is what lets one rule serve every endpoint and the check see every
+    field. `signature.request` is optional because a method may take nothing at all, and such an endpoint
+    admits no placement: a `{segment}` on it is refused, having no field to bind. A request that is
+    present and is not a record is refused too, since there would be nothing to distribute.
     """
   placement => {
     query:    [field_name]?
@@ -195,21 +207,38 @@
   }
 
   @doc:"""
+    Why a claimed method has no endpoint here: a method documented ahead of being built, or served by another
+    process behind the same proxy. `reason` is required, because an exemption somebody has to justify in a
+    greppable string is a decision where a boolean is a hole. `interface` says which implemented interface's
+    method is exempt, and is needed only when two of them declare the name -- the same disambiguation
+    `binding` carries, for the same reason, so an exemption can never quietly cover a method it was not
+    written for.
+
+    `reason` is the sole required field, so §5.6's positional form keeps the short spelling:
+    `not_bound: { get_order => "served by the read replica" }`, with the record form only where the
+    interface must be named.
+    """
+  exemption => {
+    reason:     text
+    interface:  type_name?
+  }
+
+  @doc:"""
     A web service: resources keyed by path template, each holding operations keyed by verb -- the shape
     OpenAPI's `paths` has, arrived at from the key types rather than copied. A path key is DATA -- a `path_template`,
     the URL namespace's own grammar -- which is why an operation needs no invented name and why
     `/orders/{id}` needs no identifier minted from it.
 
     `implements` names the interfaces this api binds, and is a CLAIM the reader checks: every method of
-    every implemented interface (through `extends`) has a `binding` naming it, or an entry in
-    `not_bound` giving the reason it does not -- a method documented ahead of being built, or served by
-    another process behind the same proxy. The reason is required because an exemption somebody has
-    to justify is a decision, where a boolean is a hole. An api with no `implements` is a web service on
-    its own terms, its endpoints `!operation`s.
+    every implemented interface (through `extends`) has a `binding` naming it, or an `exemption` in
+    `not_bound` giving the reason it does not. The claim is held per (interface, method), not per name:
+    two implemented interfaces may both declare `get_order`, and binding one of them says nothing about
+    the other. An api with no `implements` is a web service on its own terms, its endpoints
+    `!operation`s.
     """
   api => data & {
     implements:  [type_name]?
-    not_bound:   {method_name => text}?
+    not_bound:   {method_name => exemption}?
     resources:   {path_template => resource}
   }
 }

@@ -1,9 +1,12 @@
 package io.ltr8.tson.http.jdk.demo;
 
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
-import io.ltr8.tson.http.TsonProblemDiagnostic;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.http.TsonBindings;
 import io.ltr8.tson.http.TsonDeployment;
+import io.ltr8.tson.http.TsonProblemDiagnostic;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.jdk.demo.ValidatorServer.ValidationResult;
 import org.junit.jupiter.api.AfterEach;
@@ -65,10 +68,10 @@ class ValidatorServerTest {
         Map<String, String> schemas = Map.of(
                 ValidatorServer.VALIDATE_ID, ValidatorServer.VALIDATE,
                 TsonProblemSchema.ID, TsonProblemSchema.source());
-        tson = Tson.builder().schemaSource(schemas::get)
-                .bindings(Map.of("validation_result", ValidationResult.class,
-                        "diagnostic", TsonProblemDiagnostic.class))
-                .build();
+        tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(schemas::get))
+                .withDataBindContext(TsonBindings.of(Map.of("validation_result", ValidationResult.class,
+                        "diagnostic", TsonProblemDiagnostic.class))));
         tson.resolve(ValidatorServer.VALIDATE);
     }
 
@@ -128,7 +131,11 @@ class ValidatorServerTest {
         assertEquals(ValidatorServer.Phase.DATA, result.phase());
         // Every fault in one pass, which is the claim the page makes: three bad values and one field nobody
         // declared, not the first of them.
-        assertEquals(List.of(Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION, Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION,
+        //
+        // The three bad values are not all one code, and the split is §5.2's: "not-a-uuid" is a token uuid's
+        // grammar rejects, so it is ATOM_FORM_INVALID, where an empty name and an age of 300 parse fine and
+        // then violate their ranges.
+        assertEquals(List.of(Diagnostic.Code.ATOM_FORM_INVALID, Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION,
                         Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION, Diagnostic.Code.UNRECOGNIZED_FIELD),
                 result.diagnostics().stream().map(TsonProblemDiagnostic::code).toList());
         // Both ends located: the value in the data, and the rule in the schema.
@@ -160,7 +167,8 @@ class ValidatorServerTest {
         ValidationResult result = resultOf(validate(null, "{ when: !date 2026-13-45  free: bare }"));
 
         assertEquals(ValidatorServer.Phase.DATA, result.phase());
-        assertEquals(List.of(Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION),
+        // A month of 13 and a day of 45 are not a date the grammar admits at all, so this is the form code.
+        assertEquals(List.of(Diagnostic.Code.ATOM_FORM_INVALID),
                 result.diagnostics().stream().map(TsonProblemDiagnostic::code).toList());
     }
 
