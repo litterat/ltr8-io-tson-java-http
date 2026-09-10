@@ -1,12 +1,13 @@
 package io.ltr8.tson.http.helidon.demo;
 
-import io.ltr8.tson.compiler.Diagnostic;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonProblem;
 import io.ltr8.tson.http.TsonProblemSchema;
+import io.ltr8.tson.http.api.TsonApiSchema;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import io.ltr8.tson.http.api.TsonApiSchema;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -127,7 +128,7 @@ class OrderServerTest {
      * {@code NOT_FOUND} -- the reference is wrong and the sender is who can fix it -- where a host that timed
      * out would be a 504 and one that failed a 502.
      *
-     * <p>Two upstream changes had to land for this to be answerable. {@code TsonSchemaSource.ofMap} refuses by
+     * <p>Two upstream changes had to land for this to be answerable. {@code SchemaSource.ofMap} refuses by
      * the contract, where a {@code Map::get} returning {@code null} reached the registry and threw a
      * {@code NullPointerException} the boundary could only read as an internal fault. And
      * the reason survives the collecting receiver as the diagnostic's own code -- one per reason -- where

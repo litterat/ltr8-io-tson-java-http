@@ -1,8 +1,10 @@
 package io.ltr8.tson.http.experiment.metaservice;
 
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
-import io.ltr8.tson.compiler.TsonSchemaSource;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.base.source.SchemaSource;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -58,7 +60,8 @@ class InterfaceMapProbe {
         Map<String, String> lib = new LinkedHashMap<>();
         lib.put(PROBE_META_ID, META);
         lib.put(DOC_ID, doc);
-        return Experiment.bindVocabulary(Tson.builder().schemaSource(TsonSchemaSource.ofMap(lib))).build();
+        return Tson.of(Experiment.bindVocabulary(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))));
     }
 
     static Object resolvedBody(String entries) {

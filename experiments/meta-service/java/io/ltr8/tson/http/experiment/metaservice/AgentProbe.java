@@ -1,9 +1,11 @@
 package io.ltr8.tson.http.experiment.metaservice;
 
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
-import io.ltr8.tson.compiler.TsonDiagnosticsReceiver;
-import io.ltr8.tson.compiler.TsonSchemaSource;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.DiagnosticsReceiver;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.Test;
 
@@ -53,7 +55,7 @@ class AgentProbe {
         lib.put(AGENT_ID, read("agent-vm-1.tn"));
         // A constant may name a foreign type, so the schema declaring it has to be reachable from here.
         lib.put(ORDER_TYPES_ID, read("examples/orders-types-1.tn"));
-        return Tson.builder().schemaSource(TsonSchemaSource.ofMap(lib)).build();
+        return Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib))));
     }
 
     @Test
@@ -148,7 +150,7 @@ class AgentProbe {
                          input: { order => { value: !!schema:"%s" !order { sku: A-100  quantity: 2 } } } } ]
               return: { ref: { step: a } }
             }""".formatted(PLAN_ID, ORDERS_ID, ORDER_TYPES_ID);
-        var problems = TsonDiagnosticsReceiver.collecting();
+        var problems = DiagnosticsReceiver.collecting();
         TsonValue value = tson().treeReader().withDiagnostics(problems).read(withConstant);
 
         assertEquals(List.of(), problems.diagnostics());
@@ -168,7 +170,7 @@ class AgentProbe {
               steps: [ { name: a  method: place_order  input: { order => { value: { sku: A-100 } } } } ]
               return: { ref: { step: a } }
             }""".formatted(PLAN_ID, ORDERS_ID);
-        var problems = TsonDiagnosticsReceiver.collecting();
+        var problems = DiagnosticsReceiver.collecting();
         tson().treeReader().withDiagnostics(problems).read(untyped);
 
         assertTrue(problems.diagnostics().stream()

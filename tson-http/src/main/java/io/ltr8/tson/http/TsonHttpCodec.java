@@ -1,9 +1,12 @@
 package io.ltr8.tson.http;
 
+import io.ltr8.bind.DataBindContext;
+import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
-import io.ltr8.tson.compiler.TsonDiagnosticsCollector;
-import io.ltr8.tson.compiler.TsonDiagnosticsReceiver;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.DiagnosticsCollector;
+import io.ltr8.tson.base.DiagnosticsReceiver;
+import io.ltr8.tson.compiler.TsonDocumentPeek;
 import io.ltr8.tson.compiler.TsonObjectWriter;
 import io.ltr8.tson.compiler.TsonTreeWriter;
 import io.ltr8.tson.tree.TsonValue;
@@ -20,7 +23,7 @@ import java.util.function.Supplier;
  * piece every adapter shares: a framework adapter translates its own request and response objects into calls on
  * this, and holds no TSON knowledge of its own.
  *
- * <p><b>Reads collect, they do not fail fast.</b> Every read here runs with a {@link TsonDiagnosticsCollector},
+ * <p><b>Reads collect, they do not fail fast.</b> Every read here runs with a {@link DiagnosticsCollector},
  * so one 400 reports everything wrong with a body rather than only the first problem. The target consumer is a
  * generate-validate-retry loop, and a client told about one error per round trip needs one round trip per error.
  * The cost is that the reader keeps a {@code null} placeholder for each failed field and runs to the end -- which
@@ -126,7 +129,30 @@ public final class TsonHttpCodec {
      */
     public TsonValue readTree(InputStream body, String contentType) {
         requireTsonBody(contentType);
-        TsonDiagnosticsCollector problems = TsonDiagnosticsReceiver.collecting();
+        DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
+        return require(read(() -> tson.treeReader().withDiagnostics(problems).read(body)), problems);
+    }
+
+    /**
+     * Reads {@code body}'s header and stops, handing back the rest on the same stream -- for a caller that must
+     * know what a document declares <b>before</b> choosing how to read it, on a body that cannot be read twice.
+     *
+     * <p>Nothing is buffered and re-fed: the header is the stream's first event, so a read handed the peek
+     * carries on from just past it. That is what makes routing on {@code !!schema} cost a request body nothing.
+     *
+     * <p><b>Open it here rather than through {@code Tson.begin} directly.</b> A peek belongs to the processor
+     * policy it was opened under, and a reader that disagrees is refused; taking it from the codec that will
+     * read it is what keeps the two the same. Reading a peek through a <em>different</em> codec is therefore
+     * only sound where both share a policy -- which is what {@link TsonSchemaVersions} relies on.
+     */
+    public TsonDocumentPeek begin(InputStream body) {
+        return tson.begin(body);
+    }
+
+    /** {@link #readTree(InputStream, String)} continuing a peek this codec opened. */
+    public TsonValue readTree(TsonDocumentPeek body, String contentType) {
+        requireTsonBody(contentType);
+        DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
         return require(read(() -> tson.treeReader().withDiagnostics(problems).read(body)), problems);
     }
 
@@ -143,7 +169,23 @@ public final class TsonHttpCodec {
      */
     public TsonValue readTreeAs(InputStream body, String contentType, String schemaUri, String typeName) {
         requireTsonBody(contentType);
-        TsonDiagnosticsCollector problems = TsonDiagnosticsReceiver.collecting();
+        DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
+        return require(read(() -> tson.treeReader().withSchema(schemaUri).withDiagnostics(problems)
+                .readAs(body, typeName)), problems);
+    }
+
+    /**
+     * {@link #readTreeAs(InputStream, String, String, String)} continuing a peek this codec opened -- the shape
+     * a {@code TSON-Schema} header takes in tree mode, where the schema comes from the field and the root type
+     * from the route.
+     *
+     * <p>There is deliberately no bind-mode counterpart: upstream's object reader has no
+     * {@code readAs(peek, typeName, targetClass)}, so a body whose schema arrives only in the header must be
+     * read in tree mode or from the start. Tracked in {@code UPSTREAM.md}.
+     */
+    public TsonValue readTreeAs(TsonDocumentPeek body, String contentType, String schemaUri, String typeName) {
+        requireTsonBody(contentType);
+        DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
         return require(read(() -> tson.treeReader().withSchema(schemaUri).withDiagnostics(problems)
                 .readAs(body, typeName)), problems);
     }
@@ -162,7 +204,14 @@ public final class TsonHttpCodec {
      */
     public <T> T readObject(InputStream body, String contentType, Class<T> targetClass) {
         requireTsonBody(contentType);
-        TsonDiagnosticsCollector problems = TsonDiagnosticsReceiver.collecting();
+        DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
+        return require(read(() -> tson.objectReader().withDiagnostics(problems).read(body, targetClass)), problems);
+    }
+
+    /** {@link #readObject(InputStream, String, Class)} continuing a peek this codec opened. */
+    public <T> T readObject(TsonDocumentPeek body, String contentType, Class<T> targetClass) {
+        requireTsonBody(contentType);
+        DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
         return require(read(() -> tson.objectReader().withDiagnostics(problems).read(body, targetClass)), problems);
     }
 
@@ -175,7 +224,7 @@ public final class TsonHttpCodec {
     public <T> T readObjectAs(InputStream body, String contentType, String schemaUri, String typeName,
                               Class<T> targetClass) {
         requireTsonBody(contentType);
-        TsonDiagnosticsCollector problems = TsonDiagnosticsReceiver.collecting();
+        DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
         return require(read(() -> tson.objectReader().withSchema(schemaUri).withDiagnostics(problems)
                 .readAs(body, typeName, targetClass)), problems);
     }
@@ -363,7 +412,7 @@ public final class TsonHttpCodec {
      * placeholder wherever a field failed, so a value alongside a non-empty diagnostic list is not a usable
      * result -- it is a rejected request that happened to run to the end.
      */
-    private static <T> T require(T value, TsonDiagnosticsCollector problems) {
+    private static <T> T require(T value, DiagnosticsCollector problems) {
         List<Diagnostic> diagnostics = problems.diagnostics();
         if (!diagnostics.isEmpty()) {
             throw TsonHttpException.invalidDocument(diagnostics);

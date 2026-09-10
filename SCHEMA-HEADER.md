@@ -67,9 +67,9 @@ is a job for a gateway, and:
 - **`Content-Encoding: gzip` makes it impossible.** Routing on a directive inside a compressed body means
   decompressing to route. The same goes for any payload encrypted above the transport.
 - **It forces a peek before the read.** Routing needs the schema before the body is read, so the origin has to
-  look inside it first. That is answered now — `TsonDocumentHeader.peekResumable` reads the header over the
-  real lexer and hands back the document from its first byte — but it is still a read of the body performed
-  only to decide where the body goes. A header removes the need for it in the routing path.
+  look inside it first. That is answered now — `Tson.begin` reads the header over the real lexer and hands
+  back a peek the read continues on, so nothing is buffered and re-fed — but it is still a read of the body
+  performed only to decide where the body goes. A header removes the need for it in the routing path.
 
 **Honest limit: a header does not save the origin server from peeking.** If header and body can disagree, the
 endpoint must still read the directive to check. The saving is at the network, not at the server — except for a

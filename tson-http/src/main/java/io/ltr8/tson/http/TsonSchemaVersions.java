@@ -1,9 +1,13 @@
 package io.ltr8.tson.http;
 
+import io.ltr8.bind.DataBindContext;
+import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.TsonConfig;
-import io.ltr8.tson.compiler.TsonSchemaSource;
-import io.ltr8.tson.schema.TsonCanonicalIdentity;
+import io.ltr8.tson.base.CanonicalIdentity;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.base.source.SchemaSource;
+import io.ltr8.tson.compiler.TsonDocumentPeek;
 
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -48,7 +52,7 @@ import java.util.Set;
  *       Explicit, and each class exactly matches its schema.</li>
  *   <li><b>One class across versions</b>, holding the union of every version's fields with a
  *       {@code @Profile}-annotated constructor per version, served by
- *       {@link Builder#version(String, String, TsonSchemaSource, Map, String)}. Each constructor supplies the
+ *       {@link Builder#version(String, String, SchemaSource, Map, String)}. Each constructor supplies the
  *       default for the field its own version does not carry, so the class is complete whichever document
  *       built it. This needs the profile: without one, strict binding refuses the class outright, because the
  *       union is a shape no version's schema declares.</li>
@@ -63,10 +67,10 @@ import java.util.Set;
  *
  * <p>Nothing here requires one process. Routing by declared schema works the same whether the versions are
  * codecs in one server or hosts behind a proxy. A gateway that needs only the routing answer, without a codec,
- * calls {@link io.ltr8.tson.compiler.TsonDocumentHeader#peekResumable} directly and forwards the
- * {@code document()} it hands back -- which is the whole document, first byte included, so a one-shot body
- * survives being looked at. This class used to offer a {@code declaredSchemaOf} for that and it was wrong:
- * it returned the schema and left the caller a body that had been read to the end.
+ * calls {@code Tson.begin} directly and reads the header off the peek it hands back -- the body streaming on
+ * from just past it, so a one-shot body survives being looked at. This class used to offer a
+ * {@code declaredSchemaOf} for that and it was wrong: it returned the schema and left the caller a body that
+ * had been read to the end.
  */
 public final class TsonSchemaVersions {
 
@@ -122,11 +126,24 @@ public final class TsonSchemaVersions {
      *                 or a {@code ?sha256=} pin (§2.2.1), and a caller switching on the version must not see
      *                 that; the registered id is the stable value to switch on.
      */
-    public record Routed(String schemaId, TsonHttpCodec codec, InputStream body) {
+    public record Routed(String schemaId, TsonHttpCodec codec, TsonDocumentPeek body) {
     }
 
     public static Builder builder() {
         return new Builder();
+    }
+
+    /**
+     * A codec to open a request body's peek with, before the header says which version will read it.
+     *
+     * <p>Any of them will do, and that is a property of how they are built rather than a coincidence: every
+     * version {@link Builder#version(String, String, SchemaSource, Map, String)} makes starts from
+     * {@code ProcessorConfig.defaults()}, so they share one processor policy, and a peek is only refused by a
+     * reader whose policy differs. A caller registering a codec of their own is held to the same by the read
+     * that continues, which says so plainly rather than reading under the wrong policy.
+     */
+    private TsonHttpCodec peekWith() {
+        return byIdentity.values().iterator().next();
     }
 
     /** The schema identities this serves, as declared. */
@@ -154,8 +171,8 @@ public final class TsonSchemaVersions {
     }
 
     /**
-     * Routes {@code body} to the codec for the version that governs it, handing back a stream still positioned
-     * at the start.
+     * Routes {@code body} to the codec for the version that governs it, handing back the body as a peek the
+     * chosen codec continues -- the request stream read once, forwards.
      *
      * <p>The schema comes from the {@code TSON-Schema} header, the body's own {@code !!schema}, or both -- and
      * where both are present they must agree, which {@link TsonSchemaHeader#resolve} enforces. A JSON body has
@@ -171,7 +188,10 @@ public final class TsonSchemaVersions {
      *                           the body disagree, or if the schema named is one this endpoint does not serve
      */
     public Routed route(InputStream body, String fieldValue) {
-        TsonSchemaHeader.Governing governing = TsonSchemaHeader.resolve(body, fieldValue);
+        // Any registered codec may open the peek: every version this builder makes shares one processor
+        // policy, and a caller registering their own codec is held to the same by the read that continues.
+        TsonSchemaHeader.Governing governing =
+                TsonSchemaHeader.resolve(peekWith().begin(body), fieldValue);
         String schemaId = governing.schema().or(() -> defaultSchemaId).orElseThrow(() -> new TsonHttpException(
                 TsonHttpException.BAD_REQUEST, TsonHttpException.TYPES + "no-schema-declared", "No schema declared",
                 "this endpoint serves several schema versions, so a message must name the one that governs it "
@@ -190,7 +210,7 @@ public final class TsonSchemaVersions {
     /** Canonical identity, or a 400 -- a reference that is not a legal identity names no version. */
     private static String identityOf(String schemaId) {
         try {
-            return TsonCanonicalIdentity.canonicalize(schemaId);
+            return CanonicalIdentity.canonicalize(schemaId);
         } catch (RuntimeException notAnIdentity) {
             throw new TsonHttpException(TsonHttpException.BAD_REQUEST,
                     TsonHttpException.TYPES + "unsupported-schema-version", "Unsupported schema version",
@@ -226,13 +246,13 @@ public final class TsonSchemaVersions {
 
         /**
          * Serves {@code schemaText}, building the {@code Tson} and its own bind context from {@code bindings}
-         * -- the per-version wiring, which {@code TsonConfig.bindings} reduced to one call.
+         * -- the per-version wiring, which {@code ProcessorConfig.bindings} reduced to one call.
          *
          * @param schemaId the schema's identity, as documents will name it
          * @param source   where this version's schema and its imports come from
          * @param bindings this version's schema type names to their Java classes
          */
-        public Builder version(String schemaId, String schemaText, TsonSchemaSource source,
+        public Builder version(String schemaId, String schemaText, SchemaSource source,
                                Map<String, Class<?>> bindings) {
             return version(schemaId, schemaText, source, bindings, null);
         }
@@ -254,14 +274,12 @@ public final class TsonSchemaVersions {
          *
          * @param profile the binding profile for this version, or {@code null} for none
          */
-        public Builder version(String schemaId, String schemaText, TsonSchemaSource source,
+        public Builder version(String schemaId, String schemaText, SchemaSource source,
                                Map<String, Class<?>> bindings, String profile) {
             Map<String, Class<?>> copy = Map.copyOf(bindings);
-            TsonConfig config = Tson.builder().schemaSource(source).bindings(copy);
-            if (profile != null) {
-                config.profile(profile);
-            }
-            Tson tson = config.build();
+            Tson tson = Tson.of(ProcessorConfig.defaults()
+                    .withSchemaAccess(SchemaAccess.of(source))
+                    .withDataBindContext(TsonBindings.of(copy, profile)));
             tson.resolve(schemaText);
             TsonHttpCodec codec = new TsonHttpCodec(tson);
             copy.values().forEach(target -> codec.prepareToWrite(target));
@@ -319,7 +337,7 @@ public final class TsonSchemaVersions {
 
         private static String identityOf(String schemaId) {
             try {
-                return TsonCanonicalIdentity.canonicalize(schemaId);
+                return CanonicalIdentity.canonicalize(schemaId);
             } catch (RuntimeException e) {
                 throw new IllegalArgumentException("'" + schemaId + "' is not a schema identity: "
                         + e.getMessage(), e);

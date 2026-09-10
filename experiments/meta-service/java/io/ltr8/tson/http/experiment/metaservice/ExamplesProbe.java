@@ -1,9 +1,12 @@
 package io.ltr8.tson.http.experiment.metaservice;
 
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
-import io.ltr8.tson.compiler.TsonSchemaSource;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonDocumentHeader;
+import io.ltr8.tson.compiler.TsonDocumentPeek;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.TypeDefinition;
@@ -46,14 +49,15 @@ class ExamplesProbe {
         try (Stream<Path> files = Files.list(dir)) {
             files.filter(f -> f.toString().endsWith(".tn")).sorted().forEach(f -> {
                 String text = read(f);
-                String id = TsonDocumentHeader.peek(text).id()
+                String id = TsonDocumentPeek.of(text).header().id()
                         .orElseThrow(() -> new IllegalStateException(f + " declares no !!id"));
                 lib.put(id, text);
             });
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-        return Experiment.bindVocabulary(Tson.builder().schemaSource(TsonSchemaSource.ofMap(lib))).build();
+        return Tson.of(Experiment.bindVocabulary(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))));
     }
 
     static Path examples() {

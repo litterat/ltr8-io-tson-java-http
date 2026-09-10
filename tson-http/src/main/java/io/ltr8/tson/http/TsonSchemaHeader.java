@@ -1,7 +1,7 @@
 package io.ltr8.tson.http;
 
-import io.ltr8.tson.schema.TsonCanonicalIdentity;
-
+import io.ltr8.tson.Tson;
+import io.ltr8.tson.base.CanonicalIdentity;
 import io.ltr8.tson.compiler.TsonDocumentHeader;
 import io.ltr8.tson.compiler.TsonDocumentPeek;
 
@@ -49,8 +49,12 @@ public final class TsonSchemaHeader {
     private TsonSchemaHeader() {
     }
 
-    /** What a message says governs its body, and the body still positioned at the start. */
-    public record Governing(Optional<String> schema, InputStream body) {
+    /**
+     * What a message says governs its body, and the body itself -- as the peek the header was read from, which
+     * is what a reader continues on. {@link TsonDocumentPeek} is the whole body: the header has been read, and
+     * a read handed this one carries on from just past it.
+     */
+    public record Governing(Optional<String> schema, TsonDocumentPeek body) {
     }
 
     /**
@@ -101,20 +105,22 @@ public final class TsonSchemaHeader {
     /**
      * What governs this message, from the header and the body's own directive together, with rule 3 enforced.
      *
-     * <p>The body is peeked, never consumed; {@link Governing#body()} is the stream to read it from.
+     * <p>The body is peeked, never consumed; {@link Governing#body()} is what to read it from.
      *
-     * @param body        the message body
+     * <p><b>The caller opens the peek</b>, with {@link TsonHttpCodec#begin} or {@code Tson.begin}, because a
+     * peek belongs to the processor policy it was opened under: §9.1's limits and §8.2's token policy were
+     * applied to the tokens the header is made of, and a reader that disagrees is refused rather than allowed
+     * to read the rest of one document under a policy that never governed its start. Nothing here could pick
+     * that policy correctly on the caller's behalf.
+     *
+     * @param body        the message body, already opened as a peek
      * @param fieldValue  the {@code TSON-Schema} header value, or {@code null}
      * @throws TsonHttpException 400 if the header is malformed, or names a different schema from the body's own
      *                           {@code !!schema}
      */
-    public static Governing resolve(InputStream body, String fieldValue) {
+    public static Governing resolve(TsonDocumentPeek body, String fieldValue) {
         Optional<String> fromHeader = parse(fieldValue);
-        // The library's own header peek, over the real lexer: it buffers what the lexer pulled to reach the
-        // end of the header and hands back the document from its first byte, so a one-shot request body
-        // survives the look.
-        TsonDocumentPeek peek = TsonDocumentHeader.peekResumable(body);
-        Optional<String> fromBody = peek.header().schema();
+        Optional<String> fromBody = body.header().schema();
 
         if (fromHeader.isPresent() && fromBody.isPresent()
                 && !identityOf(fromHeader.get()).equals(identityOf(fromBody.get()))) {
@@ -127,13 +133,13 @@ public final class TsonSchemaHeader {
         }
         // Either, since where both are present they agree. The body's is preferred when it has one, so a value
         // read back out matches what the document itself says.
-        return new Governing(fromBody.or(() -> fromHeader), peek.document());
+        return new Governing(fromBody.or(() -> fromHeader), body);
     }
 
     /** Canonical identity, or a 400 -- a reference that is not a legal identity governs nothing. */
     private static String identityOf(String reference) {
         try {
-            return TsonCanonicalIdentity.canonicalize(reference);
+            return CanonicalIdentity.canonicalize(reference);
         } catch (RuntimeException notAnIdentity) {
             throw new TsonHttpException(TsonHttpException.BAD_REQUEST,
                     TsonHttpException.TYPES + "unusable-schema-reference", "Unusable schema reference",

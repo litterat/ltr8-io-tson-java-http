@@ -2,12 +2,14 @@ package io.ltr8.tson.http;
 
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
-import io.ltr8.tson.compiler.TsonBindMismatchException;
-import io.ltr8.tson.compiler.TsonDiagnosticsReceiver;
-import io.ltr8.tson.compiler.TsonLimitsPolicy;
-import io.ltr8.tson.compiler.TsonSchemaFetchException;
-import io.ltr8.tson.compiler.TsonSchemaSource;
+import io.ltr8.tson.base.BindMismatchException;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.DiagnosticsReceiver;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.SchemaFetchException;
+import io.ltr8.tson.base.policy.LimitsPolicy;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.schema.meta.ChoiceBody;
 import io.ltr8.tson.schema.meta.FieldState;
@@ -76,11 +78,12 @@ class UpstreamGapsTest {
         Map<String, String> lib = new LinkedHashMap<>();
         lib.put(META_ID, metaSource);
         lib.put(API_ID, doc);
-        var builder = Tson.builder().schemaSource(lib::get);
+        ProcessorConfig config = ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(lib::get));
         if (packages.length > 0) {
-            builder.metaNameBinder(new DataNameBinder.DefaultDataNameBinder(Set.of(packages), Map.of()));
+            config = config.withMetaNameBinder(
+                    new DataNameBinder.DefaultDataNameBinder(Set.of(packages), Map.of()));
         }
-        return builder.build();
+        return Tson.of(config);
     }
 
     // ── fixed upstream, pinned here: a template application inside a choice ─────────────────────
@@ -109,7 +112,7 @@ class UpstreamGapsTest {
                     resp    => <T, S> { status: int32 = S  body: T }
                     op      => { response: (resp<order, 201> | resp<problem, 400>) }
                 }""";
-        Tson tson = Tson.builder().schemaSource(u -> null).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> null)));
 
         List<Diagnostic> problems = tson.validateSchema(schema);
         assertEquals(List.of(), problems, () -> "expected a clean resolution, got " + problems);
@@ -143,7 +146,7 @@ class UpstreamGapsTest {
                     resp     => <T, S> { status: int32 = S  body: T }
                     created  => resp<order, 201>
                 }""";
-        Tson tson = Tson.builder().schemaSource(u -> schema).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> schema)));
         tson.resolve(schema);
         String header = "!!schema:\"https://s.example.com/2026/35/p-1.tn\"\n";
 
@@ -170,7 +173,7 @@ class UpstreamGapsTest {
                     resp    => <T, S> { status: int32 = S  body: T }
                     created => resp<order, 201>
                 }""";
-        Tson tson = Tson.builder().schemaSource(u -> schema).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> schema)));
         tson.resolve(schema);
         var entries = tson.schemaRegistry().get("https://s.example.com/2026/35/p-1.tn").orElseThrow()
                 .schema().entries();
@@ -249,7 +252,7 @@ class UpstreamGapsTest {
                   op => !operation { method: "GET"  path: "/x"  responses: [ y ] }""");
 
         // io.ltr8.tson.http.api.Operation has `summary`, `parameters` and more; this meta declares none.
-        TsonBindMismatchException thrown = assertThrows(TsonBindMismatchException.class,
+        BindMismatchException thrown = assertThrows(BindMismatchException.class,
                 () -> tson(metaSource, doc, "io.ltr8.tson.http.api").resolve(doc));
 
         assertTrue(thrown.getMessage().contains("parameters") || thrown.getMessage().contains("summary"),
@@ -322,10 +325,9 @@ class UpstreamGapsTest {
                 {
                 %s
                 }""".formatted(API_ID, TsonApiSchema.ID, declarations);
-        Tson.builder()
-                .schemaSource(u -> TsonApiSchema.ID.equals(u) ? TsonApiSchema.source() : null)
-                .metaNameBinder(TsonApiSchema.metaNameBinder())
-                .build()
+        Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(u -> TsonApiSchema.ID.equals(u) ? TsonApiSchema.source() : null))
+                .withMetaNameBinder(TsonApiSchema.metaNameBinder()))
                 .resolve(doc);
     }
 
@@ -349,7 +351,7 @@ class UpstreamGapsTest {
                   before => { a: text }
                   after  => @doc:"on the definition" { a: text }
                 }""";
-        Tson tson = Tson.builder().schemaSource(u -> schema).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> schema)));
         tson.resolve(schema);
         var entries = tson.schemaRegistry().get("https://s.example.com/2026/35/p-1.tn")
                 .orElseThrow().schema().entries();
@@ -376,7 +378,7 @@ class UpstreamGapsTest {
                 }""";
 
         assertTrue(assertThrows(RuntimeException.class,
-                () -> Tson.builder().schemaSource(u -> schema).build().resolve(schema))
+                () -> Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> schema))).resolve(schema))
                 .getMessage().contains("does not name a type"));
     }
 
@@ -444,7 +446,7 @@ class UpstreamGapsTest {
     @Test
     void everyFieldNameOfASchemalessRecordMeetsAllThreeNameRules() {
         String cyrillicPass = new String(new int[] {0x0440, 0x0430, 0x0455, 0x0455}, 0, 4);
-        Tson tson = Tson.builder().schemaSource(u -> null).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> null)));
 
         // Mixed within one name: the per-name script rule fires, and fires first.
         assertEquals(List.of(Diagnostic.Code.RESTRICTED_SCRIPT, Diagnostic.Code.CONFUSABLE_NAMES),
@@ -469,17 +471,17 @@ class UpstreamGapsTest {
      */
     @Test
     void theNestingBoundIsEnforcedAndIsNotAVerdict() {
-        assertEquals(64, TsonLimitsPolicy.defaults().maxDepth(), "\u00a79.1's own default");
+        assertEquals(64, LimitsPolicy.defaults().maxDepth(), "\u00a79.1's own default");
         assertFalse(Diagnostic.Code.LIMIT_EXCEEDED.verdict(), "nothing past the bound was read");
 
         String deep = "[".repeat(200) + "]".repeat(200);
         assertEquals(List.of(Diagnostic.Code.LIMIT_EXCEEDED),
-                codesOf(Tson.builder().schemaSource(u -> null).build(), deep));
+                codesOf(Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> null))), deep));
     }
 
     /** The codes a schemaless read of {@code document} reports, collected rather than thrown. */
     private static List<Diagnostic.Code> codesOf(Tson tson, String document) {
-        var problems = TsonDiagnosticsReceiver.collecting();
+        var problems = DiagnosticsReceiver.collecting();
         tson.treeReader().withDiagnostics(problems).readWithoutSchema(document);
         return problems.diagnostics().stream().map(Diagnostic::code).distinct().toList();
     }
@@ -494,7 +496,7 @@ class UpstreamGapsTest {
      *
      * <p>Both halves matter to this project and they pull opposite ways, so asserting one would leave the
      * other free to move. §8.2's "Values" paragraph names this project's own situation -- a service that
-     * renders or matches untrusted values -- and says the deployment applies {@code TsonConfig.tokenPolicy}
+     * renders or matches untrusted values -- and says the deployment applies {@code ProcessorConfig.tokenPolicy}
      * knowingly. {@code tson-http} does not build the {@code Tson}, so that decision is the application's;
      * what is fixed here is what it gets if it does not make one.
      */
@@ -509,11 +511,13 @@ class UpstreamGapsTest {
                 }""";
 
         String refused = assertThrows(RuntimeException.class,
-                () -> Tson.builder().schemaSource(u -> schema).build().resolve(schema)).getMessage();
+                () -> Tson.of(ProcessorConfig.defaults()
+                        .withSchemaAccess(SchemaAccess.of(u -> schema))).resolve(schema)).getMessage();
         assertTrue(refused.contains("HIGHLY_RESTRICTIVE"), refused);
 
         // The same text as a value, through a schemaless read: nothing is checked, and nothing should be.
-        assertDoesNotThrow(() -> Tson.builder().schemaSource(u -> null).build().treeReader()
+        assertDoesNotThrow(() -> Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(u -> null))).treeReader()
                 .readWithoutSchema("{ name: \"\u0430dmin\" }"));
     }
 
@@ -559,7 +563,7 @@ class UpstreamGapsTest {
      * <b>A source returning {@code null} is refused as the contract violation it is</b> — the flipped
      * assertion of a gap that has closed, kept because this is the shape a regression would take.
      *
-     * <p>{@code TsonSchemaSource} admits {@code TsonSchemaFetchException} and nothing else for "cannot supply
+     * <p>{@code SchemaSource} admits {@code SchemaFetchException} and nothing else for "cannot supply
      * this", but the natural first implementation is a map and a map spells absence as {@code null}. That used
      * to reach {@code TsonCompiledMetaRegistry.recordAndVerify} and throw a bare {@code NullPointerException}
      * four frames from the cause — which, since the identity comes from the request body, was a 500 any client
@@ -576,7 +580,7 @@ class UpstreamGapsTest {
                 !!import:"https://tson.io/2026/35/m/core.tn"
                 !!import:"https://example.com/2026/35/app/absent-1.tn"
                 { thing => { a: text } }""";
-        Tson tson = Tson.builder().schemaSource(u -> null).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> null)));
 
         RuntimeException refused = assertThrows(RuntimeException.class, () -> tson.resolve(schema));
         assertFalse(refused instanceof NullPointerException,
@@ -596,14 +600,14 @@ class UpstreamGapsTest {
                 !!meta:"https://tson.io/2026/35/m/meta.tn"
                 !!import:"https://tson.io/2026/35/m/core.tn"
                 { thing => { a: text } }""";
-        TsonSchemaSource source =
-                TsonSchemaSource.ofMap(Map.of("https://example.com/2026/35/app/ofmap-1.tn", schema));
+        SchemaSource source =
+                SchemaSource.ofMap(Map.of("https://example.com/2026/35/app/ofmap-1.tn", schema));
 
         // The scheme is a transport hint, not part of the name.
         assertDoesNotThrow(() -> source.fetch("http://example.com/2026/35/app/ofmap-1.tn"));
 
-        TsonSchemaFetchException refused = assertThrows(TsonSchemaFetchException.class,
+        SchemaFetchException refused = assertThrows(SchemaFetchException.class,
                 () -> source.fetch("https://example.com/2026/35/app/absent-1.tn"));
-        assertEquals(TsonSchemaFetchException.Reason.NOT_FOUND, refused.reason());
+        assertEquals(SchemaFetchException.Reason.NOT_FOUND, refused.reason());
     }
 }

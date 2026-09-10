@@ -7,9 +7,11 @@ import io.ltr8.annotation.Typename;
 import io.ltr8.bind.DataBindContext;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.bind.AtomContext;
+import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
-import io.ltr8.tson.compiler.config.TsonAtomContext;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonProblem;
 import io.ltr8.tson.http.TsonProblemSchema;
@@ -59,8 +61,10 @@ class TsonMediaSupportTest {
         DataNameBinder binder = name -> "order".equals(name) ? Order.class
                 : SchemaMetaNameBinder.INSTANCE.resolve(name);
         DataBindContext bind =
-                TsonAtomContext.registerDefaults(DataBindContext.builder().nameBinder(binder).build());
-        Tson tson = Tson.builder().schemaSource(uri -> SCHEMA).dataBindContext(bind).build();
+                DataBindContext.builder().nameBinder(binder).registerAtoms(AtomContext.hostTypes()).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(uri -> SCHEMA))
+                .withDataBindContext(bind));
         tson.resolve(SCHEMA);
         codec = new TsonHttpCodec(tson);
         client = HttpClient.newHttpClient();

@@ -3,10 +3,11 @@ package io.ltr8.tson.http;
 import io.ltr8.annotation.Field;
 import io.ltr8.annotation.Typename;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.TsonConfig;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.policy.LimitsPolicy;
+import io.ltr8.tson.base.policy.UnicodePolicy;
+import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.compiler.TsonCompiledSchema;
-import io.ltr8.tson.compiler.TsonLimitsPolicy;
-import io.ltr8.tson.compiler.TsonUnicodePolicy;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -57,7 +58,7 @@ public record TsonDeployment(String name, Optional<Listener> listener,
             "unicode_policy", Policy.class,
             "limits", Limits.class,
             "listener", Listener.class,
-            "restriction_level", TsonUnicodePolicy.Level.class,
+            "restriction_level", UnicodePolicy.Level.class,
             "policy_unit", Unit.class);
 
     /**
@@ -80,8 +81,8 @@ public record TsonDeployment(String name, Optional<Listener> listener,
     public record Limits(@Field("max_depth") Optional<Integer> maxDepth) {
 
         /** This descriptor's limits policy, or empty where it states no member and the library's stands. */
-        public Optional<TsonLimitsPolicy> toPolicy() {
-            return maxDepth.map(depth -> TsonLimitsPolicy.defaults().withMaxDepth(depth));
+        public Optional<LimitsPolicy> toPolicy() {
+            return maxDepth.map(depth -> LimitsPolicy.defaults().withMaxDepth(depth));
         }
     }
 
@@ -96,7 +97,7 @@ public record TsonDeployment(String name, Optional<Listener> listener,
 
     /** One §8.2 policy: a UTS #39 level, the unit it applies to, and any extra admitted script set. */
     @Typename(name = "unicode_policy")
-    public record Policy(TsonUnicodePolicy.Level level, Optional<Unit> unit, List<String> permitting) {
+    public record Policy(UnicodePolicy.Level level, Optional<Unit> unit, List<String> permitting) {
 
         /**
          * <b>Script names are canonicalised here, against the authoritative table.</b> [UAX #24] gives every
@@ -118,8 +119,8 @@ public record TsonDeployment(String name, Optional<Listener> listener,
         }
 
         /** This policy as the library's own type. */
-        public TsonUnicodePolicy toPolicy() {
-            TsonUnicodePolicy policy = TsonUnicodePolicy.of(level);
+        public UnicodePolicy toPolicy() {
+            UnicodePolicy policy = UnicodePolicy.of(level);
             if (unit.orElse(Unit.WHOLE) == Unit.SEGMENT) {
                 policy = policy.perSegment();
             }
@@ -172,7 +173,9 @@ public record TsonDeployment(String name, Optional<Listener> listener,
 
     /** A {@link Tson} with this schema resolved and bound — what {@link #read} reads through. */
     public static Tson tson() {
-        Tson tson = Tson.builder().schemaSource(uri -> SOURCE).bindings(BINDINGS).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(uri -> SOURCE))
+                .withDataBindContext(TsonBindings.of(BINDINGS)));
         tson.resolve(SOURCE);
         return tson;
     }
@@ -183,12 +186,12 @@ public record TsonDeployment(String name, Optional<Listener> listener,
     }
 
     /** The declared-name policy this descriptor states, or empty to leave the library's default alone. */
-    public Optional<TsonUnicodePolicy> identifierPolicy() {
+    public Optional<UnicodePolicy> identifierPolicy() {
         return identifiers.map(Policy::toPolicy);
     }
 
     /** The token policy this descriptor states, or empty to leave the library's default alone. */
-    public Optional<TsonUnicodePolicy> tokenPolicy() {
+    public Optional<UnicodePolicy> tokenPolicy() {
         return tokens.map(Policy::toPolicy);
     }
 
@@ -196,22 +199,22 @@ public record TsonDeployment(String name, Optional<Listener> listener,
      * The [TSON-DATA] §9.1 limits policy this descriptor states, or empty to leave the library's default
      * alone — 64 levels of nesting, §9.1's own default.
      */
-    public Optional<TsonLimitsPolicy> limitsPolicy() {
+    public Optional<LimitsPolicy> limitsPolicy() {
         return limits.flatMap(Limits::toPolicy);
     }
 
     /**
-     * Applies whatever this descriptor states to {@code config}, and returns it.
+     * {@code config} with whatever this descriptor states applied.
      *
      * <p>Only what it states: a descriptor with no {@code tokens} leaves the token policy at the library's
      * default rather than setting it to something permissive, because those are different postures and only
-     * one of them was asked for.
+     * one of them was asked for. A {@link ProcessorConfig} is a value, so an absent setting is the config
+     * handed back unchanged.
      */
-    public TsonConfig applyTo(TsonConfig config) {
-        identifierPolicy().ifPresent(config::identifierPolicy);
-        tokenPolicy().ifPresent(config::tokenPolicy);
-        limitsPolicy().ifPresent(config::limits);
-        return config;
+    public ProcessorConfig applyTo(ProcessorConfig config) {
+        ProcessorConfig withIdentifiers = identifierPolicy().map(config::withIdentifierPolicy).orElse(config);
+        ProcessorConfig withTokens = tokenPolicy().map(withIdentifiers::withTokenPolicy).orElse(withIdentifiers);
+        return limitsPolicy().map(withTokens::withLimits).orElse(withTokens);
     }
 
     /**
@@ -241,7 +244,7 @@ public record TsonDeployment(String name, Optional<Listener> listener,
      * not after it is refused.
      */
     private static Optional<String> unicodeDataVersion() {
-        return Optional.of(TsonUnicodePolicy.dataVersion());
+        return Optional.of(UnicodePolicy.dataVersion());
     }
 
     private static String readResource(String path) {

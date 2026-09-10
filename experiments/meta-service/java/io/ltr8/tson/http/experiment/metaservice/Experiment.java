@@ -1,7 +1,7 @@
 package io.ltr8.tson.http.experiment.metaservice;
 
 import io.ltr8.bind.DataNameBinder;
-import io.ltr8.tson.TsonConfig;
+import io.ltr8.tson.base.ProcessorConfig;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -30,8 +30,8 @@ final class Experiment {
     }
 
     /** The bound classes for the sketch's {@code data} constructors, as {@code TsonApiSchema.metaNameBinder()} does. */
-    static TsonConfig bindVocabulary(TsonConfig config) {
-        return config.metaNameBinder(new DataNameBinder.DefaultDataNameBinder(
+    static ProcessorConfig bindVocabulary(ProcessorConfig config) {
+        return config.withMetaNameBinder(new DataNameBinder.DefaultDataNameBinder(
                 Set.of("io.ltr8.tson.http.experiment.metaservice"), Map.of()));
     }
 }

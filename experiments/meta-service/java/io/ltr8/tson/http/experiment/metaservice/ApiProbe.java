@@ -1,8 +1,10 @@
 package io.ltr8.tson.http.experiment.metaservice;
 
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
-import io.ltr8.tson.compiler.TsonSchemaSource;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.schema.meta.FieldState;
 import io.ltr8.tson.schema.meta.RecordBody;
@@ -115,7 +117,8 @@ class ApiProbe {
         lib.put(MetaServiceSketchProbe.ERR_ID, MetaServiceSketchProbe.ERRORS);
         lib.put(IFACE_ID, IFACE);
         lib.put(API_ID, api);
-        return Experiment.bindVocabulary(Tson.builder().schemaSource(TsonSchemaSource.ofMap(lib))).build();
+        return Tson.of(Experiment.bindVocabulary(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))));
     }
 
     /** Resolves the api document and reads it into routes; the resolver's verdict is asserted clean first. */
@@ -452,7 +455,7 @@ class ApiProbe {
         lib.put(LIB_ID, LIB_B);
         lib.put(IFACE_ID, IFACE_B);
         lib.put(API_ID, API_B);
-        Tson tson = Tson.builder().schemaSource(TsonSchemaSource.ofMap(lib)).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib))));
         List<Diagnostic> problems = tson.validateSchema(API_B);
         assertEquals(List.of(), problems, () -> "" + problems);
 

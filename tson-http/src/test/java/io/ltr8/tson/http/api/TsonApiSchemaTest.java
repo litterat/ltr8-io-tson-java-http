@@ -1,6 +1,8 @@
 package io.ltr8.tson.http.api;
 
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.http.TsonProblemSchema;
 import org.junit.jupiter.api.Test;
 
@@ -67,8 +69,9 @@ class TsonApiSchemaTest {
         lib.put(ORDER_ID, ORDER);
         lib.putAll(TsonProblemSchema.publishedById());
         lib.put(API_ID, api);
-        Tson tson = Tson.builder().schemaSource(lib::get)
-                .metaNameBinder(TsonApiSchema.metaNameBinder()).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(lib::get))
+                .withMetaNameBinder(TsonApiSchema.metaNameBinder()));
         tson.resolve(api);
         return tson;
     }

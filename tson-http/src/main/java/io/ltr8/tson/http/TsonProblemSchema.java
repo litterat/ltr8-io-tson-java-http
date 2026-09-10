@@ -1,7 +1,10 @@
 package io.ltr8.tson.http;
 
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonCompiledSchema;
 
 import java.io.IOException;
@@ -49,7 +52,7 @@ public final class TsonProblemSchema {
     }
 
     /**
-     * The same history keyed by identity, for a caller wiring a {@code TsonSchemaSource} by hand rather than
+     * The same history keyed by identity, for a caller wiring a {@code SchemaSource} by hand rather than
      * serving it over HTTP.
      *
      * <p>Worth using even at one version: serving the current text at a superseded version's URI fails as an
@@ -81,7 +84,9 @@ public final class TsonProblemSchema {
      * {@link TsonProblemDiagnostic} -- what a client reads an error body back through.
      */
     public static Tson tson() {
-        Tson tson = Tson.builder().schemaSource(uri -> SOURCE).bindings(BINDINGS).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(uri -> SOURCE))
+                .withDataBindContext(TsonBindings.of(BINDINGS)));
         tson.resolve(SOURCE);
         return tson;
     }

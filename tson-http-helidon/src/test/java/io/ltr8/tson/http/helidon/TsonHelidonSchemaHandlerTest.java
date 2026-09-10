@@ -2,8 +2,10 @@ package io.ltr8.tson.http.helidon;
 
 import io.helidon.webserver.WebServer;
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.HttpSchemaSource;
+import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.http.TsonHttpCodec;
-import io.ltr8.tson.TsonHttpSchemaSource;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.AfterEach;
@@ -42,7 +44,7 @@ class TsonHelidonSchemaHandlerTest {
 
     @BeforeEach
     void startServer() {
-        TsonHttpCodec codec = new TsonHttpCodec(Tson.builder().build());
+        TsonHttpCodec codec = new TsonHttpCodec(Tson.of(ProcessorConfig.defaults()));
         server = WebServer.builder()
                 .host("127.0.0.1")
                 .port(0)
@@ -100,12 +102,12 @@ class TsonHelidonSchemaHandlerTest {
      */
     @Test
     void aServedSchemaIsOneAFetchingClientCanUse() {
-        try (TsonHttpSchemaSource source = TsonHttpSchemaSource.builder()
+        try (HttpSchemaSource source = HttpSchemaSource.builder()
                 .mapHost(HOST, base)
                 .timeout(Duration.ofSeconds(2))
                 .build()) {
 
-            Tson tson = Tson.builder().schemaSource(source).build();
+            Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(source)));
             tson.resolve(source.fetch(SCHEMA_ID));
             TsonHttpCodec codec = new TsonHttpCodec(tson);
 

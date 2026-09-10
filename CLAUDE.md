@@ -21,7 +21,7 @@ of the sibling can move the whole identity space; "Project-owned schema `!!id`" 
 suite driving it under load. Responses are self-describing in both directions: an error body names
 `problem-1.tn`, a demo's order reply names the schema governing it, and the server publishes both so those
 URLs resolve. Every adapter proves the full loop: a schema served at its identity path, fetched back by
-`TsonHttpSchemaSource`, and used to validate a document. A service also publishes a description of itself
+`HttpSchemaSource`, and used to validate a document. A service also publishes a description of itself
 (`meta-http-1.tn`), from which it derives what to publish and what to warm.
 
 **Don't state a count of anything here.** Test counts and file counts go stale within a day and nothing
@@ -60,10 +60,11 @@ Package group `io.ltr8`, as in tson-java (reverse-DNS names who *publishes*, not
   - **Codec** — request `InputStream` → `TsonValue` (tree mode) or a bound Java object (bind mode);
     object/`TsonValue` → response bytes.
   - **Error mapping** — `Diagnostic` and the exception hierarchy → status code + a TSON error body.
-  - **~~`TsonSchemaSource` over HTTP~~ — this module no longer owns one.** `TsonHttpSchemaSource` was built
-    here, offered upstream, and accepted: it now lives in tson-java as `io.ltr8.tson.TsonHttpSchemaSource`,
-    alongside a `TsonFileSchemaSource` this repo never had and the `SchemaReference` rules they share. Use it
-    from there — `TsonConfig.httpSchemas(hosts…)` is the one-call form. **Do not reintroduce a copy here**:
+  - **~~`SchemaSource` over HTTP~~ — this module no longer owns one.** `HttpSchemaSource` was built
+    here, offered upstream, and accepted: it now lives in tson-java as `io.ltr8.tson.base.source.HttpSchemaSource`,
+    alongside a `FileSchemaSource` this repo never had and the `SchemaReference` rules they share. Use it
+    from there — `SchemaAccess.httpSchemas(hosts…)` on the config is the one-call form. **Do not reintroduce a
+    copy here**:
     the reference comes from an untrusted request body, so a second implementation is a second place for one
     security check to drift lenient.
   - **`TsonAcceptSchemaHeader`** — the `TSON-Accept-Schema` request field: which schema versions a client will
@@ -124,7 +125,7 @@ each other.
   requests, and lifting the two into a shared module was asked for upstream and rightly rejected. `problem`
   follows **RFC 9457**; `diagnostic` stays close to what a TSON read produces, because that is what it
   reports.
-- `io.ltr8.tson.TsonHttpSchemaSource` / `TsonSchemaFetchException` — **upstream's, not this module's** (see
+- `io.ltr8.tson.base.source.HttpSchemaSource` / `SchemaFetchException` — **upstream's, not this module's** (see
   above). What stays here is the half upstream cannot know: `TsonHttpException.from` maps a fetch `Reason`
   through `Diagnostic.Code.of` into the one fetch status table, and `TsonHttpSchemaSourceIntegrationTest` pins
   that mapping and the codec's end-to-end read of a document whose schema arrived over the wire. The policy itself is upstream's suite — do not retest it here.
@@ -289,10 +290,11 @@ required: an exemption somebody has to justify in a greppable string is a decisi
 hole. Readable back through `exemptions()`, and `requireComplete()`'s failure message names the method, so
 the way out is discoverable from the error rather than the Javadoc.
 
-**This is the shape to copy for any future helper here**, and it is upstream's: `bindings()` is opinionated
-but `dataBindContext()` still exists; `SchemaMetaNameBinder.extendedWith` is public so `metaNameBinder` is not
-a black box; and `lenientBinding()` is the model — the way out is a *named position with a rationale*, not a
-flag meaning "be sloppy". An opinionated helper is fine. A fixed opinion is not.
+**This is the shape to copy for any future helper here**, and it is upstream's: `TsonBindings.of` is
+opinionated but `withDataBindContext` still takes a context you built yourself, and
+`SchemaMetaNameBinder.extendedWith` is public so `metaNameBinder` is not a black box. The way out is a *named
+position with a rationale*, not a flag meaning "be sloppy". An opinionated helper is fine. A fixed opinion is
+not.
 
 **It checks coverage, not path equality, and that is what keeps it framework-agnostic.** The registered path
 and the declared path may differ and often must — the JDK demo serves `/{schemaPath}` from a
@@ -321,6 +323,11 @@ which is where that per-adapter path seam would finally have to exist.
 methods (transport-neutral) and operations (HTTP-bound), and finds the real obstacle: an operation binding a
 method declared *elsewhere* must refer to it, and a `kind: DATA` entry cannot be referred to. The two shapes
 that work today and the spec change that would settle it are measured and written up there.
+
+**Its scope is the descriptor — RPC- and API-style endpoints — and the agent sketches in it are future work.**
+`agent-1.tn` and `agent-vm-1.tn` are there to press on the interface layer from a direction that is not HTTP, so
+that the meta layer is shaped by more than one consumer; they are kept resolved and probed for that and nothing
+else. Do not build toward them, and do not let a decision that is the agent's alone move the descriptor.
 
 **An operation's long description is its `@doc`**, read back with `TsonApiDescription.doc(name)`; `summary` is
 the short form. A response and a parameter carry a `description` *field* instead, for a permanent reason —
@@ -426,7 +433,7 @@ non-default port** — an ephemeral test port, an internal endpoint, a mirror �
 an identity. A mapping renames nothing: the loader still cross-checks the fetched document's `!!id`.
 
 Getting this backwards produces a confusing failure a long way from its cause: a port-carrying `!!schema`
-fails inside `TsonCanonicalIdentity.canonicalize` during resolution, with a message about identity and a
+fails inside `CanonicalIdentity.canonicalize` during resolution, with a message about identity and a
 stack trace through the resolver.
 
 ## Consuming tson-java
@@ -452,9 +459,25 @@ only landed in that repo on the user's say-so. Pulling it is fine when asked.
 Read tson-java's own `CLAUDE.md` and `docs/` before working on the codec — but these are the facts that
 shape the HTTP integration specifically:
 
-**Front door.** `Tson.builder()` → `TsonConfig` (`.schemaSource(…)`, `.dataBindContext(…)`) → `Tson`.
-Bootstrapping loads meta-kernel + `meta.tn` + `core.tn`. From a `Tson` you get `treeReader()`,
-`objectReader()`, `treeWriter()`, `objectWriter()`, `resolve(schemaText)`, and `validate(…)`.
+**Front door.** `ProcessorConfig.defaults()` → `.withSchemaAccess(…)` / `.withDataBindContext(…)` →
+`Tson.of(config)`, or `Tson.standard()` unconfigured. **The config is an immutable value, not a builder**: each
+`withX` returns a new one, so a helper that "applies" settings returns a config rather than mutating the caller's
+(which is what `TsonDeployment.applyTo` does). Bootstrapping loads meta-kernel + `meta.tn` + `core.tn`. From a
+`Tson` you get `treeReader()`, `objectReader()`, `treeWriter()`, `objectWriter()`, `resolve(schemaText)`,
+`validate(…)`, and `begin(…)`.
+
+**Where a schema comes from is its own value.** `SchemaAccess.registeredOnly()` (nothing is fetchable — what an
+unconfigured deployment gets), `of(source)`, `httpSchemas(hosts…)`, `fileSchemas(host, dir)`, or a builder
+carrying a `FetchPolicy` beside the source. `registeredOnly()` is the shape the validator demo wants, and it now
+says so rather than passing a source that refuses everything.
+
+**The shared vocabulary lives in `io.ltr8.tson.base`**, a module of its own, with the `Tson` prefix stripped —
+`Diagnostic`, `SourcePosition`, `DiagnosticsCollector`/`Receiver`, `CanonicalIdentity`, `ProcessorConfig`,
+`policy.UnicodePolicy`/`LimitsPolicy`, `source.SchemaSource`/`HttpSchemaSource`/`FileSchemaSource`,
+`bind.AtomContext`, and the exceptions. It is one vocabulary across both encodings by specification, which is
+why it is not in `tson-compiler`. **The classifying factories stayed behind**: `TsonDiagnostics` in
+`tson-compiler` owns `ofBaseSyntaxError` and friends, because they switch on the TSON reader's own exception
+types.
 
 **Read mode is which registry you hold, not a parameter.** `treeReader()` yields an immutable queryable
 `TsonValue`; `objectReader()` binds to Java objects. Both readers take `InputStream` as well as `String`
@@ -468,14 +491,14 @@ a caller that wants `Content-Length`. **An error body is only ever buffered** �
 part-way through leaves a client holding a truncated problem on a response whose status is already sent.
 
 **A self-describing document carries its own `!!schema` directive** and the reader resolves it through
-the configured `TsonSchemaSource`. This is the crux of the HTTP story: a schema URL arriving in a request
+the configured `SchemaSource`. This is the crux of the HTTP story: a schema URL arriving in a request
 body is an **untrusted URL**, so the HTTP-backed source must be policy-gated (allow-list of origins,
 timeouts, size cap, cache) rather than fetching whatever it is handed. Never wire a naive fetcher in.
 
 **§7.8's scope push is a second such URL, at a *value* position, and it is new in Revision 35.** At a `scoped`
 field the value carries its own nested `!!schema` and a type-ref resolved there, loaded as the value arrives
 rather than from the document header — so a body can name an origin from halfway down a record. It resolves
-through the same `TsonSchemaSource`, so the same allow-list guards it; `TsonHttpSchemaSourceIntegrationTest.`
+through the same `SchemaSource`, so the same allow-list guards it; `TsonHttpSchemaSourceIntegrationTest.`
 `aScopePushInARequestBodyIsGatedByTheSameAllowList` pins both directions, because only the pair says the gate is
 a gate. Two properties keep it from being a wider surface than it looks: **a schema has to opt in** — the push
 is refused where the position's reader is not a scoped one, so a body cannot push a scope into an ordinary
@@ -490,10 +513,10 @@ internal fault → 5xx. A gap must never be reported to a client as "your reques
 
 **Ask the `Diagnostic.Code`, not the exception type — the split is no longer one type per outcome.** A read
 gap is now *reported* like any other problem rather than thrown, so it reaches a collecting caller as a
-`NOT_IMPLEMENTED` diagnostic among the rest, and a fail-fast one as a `TsonReadException` carrying that same
+`NOT_IMPLEMENTED` diagnostic among the rest, and a fail-fast one as a `ReadException` carrying that same
 code — the very type a schema violation arrives as. Classifying by type therefore answers 400 for a gap,
 which is the one verdict this policy may never give. `TsonHttpException.invalidDocument` holds the rule and
-`from` routes every `TsonReadException` through it, so both channels answer alike. Upstream states the rule
+`from` routes every `ReadException` through it, so both channels answer alike. Upstream states the rule
 as *"asking by code rather than by exception type is the stated policy"*.
 
 **Eight codes are not verdicts on the document, and they differ by who could not give one** — this library, the
@@ -545,7 +568,7 @@ missing one, so a 502 there would advertise a retry that cannot help. It goes wi
 not fetch. The CLI reaches the same place from the other side, ranking it permanent.
 
 **Both channels must answer alike, and there is now one table rather than two held together.** One fetch
-failure reaches a consumer two ways: thrown as `TsonSchemaFetchException` (essentially startup-only, since
+failure reaches a consumer two ways: thrown as `SchemaFetchException` (essentially startup-only, since
 **every read through the codec collects**) and collected as a diagnostic, the common path. The two speak
 different enums — thrown carries a `Reason`, collected a `Code` — so `TsonHttpException.from` maps through
 `Diagnostic.Code.of(reason)` into `fetchFailure`, which is the only fetch status table. Do not add a second
@@ -562,12 +585,21 @@ other, which the schema would still call valid. Pinned by
 
 `Diagnostic.Code` is the detail vocabulary — mostly 4xx, but see the table above for the eight that are not:
 `FIELD_REQUIRED`, `FIELD_FIXED`, `TYPE_MISMATCH`, `WRONG_ARITY`, `UNKNOWN_TYPE_REF`,
-`ATOM_CONSTRAINT_VIOLATION`, `UNRECOGNIZED_FIELD`, `DUPLICATE_MAP_KEY`, `DUPLICATE_FIELD`, `CONFUSABLE_NAMES`,
+`ATOM_FORM_INVALID`, `ATOM_CONSTRAINT_VIOLATION`, `UNRECOGNIZED_FIELD`, `DUPLICATE_MAP_KEY`,
+`DUPLICATE_FIELD`, `CONFUSABLE_NAMES`,
 `RESTRICTED_CHARACTER`, `RESTRICTED_SCRIPT`, `SCHEMA_ERROR`, `UNKNOWN_TYPE`, `VALIDATION_ERROR`,
 `NOT_IMPLEMENTED`, `BIND_MISMATCH`, `LIMIT_EXCEEDED`, `SCHEMA_NOT_PERMITTED`, `SCHEMA_NOT_FOUND`,
 `SCHEMA_UNREACHABLE`, `SCHEMA_TIMEOUT`, `SCHEMA_TOO_LARGE`.
 
-**`TsonSchemaFetchException` lives in `io.ltr8.tson.compiler`**, beside the `TsonSchemaSource` interface whose
+**An atom refuses in two categories, so it carries two codes.** §5.2 splits the refusal and §8.1 files the
+halves apart: a token the atom's grammar rejects is `ATOM_FORM_INVALID` (a resolver error), a parsed value
+violating the atom's range is `ATOM_CONSTRAINT_VIOLATION` (a validation one). Both are verdicts and both are
+400; they are two codes because the fixes differ — rewrite the token, or change the value it denotes. `"not-a-
+uuid"` at a `uuid` field is the first, an `age` of 300 against a `max` the second, and
+`ValidatorServerTest.aFaultingDocumentIsAnAnswerRatherThanAFailure` shows both in one document. Adding it to
+`problem-1.tn`'s `diagnostic_code` is exactly the drift `TsonProblemSchemaTest` exists to catch, and it did.
+
+**`SchemaFetchException` lives in `io.ltr8.tson.base`**, beside the `SchemaSource` interface whose
 contract it is — `fetch` names it as the one way a source says "cannot supply this", which is what lets the
 classification route on it at all.
 
@@ -618,9 +650,9 @@ level up. Not adding a `policy` member was therefore a layering decision, not an
 members are the standard's own growth mechanism and `errors` already is one. If a client ever needs to know
 *which version* of the profile judged it, the answer is a `Link` header plus the profile's `name`, added then.
 
-**The defaults are opposite on purpose**, and a server inherits both: `TsonConfig.identifierPolicy` defaults
+**The defaults are opposite on purpose**, and a server inherits both: `ProcessorConfig.withIdentifierPolicy` defaults
 to Highly Restrictive over *declared names*, so a schema a request body names is refused for a homograph;
-`TsonConfig.tokenPolicy` defaults to unrestricted over *values*, because data may legitimately be a Cyrillic
+`ProcessorConfig.withTokenPolicy` defaults to unrestricted over *values*, because data may legitimately be a Cyrillic
 display name and no scan runs at all. Pinned by
 `UpstreamGapsTest.aDeclaredNameDefaultsToHighlyRestrictiveAndAValueToUnrestricted` — asserting one half would
 leave the other free to move.
@@ -629,7 +661,7 @@ leave the other free to move.
 this project's exact situation — a service that renders or matches untrusted values faces on values the
 spoofing surface §9.4 raises for names — and says such a deployment applies the level *knowingly*.
 `tson-http` never builds the `Tson`, so it has no place to decide; a service that renders what it reads should
-pass `tokenPolicy(...)` where it builds one. Two traps if it does: a token policy stricter than the identifier
+pass `withTokenPolicy(...)` where it builds one. Two traps if it does: a token policy stricter than the identifier
 policy **subsumes** it, since the check runs before anything knows which tokens are names; and a per-segment
 policy is refused outright at that setter, `_` and `-` being word separators in a name and ordinary characters
 in a value, so segmenting one would admit UTS #39's own `Toys-Я-Us`.
@@ -649,7 +681,7 @@ A schema arriving at runtime (an unknown `!!schema` URL) must go through a singl
 path, not a concurrent one. The contract is now stated where a server reads it — `Tson`'s class Javadoc
 (concurrent reads through one instance are safe; on a race work may be duplicated but state never is;
 `resolve`/`validateSchema` and mutating a `DataBindContext` under live reads are outside the guarantee) and
-`TsonConfig.dataBindContext` — and pinned upstream by `ReadPathConcurrencyTest` and
+`ProcessorConfig.withDataBindContext` — and pinned upstream by `ReadPathConcurrencyTest` and
 `SharedInstanceConcurrencyTest`. `TsonHttpCodecConcurrencyTest` is the same claim measured from this end.
 
 ## Traps — read before touching the code involved
@@ -678,18 +710,20 @@ Each cost a debugging cycle here and is pinned by a test.
   `parameters` for that reason. A **required** list is deliberately not guarded: it never reaches a
   constructor, because the reader reports `FIELD_REQUIRED` and abandons the construction first, so a guard
   there would mask a real violation. A `references()` that returns such a `null` is refused by name — a
-  `TsonBindMismatchException` naming the class — rather than being an NPE out of `Tson.resolve`; the guard is
+  `BindMismatchException` naming the class — rather than being an NPE out of `Tson.resolve`; the guard is
   still the class's job, the failure just no longer reads as a library fault.
 - **A bound class must be public.** tson-java declares no `opens` and binding only ever touches public
   constructors and methods, so a package-private record fails analysis with a bare `DataBindException:
   Failed to resolve` that names nothing useful.
-- **Object binding needs bindings.** The class passed to `readObject` is the expected *result*, not the
-  mapping. Use `Tson.builder().bindings(Map.of("order", Order.class))`, which builds the whole context — the
-  map as a name binder, chained over the kernel's vocabulary rather than replacing it, with the atom
-  registrations applied. Do **not** hand-roll `DataBindContext.builder()` for this: two of those three steps
-  are invisible, and missing either fails a long way from the cause. `bindings`/`profile` are mutually
-  exclusive with `dataBindContext` — a context is built or given, not both.
-- **A type nothing binds is a 500, not a 501.** It is a `TsonMissingBindingException` naming the map, deferred
+- **Object binding needs bindings, and the convenience is now this repo's.** The class passed to `readObject`
+  is the expected *result*, not the mapping. Upstream's `bindings(Map)`/`profile(String)` are gone with the
+  builder, so `TsonBindings.of(Map.of("order", Order.class))` — or `of(map, profile)` — is what builds the whole
+  context here: the map as a name binder, **chained over the kernel's vocabulary rather than replacing it**,
+  with the atom registrations applied. Do **not** hand-roll `DataBindContext.builder()` at a call site: two of
+  those three steps are invisible, and missing either fails a long way from the cause. The map authors the
+  failure on purpose — the kernel binder is the backstop, and letting it speak reports a missing line of your
+  configuration as "not kernel vocabulary".
+- **A type nothing binds is a 500, not a 501.** It is a `MissingBindingException` naming the map, deferred
   to the first read of that specific type (a schema legitimately declares types a consumer never binds). It
   used to present as `UnsupportedOperationException: no usable compiled reader`, which this project mapped to
   501 — reporting a missing line of its own configuration as "this library cannot do that". Pinned by
@@ -697,10 +731,16 @@ Each cost a debugging cycle here and is pinned by a test.
 - **A JSON body names neither its schema nor its root type**, and cannot — directive syntax is not JSON. So the
   schema comes from the `TSON-Schema` header and the root type from the route, which means reading one is
   `readObjectAs`/`readTreeAs`, never the bare `read`. Same two-part requirement as `describing()`, same reason.
-- **`acceptingJson()` no longer rests on a superset guarantee, and one of its divergences is silent.**
-  Revision 35 rewrote [TSON-DATA] §6: TSON is JSON-*like* and **is not a JSON superset**, and §6 puts JSON
-  compatibility in a separate **JSON reader** — a second encoding of the same model — which tson-java has not
-  built. So the gate admits JSON as the *TSON* reader reads it. Four differences, measured not assumed and
+- **`acceptingJson()` rests on nothing, and one of its divergences is silent. The reader it was waiting for
+  now exists, and this project has not adopted it.** Revision 35 rewrote [TSON-DATA] §6: TSON is JSON-*like*
+  and **is not a JSON superset**, and §6 puts JSON compatibility in a separate **JSON reader** — a second
+  encoding of the same model. That reader has since been built: **[TSON-JSON] is spec Part 3 and tson-java has
+  a `tson-json` module** (`Json.standard()` / `Json.of(ProcessorConfig)`, tree and object readers, writers),
+  sharing this project's `ProcessorConfig` and atom vocabulary so a class binds identically under both
+  encodings. Schema-directed decode is not wired there yet, so it is schemaless / bind-out-of-band — which is
+  exactly what a `TSON-Schema` header plus a route-supplied type already supplies.
+  **Until it is adopted here, the gate still admits JSON as the *TSON* reader reads it**, which is neither all
+  of JSON nor JSON's meaning. Four differences, measured not assumed and
   pinned by `TsonHttpCodecJsonTest.theTsonReaderIsNotAJsonReader`: **JSON `null` reads as the four-character
   string `"null"`**, with no diagnostic, where §6's reader maps it to absence (§4.4 removed the null keyword,
   so the token is text like any other) — that one corrupts rather than refuses, and at a `text?` field it
@@ -709,25 +749,37 @@ Each cost a debugging cycle here and is pinned by a test.
   give a map); a **surrogate-pair escape** is a parse error, which is how JSON must write any non-BMP
   character; and there is **no `\/`**, which RFC 8259 permits. Shared shapes — identifier-keyed objects,
   arrays, strings, numbers, booleans — read as they look. An endpoint whose clients send real JSON should go
-  on answering 415 until the reader exists; `UPSTREAM.md` carries the ask.
-- **Peek a header with `TsonDocumentHeader`, and use `peekResumable` for a request body.** A body is one-shot
-  — no mark, no rewind — and `peekResumable` records what the lexer pulled and hands back the document from
-  its first byte, so looking costs the reader nothing. **A `ByteArrayInputStream` will not catch a mistake
-  here**: it supports `mark`/`reset`, so a peek that consumes the stream still looks intact. Test with a
-  stream whose `markSupported()` is false, as `TsonSchemaHeaderTest` does — this project shipped a peek that
-  ate the whole body on a real request and had a green test suite over the wrong fixture.
+  on answering 415 until `tson-json` is wired in here. **That is a design decision, not a migration step** —
+  it adds a module dependency and a second codec path — so it is open work rather than a trap to route around.
+- **Peek a request body with `TsonHttpCodec.begin`, and pass the peek on — it *is* the body.** A body is
+  one-shot, and `TsonDocumentPeek` is the continuation handle: the header has been read and a reader continues
+  from just past it, so nothing is buffered and re-fed and `document()` no longer exists. `TsonSchemaHeader
+  .Governing` and `TsonSchemaVersions.Routed` therefore carry a peek rather than an `InputStream`.
+  **A peek belongs to the processor policy it was opened under** — §9.1's limits and §8.2's token policy were
+  applied to the tokens the header is made of — and a reader that disagrees is *refused*, not quietly obeyed.
+  That is why `begin` is on the codec: taking the peek from the codec that will read it keeps the two the same,
+  and it is why `resolve` takes a peek rather than opening one it could not pick a policy for.
+  **A `ByteArrayInputStream` will not catch a mistake here**: it supports `mark`/`reset`, so a peek that
+  consumes the stream still looks intact. Test with a stream whose `markSupported()` is false and whose
+  `reset()` throws, as `TsonSchemaHeaderTest` does — this project shipped a peek that ate the whole body on a
+  real request and had a green test suite over the wrong fixture.
+- **Bind mode cannot continue a peek.** Upstream's object reader has `read(peek, Class)` but no
+  `readAs(peek, typeName, Class)`, where the tree reader has `readAs(peek, typeName)`. So a body whose schema
+  arrives only in the `TSON-Schema` header — a JSON body, which can carry no directive — is read from the start
+  in bind mode, and peeking it buys nothing anyway since there is no directive to cross-check. `UPSTREAM.md`
+  carries the ask.
 - **`describing()` needs a root type name as well as a schema URI, for an object.** A bound record writes no
   type-ref of its own, so `!!schema` alone yields a document whose reader cannot select a type. The tree form
   takes one argument, because a tree node already carries a type-ref. `TsonHttpCodec.write(value, schemaUri,
   rootTypeName)` and `writeTree(value, schemaUri)` mirror that asymmetry deliberately.
 - **Binding is strict, and a mismatch is a startup failure if you let it be.** A schema field with no
-  component, or a component no field fills, is a `TsonBindMismatchException` when the schema compiles in bind
+  component, or a component no field fills, is a `BindMismatchException` when the schema compiles in bind
   mode. `TsonHttpCodec.prepareToRead(schemaId)` forces that at startup and `TsonSchemaVersions` calls it —
   without it the same mistake is a 500 on the first request that reads one. `@Unbound` marks a component that
   is the class's own, and as of Revision 35 it means **not on the wire in both directions** — it was read-side
   only, so a marked component was silently *written*. If a response type here ever carries one, that is the
-  change to know: the field leaves the body. `TsonConfig.lenientBinding()` is the deliberate
-  versioned-evolution position. **A
+  change to know: the field leaves the body. **There is no lenient escape hatch any more** — upstream removed
+  it, so strict is the only mode and a mismatch is a startup failure or nothing. **A
   mismatch reaching the diagnostics channel is still reported as `SCHEMA_ERROR` and so becomes a 400** —
   routing and `prepareToRead` are what keep it unreachable.
 - **`prepareToWrite` is a warm-up, not a correctness measure** — it was one, before the descriptor race was
@@ -742,7 +794,7 @@ Each cost a debugging cycle here and is pinned by a test.
   schema compiles, and every value is refused with *"'Latn' does not match the required pattern
   `^[A-Za-z][A-Za-z_]*$`"* — a message that reads like the value is wrong when the pattern is. Reflex from
   JSON Schema, which is unanchored and needs them. `deployment-1.tn`'s `script_name` is the one pattern here.
-- **Use `TsonSchemaSource.ofMap`, never `map::get`.** `TsonSchemaFetchException` is the whole contract for
+- **Use `SchemaSource.ofMap`, never `map::get`.** `SchemaFetchException` is the whole contract for
   "cannot supply this", and a source returning `null` is now refused by name rather than dereferenced — but
   refused is still a failure, and `ofMap` is the form that does not fail: it throws `NOT_FOUND` for a miss and
   compares by **canonical identity**, so a reference differing only in scheme or `?sha256=` pin still resolves
@@ -752,7 +804,7 @@ Each cost a debugging cycle here and is pinned by a test.
   in all three adapters, by `OrderServerTest.aDocumentNamingAnUnknownSchemaIsTheSendersMistake`.
 - **Never `computeIfAbsent` on a schema cache.** It holds a `ConcurrentHashMap` bin lock for the whole of a
   network fetch, blocking every other thread whose key lands in that bin — and stalling a resize — for as long
-  as the timeout allows. `TsonHttpSchemaSource` uses get-then-put; two threads racing one identity fetch it
+  as the timeout allows. `HttpSchemaSource` uses get-then-put; two threads racing one identity fetch it
   twice and store identical content, which costs a request and breaks nothing.
 
   *Not* because the loader is re-entrant: it isn't. It fetches a document, returns, and only then resolves and
@@ -897,11 +949,11 @@ which is where §8.2 puts the policy. **`limits` is kept in the projection** on 
 the policies: a 413 says a document went past a bound, and a sender that read the bound first never writes
 past it — a limit is the shape of what this endpoint accepts, where the allow-list is topology.
 `unicode_data_version` is read from
-`TsonUnicodePolicy.dataVersion()` rather than copied — a constant would go stale silently on an upgrade —
+`UnicodePolicy.dataVersion()` rather than copied — a constant would go stale silently on an upgrade —
 and it is in the profile because §8.3 marks all three rules unstable across Unicode releases, so two
 conforming processors may legitimately disagree about one name and the version is what explains it.
 
-**`restriction_level` copies `TsonUnicodePolicy.Level` by hand**, held to it by
+**`restriction_level` copies `UnicodePolicy.Level` by hand**, held to it by
 `TsonDeploymentTest.everyRestrictionLevelIsDeclaredInTheSchema` — the same discipline `diagnostic_code` gets,
 and the same failure if it lapses: a level added upstream that a descriptor can name and nothing can read.
 

@@ -6,15 +6,19 @@ import com.sun.net.httpserver.HttpServer;
 import io.ltr8.annotation.Field;
 import io.ltr8.annotation.Typename;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.compiler.Diagnostic;
+import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonDocumentHeader;
-import io.ltr8.tson.compiler.TsonSchemaSource;
+import io.ltr8.tson.compiler.TsonDocumentPeek;
+import io.ltr8.tson.http.TsonBindings;
+import io.ltr8.tson.http.TsonDeployment;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonProblemDiagnostic;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaCatalog;
-import io.ltr8.tson.http.TsonDeployment;
 import io.ltr8.tson.http.TsonSchemaHeader;
 import io.ltr8.tson.http.api.Operation;
 import io.ltr8.tson.http.api.TsonApiCoverage;
@@ -146,7 +150,8 @@ public final class ValidatorServer {
         // value -- so the one service that exists to give a verdict on such a document could never be asked
         // about one. Text a service acts on and text it is asked about are different surfaces; only the
         // second is judged.
-        Tson probe = deployment.applyTo(Tson.builder().schemaSource(TsonSchemaSource.ofMap(library))).build();
+        Tson probe = Tson.of(deployment.applyTo(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(library)))));
 
         long started = System.nanoTime();
         Phase phase = Phase.DATA;
@@ -174,7 +179,7 @@ public final class ValidatorServer {
      */
     private static String declaredId(String schemaText) {
         try {
-            return TsonDocumentHeader.peek(schemaText).id().orElse(null);
+            return TsonDocumentPeek.of(schemaText).header().id().orElse(null);
         } catch (RuntimeException e) {
             return null;
         }
@@ -196,7 +201,7 @@ public final class ValidatorServer {
                 "diagnostic", TsonProblemDiagnostic.class,
                 "acceptance_profile", TsonDeployment.AcceptanceProfile.class,
                 "unicode_policy", TsonDeployment.Policy.class,
-                "restriction_level", io.ltr8.tson.compiler.TsonUnicodePolicy.Level.class,
+                "restriction_level", io.ltr8.tson.base.policy.UnicodePolicy.Level.class,
                 "policy_unit", TsonDeployment.Unit.class);
         // deployment-1.tn is published; a descriptor governed by it never is. A client fetches the schema
         // to read the profile at /.well-known/tson-deployment, and there is nothing here to serve it the
@@ -205,8 +210,10 @@ public final class ValidatorServer {
                 TsonProblemSchema.ID, TsonProblemSchema.source(),
                 TsonDeployment.ID, TsonDeployment.source(),
                 TsonApiSchema.ID, TsonApiSchema.source());
-        Tson tson = Tson.builder().schemaSource(TsonSchemaSource.ofMap(schemas)).bindings(bindings)
-                .metaNameBinder(TsonApiSchema.metaNameBinder()).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(schemas)))
+                .withDataBindContext(TsonBindings.of(bindings))
+                .withMetaNameBinder(TsonApiSchema.metaNameBinder()));
         tson.resolve(VALIDATE);
         tson.resolve(API);
         TsonHttpCodec codec = new TsonHttpCodec(tson);
