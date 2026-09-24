@@ -14,15 +14,15 @@ import java.util.Optional;
  * that will not parse the body can still read it.
  *
  * <pre>{@code
- * TSON-Schema: "https://schemas.example.com/2026/35/app/order-1.tn"
+ * TSON-Schema: "https://schemas.example.com/2026/36/app/order-1.tn"
  * }</pre>
  *
  * <p><b>It is a projection of {@code !!schema}, not an alternative to it.</b> The body directive remains the
  * format's own mechanism; this exists so that a gateway routing between two versions of a service, or a JSON
- * body that cannot carry a directive at all, has something to go on. See {@code SCHEMA-HEADER.md} for the
- * design and the reasoning.
+ * body that cannot carry a directive at all, has something to go on. [TSON-JSON] §3.5 defines the field for
+ * every TSON-carrying body; {@code SCHEMA-HEADER.md} holds the design record behind it.
  *
- * <p>The rules this implements:
+ * <p>The rules this implements, each §3.5's:
  *
  * <ol>
  *   <li>The value is an <b>RFC 9651 sf-string</b> -- quoted, always. Same rule as the directive's own argument,

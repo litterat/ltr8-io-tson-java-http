@@ -1,6 +1,6 @@
-!!id:"https://tson.io/2026/35/ltr8/http/problem-1.tn"
-!!meta:"https://tson.io/2026/35/m/meta.tn"
-!!import:"https://tson.io/2026/35/m/core.tn"
+!!id:"https://tson.io/2026/36/ltr8/http/problem-1.tn"
+!!meta:"https://tson.io/2026/36/m/meta.tn"
+!!import:"https://tson.io/2026/36/m/core.tn"
 @doc:"""
   The error body this project writes when a request cannot be fulfilled.
 
@@ -94,15 +94,15 @@
     would arrive only after the fact. Which rule fired is the code, one per rule.
     """
   diagnostic => {
-    path: text?
-    schema_pointer: text?
-    schema_id: text?
+    path?: text
+    schema_pointer?: text
+    schema_id?: text
     code: diagnostic_code
     message: text
-    expected: text?
-    actual: text?
-    data_position: text?
-    schema_position: text?
+    expected?: text
+    actual?: text
+    data_position?: text
+    schema_position?: text
   }
   @doc:"""
     RFC 9457's five members, plus errors.
@@ -119,11 +119,11 @@
     unacceptable Accept -- which is why it is a list rather than a required single value.
     """
   problem => {
-    type: uri?
+    type?: uri
     title: text
     status: int32
-    detail: text?
-    instance: uri?
+    detail?: text
+    instance?: uri
     errors: [diagnostic]
   }
 }

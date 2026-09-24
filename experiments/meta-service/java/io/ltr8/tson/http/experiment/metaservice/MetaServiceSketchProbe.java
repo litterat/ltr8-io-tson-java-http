@@ -6,7 +6,7 @@ import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.TsonProblemSchema;
-import io.ltr8.tson.schema.meta.FieldState;
+import io.ltr8.tson.schema.meta.FieldRole;
 import io.ltr8.tson.schema.meta.RecordBody;
 import org.junit.jupiter.api.Test;
 
@@ -28,14 +28,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class MetaServiceSketchProbe {
 
-    static final String ERR_ID = "https://schemas.example.com/2026/35/app/orders-errors-1.tn";
-    static final String DOC_ID = "https://schemas.example.com/2026/35/app/orders-1.tn";
+    static final String ERR_ID = "https://schemas.example.com/2026/36/app/orders-errors-1.tn";
+    static final String DOC_ID = "https://schemas.example.com/2026/36/app/orders-1.tn";
 
     /** An error type pins the status it inherits from {@code problem}, which is how an operation's errors get one. */
     static final String ERRORS = """
             !!id:"%s"
-            !!meta:"https://tson.io/2026/35/m/meta.tn"
-            !!import:"https://tson.io/2026/35/m/core.tn"
+            !!meta:"https://tson.io/2026/36/m/meta.tn"
+            !!import:"https://tson.io/2026/36/m/core.tn"
             !!import:"%s"
             {
               sku_not_found   => problem & { status: = 404  sku: text }
@@ -46,7 +46,7 @@ class MetaServiceSketchProbe {
         return """
             !!id:"%s"
             !!meta:"%s"
-            !!import:"https://tson.io/2026/35/m/core.tn"
+            !!import:"https://tson.io/2026/36/m/core.tn"
             !!import:"%s"
             {
               order       => { sku: text  quantity: int32 }
@@ -110,11 +110,11 @@ class MetaServiceSketchProbe {
         assertEquals("place_order", post.method());
         Operation get = assertInstanceOf(Operation.class, api.resources().get("/{schemaPath}").endpoints().get("GET"));
 
-        // The status an error carries is readable from its type: REQUIRED_FIXED 404.
+        // The status an error carries is readable from its type: a FIXED 404.
         var errEntries = tson.schemaRegistry().get(ERR_ID).orElseThrow().schema().entries();
         var status = ((RecordBody) errEntries.get("sku_not_found").body()).fields().stream()
                 .filter(f -> f.name().equals("status")).findFirst().orElseThrow();
-        assertEquals(FieldState.REQUIRED_FIXED, status.state());
+        assertEquals(FieldRole.FIXED, status.role());
         assertEquals("404", status.value().orElseThrow().text());
     }
 

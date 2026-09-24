@@ -25,67 +25,7 @@ passing unnoticed. Deleting an entry is a documentation act, never a test one.
 
 ---
 
-## 1. A `data` entry is in the type system everywhere except at the one position that would name it
-
-**Hit:** the CRUD-family payoff of an API description. `fetch => <T> !operation { method: GET  path: "/x"
-responses: [ { status: 200  body: T  description: "found" } ] }` — one declaration standing for every
-fetch-by-id endpoint — declares and resolves. Nothing may apply it. `getOrder => fetch<order>` is refused:
-
-> `'fetch<order>' names 'operation_GET_/x_200_order_found_1f8d998a', which is built with 'operation' and
-> describes something other than a data value — it is declared by this schema but is not a type, so nothing
-> can be typed by it`
-
-**The mechanism is not missing, which is the thing to know before designing anything.** An earlier version of
-this entry asked for "a way to name the application", implying one had to be invented. It does not: the
-declaration position already produces a name-keyed entry for a template application. Measured, on the type
-case:
-
-```
-page_of_order => page<order>
-
-page_of_order          kind=REFERENCE  source=page_order_463f346d
-page_order_463f346d    kind=PRODUCT    source=page
-```
-
-The author's name survives as a real entry in the map — a REFERENCE onto the internal instantiation — which is
-exactly the shape an operation needs, since a generated name is no use to anything looking an operation up by
-name (`TsonApiCoverage.serving`). **What fails is one kind check at the last step**, because a REFERENCE is
-defined as pointing at a *type* and the target here is `kind: DATA`.
-
-**And the spec is not of one mind about that check.** §4.1 *enumerates* the positions where naming a
-`kind: DATA` entry is an error — "a field type, element type, variant, argument, composition operand, or
-refinement source" — and **a reference target is not among them**. But §4.1's own definition of the REFERENCE
-kind, and §8.3, both say a reference points at a type. Which reading governs decides whether this is a spec
-change or an implementation one, and it is worth settling either way: once `data` entries became full citizens
-of resolution — namespace membership, `type_ref` slots whose references are walked, templates, structural
-identity — "reference" quietly stopped meaning "reference to a type", and the definition did not move with it.
-
-**Change**, in preference order:
-
-1. **Let a reference target a `data` entry**, leaving §4.1's enumerated positions exactly as they are. An
-   alias declaration is a binding, not a typing position, so nothing that the DATA rule protects is weakened:
-   no field, element, variant, argument, composition operand or refinement source becomes able to name one.
-2. If that is wrong, say so in §4.1 — add the reference target to the enumerated list, so the refusal is
-   stated rather than inferred from REFERENCE's definition, and the gap becomes a deliberate closed door
-   rather than an oversight.
-
-**The consumer cost, stated because it is real and small:** `getOrder` would then be a REFERENCE, so `method`
-and `path` live one hop away on the instantiation. `TsonApiDescription` does not follow that hop today.
-
-**Workaround in place:** write each operation out untemplated, which is what this project's description does.
-That costs a full record per endpoint where the template would have cost an application, and it is the cost
-the `data` base kind otherwise removes.
-
-**Priority: low** — a description is written once and read often, so verbosity there is cheap. Recorded
-because the remaining step is small enough to look already done, and because the framing above took a
-measurement to arrive at. Pinned at both stages by
-`UpstreamGapsTest.aTemplatedDataConstructorDeclaresButItsApplicationCannotBeNamed`: asserting only the throw
-would go on passing if the declaration regressed to a parse error, which is a different gap wearing the same
-red.
-
----
-
-## 2. The object reader cannot continue a peek against a stated type
+## 1. The object reader cannot continue a peek against a stated type
 
 **Hit:** reading a body whose schema arrives in the `TSON-Schema` header rather than in a `!!schema` directive,
 in **bind** mode. `Tson.begin` hands back a `TsonDocumentPeek`, and the readers continue on one — but only some

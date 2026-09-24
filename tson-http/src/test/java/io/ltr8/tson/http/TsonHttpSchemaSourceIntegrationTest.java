@@ -40,8 +40,8 @@ class TsonHttpSchemaSourceIntegrationTest {
 
     private static final String SCHEMA = """
             !!id:"%s"
-            !!meta:"https://tson.io/2026/35/m/meta.tn"
-            !!import:"https://tson.io/2026/35/m/core.tn"
+            !!meta:"https://tson.io/2026/36/m/meta.tn"
+            !!import:"https://tson.io/2026/36/m/core.tn"
             {
                 order => { sku: text  quantity: int32 }
             }""";
@@ -49,10 +49,10 @@ class TsonHttpSchemaSourceIntegrationTest {
     /** A schema with a {@code scoped} field, so a body may push a foreign scope where this one opted into it. */
     private static final String ENVELOPE = """
             !!id:"%s"
-            !!meta:"https://tson.io/2026/35/m/meta.tn"
-            !!import:"https://tson.io/2026/35/m/core.tn"
+            !!meta:"https://tson.io/2026/36/m/meta.tn"
+            !!import:"https://tson.io/2026/36/m/core.tn"
             {
-                envelope => { attachment: extern  note: text? }
+                envelope => { attachment: extern  note?: text }
             }""";
 
     /** The identity host schemas are named by -- never where they are fetched from. §2.2.1 forbids a port here. */

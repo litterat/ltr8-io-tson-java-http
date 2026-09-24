@@ -19,11 +19,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * What {@link TsonHttpCodec#acceptingJson()} actually admits, now that [TSON-DATA] §6 no longer makes TSON a
  * JSON superset.
  *
- * <p>Revision 35 withdrew the superset claim and put JSON compatibility in a separate <b>JSON reader</b> --
- * "a second encoding of the same model rather than a mode of this notation" -- which tson-java has not built.
- * So the gate admits JSON as the <em>TSON</em> reader reads it, and these are the places the two differ.
+ * <p>JSON is a second encoding of the same model, defined by [TSON-JSON] and read by tson-java's own JSON
+ * reader, which this codec does not route to. So the gate admits JSON as the <em>TSON</em> reader reads it, and
+ * these are the places the two differ.
  *
- * <p><b>Written to fail when a real JSON reader lands.</b> That failure is the feature arriving, not a
+ * <p><b>Written to fail when the codec adopts the JSON reader.</b> That failure is the feature arriving, not a
  * regression: at that point this class becomes the check that the codec routes a JSON body to it. Until then
  * it is the honest statement of what an endpoint opts into, which the method's own Javadoc repeats because a
  * caller reads that and not this.
@@ -38,14 +38,14 @@ class TsonHttpCodecJsonTest {
     @Test
     void theTsonReaderIsNotAJsonReader() {
         // 1. Silent, and the only one that corrupts rather than refuses: JSON `null` is the string "null".
-        //    §4.4 removed the null keyword, so the token is text; §6's reader is what maps it to absence.
+        //    §4.4 removed the null keyword, so the token is text; the JSON reader is what maps it to absence.
         TsonValue read = codec.readTree(json("{\"a\": null}"), "application/json");
         assertEquals("null", read.get("a").asString().orElseThrow(),
                 "JSON null reads as the four-character string, which no diagnostic reports");
-        assertFalse(read.get("a").isAbsent(), "and it is not absence, which is what §6's reader would give");
+        assertFalse(read.get("a").isAbsent(), "and it is not absence, which is what the JSON reader would give");
 
         // 2. A key that is not an identifier. §2.5 makes a field name an identifier whichever spelling carried
-        //    it, so ordinary JSON keys are refused; §6's reader maps such an object to a map instead.
+        //    it, so ordinary JSON keys are refused; the JSON encoding admits them where a map is read.
         assertRefused("{\"first name\": 1}");
         assertRefused("{\"a.b\": 1}");
 
@@ -82,6 +82,19 @@ class TsonHttpCodecJsonTest {
         assertEquals(TsonHttpException.UNSUPPORTED_MEDIA_TYPE,
                 assertThrows(TsonHttpException.class,
                         () -> tsonOnly.readTree(json("{\"a\": 1}"), "application/json")).status());
+    }
+
+    /**
+     * <b>{@code application/tson+json} is refused, even with the opt-in.</b> It is [TSON-JSON]'s media type, and a
+     * sender using it claims that encoding's reading -- {@code $schema}/{@code $type} as the binding, {@code
+     * null} as absence -- which the TSON reader behind this codec does not give. Admitting it would read {@code
+     * $type} as an ordinary member and {@code null} as a string: a misreading, where a 415 is an answer.
+     */
+    @Test
+    void theJsonEncodingsOwnMediaTypeIsA415() {
+        assertEquals(TsonHttpException.UNSUPPORTED_MEDIA_TYPE,
+                assertThrows(TsonHttpException.class,
+                        () -> codec.readTree(json("{\"a\": 1}"), "application/tson+json")).status());
     }
 
     private void assertRefused(String document) {

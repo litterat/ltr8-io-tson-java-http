@@ -1,7 +1,7 @@
-!!id:"https://tson.io/2026/35/ltr8/http/agent-vm-1.tn"
-!!meta:"https://tson.io/2026/35/m/meta.tn"
-!!import:"https://tson.io/2026/35/m/core.tn"
-!!import:"https://tson.io/2026/35/ltr8/http/agent-1.tn"
+!!id:"https://tson.io/2026/36/ltr8/http/agent-vm-1.tn"
+!!meta:"https://tson.io/2026/36/m/meta.tn"
+!!import:"https://tson.io/2026/36/m/core.tn"
+!!import:"https://tson.io/2026/36/ltr8/http/agent-1.tn"
 @doc:"""
   TSON Agent VM — the resolved form of an agent plan
   (draft 2, brought to 2026 Revision 35; companion to agent-1.tn, whose `name` and `constant` it imports).
@@ -50,7 +50,7 @@
     """
   call_op => {
     method: pool_index
-    or:     pool_index?
+    or?:    pool_index
   }
 
   @doc:"""
@@ -135,6 +135,6 @@
     max_stack:  uint16
     slots:      uint16
     code:       [instruction; 1..]
-    debug:      {slot_index => name}?
+    debug?:     {slot_index => name}
   }
 }

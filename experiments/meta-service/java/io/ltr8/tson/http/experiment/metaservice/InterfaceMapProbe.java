@@ -32,12 +32,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class InterfaceMapProbe {
 
-    static final String PROBE_META_ID = "https://tson.io/2026/35/ltr8/http/meta-probe.tn";
-    static final String DOC_ID = "https://schemas.example.com/2026/35/app/probe-1.tn";
+    static final String PROBE_META_ID = "https://tson.io/2026/36/ltr8/http/meta-probe.tn";
+    static final String DOC_ID = "https://schemas.example.com/2026/36/app/probe-1.tn";
 
     /** The sketch, plus one probe-only constructor. */
     static final String META = Experiment.metaServiceSource()
-            .replace("https://tson.io/2026/35/ltr8/http/meta-service-1.tn", PROBE_META_ID)
+            .replace("https://tson.io/2026/36/ltr8/http/meta-service-1.tn", PROBE_META_ID)
             .replace("\n  api => data & {",
                     "\n  interface_of_signatures => data & { methods: {type_name => signature} }\n"
                     + "  data_method => data & signature\n"
@@ -48,7 +48,7 @@ class InterfaceMapProbe {
         return """
         !!id:"%s"
         !!meta:"%s"
-        !!import:"https://tson.io/2026/35/m/core.tn"
+        !!import:"https://tson.io/2026/36/m/core.tn"
         {
           order     => { sku: text  quantity: int32 }
           order_ref => { id: text }

@@ -305,25 +305,25 @@ public final class TsonHttpCodec {
     /**
      * A codec that also admits an {@code application/json} body, <b>read by the TSON reader</b>.
      *
-     * <p><b>Read the divergences below before enabling this.</b> [TSON-DATA] §6 used to make every valid JSON
-     * document a valid TSON document, and this method was a media-type gate over that guarantee. Revision 35
-     * withdrew it: TSON is JSON-<em>like</em> and is not a superset, and §6 now puts JSON compatibility in a
-     * separate <b>JSON reader</b> -- a second encoding of the same model, which tson-java has not built. Until
-     * it exists there is no reader here that implements §6's mapping, so what this gate admits is JSON as the
-     * TSON reader happens to read it, which is neither all of JSON nor JSON's meaning.
+     * <p><b>Read the divergences below before enabling this.</b> TSON is JSON-<em>like</em> and is not a JSON
+     * superset ([TSON-DATA] §6). JSON is a second encoding of the same model, defined by [TSON-JSON] with its
+     * own media type, {@code application/tson+json}, and its own reader -- tson-java's {@code tson-json} module.
+     * This codec does not route to that reader: what this gate admits is JSON as the <em>TSON</em> reader
+     * happens to read it, which is neither all of JSON nor JSON's meaning.
      *
      * <p><b>Four divergences, and the first is silent.</b> Each is pinned by {@code
-     * TsonHttpCodecJsonTest.theTsonReaderIsNotAJsonReader}, which is written to fail when a real JSON reader
-     * lands -- that failure is the feature arriving, not a regression.
+     * TsonHttpCodecJsonTest.theTsonReaderIsNotAJsonReader}, which is written to fail when this codec routes a
+     * JSON body to the JSON reader -- that failure is the feature arriving, not a regression.
      *
      * <ul>
      *   <li><b>{@code null} reads as the four-character string {@code "null"}</b>, not as absence. §4.4 removed
-     *       the null keyword, so the token is text like any other, and §6's reader is what maps JSON's
-     *       {@code null} to absence (§2.9). At a {@code text?} field a JSON {@code null} therefore binds a
+     *       the null keyword, so the token is text like any other, and the JSON reader is what maps JSON's
+     *       {@code null} to absence (§2.9). At a {@code text} field a JSON {@code null} therefore binds a
      *       string, with no diagnostic. This is the one that corrupts data rather than refusing it.</li>
      *   <li><b>A key that is not an identifier is a parse error.</b> §2.5 makes a field name an identifier at
      *       every layer, whichever spelling carried it, so {@code {"first name": 1}} and {@code {"a.b": 1}} are
-     *       refused. §6's reader maps such an object to a map instead.</li>
+     *       refused. In the JSON encoding a member name is only an identifier where the position reads the
+     *       object as a record; at a map position any string is a key.</li>
      *   <li><b>A surrogate-pair escape is a parse error.</b> §7.2.2 asks whether the value denoted is a Unicode
      *       scalar value, so {@code "\uD83D\uDE00"} -- how JSON must write a non-BMP character -- refuses on
      *       the first half.</li>
@@ -332,7 +332,8 @@ public final class TsonHttpCodec {
      *
      * <p><b>Opt-in, because "reads TSON" and "reads JSON" are different promises.</b> An endpoint that wants
      * only TSON should go on answering 415, and does by default. On the evidence above, an endpoint whose
-     * clients send real JSON should go on answering 415 as well, until §6's reader exists.
+     * clients send real JSON should go on answering 415 as well, until this codec reads it with the JSON
+     * reader.
      *
      * <p><b>A JSON body names neither its schema nor its root type.</b> It cannot: directive syntax is not JSON.
      * So the schema comes from the {@code TSON-Schema} header ({@link TsonSchemaHeader}) and the root type from
@@ -382,6 +383,10 @@ public final class TsonHttpCodec {
             throw TsonHttpException.unsupportedMediaType("Content-Type '" + contentType + "' is not a media type: "
                     + malformed.getMessage());
         }
+        if (isTsonJson(mediaType)) {
+            throw TsonHttpException.unsupportedMediaType("this endpoint does not read [TSON-JSON]'s encoding; "
+                    + TsonMediaType.APPLICATION_TSON + " is what it reads, not " + mediaType);
+        }
         if (!mediaType.isTson() && !(acceptingJson && isJson(mediaType))) {
             throw TsonHttpException.unsupportedMediaType("this endpoint reads " + TsonMediaType.APPLICATION_TSON
                     + (acceptingJson ? " and application/json" : "") + ", not " + mediaType);
@@ -392,10 +397,23 @@ public final class TsonHttpCodec {
         }
     }
 
-    /** Whether {@code mediaType} is JSON -- §6's "every valid JSON document is a valid TSON document". */
+    /**
+     * Whether {@code mediaType} is JSON that {@link #acceptingJson} admits: {@code application/json} or a
+     * {@code +json} suffix -- except {@code application/tson+json}, which {@link #isTsonJson} refuses.
+     */
     private static boolean isJson(TsonMediaType mediaType) {
         return "application".equals(mediaType.type())
                 && ("json".equals(mediaType.subtype()) || mediaType.subtype().endsWith("+json"));
+    }
+
+    /**
+     * Whether {@code mediaType} is {@code application/tson+json}, [TSON-JSON]'s own media type. It is refused
+     * even by {@link #acceptingJson}: a sender using it claims that encoding's reading -- {@code $schema} and
+     * {@code $type} as the document's binding, {@code null} as absence -- and the TSON reader behind this codec
+     * gives neither, so admitting it would misread the body rather than refuse it.
+     */
+    private static boolean isTsonJson(TsonMediaType mediaType) {
+        return "application".equals(mediaType.type()) && "tson+json".equals(mediaType.subtype());
     }
 
     /** Runs a read, classifying anything the library throws out of it into a status. */

@@ -1,6 +1,6 @@
-!!id:"https://tson.io/2026/35/ltr8/http/meta-http-1.tn"
-!!meta:"https://tson.io/2026/35/m/meta-kernel.tn"
-!!import:"https://tson.io/2026/35/m/meta.tn"
+!!id:"https://tson.io/2026/36/ltr8/http/meta-http-1.tn"
+!!meta:"https://tson.io/2026/36/m/meta-kernel.tn"
+!!import:"https://tson.io/2026/36/m/meta.tn"
 @doc:"""
   A meta layer adding HTTP operations to the type system: a schema governed by this one describes an
   HTTP API, and its request and response payloads are type references the compiler resolves.
@@ -53,14 +53,14 @@
     in:          parameter_location
     type:        type_ref
     required:    boolean
-    description: text?
+    description?: text
   }
 
   @doc:"One response. `body` is absent for a 204, or a document served as bytes."
   response => {
     status:      status_code
-    body:        type_ref?
-    description: text?
+    body?:       type_ref
+    description?: text
   }
 
   @doc:"""
@@ -88,10 +88,10 @@
   operation => data & {
     method:      http_method
     path:        text
-    summary:     text?
-    deprecated:  boolean?
-    parameters:  [parameter]?
-    request:     type_ref?
+    summary?:    text
+    deprecated?: boolean
+    parameters?: [parameter]
+    request?:    type_ref
     responses:   [response]
   }
 }

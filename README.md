@@ -17,7 +17,7 @@ Four modules:
 rather than by calling handlers, because the point of three adapters is that each framework's own body and
 content-negotiation handling differs. Each proves the same loop: a schema served at its own identity path,
 fetched back over HTTP under policy, and used to validate a posted document. Serves multiple schema versions
-side by side, routed by the `TSON-Schema` header or the body's own `!!schema`, and validates JSON bodies
+side by side, routed by the `TSON-Schema` header ([TSON-JSON] §3.5) or the body's own `!!schema`, and validates JSON bodies
 against TSON schemas. A service also publishes a description of itself, as a schema whose payload types the
 compiler resolves — and the examples below are executed by a test, so they are true or the build fails.
 
@@ -31,15 +31,15 @@ Each starts the same server and prints what to try. The same commands work again
 
 ```
 $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binary '
-  !!schema:"https://schemas.example.com/2026/35/app/order-1.tn"
+  !!schema:"https://schemas.example.com/2026/36/app/order-1.tn"
   !order { sku: "ABC-1"  quantity: 3 }'
-!!schema:"https://schemas.example.com/2026/35/app/order-1.tn"
+!!schema:"https://schemas.example.com/2026/36/app/order-1.tn"
 !order { sku: "ABC-1" quantity: 6 }
 
 $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binary '
-  !!schema:"https://schemas.example.com/2026/35/app/order-1.tn"
+  !!schema:"https://schemas.example.com/2026/36/app/order-1.tn"
   !order { }'
-!!schema:"https://tson.io/2026/35/ltr8/http/problem-1.tn"
+!!schema:"https://tson.io/2026/36/ltr8/http/problem-1.tn"
 !problem { status: 400 title: "Invalid TSON document" detail: "the request body has 2 problems" errors: [
   { path: "/sku" schema_pointer: "/order/sku" code: "FIELD_REQUIRED"
     message: "missing required field \'sku\' for \'order\'" data_position: "3:8:70" ... }
@@ -51,7 +51,7 @@ Both problems, in one response — a client fixing one error per round trip need
 ### Problem types
 
 `type` is the member to match on: it is stable where `title` is prose. Every failure this project produces
-carries one of these, under `https://ltr8.io/2026/35/http/problems/` — the implementation's own host, kept apart
+carries one of these, under `https://ltr8.io/2026/36/http/problems/` — the implementation's own host, kept apart
 from the specification's `tson.io`, where schema identities live.
 
 | `type` | Status | Raised when |
@@ -83,8 +83,8 @@ Both replies name the schema that governs them, and the server publishes both do
 validate what it received with nothing told out of band:
 
 ```
-$ curl -s localhost:8080/2026/35/ltr8/http/problem-1.tn | head -1
-!!id:"https://tson.io/2026/35/ltr8/http/problem-1.tn"
+$ curl -s localhost:8080/2026/36/ltr8/http/problem-1.tn | head -1
+!!id:"https://tson.io/2026/36/ltr8/http/problem-1.tn"
 ```
 
 ```java
@@ -119,7 +119,7 @@ difference in code, message or source position between the two is a finding.
 The request is itself a TSON document, governed by a schema the service publishes:
 
 ```
-!!schema:"https://schemas.example.com/2026/35/app/validate-1.tn"
+!!schema:"https://schemas.example.com/2026/36/app/validate-1.tn"
 !validation_request {
   schema: "!!id:\"...the schema under test...\" ..."
   data:   "!!schema:\"...that same identity...\" ..."
@@ -150,7 +150,7 @@ one. The demo's sets a token policy, which you can see decide a verdict:
 
 ```
 $ curl -s localhost:8080/.well-known/tson-deployment
-!!schema:"https://tson.io/2026/35/ltr8/http/deployment-1.tn"
+!!schema:"https://tson.io/2026/36/ltr8/http/deployment-1.tn"
 !acceptance_profile { name: "validator-demo" tokens: { level: "SINGLE_SCRIPT" permitting: [] } }
 ```
 

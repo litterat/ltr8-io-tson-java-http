@@ -96,8 +96,8 @@ class OrderServerTest {
     /** The last two: both schemas published at their own identity paths. */
     @Test
     void publishesBothSchemasAtTheirIdentityPaths() throws Exception {
-        assertEquals(OrderServer.SCHEMA, get("/2026/35/app/order-1.tn").body());
-        assertEquals(TsonProblemSchema.source(), get("/2026/35/ltr8/http/problem-1.tn").body());
+        assertEquals(OrderServer.SCHEMA, get("/2026/36/app/order-1.tn").body());
+        assertEquals(TsonProblemSchema.source(), get("/2026/36/ltr8/http/problem-1.tn").body());
     }
     /**
      * <b>The schemas name their identities literally, so something has to hold them to the constants.</b>
@@ -137,7 +137,7 @@ class OrderServerTest {
     @Test
     void aDocumentNamingAnUnknownSchemaIsTheSendersMistake() throws Exception {
         HttpResponse<String> response = post("""
-                !!schema:"https://schemas.example.com/2026/35/app/nowhere-1.tn"
+                !!schema:"https://schemas.example.com/2026/36/app/nowhere-1.tn"
                 !order { sku: "ABC-1"  quantity: 3 }""");
 
         assertEquals(400, response.statusCode(), response.body());

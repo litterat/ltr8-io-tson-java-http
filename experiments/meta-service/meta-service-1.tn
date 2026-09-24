@@ -1,6 +1,6 @@
-!!id:"https://tson.io/2026/35/ltr8/http/meta-service-1.tn"
-!!meta:"https://tson.io/2026/35/m/meta-kernel.tn"
-!!import:"https://tson.io/2026/35/m/meta.tn"
+!!id:"https://tson.io/2026/36/ltr8/http/meta-service-1.tn"
+!!meta:"https://tson.io/2026/36/m/meta-kernel.tn"
+!!import:"https://tson.io/2026/36/m/meta.tn"
 @doc:"""
   A meta layer for describing a service: what it can be asked to do (methods, grouped into interfaces)
   and how one transport exposes that (HTTP operations). A schema governed by this one is a service
@@ -58,9 +58,9 @@
     cannot satisfy) are not listed: every call has them and the error boundary answers them.
     """
   signature => {
-    request:          type_ref?
-    response:         type_ref?
-    errors:           [type_ref]?
+    request?:         type_ref
+    response?:        type_ref
+    errors?:          [type_ref]
   }
 
   @doc:"""
@@ -80,7 +80,7 @@
     entries into the namespace, where extending an interface says whose methods are also mine.
     """
   interface => data & {
-    extends:  [type_name]?
+    extends?: [type_name]
     methods:  {method_name => method}
   }
 
@@ -131,9 +131,9 @@
     present and is not a record is refused too, since there would be nothing to distribute.
     """
   placement => {
-    query:    [field_name]?
-    headers:  {field_name => header_name}?
-    body:     field_name?
+    query?:   [field_name]
+    headers?: {field_name => header_name}
+    body?:    field_name
   }
 
   @doc:"""
@@ -160,7 +160,7 @@
     is a new record composing this one, admitted wherever an `endpoint` is.
     """
   endpoint => placement & {
-    status:   status_code ~ 200
+    status?:  status_code ~ 200
   }
 
   @doc:"""
@@ -195,7 +195,7 @@
     """
   binding => endpoint & {
     method:     method_name
-    interface:  type_name?
+    interface?: type_name
   }
 
   @doc:"""
@@ -220,7 +220,7 @@
     """
   exemption => {
     reason:     text
-    interface:  type_name?
+    interface?: type_name
   }
 
   @doc:"""
@@ -237,8 +237,8 @@
     `!operation`s.
     """
   api => data & {
-    implements:  [type_name]?
-    not_bound:   {method_name => exemption}?
+    implements?: [type_name]
+    not_bound?:  {method_name => exemption}
     resources:   {path_template => resource}
   }
 }

@@ -48,7 +48,7 @@ public record TsonDeployment(String name, Optional<Listener> listener,
                              @Field("schema_hosts") List<String> schemaHosts) {
 
     /** The schema a descriptor names. Published like any other, unlike the descriptors it governs. */
-    public static final String ID = "https://tson.io/2026/35/ltr8/http/deployment-1.tn";
+    public static final String ID = "https://tson.io/2026/36/ltr8/http/deployment-1.tn";
 
     private static final String SOURCE = readResource("/deployment-1.tn");
 

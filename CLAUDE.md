@@ -13,8 +13,8 @@ It is a **consumer** of the TSON library, not part of it. The library lives in t
 and consumed as a Gradle **included build** (see "Consuming tson-java" below). Destination remote:
 `https://github.com/litterat/`.
 
-**Built against 2026 Revision 35** of the spec — the sibling's `spec/` holds the snapshot, and every identity
-in this repo carries `/2026/35/`. The revision series changes without compatibility guarantees, so a `git pull`
+**Built against 2026 Revision 36** of the spec — the sibling's `spec/` holds the snapshot, and every identity
+in this repo carries `/2026/36/`. The revision series changes without compatibility guarantees, so a `git pull`
 of the sibling can move the whole identity space; "Project-owned schema `!!id`" below says what that costs.
 
 **Status.** All four modules are built and tested, each adapter with a runnable demo server and a concurrency
@@ -30,8 +30,10 @@ is covered, not how much.
 
 The project does what it set out to do; what remains is polish and the open questions below.
 
-**`TSON-Schema` header — built.** `SCHEMA-HEADER.md` carries the rules and the reasoning; `TsonSchemaHeader` is
-the implementation. An RFC 9651 sf-string (quoted, always — an unquoted URI parses as an sf-token right up
+**`TSON-Schema` header — built, and now the spec's.** Revision 36 adopted it: [TSON-JSON] §3.5 defines
+`TSON-Schema` and `TSON-Accept-Schema` for every TSON-carrying body, [TSON-DATA] §7.1 points there, and the rules
+are the ones settled here. Cite §3.5 for them; `SCHEMA-HEADER.md` is the design record behind it, and
+`TsonSchemaHeader` is the implementation. An RFC 9651 sf-string (quoted, always — an unquoted URI parses as an sf-token right up
 until someone pins a schema, which is why the strictness is deliberate); permitted on requests and responses
 and on a body of any media type; may coexist with the body's `!!schema` and must then agree by canonical
 identity, a mismatch being a 400 rather than a precedence question; and a schemaless body stays valid TSON,
@@ -75,7 +77,7 @@ Package group `io.ltr8`, as in tson-java (reverse-DNS names who *publishes*, not
     the last version registered unless `preferredResponseVersion` says otherwise. `SCHEMA-HEADER.md` §7.
 - **`TsonSchemaHeader`** — the `TSON-Schema` field: sf-string parse/format, and `resolve` reading both
     channels and enforcing agreement. **`TsonHttpCodec.acceptingJson()`** is what admits a JSON body, opt-in —
-    and see the trap below, because Revision 35 withdrew the superset claim it was built on.
+    and see the trap below, because TSON is not a JSON superset and this codec does not use the JSON reader.
   - **`TsonSchemaCatalog`** — the schemas a server publishes, indexed by the path each one's own `!!id`
     names, plus the cache policy. Server-agnostic because every adapter needs the same lookup and the same two
     headers; only the routing differs, so an adapter's schema handler is a dozen lines over it.
@@ -116,7 +118,7 @@ each other.
 - `TsonHttpCodec` — reads bodies (tree or bound, self-describing or against a stated schema and type),
   writes bodies, and gates on `Content-Type` and `Accept`.
 - `TsonHttpException` — status plus diagnostics. **`from(RuntimeException)` is the entire status policy**;
-  put nothing status-shaped anywhere else. Problem `type` URIs live under `https://ltr8.io/2026/35/http/problems/`
+  put nothing status-shaped anywhere else. Problem `type` URIs live under `https://ltr8.io/2026/36/http/problems/`
   — `ltr8.io` is the implementation resource, kept apart from the specification's `tson.io`, where schema
   identities live. The revision rides in it too, so a spec bump moves it with everything else.
 - `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem-1.tn` — the error body, its schema,
@@ -303,15 +305,17 @@ form matches across, and Helidon uses `any()`. Comparing paths would need a tran
 and a wrong entry there is a route that silently never matches: a worse failure than the one being prevented.
 Claiming by name sidesteps it entirely.
 
-**One operation per endpoint, written out — the template that would collapse them does not apply yet.**
-`fetch => <T> !operation { … }` now declares and resolves, but `getOrder => fetch<order>` is refused: naming
-an application means writing an alias, an alias names a type, and the entry the application materialises is
-`kind: DATA`. So the CRUD-family payoff is visible and not yet reachable, and the longhand below is not a
-style choice. `UPSTREAM.md` #1, pinned at both stages by `UpstreamGapsTest`.
+**A templated operation is applied by name.** `fetch => <T> !operation { … }` declares, and `getOrder =>
+fetch<order>` resolves: [TSON-SCHEMA] §8.2 makes a declaration naming an application *that application's
+entry*, so `getOrder` is itself the `kind: DATA` entry with the `Operation` body in place and its `source`
+recording `fetch<order>` — no alias, no hop onto a minted name. `TsonApiDescription` therefore finds it as it
+finds a written-out one, by what its body is, and needs nothing new. The demo description still writes its two
+operations out, because they share no shape; the CRUD-family payoff is there for a service whose endpoints do.
+Pinned by `UpstreamGapsTest.aTemplatedDataConstructorsApplicationIsAnOperation`.
 
 **A choice of applications does resolve**, though, and used to be the other half of this — `(resp<order, 201>
 | resp<problem, 400>)` lifts each application to its own synthetic entry, carries each value argument as a
-`REQUIRED_FIXED` field, and needs no workaround. Noted because the workaround it needed (name each
+fixed field (`status: int32 = S` stays a marker the document writes), and needs no workaround. Noted because the workaround it needed (name each
 application as an entry first) is still the obvious thing to reach for. The description here does not use a
 choice at all — `responses` is an array of `response` records — so nothing changed; the point is that nothing
 has to.
@@ -537,7 +541,10 @@ is that set, stated upstream so no consumer keeps a private copy; **use it rathe
 **Not being a verdict does not settle the status**, and the fetch codes are where that shows. `verdict()`
 answers *was the document judged*; a status answers *who must act*. For a reference this deployment will not
 fetch, cannot find, or finds too large, the body went unchecked **and** the sender still holds the fix — so
-those are 400s. The invariant that does hold is the other direction, and `TsonHttpCodecTest`.
+those are 400s. The spec now says the first half itself: Revision 36 widened [TSON-DATA] §8.1's fifth outcome
+to *not judged*, whose members are a refusal and an **unavailable schema** ([TSON-SCHEMA] §10.1) — so a schema
+nobody could obtain is not a verdict by the spec's own account, and a `?sha256=` pin mismatch stays a resolver
+error, a finding about bytes that *were* obtained. The invariant that does hold is the other direction, and `TsonHttpCodecTest`.
 `everyCodeEarnsAStatusAndNoVerdictBecomesAServerFault` pins it: **a code `verdict()` calls true may never be
 answered 5xx.** That is the failure the classification exists to prevent — telling a sender the server broke
 when their document really was wrong sends them round a loop that cannot terminate.
@@ -698,6 +705,16 @@ Each cost a debugging cycle here and is pinned by a test.
   `TsonProblemSchemaTest` checks it is current, and an error body emitting a code its own schema rejects would
   not otherwise be caught, since no fixture produces a code that is new. The Java enum is the source of truth —
   never check this schema against tson-cli's, which would only prove they drifted together.
+- **An optional field is `name?: T`, and `name: T?` is not one.** [TSON-SCHEMA] §5.2 gives a field three
+  slots: `?` on the *name* says the key may be omitted, `?` on the *type* says a written `_` is admitted, and
+  `~`/`=` say what a value may be. So `detail: text?` is a field the document **must write** (as `_` if it has
+  nothing), and reads exactly like the optional field it used to be — until a response omitting it comes back
+  `FIELD_REQUIRED`. Every schema here spells optional as `name?: T`, following upstream's kernel. Two more that
+  bite: a default needs the name marked (`page?: int32 ~ 1`; `page: int32 ~ 1` is refused), and a pin on an
+  unmarked name (`status: int32 = 404`) is a **marker** the document must write and is never injected — only
+  `status?: int32 = 404` injects. A refinement cannot move a field from required to omissible, so a base whose
+  subtypes should inject a pin has to declare the name marked. Bound values cannot tell the three
+  optional-ish spellings apart; only a tree keeps whether `_` was written.
 - **A `text` field accepts any token, including `42`, `true` and `2026-01-01`.** It rejects only what is
   not a token at all — an array, a record. Correct per spec, and it reliably reads as a bug: [TSON-DATA]
   §4 says base type resolution does not apply at a schema-typed position, and §7.1's "form is not meaning"
@@ -732,25 +749,26 @@ Each cost a debugging cycle here and is pinned by a test.
   schema comes from the `TSON-Schema` header and the root type from the route, which means reading one is
   `readObjectAs`/`readTreeAs`, never the bare `read`. Same two-part requirement as `describing()`, same reason.
 - **`acceptingJson()` rests on nothing, and one of its divergences is silent. The reader it was waiting for
-  now exists, and this project has not adopted it.** Revision 35 rewrote [TSON-DATA] §6: TSON is JSON-*like*
-  and **is not a JSON superset**, and §6 puts JSON compatibility in a separate **JSON reader** — a second
-  encoding of the same model. That reader has since been built: **[TSON-JSON] is spec Part 3 and tson-java has
-  a `tson-json` module** (`Json.standard()` / `Json.of(ProcessorConfig)`, tree and object readers, writers),
-  sharing this project's `ProcessorConfig` and atom vocabulary so a class binds identically under both
-  encodings. Schema-directed decode is not wired there yet, so it is schemaless / bind-out-of-band — which is
-  exactly what a `TSON-Schema` header plus a route-supplied type already supplies.
+  exists, and this project has not adopted it.** TSON is JSON-*like* and **is not a JSON superset** ([TSON-DATA]
+  §6); JSON is a second encoding of the same model, defined by **[TSON-JSON]** (spec Part 3) with its own media
+  type, `application/tson+json`, and read by tson-java's **`tson-json` module** (`Json.standard()` /
+  `Json.of(ProcessorConfig)`, tree and object readers against a schema, writers), sharing this project's
+  `ProcessorConfig` and atom vocabulary so a class binds identically under both encodings. Its out-of-band
+  binding route (§3.4) is exactly what a `TSON-Schema` header plus a route-supplied type already supplies.
   **Until it is adopted here, the gate still admits JSON as the *TSON* reader reads it**, which is neither all
   of JSON nor JSON's meaning. Four differences, measured not assumed and
   pinned by `TsonHttpCodecJsonTest.theTsonReaderIsNotAJsonReader`: **JSON `null` reads as the four-character
-  string `"null"`**, with no diagnostic, where §6's reader maps it to absence (§4.4 removed the null keyword,
-  so the token is text like any other) — that one corrupts rather than refuses, and at a `text?` field it
-  binds silently; a key that is not an identifier is a **parse error** (§2.5 makes a field name an identifier
-  whichever spelling carried it, so `{"first name": 1}` and `{"a.b": 1}` are refused where §6's reader would
-  give a map); a **surrogate-pair escape** is a parse error, which is how JSON must write any non-BMP
-  character; and there is **no `\/`**, which RFC 8259 permits. Shared shapes — identifier-keyed objects,
-  arrays, strings, numbers, booleans — read as they look. An endpoint whose clients send real JSON should go
-  on answering 415 until `tson-json` is wired in here. **That is a design decision, not a migration step** —
-  it adds a module dependency and a second codec path — so it is open work rather than a trap to route around.
+  string `"null"`**, with no diagnostic, where the JSON reader maps it to absence (§4.4 removed the null
+  keyword, so the token is text like any other) — that one corrupts rather than refuses, and at a `text` field
+  it binds silently; a key that is not an identifier is a **parse error** (§2.5 makes a field name an
+  identifier whichever spelling carried it, so `{"first name": 1}` and `{"a.b": 1}` are refused); a
+  **surrogate-pair escape** is a parse error, which is how JSON must write any non-BMP character; and there is
+  **no `\/`**, which RFC 8259 permits. Shared shapes — identifier-keyed objects, arrays, strings, numbers,
+  booleans — read as they look. **`application/tson+json` is a 415 even with the opt-in**: a sender using it
+  claims Part 3's reading (`$schema`/`$type` as the binding, `null` as absence), and admitting it into the TSON
+  reader would misread the body rather than refuse it. An endpoint whose clients send real JSON should go on
+  answering 415 until `tson-json` is wired in here. **That is a design decision, not a migration step** — it
+  adds a module dependency and a second codec path — so it is open work rather than a trap to route around.
 - **Peek a request body with `TsonHttpCodec.begin`, and pass the peek on — it *is* the body.** A body is
   one-shot, and `TsonDocumentPeek` is the continuation handle: the header has been read and a reader continues
   from just past it, so nothing is buffered and re-fed and `document()` no longer exists. `TsonSchemaHeader
@@ -858,7 +876,7 @@ upstream revision adding a code is otherwise invisible here until an error body 
 rejects. It has caught every addition so far. Keep it.
 
 **Project-owned schema `!!id`** follows tson-java's convention with this repo's own group:
-`https://tson.io/2026/35/ltr8/http/<name>-<version>.tn` — `/2026/35` the spec revision, `ltr8` the
+`https://tson.io/2026/36/ltr8/http/<name>-<version>.tn` — `/2026/36` the spec revision, `ltr8` the
 publishing org, `http` the subsystem. The version in the name is real, but see above for when bumping it is
 required rather than reflexive.
 
@@ -1048,8 +1066,8 @@ request exercises that.
   their imports **literally**, as a published document must, and each `OrderServerTest.identitiesMatchTheConstants`
   holds those literals to the constants — which is what the old string interpolation gave for free.
 - `tson-http/src/main/resources/deployment-1.tn` — the deployment-descriptor schema and the
-  `acceptance_profile` projection published from it. A proposal, like `SCHEMA-HEADER.md`'s field and
-  `meta-http-1.tn`, carrying its own argument in its `@doc`.
+  `acceptance_profile` projection published from it. A proposal, like `meta-http-1.tn`, carrying its own
+  argument in its `@doc` — still open against Revision 36, whose change log carries it as an open question.
 - `tson-http-jdk/src/demo/resources/` — the validator demo's own schemas (`validate-1.tn`,
   `validate-api-1.tn`) and its page (`validator.html`). **Not** in `demo/schemas/`, which is the three order
   demos' shared resource path; these belong to one demo on one adapter.
@@ -1071,5 +1089,5 @@ request exercises that.
   more, and only a still-open gap names a number. **Pin the gap, not the way it is delivered**: one of these
   once asserted that resolution *throws*, stopped throwing when gaps became diagnostics, and read exactly like
   the feature landing.
-- `SCHEMA-HEADER.md` — the proposal for naming a governing schema in an HTTP header. A design document for the
-  spec author, not a description of anything built.
+- `SCHEMA-HEADER.md` — the design record for naming a governing schema in an HTTP header: the proposal Revision
+  36 adopted as [TSON-JSON] §3.5, kept for the argument behind each rule. Cite §3.5 for the rules themselves.
