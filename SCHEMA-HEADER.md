@@ -10,10 +10,11 @@ instruction — and `TSON-Accept-Schema` (§7 below) as the reverse direction, a
 Those are the rules this document settled, and the implementation here already obeys them; the spec now cites
 its own section for each, and so should anything new in this repo.
 
-**One seam remains, and it is this repo's rather than the spec's.** Part 3's JSON encoding travels as
-`application/tson+json` and is read by the JSON reader, where `$schema`/`$type` are its in-band binding and a
-JSON `null` is absence. `TsonHttpCodec.acceptingJson()` still admits `application/json` and reads it with the
-*TSON* reader, which is neither — see `CLAUDE.md`'s trap on it. Adopting the JSON reader is open work.
+**One seam remains, and it is upstream's.** Part 3's JSON encoding travels as `application/tson+json` and is
+read here by tson-java's JSON reader (`TsonHttpCodec.acceptingJson()`), through §3.4's out-of-band route: the
+schema from this header, the root type from the route. The in-band route — `$schema`/`$type` on the root object
+— is not built in that reader yet, so rule 3's agreement check has nothing to compare against for a JSON body,
+and a body carrying both is refused rather than checked. `UPSTREAM.md` carries it.
 
 The rest of this document is kept as the design record: the argument for each rule, and what building it took.
 

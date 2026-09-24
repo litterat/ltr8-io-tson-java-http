@@ -189,9 +189,9 @@ class TsonSchemaHeaderRoutingTest {
     }
 
     /**
-     * <b>The case the header exists for.</b> §6 makes every valid JSON document a valid TSON document, but
-     * {@code !!schema} is directive syntax and not JSON -- so before this, a JSON payload had no way to say
-     * which schema governed it, and this project could only ever reject one with a 415.
+     * <b>The case the header exists for.</b> {@code !!schema} is directive syntax and not JSON, so the header is
+     * the only channel a JSON payload has to say which schema governs it ([TSON-JSON] §3.4's out-of-band route,
+     * which §3.5 makes this header's).
      */
     @Test
     void aJsonBodyIsValidatedAgainstTheSchemaTheHeaderNames() throws Exception {
@@ -210,6 +210,20 @@ class TsonSchemaHeaderRoutingTest {
         assertEquals(400, response.statusCode());
         assertTrue(response.body().contains("FIELD_REQUIRED"), response.body());
         assertTrue(response.body().contains("2 problems"), "quantity and currency: " + response.body());
+    }
+
+    /**
+     * <b>[TSON-JSON]'s own media type, read by the JSON reader.</b> {@code application/tson+json} is the encoding
+     * the header was defined for (§3.5), and the body is read as JSON means it: {@code \/} is RFC 8259's escaped
+     * solidus, which the TSON reader refused.
+     */
+    @Test
+    void aTsonJsonBodyIsReadAsJson() throws Exception {
+        HttpResponse<String> response = post("/orders-json", "application/tson+json",
+                "{\"sku\": \"ABC\\/1\", \"quantity\": 3, \"currency\": \"AUD\"}",
+                TsonSchemaHeader.format(V2_ID));
+        assertEquals(200, response.statusCode(), response.body());
+        assertEquals("json:ABC/1:3:AUD", response.body());
     }
 
     /** JSON is admitted only where the endpoint says so; the TSON-only route still answers 415. */

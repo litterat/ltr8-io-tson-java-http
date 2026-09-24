@@ -13,4 +13,6 @@ module io.ltr8.tson.http {
     // TsonDeployment.applyTo, SchemaAccess and SchemaSource on TsonSchemaVersions, Diagnostic throughout
     // TsonHttpException. It resolves through io.ltr8.tson either way; naming it says a consumer needs it.
     requires transitive io.ltr8.tson.base;
+    // transitive: a JSON body read as a tree comes back as a JsonValue, which is in this module's signatures.
+    requires transitive io.ltr8.tson.json;
 }

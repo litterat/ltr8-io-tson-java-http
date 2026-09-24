@@ -41,7 +41,8 @@ with "must name a schema" living in endpoint policy — which is what `TsonSchem
 
 **Hard constraints:**
 - Java 25 only (matches tson-java).
-- `tson-http` and `tson-http-jdk` take **no external runtime dependencies** — same rule as tson-java.
+- `tson-http` and `tson-http-jdk` take **no external runtime dependencies** — same rule as tson-java. tson-java's
+  own modules are not external: `tson-http` depends on `io.ltr8:tson` and `io.ltr8:tson-json`.
   The two third-party adapters obviously depend on their server; that dependency stops at their own
   module and never leaks back into `tson-http`.
 - Every module has a real `module-info.java`; module names mirror each module's root exported package.
@@ -76,8 +77,8 @@ Package group `io.ltr8`, as in tson-java (reverse-DNS names who *publishes*, not
     canonical identity. `TsonSchemaVersions.chooseResponseVersion` is the endpoint-level answer, preferring
     the last version registered unless `preferredResponseVersion` says otherwise. `SCHEMA-HEADER.md` §7.
 - **`TsonSchemaHeader`** — the `TSON-Schema` field: sf-string parse/format, and `resolve` reading both
-    channels and enforcing agreement. **`TsonHttpCodec.acceptingJson()`** is what admits a JSON body, opt-in —
-    and see the trap below, because TSON is not a JSON superset and this codec does not use the JSON reader.
+    channels and enforcing agreement. **`TsonHttpCodec.acceptingJson()`** is what admits a JSON body, opt-in,
+    and reads it with tson-java's JSON reader — see "A JSON body is read by the JSON reader" below.
   - **`TsonSchemaCatalog`** — the schemas a server publishes, indexed by the path each one's own `!!id`
     names, plus the cache policy. Server-agnostic because every adapter needs the same lookup and the same two
     headers; only the routing differs, so an adapter's schema handler is a dozen lines over it.
@@ -745,30 +746,43 @@ Each cost a debugging cycle here and is pinned by a test.
   used to present as `UnsupportedOperationException: no usable compiled reader`, which this project mapped to
   501 — reporting a missing line of its own configuration as "this library cannot do that". Pinned by
   `TsonHttpCodecTest.aTypeNothingBindsIsAServerFaultNotALibraryGap`.
-- **A JSON body names neither its schema nor its root type**, and cannot — directive syntax is not JSON. So the
-  schema comes from the `TSON-Schema` header and the root type from the route, which means reading one is
-  `readObjectAs`/`readTreeAs`, never the bare `read`. Same two-part requirement as `describing()`, same reason.
-- **`acceptingJson()` rests on nothing, and one of its divergences is silent. The reader it was waiting for
-  exists, and this project has not adopted it.** TSON is JSON-*like* and **is not a JSON superset** ([TSON-DATA]
-  §6); JSON is a second encoding of the same model, defined by **[TSON-JSON]** (spec Part 3) with its own media
-  type, `application/tson+json`, and read by tson-java's **`tson-json` module** (`Json.standard()` /
-  `Json.of(ProcessorConfig)`, tree and object readers against a schema, writers), sharing this project's
-  `ProcessorConfig` and atom vocabulary so a class binds identically under both encodings. Its out-of-band
-  binding route (§3.4) is exactly what a `TSON-Schema` header plus a route-supplied type already supplies.
-  **Until it is adopted here, the gate still admits JSON as the *TSON* reader reads it**, which is neither all
-  of JSON nor JSON's meaning. Four differences, measured not assumed and
-  pinned by `TsonHttpCodecJsonTest.theTsonReaderIsNotAJsonReader`: **JSON `null` reads as the four-character
-  string `"null"`**, with no diagnostic, where the JSON reader maps it to absence (§4.4 removed the null
-  keyword, so the token is text like any other) — that one corrupts rather than refuses, and at a `text` field
-  it binds silently; a key that is not an identifier is a **parse error** (§2.5 makes a field name an
-  identifier whichever spelling carried it, so `{"first name": 1}` and `{"a.b": 1}` are refused); a
-  **surrogate-pair escape** is a parse error, which is how JSON must write any non-BMP character; and there is
-  **no `\/`**, which RFC 8259 permits. Shared shapes — identifier-keyed objects, arrays, strings, numbers,
-  booleans — read as they look. **`application/tson+json` is a 415 even with the opt-in**: a sender using it
-  claims Part 3's reading (`$schema`/`$type` as the binding, `null` as absence), and admitting it into the TSON
-  reader would misread the body rather than refuse it. An endpoint whose clients send real JSON should go on
-  answering 415 until `tson-json` is wired in here. **That is a design decision, not a migration step** — it
-  adds a module dependency and a second codec path — so it is open work rather than a trap to route around.
+- **A JSON body is read by the JSON reader, and only where the endpoint opted in.** TSON is JSON-*like* and
+  **is not a JSON superset** ([TSON-DATA] §6); JSON is a second encoding of the same model, defined by
+  **[TSON-JSON]** (spec Part 3) with its own media type, `application/tson+json`. `acceptingJson()` admits that,
+  `application/json` and any other `+json` type, and reads all of them with tson-java's **`tson-json`**. The
+  `Json` it uses is built from the codec's own `Tson`: the same processor policy, `DataBindContext` and
+  registered schemas, so a class binds identically under both encodings and a body is judged by one policy
+  whichever carried it (`TsonHttpCodecJsonTest.theJsonReaderIsJudgedByTheTsonPolicy` shows a TSON-side nesting
+  bound answering a JSON body 413). **It compiles a schema's JSON readers on the first read that names it** —
+  on a request thread, the one departure from resolving everything at startup, since `Json` has no entry for
+  compiling ahead. What makes it tolerable is that nothing is *resolved* there (the schema is already the
+  `Tson`'s) and the compiled cache is safe for concurrent reads; `TsonHttpCodecConcurrencyTest.`
+  `bindsJsonAndTsonConcurrentlyFromColdStart` races that first compile rather than assuming it. Three rules come
+  with it:
+  - **A JSON body names neither its schema nor its root type, as far as this reader goes.** Part 3 §3.4 has two
+    routes and tson-java builds only the out-of-band one, so the schema comes from the `TSON-Schema` header
+    and the root type from the route: `readObjectAs`/`readJsonTreeAs`. The in-band route — a root object
+    carrying `$schema` and `$type` — is *refused* by the reader today, so a spec-valid body naming its binding
+    in agreement with the header is a 400. `UPSTREAM.md` carries it and
+    `UpstreamGapsTest.aJsonDocumentsInBandBindingIsRefused` fails the day it lands, which is when the codec
+    should start checking §3.5's agreement itself.
+  - **A tree is the encoding's own model.** Bind mode reads either encoding through the same methods; tree mode
+    does not, because a `TsonValue` is the TSON reader's tree. A JSON body is read into a `JsonValue` with
+    `readJsonTree`/`readJsonTreeAs`, and a JSON body handed to a `TsonValue` read is an `IllegalStateException`
+    — the route's fault, a 500, never a 415 blaming a client that sent what the endpoint admits.
+  - **A JSON body is never peeked.** A `TsonDocumentPeek` is the TSON reader's continuation of a header, so a
+    JSON body reaching a peek-taking read is refused the same way. That is also why `TsonSchemaVersions.route`
+    does not route one: a JSON route reads the header and the stream directly, as
+    `TsonSchemaHeaderRoutingTest`'s does.
+
+  **JSON `null` is the absent sentinel, and this repo's optional fields refuse it.** In the JSON encoding `null`
+  is how `_` is written, so it is read on §5.2's terms: absence at a voidable field (`a?: T?`, `a: T?`),
+  refused at `a?: T`, which is how every optional field here is spelled — omit it instead. A client writing
+  `null` for such a field gets a 400, correctly; if a public schema should take one, spell the field `a?: T?`.
+
+  **Responses stay TSON.** Nothing here writes JSON, so a JSON client must still accept `application/tson`;
+  `Accept: application/json` alone is a 406. Helidon's `TsonMediaSupport` claims `application/tson` only, so a
+  JSON body there goes through a handler calling the codec, not through `req.content().as(…)`.
 - **Peek a request body with `TsonHttpCodec.begin`, and pass the peek on — it *is* the body.** A body is
   one-shot, and `TsonDocumentPeek` is the continuation handle: the header has been read and a reader continues
   from just past it, so nothing is buffered and re-fed and `document()` no longer exists. `TsonSchemaHeader
@@ -782,10 +796,9 @@ Each cost a debugging cycle here and is pinned by a test.
   `reset()` throws, as `TsonSchemaHeaderTest` does — this project shipped a peek that ate the whole body on a
   real request and had a green test suite over the wrong fixture.
 - **Bind mode cannot continue a peek.** Upstream's object reader has `read(peek, Class)` but no
-  `readAs(peek, typeName, Class)`, where the tree reader has `readAs(peek, typeName)`. So a body whose schema
-  arrives only in the `TSON-Schema` header — a JSON body, which can carry no directive — is read from the start
-  in bind mode, and peeking it buys nothing anyway since there is no directive to cross-check. `UPSTREAM.md`
-  carries the ask.
+  `readAs(peek, typeName, Class)`, where the tree reader has `readAs(peek, typeName)`. So a TSON body whose
+  schema arrives in the `TSON-Schema` header and which might also carry `!!schema` cannot be cross-checked and
+  bound in one pass; such a route reads in tree mode or gives up the check. `UPSTREAM.md` carries the ask.
 - **`describing()` needs a root type name as well as a schema URI, for an object.** A bound record writes no
   type-ref of its own, so `!!schema` alone yields a document whose reader cannot select a type. The tree form
   takes one argument, because a tree node already carries a type-ref. `TsonHttpCodec.write(value, schemaUri,

@@ -58,6 +58,25 @@ route reads from the start and says why.
 
 ---
 
+## 2. A JSON document cannot name its own binding
+
+**Hit:** a JSON body that names its schema and root type in band. [TSON-JSON] §3.4 gives a JSON document two
+routes to its binding — out of band, supplied by the application, and in band, a root annotation object carrying
+`$schema` and `$type` — and §3.5 requires a `TSON-Schema` header to agree with an in-band binding by canonical
+identity. tson-java's JSON reader builds the first route only, and refuses a `$schema` at any position that is
+not scoped, the root included. So a body that names its binding twice, in agreement, is a 400 here, where the
+spec calls it valid.
+
+**Already on upstream's list** — `BACKLOG.md`, "A JSON document has no in-band way to name its schema". Recorded
+here because this project hits it, and because what it needs is specific: an entry that reads the in-band
+binding (or reports its absence) before the body, so `TsonHttpCodec` can check §3.5's agreement against the
+header — the JSON counterpart of what `TsonDocumentPeek` gives a TSON body.
+
+**Workaround in place:** none needed for the common case — a JSON client sends the header and a bare value,
+which is §3.4's "expected production route". Pinned by `UpstreamGapsTest.aJsonDocumentsInBandBindingIsRefused`.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. That register renumbers from #1
