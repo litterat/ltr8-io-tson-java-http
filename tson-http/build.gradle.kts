@@ -10,6 +10,9 @@ dependencies {
     // The version is only consulted when consuming published artifacts (-Ptson.published=true); the
     // included build substitutes this coordinate with the sibling's own project and ignores it.
     api("io.ltr8:tson:${property("tson.version")}")
+    // [TSON-JSON]'s reader, for a JSON body TsonHttpCodec.acceptingJson() admits. `api` because a JsonValue is
+    // what a JSON tree read hands back. tson-java's own module, so the no-external-dependency rule holds.
+    api("io.ltr8:tson-json:${property("tson.version")}")
 }
 
 // Experiments -- design explorations that stay compiled and passing rather than rotting in a scratchpad. The

@@ -166,6 +166,29 @@ class TsonHttpCodecConcurrencyTest {
     }
 
     /**
+     * <b>The JSON reader, from a cold start, against both encodings at once.</b> A codec built {@code
+     * acceptingJson} holds a {@code Json} whose compiled readers are made on the first read of each schema --
+     * on a request thread, which is the one departure from resolving everything at startup. So nothing reads
+     * before the threads are released: every one races the first compile, half of them read JSON and half TSON
+     * through the same codec, and each checks its own value, since a crossed result is the failure worth finding.
+     */
+    @Test
+    @Timeout(120)
+    void bindsJsonAndTsonConcurrentlyFromColdStart() throws Exception {
+        TsonHttpCodec both = codec.acceptingJson();
+        hammer((thread, i) -> {
+            Order expected = new Order("SKU-" + thread + "-" + i, thread * 1000 + i);
+            Order read = thread % 2 == 0
+                    ? both.readObjectAs(body("{\"sku\": \"%s\", \"quantity\": %d}"
+                            .formatted(expected.sku(), expected.quantity())), "application/tson+json", SCHEMA_ID,
+                            "order", Order.class)
+                    : both.readObject(body(order(expected.sku(), expected.quantity())), "application/tson",
+                            Order.class);
+            assertEquals(expected, read);
+        });
+    }
+
+    /**
      * Writers hold a bind context and build a fresh emitter per call; this is the claim that they may be
      * shared -- given the descriptor for what is being written has been prepared. See {@link #setUp}.
      */

@@ -11,6 +11,7 @@ import io.ltr8.tson.base.policy.LimitsPolicy;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.api.TsonApiSchema;
+import io.ltr8.tson.json.Json;
 import io.ltr8.tson.schema.meta.ChoiceBody;
 import io.ltr8.tson.schema.meta.FieldRole;
 import io.ltr8.tson.schema.meta.RecordBody;
@@ -590,5 +591,42 @@ class UpstreamGapsTest {
         SchemaFetchException refused = assertThrows(SchemaFetchException.class,
                 () -> source.fetch("https://example.com/2026/36/app/absent-1.tn"));
         assertEquals(SchemaFetchException.Reason.NOT_FOUND, refused.reason());
+    }
+
+    // ── open: a JSON document cannot name its own binding ───────────────────────────────────────
+
+    /**
+     * <b>[TSON-JSON] §3.4's in-band route is not built</b>: a root annotation object carrying {@code $schema} and
+     * {@code $type} is how a JSON document names its own binding, and §3.5 requires it to agree with a {@code
+     * TSON-Schema} header by canonical identity. tson-java's JSON reader builds only the out-of-band route, and
+     * refuses a {@code $schema} at a position that is not scoped -- so a spec-valid body that names its binding
+     * twice, in agreement, is a 400 today. {@code TsonHttpCodec.acceptingJson} documents it; this is what fails
+     * the day it lands, so the codec can then check the agreement rather than leave it to the reader.
+     *
+     * <p>Asserted through {@code Json} directly, over the same schema the header route would name, so the refusal
+     * is the reader's and not this project's media-type gate.
+     */
+    @Test
+    void aJsonDocumentsInBandBindingIsRefused() {
+        String schemaId = "https://s.example.com/2026/36/j-1.tn";
+        String schema = """
+                !!id:"https://s.example.com/2026/36/j-1.tn"
+                !!meta:"https://tson.io/2026/36/m/meta.tn"
+                !!import:"https://tson.io/2026/36/m/core.tn"
+                {
+                    note => { title: text }
+                }""";
+        Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> schema)));
+        tson.resolve(schema);
+        Json json = Json.standard().withSchemas(tson.schemaRegistry());
+
+        // Out of band: the binding from outside, the body a bare value. Built.
+        assertEquals(List.of(), json.validate("{\"title\": \"t\"}", schemaId, "note"));
+
+        // In band, agreeing with it exactly: refused, where §3.4 makes it valid.
+        List<Diagnostic> inBand = json.validate(
+                "{\"$schema\": \"" + schemaId + "\", \"$type\": \"note\", \"title\": \"t\"}", schemaId, "note");
+        assertFalse(inBand.isEmpty(), "the in-band route has landed -- check the agreement in TsonHttpCodec");
+        assertTrue(inBand.getFirst().message().contains("$schema"), () -> "" + inBand);
     }
 }

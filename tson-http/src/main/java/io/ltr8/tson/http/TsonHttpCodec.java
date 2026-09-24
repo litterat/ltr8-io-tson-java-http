@@ -6,9 +6,12 @@ import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.DiagnosticsCollector;
 import io.ltr8.tson.base.DiagnosticsReceiver;
+import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.compiler.TsonDocumentPeek;
 import io.ltr8.tson.compiler.TsonObjectWriter;
 import io.ltr8.tson.compiler.TsonTreeWriter;
+import io.ltr8.tson.json.Json;
+import io.ltr8.tson.json.tree.JsonValue;
 import io.ltr8.tson.tree.TsonValue;
 
 import java.io.ByteArrayOutputStream;
@@ -45,6 +48,10 @@ import java.util.function.Supplier;
  * -- the write-side counterpart to reading from an {@code InputStream}. The buffering {@link #write}/
  * {@link #writeTree} remain for a caller that wants the bytes in hand, typically to set {@code Content-Length}.
  *
+ * <p><b>A JSON body is opt-in, and read by the JSON reader.</b> {@link #acceptingJson} admits one and reads it
+ * through [TSON-JSON]'s own reader, under the same policy, binding and registered schemas as a TSON body. See
+ * that method for what it takes to read one.
+ *
  * <p>{@link #writeProblem} is deliberately only buffered. Streaming an error body means a failure part-way
  * through leaves a client holding a truncated problem on a response whose status is already sent, which is worse
  * than the failure being reported. A problem is small, so there is nothing to gain by streaming it.
@@ -55,15 +62,16 @@ public final class TsonHttpCodec {
     private final TsonObjectWriter objectWriter;
     private final TsonTreeWriter treeWriter;
     private final TsonObjectWriter problemWriter;
-    private final boolean acceptingJson;
+    /** The JSON encoding's front door over the same configuration, or {@code null} where JSON is not admitted. */
+    private final Json json;
 
     /** A codec over {@code tson}, whose schemas are expected to be already resolved. */
     public TsonHttpCodec(Tson tson) {
-        this(tson, false);
+        this(tson, null);
     }
 
-    private TsonHttpCodec(Tson tson, boolean acceptingJson) {
-        this.acceptingJson = acceptingJson;
+    private TsonHttpCodec(Tson tson, Json json) {
+        this.json = json;
         this.tson = tson;
         this.objectWriter = tson.objectWriter();
         this.treeWriter = tson.treeWriter();
@@ -128,7 +136,7 @@ public final class TsonHttpCodec {
      * @throws TsonHttpException 415 if the body is not TSON, 400 if it is TSON but invalid
      */
     public TsonValue readTree(InputStream body, String contentType) {
-        requireTsonBody(contentType);
+        requireTsonTree(contentType, "readJsonTree");
         DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
         return require(read(() -> tson.treeReader().withDiagnostics(problems).read(body)), problems);
     }
@@ -151,7 +159,7 @@ public final class TsonHttpCodec {
 
     /** {@link #readTree(InputStream, String)} continuing a peek this codec opened. */
     public TsonValue readTree(TsonDocumentPeek body, String contentType) {
-        requireTsonBody(contentType);
+        requirePeekable(contentType);
         DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
         return require(read(() -> tson.treeReader().withDiagnostics(problems).read(body)), problems);
     }
@@ -168,7 +176,7 @@ public final class TsonHttpCodec {
      * @throws TsonHttpException 415 if the body is not TSON, 400 if it is TSON but invalid
      */
     public TsonValue readTreeAs(InputStream body, String contentType, String schemaUri, String typeName) {
-        requireTsonBody(contentType);
+        requireTsonTree(contentType, "readJsonTreeAs");
         DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
         return require(read(() -> tson.treeReader().withSchema(schemaUri).withDiagnostics(problems)
                 .readAs(body, typeName)), problems);
@@ -184,9 +192,36 @@ public final class TsonHttpCodec {
      * read in tree mode or from the start. Tracked in {@code UPSTREAM.md}.
      */
     public TsonValue readTreeAs(TsonDocumentPeek body, String contentType, String schemaUri, String typeName) {
-        requireTsonBody(contentType);
+        requirePeekable(contentType);
         DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
         return require(read(() -> tson.treeReader().withSchema(schemaUri).withDiagnostics(problems)
+                .readAs(body, typeName)), problems);
+    }
+
+    /**
+     * Reads a JSON request body into a {@link JsonValue} tree -- the JSON encoding's tree mode, schemaless.
+     * A {@code TsonValue} is the TSON reader's tree, so a JSON body is never read into one.
+     *
+     * @throws TsonHttpException 415 if the body is not JSON or this codec does not admit JSON, 400 if it is
+     *                           JSON but not within [TSON-JSON] §3.1's profile
+     */
+    public JsonValue readJsonTree(InputStream body, String contentType) {
+        requireJsonBody(contentType);
+        DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
+        return require(read(() -> json.treeReader().withDiagnostics(problems).read(body)), problems);
+    }
+
+    /**
+     * {@link #readJsonTree} against a stated schema and root type -- [TSON-JSON] §3.4's out-of-band binding, the
+     * shape a {@code TSON-Schema} header takes. Validated in full; the tree is the JSON as it arrived.
+     *
+     * @throws TsonHttpException 415 if the body is not JSON or this codec does not admit JSON, 400 if it is
+     *                           JSON but invalid
+     */
+    public JsonValue readJsonTreeAs(InputStream body, String contentType, String schemaUri, String typeName) {
+        requireJsonBody(contentType);
+        DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
+        return require(read(() -> json.treeReader().withSchema(schemaUri).withDiagnostics(problems)
                 .readAs(body, typeName)), problems);
     }
 
@@ -203,14 +238,17 @@ public final class TsonHttpCodec {
      * @throws TsonHttpException 415 if the body is not TSON, 400 if it is TSON but invalid
      */
     public <T> T readObject(InputStream body, String contentType, Class<T> targetClass) {
-        requireTsonBody(contentType);
         DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
+        if (isJsonBody(contentType)) {
+            return require(read(() -> json.objectReader().withDiagnostics(problems).read(body, targetClass)),
+                    problems);
+        }
         return require(read(() -> tson.objectReader().withDiagnostics(problems).read(body, targetClass)), problems);
     }
 
     /** {@link #readObject(InputStream, String, Class)} continuing a peek this codec opened. */
     public <T> T readObject(TsonDocumentPeek body, String contentType, Class<T> targetClass) {
-        requireTsonBody(contentType);
+        requirePeekable(contentType);
         DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
         return require(read(() -> tson.objectReader().withDiagnostics(problems).read(body, targetClass)), problems);
     }
@@ -223,8 +261,11 @@ public final class TsonHttpCodec {
      */
     public <T> T readObjectAs(InputStream body, String contentType, String schemaUri, String typeName,
                               Class<T> targetClass) {
-        requireTsonBody(contentType);
         DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
+        if (isJsonBody(contentType)) {
+            return require(read(() -> json.objectReader().withSchema(schemaUri).withDiagnostics(problems)
+                    .readAs(body, typeName, targetClass)), problems);
+        }
         return require(read(() -> tson.objectReader().withSchema(schemaUri).withDiagnostics(problems)
                 .readAs(body, typeName, targetClass)), problems);
     }
@@ -303,45 +344,38 @@ public final class TsonHttpCodec {
     }
 
     /**
-     * A codec that also admits an {@code application/json} body, <b>read by the TSON reader</b>.
+     * A codec that also admits a JSON body -- {@code application/tson+json}, [TSON-JSON]'s own media type, and
+     * {@code application/json} or any other {@code +json} type -- <b>read by the JSON reader</b>, tson-java's
+     * {@code tson-json}. Opt-in, because "reads TSON" and "reads JSON" are different promises: an endpoint that
+     * wants only TSON goes on answering 415, and does by default.
      *
-     * <p><b>Read the divergences below before enabling this.</b> TSON is JSON-<em>like</em> and is not a JSON
-     * superset ([TSON-DATA] §6). JSON is a second encoding of the same model, defined by [TSON-JSON] with its
-     * own media type, {@code application/tson+json}, and its own reader -- tson-java's {@code tson-json} module.
-     * This codec does not route to that reader: what this gate admits is JSON as the <em>TSON</em> reader
-     * happens to read it, which is neither all of JSON nor JSON's meaning.
+     * <p><b>One configuration, both encodings.</b> The JSON reader is built from this codec's own {@code Tson}:
+     * the same processor policy (§9.1's limits and §8.2's name hygiene), the same {@code DataBindContext}, and the
+     * same registered schemas, so a class binds identically under both and a document is judged by one policy
+     * whichever encoding carried it. Nothing is fetched: a schema is named from what the {@code Tson} already
+     * holds, so the startup rule stands. Call this at startup and keep the codec -- it holds the JSON reader's
+     * compiled schemas, and a codec derived per request would compile them per request.
      *
-     * <p><b>Four divergences, and the first is silent.</b> Each is pinned by {@code
-     * TsonHttpCodecJsonTest.theTsonReaderIsNotAJsonReader}, which is written to fail when this codec routes a
-     * JSON body to the JSON reader -- that failure is the feature arriving, not a regression.
+     * <p><b>A JSON body names neither its schema nor its root type</b> -- not in a way this reader can use yet.
+     * [TSON-JSON] §3.4 has two routes, and tson-java builds only the out-of-band one: the schema comes from the
+     * {@code TSON-Schema} header ({@link TsonSchemaHeader}) and the root type from the route, so reading one
+     * against a schema is {@link #readObjectAs} or {@link #readJsonTreeAs}. The in-band route, a root annotation
+     * object carrying {@code $schema} and {@code $type}, is refused by that reader today.
      *
-     * <ul>
-     *   <li><b>{@code null} reads as the four-character string {@code "null"}</b>, not as absence. §4.4 removed
-     *       the null keyword, so the token is text like any other, and the JSON reader is what maps JSON's
-     *       {@code null} to absence (§2.9). At a {@code text} field a JSON {@code null} therefore binds a
-     *       string, with no diagnostic. This is the one that corrupts data rather than refusing it.</li>
-     *   <li><b>A key that is not an identifier is a parse error.</b> §2.5 makes a field name an identifier at
-     *       every layer, whichever spelling carried it, so {@code {"first name": 1}} and {@code {"a.b": 1}} are
-     *       refused. In the JSON encoding a member name is only an identifier where the position reads the
-     *       object as a record; at a map position any string is a key.</li>
-     *   <li><b>A surrogate-pair escape is a parse error.</b> §7.2.2 asks whether the value denoted is a Unicode
-     *       scalar value, so {@code "\uD83D\uDE00"} -- how JSON must write a non-BMP character -- refuses on
-     *       the first half.</li>
-     *   <li><b>There is no {@code \/} escape.</b> RFC 8259 permits it and TSON's escape table does not.</li>
-     * </ul>
+     * <p><b>Bind mode serves both encodings; tree mode is one per encoding.</b> {@link #readObject} and
+     * {@link #readObjectAs} read whichever the {@code Content-Type} names. A tree is the encoding's own model --
+     * {@code TsonValue} for TSON, {@link JsonValue} for JSON -- so a JSON body is read as a tree with {@link
+     * #readJsonTree}/{@link #readJsonTreeAs}, and handing one to a {@code TsonValue} read is a fault in the
+     * route, not the request.
      *
-     * <p><b>Opt-in, because "reads TSON" and "reads JSON" are different promises.</b> An endpoint that wants
-     * only TSON should go on answering 415, and does by default. On the evidence above, an endpoint whose
-     * clients send real JSON should go on answering 415 as well, until this codec reads it with the JSON
-     * reader.
-     *
-     * <p><b>A JSON body names neither its schema nor its root type.</b> It cannot: directive syntax is not JSON.
-     * So the schema comes from the {@code TSON-Schema} header ({@link TsonSchemaHeader}) and the root type from
-     * the route -- which means reading one is {@link #readObjectAs}/{@link #readTreeAs}, never the bare
-     * {@code read}. The same two-part requirement as writing a self-describing document, for the same reason.
+     * <p><b>A JSON body is never peeked.</b> A {@link TsonDocumentPeek} is the TSON reader's continuation of a
+     * header, and a JSON document has none; a JSON body reaching a peek-taking read is refused the same way.
      */
     public TsonHttpCodec acceptingJson() {
-        return new TsonHttpCodec(tson, true);
+        return new TsonHttpCodec(tson, Json.of(ProcessorConfig.defaults()
+                        .withProcessorPolicy(tson.processorPolicy())
+                        .withDataBindContext(tson.dataBindContext()))
+                .withSchemas(tson.schemaRegistry()));
     }
 
     /** The {@code Content-Type} every response body from this codec carries. */
@@ -363,18 +397,30 @@ public final class TsonHttpCodec {
     }
 
     /**
-     * Checks a request's {@code Content-Type} names a body this codec can read.
+     * Checks a request's {@code Content-Type} names a body this codec can read: TSON, or JSON where it was built
+     * {@link #acceptingJson}.
      *
-     * <p><b>An absent {@code Content-Type} is accepted.</b> RFC 9110 §8.3 lets a recipient assume a media type or
-     * examine the content when none is given, and §7.1 makes a TSON document classifiable from its own opening
-     * bytes -- so the parse itself is the check, and rejecting the request unread would be stricter than the
-     * format requires. What is rejected is a header that positively claims something else.
+     * <p><b>An absent {@code Content-Type} is accepted, as TSON.</b> RFC 9110 §8.3 lets a recipient assume a media
+     * type or examine the content when none is given, and §7.1 makes a TSON document classifiable from its own
+     * opening bytes -- so the parse itself is the check, and rejecting the request unread would be stricter than
+     * the format requires. What is rejected is a header that positively claims something else.
      *
      * @throws TsonHttpException 415 if it does not
      */
     public void requireTsonBody(String contentType) {
+        isJsonBody(contentType);
+    }
+
+    /**
+     * Whether {@code contentType} names a JSON body this codec reads, after refusing one it reads neither way --
+     * the one place the media-type gate is decided.
+     *
+     * @throws TsonHttpException 415 for a body that is neither TSON nor admitted JSON, or that claims a charset
+     *                           other than UTF-8
+     */
+    private boolean isJsonBody(String contentType) {
         if (contentType == null || contentType.isBlank()) {
-            return;
+            return false;
         }
         TsonMediaType mediaType;
         try {
@@ -383,37 +429,54 @@ public final class TsonHttpCodec {
             throw TsonHttpException.unsupportedMediaType("Content-Type '" + contentType + "' is not a media type: "
                     + malformed.getMessage());
         }
-        if (isTsonJson(mediaType)) {
-            throw TsonHttpException.unsupportedMediaType("this endpoint does not read [TSON-JSON]'s encoding; "
-                    + TsonMediaType.APPLICATION_TSON + " is what it reads, not " + mediaType);
-        }
-        if (!mediaType.isTson() && !(acceptingJson && isJson(mediaType))) {
+        boolean isJson = isJson(mediaType);
+        if (!mediaType.isTson() && !(json != null && isJson)) {
             throw TsonHttpException.unsupportedMediaType("this endpoint reads " + TsonMediaType.APPLICATION_TSON
-                    + (acceptingJson ? " and application/json" : "") + ", not " + mediaType);
+                    + (json != null ? " and JSON" : "") + ", not " + mediaType);
         }
+        // [TSON-DATA] §7.1 and [TSON-JSON] §3.1 alike: a document in either encoding is UTF-8.
         if (mediaType.hasUnsupportedCharset()) {
-            throw TsonHttpException.unsupportedMediaType("a TSON document is UTF-8 ([TSON-DATA] §7.1); '"
-                    + contentType + "' claims " + mediaType.charset().orElseThrow());
+            throw TsonHttpException.unsupportedMediaType("a TSON document is UTF-8 ([TSON-DATA] §7.1, [TSON-JSON] "
+                    + "§3.1); '" + contentType + "' claims " + mediaType.charset().orElseThrow());
+        }
+        return isJson;
+    }
+
+    /** Admits a JSON body only, for the JSON tree reads. */
+    private void requireJsonBody(String contentType) {
+        if (json == null) {
+            throw new IllegalStateException("a JSON read on a codec that does not admit JSON -- build the route's "
+                    + "codec with acceptingJson()");
+        }
+        if (!isJsonBody(contentType)) {
+            throw TsonHttpException.unsupportedMediaType("this route reads its body as JSON, not "
+                    + (contentType == null || contentType.isBlank() ? "an unlabelled body" : contentType));
+        }
+    }
+
+    /** Admits a TSON body only, for the reads producing a {@code TsonValue}; see {@link #acceptingJson}. */
+    private void requireTsonTree(String contentType, String jsonRead) {
+        if (isJsonBody(contentType)) {
+            throw new IllegalStateException("a JSON body cannot be read into a TsonValue, which is the TSON "
+                    + "reader's tree -- this route should read it with " + jsonRead);
+        }
+    }
+
+    /** Admits a TSON body only, for the reads continuing a peek; see {@link #acceptingJson}. */
+    private void requirePeekable(String contentType) {
+        if (isJsonBody(contentType)) {
+            throw new IllegalStateException("a JSON body was peeked, and a peek is the TSON reader's -- this route "
+                    + "should read a JSON body from its stream");
         }
     }
 
     /**
-     * Whether {@code mediaType} is JSON that {@link #acceptingJson} admits: {@code application/json} or a
-     * {@code +json} suffix -- except {@code application/tson+json}, which {@link #isTsonJson} refuses.
+     * Whether {@code mediaType} is JSON: {@code application/tson+json}, [TSON-JSON]'s own, or {@code
+     * application/json} or any other {@code +json} type, all read by the JSON reader alike.
      */
     private static boolean isJson(TsonMediaType mediaType) {
         return "application".equals(mediaType.type())
                 && ("json".equals(mediaType.subtype()) || mediaType.subtype().endsWith("+json"));
-    }
-
-    /**
-     * Whether {@code mediaType} is {@code application/tson+json}, [TSON-JSON]'s own media type. It is refused
-     * even by {@link #acceptingJson}: a sender using it claims that encoding's reading -- {@code $schema} and
-     * {@code $type} as the document's binding, {@code null} as absence -- and the TSON reader behind this codec
-     * gives neither, so admitting it would misread the body rather than refuse it.
-     */
-    private static boolean isTsonJson(TsonMediaType mediaType) {
-        return "application".equals(mediaType.type()) && "tson+json".equals(mediaType.subtype());
     }
 
     /** Runs a read, classifying anything the library throws out of it into a status. */
