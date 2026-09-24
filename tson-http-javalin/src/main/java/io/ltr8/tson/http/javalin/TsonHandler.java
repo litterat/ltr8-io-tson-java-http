@@ -20,13 +20,13 @@ import java.util.List;
  * }));
  * }</pre>
  *
- * <p>The boundary does the same four things as {@code tson-http-jdk}'s, and for the same reasons: it checks
- * {@code Accept} <b>before</b> the handler runs, maps a failure through {@link TsonHttpException#from} and
- * nowhere else, never overwrites a response the handler has already sent, and writes whatever
- * {@link TsonHttpException#problem()} returns -- which withholds what describes this deployment rather than
- * what carries a 5xx status, so a 500 and a 502/504 answer with status, type and title alone while a 501
- * still carries the violations the read found. The exception goes to a {@link System.Logger}, so this module
- * needs no logging dependency of its own beyond the one Javalin already brings.
+ * <p>The boundary does the same four things as {@code tson-http-jdk}'s, and for the same reasons: it negotiates {@code
+ * Accept} <b>before</b> the handler runs, writing the response and any problem in what it chose, maps a failure through
+ * {@link TsonHttpException#from} and nowhere else, never overwrites a response the handler has already sent, and writes
+ * whatever {@link TsonHttpException#problem()} returns -- which withholds what describes this deployment rather than what
+ * carries a 5xx status, so a 500 and a 502/504 answer with status, type and title alone while a 501 still carries the
+ * violations the read found. The exception goes to a {@link System.Logger}, so this module needs no logging dependency of
+ * its own beyond the one Javalin already brings.
  *
  * <p><b>{@link #install} is for the routes that are not written this way.</b> A real application mixes TSON
  * routes with plain Javalin ones, and a {@link TsonHttpException} thrown from a service layer inside a plain
@@ -44,7 +44,7 @@ public interface TsonHandler {
         return context -> {
             TsonContext tson = new TsonContext(context, codec);
             try {
-                codec.requireTsonAcceptable(tson.header("Accept"));
+                tson.representation(codec.negotiate(tson.header("Accept")));
                 handler.handle(tson);
                 if (!tson.committed()) {
                     // A handler that returns without answering is a bug in the handler, not a request problem.
@@ -64,7 +64,7 @@ public interface TsonHandler {
      */
     static void install(Javalin app, TsonHttpCodec codec) {
         app.exception(TsonHttpException.class, (failure, context) ->
-                Boundary.fail(codec, new TsonContext(context, codec), failure));
+                Boundary.fail(codec, Boundary.context(context, codec), failure));
     }
 
     /** The shared failure rendering. Package-private: reached through {@link #asHandler} and {@link #install}. */
@@ -86,7 +86,22 @@ public interface TsonHandler {
             if (mapped.status() >= 500) {
                 LOG.log(Level.ERROR, mapped.status() + " handling " + tson.path(), failure);
             }
-            tson.respondBytes(mapped.status(), codec.writeProblem(mapped.problem()));
+            tson.respondProblem(mapped.status(), codec.writeProblem(mapped.problem(), tson.representation()));
+        }
+
+        /**
+         * A context for a failure from a plain route, written in what {@code Accept} negotiates -- or TSON where it
+         * negotiates nothing, since the failure being reported is not a 406 and a client that accepts neither
+         * encoding is still owed a body in one of them.
+         */
+        static TsonContext context(Context context, TsonHttpCodec codec) {
+            TsonContext tson = new TsonContext(context, codec);
+            try {
+                tson.representation(codec.negotiate(tson.header("Accept")));
+            } catch (TsonHttpException notAcceptable) {
+                // Stays TSON.
+            }
+            return tson;
         }
 
         /**

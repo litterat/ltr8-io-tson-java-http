@@ -18,6 +18,10 @@ import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonProblem;
 import io.ltr8.tson.http.TsonProblemDiagnostic;
 import io.ltr8.tson.http.TsonProblemSchema;
+import io.ltr8.tson.http.TsonMediaType;
+import io.ltr8.tson.http.TsonSchemaHeader;
+import io.ltr8.tson.json.Json;
+import io.ltr8.tson.json.tree.JsonValue;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,6 +66,7 @@ class TsonHelidonAdapterTest {
     private HttpClient client;
     private String base;
     private TsonHttpCodec codec;
+    private TsonHttpCodec jsonCodec;
 
     @BeforeEach
     void setUp() {
@@ -74,6 +79,7 @@ class TsonHelidonAdapterTest {
                 .withDataBindContext(bind));
         tson.resolve(SCHEMA);
         codec = new TsonHttpCodec(tson);
+        jsonCodec = codec.acceptingJson();
         client = HttpClient.newHttpClient();
     }
 
@@ -320,5 +326,104 @@ class TsonHelidonAdapterTest {
         HttpResponse<String> response = post("/orders", "{ a: 1 }");
         assertEquals(String.valueOf(response.body().length()),
                 response.headers().firstValue("Content-Length").orElseThrow());
+    }
+
+    /** A route whose codec admits and produces JSON as well as TSON -- the only route of its server. */
+    private void jsonRoute(String path, TsonHandler handler) {
+        start(routing -> routing.post(path, TsonHandler.asHandler(jsonCodec, handler)));
+    }
+
+    // ── JSON responses: the same route, answering in what the client negotiated ────────────────────────
+
+    /** Reads an order in either encoding and answers with the doubled order, naming its schema. */
+    private void doublingJsonRoute() {
+        jsonRoute("/orders", tson -> {
+            Order order = tson.readObjectAs(SCHEMA_ID, "order", Order.class);
+            tson.respondDescribed(201, new Order(order.sku(), order.quantity() * 2), SCHEMA_ID, "order");
+        });
+    }
+
+    /**
+     * <b>A JSON client gets JSON, and the schema in the header.</b> A JSON body has no in-band channel, so
+     * {@code TSON-Schema} is the only place a reply written as JSON can name what governs it ([TSON-JSON] §3.5).
+     */
+    @Test
+    void aJsonClientGetsJsonNamingItsSchemaInTheHeader() throws Exception {
+        doublingJsonRoute();
+
+        HttpResponse<String> response = post("/orders", "{\"sku\": \"ABC-1\", \"quantity\": 3}",
+                "Content-Type", "application/tson+json", "Accept", "application/tson+json");
+
+        assertEquals(201, response.statusCode(), response.body());
+        assertEquals("application/tson+json", mediaType(response));
+        assertEquals(TsonSchemaHeader.format(SCHEMA_ID),
+                response.headers().firstValue(TsonSchemaHeader.NAME).orElseThrow());
+        JsonValue order = Json.parse(response.body());
+        assertEquals("ABC-1", order.get("sku").asString());
+        assertEquals(6, order.get("quantity").asInt());
+    }
+
+    /** The same route answers a client with no preference in TSON, the encoding that describes itself in band. */
+    @Test
+    void aClientWithNoPreferenceGetsSelfDescribingTson() throws Exception {
+        doublingJsonRoute();
+
+        HttpResponse<String> response = post("/orders", "{\"sku\": \"ABC-1\", \"quantity\": 3}",
+                "Content-Type", "application/json", "Accept", "*/*");
+
+        assertEquals(201, response.statusCode(), response.body());
+        assertEquals("application/tson", mediaType(response));
+        assertTrue(response.body().contains("!!schema:\"" + SCHEMA_ID + "\""), response.body());
+    }
+
+    /**
+     * <b>A JSON client's problem is RFC 9457's own format</b>: {@code problem-1.tn}'s {@code problem} written as
+     * JSON is an {@code application/problem+json} body, labelled so where the client accepts that type and with
+     * the JSON type it asked for where it does not.
+     */
+    @Test
+    void aJsonClientsProblemIsRfc9457Json() throws Exception {
+        doublingJsonRoute();
+
+        HttpResponse<String> labelled = post("/orders", "{}", "Content-Type", "application/json",
+                "Accept", "application/json, application/problem+json");
+        assertEquals(400, labelled.statusCode());
+        assertEquals("application/problem+json", mediaType(labelled));
+        JsonValue problem = Json.parse(labelled.body());
+        assertEquals(400, problem.get("status").asInt());
+        assertEquals(2, problem.get("errors").asList().size(), "both missing fields");
+        assertEquals("FIELD_REQUIRED", problem.get("errors").get(0).get("code").asString());
+
+        HttpResponse<String> plain = post("/orders", "{}", "Content-Type", "application/json",
+                "Accept", "application/json");
+        assertEquals(400, plain.statusCode());
+        assertEquals("application/json", mediaType(plain));
+    }
+
+    /**
+     * <b>A response only TSON can carry is sent as TSON wherever the client takes it at all</b> -- a server may
+     * send any representation the client accepts -- and is a 406 where it takes none, answered in the JSON it
+     * did ask for.
+     */
+    @Test
+    void aTsonOnlyResponseFallsBackToTsonOrIsA406() throws Exception {
+        jsonRoute("/bytes", tson -> tson.respondBytes(200, tson.codec().write(new Order("ABC-1", 3))));
+
+        HttpResponse<String> fallback = post("/bytes", "{ a: 1 }",
+                "Content-Type", "application/tson", "Accept", "application/json, application/tson;q=0.1");
+        assertEquals(200, fallback.statusCode());
+        assertEquals("application/tson", mediaType(fallback));
+
+        HttpResponse<String> refused = post("/bytes", "{ a: 1 }",
+                "Content-Type", "application/tson", "Accept", "application/json");
+        assertEquals(406, refused.statusCode());
+        assertEquals("application/json", mediaType(refused));
+        assertEquals(406, Json.parse(refused.body()).get("status").asInt());
+    }
+
+    /** A response's media type without parameters -- a framework may add a {@code charset} of its own. */
+    private static String mediaType(HttpResponse<String> response) {
+        TsonMediaType type = TsonMediaType.parse(response.headers().firstValue("Content-Type").orElseThrow());
+        return type.type() + "/" + type.subtype();
     }
 }

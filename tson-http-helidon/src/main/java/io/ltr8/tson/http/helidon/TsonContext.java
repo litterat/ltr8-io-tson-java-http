@@ -6,6 +6,7 @@ import io.helidon.webserver.http.ServerResponse;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonMediaType;
+import io.ltr8.tson.http.TsonSchemaHeader;
 import io.ltr8.tson.tree.TsonValue;
 
 import java.io.IOException;
@@ -21,12 +22,18 @@ import java.util.List;
  *
  * <p>Helidon keeps request and response as two objects rather than one exchange, which is the only structural
  * difference; everything else is the same translation.
+ *
+ * <p><b>A response is written in the representation the boundary negotiated</b> ({@link #representation()}):
+ * TSON, or JSON where the codec admits it and the client prefers it. {@link #respond} and {@link
+ * #respondDescribed} follow it; {@link #respondTree} and {@link #respondBytes} can only carry TSON, and send it
+ * wherever the client accepts it at all.
  */
 public final class TsonContext {
 
     private final ServerRequest request;
     private final ServerResponse response;
     private final TsonHttpCodec codec;
+    private TsonHttpCodec.Representation representation = TsonHttpCodec.Representation.TSON;
     private boolean committed;
 
     TsonContext(ServerRequest request, ServerResponse response, TsonHttpCodec codec) {
@@ -48,6 +55,16 @@ public final class TsonContext {
     /** One request header, or {@code null} if the request carried none by that name. */
     public String header(String name) {
         return request.headers().first(HeaderNames.create(name)).orElse(null);
+    }
+
+    /** How this request's response is written -- what the boundary negotiated from its {@code Accept}. */
+    public TsonHttpCodec.Representation representation() {
+        return representation;
+    }
+
+    /** Set by the boundary once {@code Accept} is negotiated; until then, and if it fails, TSON. */
+    void representation(TsonHttpCodec.Representation negotiated) {
+        this.representation = negotiated;
     }
 
     /** The underlying request, for anything this class does not cover. */
@@ -108,23 +125,52 @@ public final class TsonContext {
     }
 
     /**
-     * Sends {@code value} as an {@code application/tson} body, <b>streamed</b> into the response as it is
+     * Sends {@code value} in the negotiated {@link #representation()}, <b>streamed</b> into the response as it is
      * produced, so a large document never exists as a {@code String}.
      */
     public void respond(int status, Object value) {
-        stream(status, out -> codec.writeTo(value, out));
+        stream(status, representation.mediaType(), out -> codec.writeTo(value, representation, out));
     }
 
-    /** {@link #respond} for a tree. */
+    /**
+     * {@link #respond}, naming the schema that governs the reply: in the {@code TSON-Schema} header always, and
+     * in band as well where the representation is TSON. A JSON body has no in-band channel, so the header is its
+     * only one ([TSON-JSON] §3.5).
+     */
+    public void respondDescribed(int status, Object value, String schemaUri, String rootTypeName) {
+        setHeader(TsonSchemaHeader.NAME, TsonSchemaHeader.format(schemaUri));
+        stream(status, representation.mediaType(),
+                out -> codec.writeTo(value, schemaUri, rootTypeName, representation, out));
+    }
+
+    /**
+     * {@link #respond} for a tree, which only TSON can carry: sent as {@code application/tson} wherever the client
+     * accepts it at all.
+     *
+     * @throws TsonHttpException 406 if the client accepts no TSON
+     */
     public void respondTree(int status, TsonValue value) {
-        stream(status, out -> codec.writeTreeTo(value, out));
+        stream(status, representation.requireTson(), out -> codec.writeTreeTo(value, out));
     }
 
-    /** Sends a body already in hand, letting Helidon set {@code Content-Length}. */
+    /**
+     * Sends TSON already in hand, letting Helidon set {@code Content-Length}. The bytes are the caller's own
+     * encoding, so they are labelled {@code application/tson} and sent wherever the client accepts it at all.
+     *
+     * @throws TsonHttpException 406 if the client accepts no TSON
+     */
     public void respondBytes(int status, byte[] body) {
+        send(status, representation.requireTson(), body);
+    }
+
+    /** Sends an error body the codec rendered in the negotiated representation. The boundary's, and only its. */
+    void respondProblem(int status, byte[] body) {
+        send(status, representation.problemMediaType(), body);
+    }
+
+    private void send(int status, TsonMediaType mediaType, byte[] body) {
         commit();
-        response.status(status).header(HeaderNames.CONTENT_TYPE.defaultCase(),
-                TsonMediaType.APPLICATION_TSON.toString());
+        response.status(status).header(HeaderNames.CONTENT_TYPE.defaultCase(), mediaType.toString());
         response.send(body);
     }
 
@@ -146,11 +192,10 @@ public final class TsonContext {
         return header("Content-Type");
     }
 
-    private void stream(int status, ThrowingWriter write) {
+    private void stream(int status, TsonMediaType mediaType, ThrowingWriter write) {
         commit();
         // Before the stream is taken: taking it starts the response, after which neither can change.
-        response.status(status).header(HeaderNames.CONTENT_TYPE.defaultCase(),
-                TsonMediaType.APPLICATION_TSON.toString());
+        response.status(status).header(HeaderNames.CONTENT_TYPE.defaultCase(), mediaType.toString());
         try (OutputStream out = response.outputStream()) {
             write.writeTo(out);
         } catch (IOException e) {

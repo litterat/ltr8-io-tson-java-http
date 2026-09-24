@@ -15,6 +15,8 @@ import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonProblem;
 import io.ltr8.tson.http.TsonProblemSchema;
+import io.ltr8.tson.json.Json;
+import io.ltr8.tson.json.tree.JsonValue;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -80,6 +82,11 @@ class TsonMediaSupportTest {
 
     /** TSON registered with Helidon's entity machinery, and install so a rejection is still a TSON problem. */
     private void start(Consumer<HttpRouting.Builder> routes) {
+        start(codec, routes);
+    }
+
+    /** {@link #start(Consumer)} over {@code codec} -- one built {@code acceptingJson}, for the JSON cases. */
+    private void start(TsonHttpCodec codec, Consumer<HttpRouting.Builder> routes) {
         server = WebServer.builder()
                 .host("127.0.0.1")
                 .port(0)
@@ -124,6 +131,33 @@ class TsonMediaSupportTest {
         assertTrue(response.headers().firstValue("Content-Type").orElseThrow().startsWith("application/tson"));
         assertTrue(response.body().contains("ABC-1"), response.body());
         assertTrue(response.body().contains("6"), response.body());
+    }
+
+    /**
+     * <b>JSON through the same seam, both ways.</b> Over a codec built {@code acceptingJson}, a plain handler reads a
+     * JSON body with {@code content().as()} and answers a client that prefers JSON with {@code send()} -- the
+     * media support asks the codec which bodies it reads and negotiates the reply, so the handler still names no
+     * encoding at all.
+     */
+    @Test
+    void aPlainHelidonHandlerReadsAndWritesJsonWhereTheCodecAdmitsIt() throws Exception {
+        start(codec.acceptingJson(), routing -> routing.post("/orders", (request, response) -> {
+            Order order = request.content().as(Order.class);
+            response.status(201).send(new Order(order.sku(), order.quantity() * 2));
+        }));
+
+        HttpResponse<String> response = client.send(HttpRequest.newBuilder(URI.create(base + "/orders"))
+                        .header("Content-Type", "application/tson+json")
+                        .header("Accept", "application/tson+json")
+                        .POST(HttpRequest.BodyPublishers.ofString("{\"sku\": \"ABC-1\", \"quantity\": 3}",
+                                StandardCharsets.UTF_8)).build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+        assertEquals(201, response.statusCode(), response.body());
+        assertTrue(response.headers().firstValue("Content-Type").orElseThrow().startsWith("application/tson+json"));
+        JsonValue written = Json.parse(response.body());
+        assertEquals("ABC-1", written.get("sku").asString());
+        assertEquals(6, written.get("quantity").asInt());
     }
 
     /**

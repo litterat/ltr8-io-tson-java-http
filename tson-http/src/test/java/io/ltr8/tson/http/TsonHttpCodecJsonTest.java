@@ -5,6 +5,7 @@ import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.policy.LimitsPolicy;
 import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.json.Json;
 import io.ltr8.tson.json.tree.JsonNull;
 import io.ltr8.tson.json.tree.JsonValue;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -175,6 +177,86 @@ class TsonHttpCodecJsonTest {
     void aTsonBodyIsStillReadByTheTsonReader() {
         assertEquals(new Note("t", null, null, 2), codec.readObjectAs(json("{ title: t  count: 2 }"),
                 "application/tson", SCHEMA_ID, "note", Note.class));
+    }
+
+    // ── the write side ────────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * <b>Negotiation, as a table.</b> Each row is an {@code Accept} and what it gets: the response's media type,
+     * the problem's, and whether TSON remains acceptable for a response only TSON can carry. A tie goes to TSON,
+     * then to {@code application/tson+json}; {@code application/problem+json} labels a problem only where the
+     * client accepts it.
+     */
+    @Test
+    void negotiationPicksTheHighestQualityAndBreaksTiesTowardTson() {
+        record Row(String accept, String media, String problem, boolean tson) {
+        }
+        for (Row row : List.of(
+                new Row(null, "application/tson", "application/tson", true),
+                new Row("*/*", "application/tson", "application/tson", true),
+                new Row("application/*", "application/tson", "application/tson", true),
+                new Row("application/tson+json", "application/tson+json", "application/tson+json", false),
+                new Row("application/json", "application/json", "application/json", false),
+                new Row("application/json, application/tson+json", "application/tson+json",
+                        "application/tson+json", false),
+                new Row("application/json, application/problem+json", "application/json",
+                        "application/problem+json", false),
+                new Row("application/json, */*;q=0.1", "application/json", "application/problem+json", true),
+                new Row("application/tson;q=0.5, application/json", "application/json", "application/json",
+                        true))) {
+            TsonHttpCodec.Representation chosen = codec.negotiate(row.accept());
+            assertEquals(row.media(), chosen.mediaType().toString(), row.accept());
+            assertEquals(row.problem(), chosen.problemMediaType().toString(), row.accept());
+            assertEquals(row.tson(), chosen.tsonAcceptable(), row.accept());
+        }
+
+        assertEquals(TsonHttpException.NOT_ACCEPTABLE, assertThrows(TsonHttpException.class,
+                () -> codec.negotiate("text/html")).status());
+    }
+
+    /** A codec that did not opt in produces TSON only, and negotiates exactly as it always checked. */
+    @Test
+    void aCodecWithoutTheOptInNegotiatesTsonOnly() {
+        TsonHttpCodec tsonOnly = codec(ProcessorConfig.defaults());
+        assertEquals(TsonHttpCodec.Representation.TSON, tsonOnly.negotiate("*/*"));
+        assertEquals(TsonHttpException.NOT_ACCEPTABLE, assertThrows(TsonHttpException.class,
+                () -> tsonOnly.negotiate("application/json")).status());
+    }
+
+    /**
+     * <b>A JSON response is the JSON encoding of the same value</b>, through the same bindings, and names no schema
+     * in band -- JSON has no directive syntax, so the caller's {@code TSON-Schema} header is the only channel.
+     */
+    @Test
+    void aDescribedJsonResponseIsBareJsonThatReadsBack() {
+        TsonHttpCodec.Representation json = codec.negotiate("application/tson+json");
+        Note note = new Note("t", "b", null, 2);
+
+        var out = new java.io.ByteArrayOutputStream();
+        codec.writeTo(note, SCHEMA_ID, "note", json, out);
+        String written = out.toString(StandardCharsets.UTF_8);
+
+        assertFalse(written.contains("$schema") || written.contains("!!schema"), written);
+        assertEquals(note, codec.readObjectAs(json(written), "application/tson+json", SCHEMA_ID, "note", Note.class));
+    }
+
+    /**
+     * <b>A problem written as JSON is an RFC 9457 body</b>: its five members at the top level, absent ones left
+     * out rather than written {@code null}, and {@code errors} as an extension member.
+     */
+    @Test
+    void aProblemWrittenAsJsonIsRfc9457() {
+        TsonHttpException refused = assertThrows(TsonHttpException.class, () -> codec.readObjectAs(
+                json("{}"), "application/json", SCHEMA_ID, "note", Note.class));
+
+        JsonValue problem = Json.parse(new String(
+                codec.writeProblem(refused.problem(), codec.negotiate("application/json, application/problem+json")),
+                StandardCharsets.UTF_8));
+
+        assertEquals(400, problem.get("status").asInt());
+        assertTrue(problem.get("type").asString().endsWith("/invalid-document"), problem.toString());
+        assertTrue(problem.tryGet("instance").isEmpty(), "absent is omitted, not null: " + problem);
+        assertEquals("FIELD_REQUIRED", problem.get("errors").get(0).get("code").asString());
     }
 
     private JsonValue tree(String document) {

@@ -28,11 +28,14 @@ import java.util.List;
  * <h2>What the boundary does, so a handler does not have to</h2>
  *
  * <ul>
- *   <li><b>Checks {@code Accept} before the handler runs</b>, not after. Every route here produces TSON, so a
- *       client that will not take it should be told before the work is done -- and putting the check in the
- *       boundary is the only way it cannot be forgotten.</li>
- *   <li><b>Turns a failure into a status and a TSON problem body</b>, through {@link TsonHttpException#from},
- *       which is the whole policy. Nothing here re-decides what a status should be.</li>
+ *   <li><b>Negotiates {@code Accept} before the handler runs</b>, not after, through {@link
+ *       TsonHttpCodec#negotiate}. Every route produces TSON, and JSON too where the codec was built {@code
+ *       acceptingJson}, so a client that will take neither should be told before the work is done -- and
+ *       putting the check in the boundary is the only way it cannot be forgotten. What it chose is the
+ *       exchange's {@link TsonExchange#representation()}.</li>
+ *   <li><b>Turns a failure into a status and a problem body</b> in that representation, through {@link
+ *       TsonHttpException#from}, which is the whole policy. Nothing here re-decides what a status should
+ *       be.</li>
  *   <li><b>Never overwrites a response that has already been sent.</b> Status and headers go out in one call,
  *       so once a handler has committed, a later failure cannot become a 500 -- attempting it would throw
  *       inside the boundary and lose the original. The exchange is closed and the failure logged instead.</li>
@@ -86,7 +89,7 @@ public interface TsonHandler {
             TsonExchange exchange = new TsonExchange(http, codec);
             try (http) {
                 try {
-                    codec.requireTsonAcceptable(exchange.header("Accept"));
+                    exchange.representation(codec.negotiate(exchange.header("Accept")));
                     handler.handle(exchange);
                     if (!exchange.committed()) {
                         // A handler that returns without answering is a bug in the handler, not a request
@@ -110,7 +113,7 @@ public interface TsonHandler {
             if (mapped.status() >= 500) {
                 LOG.log(Level.ERROR, mapped.status() + " handling " + exchange.uri(), failure);
             }
-            exchange.respondBytes(mapped.status(), codec.writeProblem(mapped.problem()));
+            exchange.respondProblem(mapped.status(), codec.writeProblem(mapped.problem(), exchange.representation()));
         }
 
         /**
