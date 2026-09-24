@@ -6,7 +6,7 @@ import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.TsonProblemSchema;
-import io.ltr8.tson.schema.meta.FieldState;
+import io.ltr8.tson.schema.meta.FieldRole;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.RecordField;
 import org.junit.jupiter.api.Test;
@@ -36,21 +36,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ApiProbe {
 
-    static final String IFACE_ID = "https://schemas.example.com/2026/35/app/orders-1.tn";
-    static final String API_ID = "https://schemas.example.com/2026/35/app/orders-api-1.tn";
+    static final String IFACE_ID = "https://schemas.example.com/2026/36/app/orders-1.tn";
+    static final String API_ID = "https://schemas.example.com/2026/36/app/orders-api-1.tn";
 
     /** The interface: four methods over four request records, nothing HTTP in sight. */
     static final String IFACE = """
         !!id:"%s"
         !!meta:"%s"
-        !!import:"https://tson.io/2026/35/m/core.tn"
+        !!import:"https://tson.io/2026/36/m/core.tn"
         !!import:"%s"
         {
           order       => { sku: text  quantity: int32 }
           order_ref   => { id: text }
-          order_query => { status: text?  page: int32 ~ 1  page_size: int32 ~ 20 }
-          order_page  => { items: [order]  next_page: int32? }
-          new_order   => { order: order  idempotency_key: text? }
+          order_query => { status?: text  page?: int32 ~ 1  page_size?: int32 ~ 20 }
+          order_page  => { items: [order]  next_page?: int32 }
+          new_order   => { order: order  idempotency_key?: text }
 
           orders => !interface {
             @doc:"Accept an order and confirm it with the quantity doubled."
@@ -68,7 +68,7 @@ class ApiProbe {
 
           bulk => !interface { @safe page_orders => { request: order_page  response: order_page } }
 
-          order_search => { tags: [text]  status: text? }
+          order_search => { tags: [text]  status?: text }
           @doc:"A repeatable query parameter, and a second declaration of `list_orders`."
           search => !interface { @safe search_orders => { request: order_search  response: order_page }
                                  @safe list_orders   => { request: order_query  response: order_page } }
@@ -103,7 +103,7 @@ class ApiProbe {
         return """
         !!id:"%s"
         !!meta:"%s"
-        !!import:"https://tson.io/2026/35/m/core.tn"
+        !!import:"https://tson.io/2026/36/m/core.tn"
         !!import:"%s"
         {
         %s
@@ -405,17 +405,17 @@ class ApiProbe {
 
     // ── kept for comparison: a method as a TYPE, and the operation IS-A the method ──────────────
 
-    static final String LIB_ID = "https://tson.io/2026/35/ltr8/http/service-1.tn";
+    static final String LIB_ID = "https://tson.io/2026/36/ltr8/http/service-1.tn";
 
     static final String LIB_B = """
         !!id:"%s"
-        !!meta:"https://tson.io/2026/35/m/meta.tn"
-        !!import:"https://tson.io/2026/35/m/core.tn"
+        !!meta:"https://tson.io/2026/36/m/meta.tn"
+        !!import:"https://tson.io/2026/36/m/core.tn"
         {
-          method      => <Req, Resp> { request: Req  response: Resp?  safe: boolean ~ false  idempotent: boolean ~ false }
+          method      => <Req, Resp> { request: Req  response?: Resp  safe?: boolean ~ false  idempotent?: boolean ~ false }
           http_verb   => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
           status_code => !integer ^ { min: 100  max: 599 }
-          http        => { verb: http_verb  path: text  status: status_code ~ 200 }
+          http        => { verb: http_verb  path: text  status?: status_code ~ 200 }
         }""".formatted(LIB_ID);
 
     /**
@@ -424,30 +424,33 @@ class ApiProbe {
      */
     static final String IFACE_B = """
         !!id:"%s"
-        !!meta:"https://tson.io/2026/35/m/meta.tn"
-        !!import:"https://tson.io/2026/35/m/core.tn"
+        !!meta:"https://tson.io/2026/36/m/meta.tn"
+        !!import:"https://tson.io/2026/36/m/core.tn"
         !!import:"%s"
         {
           order     => { sku: text  quantity: int32 }
           order_ref => { id: text }
-          place_order  => method<order, order> & { errors: [text]? }
-          cancel_order => method<order_ref, void> & { idempotent: = true }
+          place_order  => method<order, order> & { errors?: [text] }
+          cancel_order => method<order_ref, void> & { idempotent?: = true }
         }""".formatted(IFACE_ID, LIB_ID);
 
     static final String API_B = """
         !!id:"%s"
-        !!meta:"https://tson.io/2026/35/m/meta.tn"
-        !!import:"https://tson.io/2026/35/m/core.tn"
+        !!meta:"https://tson.io/2026/36/m/meta.tn"
+        !!import:"https://tson.io/2026/36/m/core.tn"
         !!import:"%s"
         !!import:"%s"
         {
-          create_order => place_order & http & { verb: = POST  path: = "/orders"  status: = 201 }
+          create_order => place_order & http & { verb: = POST  path: = "/orders"  status?: = 201 }
         }""".formatted(API_ID, LIB_ID, IFACE_ID);
 
     /**
      * Under plain {@code meta.tn}: the operation IS-A its method, the binding reads back as fixed fields, and a
-     * plan step is a value of the method type. The cost shows in the read-back value -- schema facts declared as
-     * fields are injected into every instance, so each step carries its own URL.
+     * plan step is a value of the method type. The cost shows in every value -- schema facts declared as fields
+     * are per-instance. {@code verb: = POST} pins a field whose name is unmarked, which [TSON-SCHEMA] §5.2 makes
+     * a <em>marker</em>: never injected, so each step must write its own verb and URL, and omitting one is the
+     * missing-field error. Pinning with the name marked instead would inject, but a refinement may not relax a
+     * required field to an omissible one, so the base would have to declare {@code verb?:} to begin with.
      */
     @Test
     void aMethodAsATypeCanBeComposedIntoAnOperation() {
@@ -465,16 +468,22 @@ class ApiProbe {
 
         Map<String, RecordField> fields = new LinkedHashMap<>();
         ((RecordBody) def.body()).fields().forEach(f -> fields.put(f.name(), f));
-        assertEquals(FieldState.REQUIRED_FIXED, fields.get("verb").state());
+        assertEquals(FieldRole.FIXED, fields.get("verb").role());
         assertEquals("POST", fields.get("verb").value().orElseThrow().text());
         assertEquals("/orders", fields.get("path").value().orElseThrow().text());
         assertEquals("order", fields.get("request").type().name());
 
-        String step = """
+        String bare = """
             !!schema:"%s"
             !create_order { request: { sku: A-100  quantity: 2 } }""".formatted(API_ID);
+        String missing = assertThrows(RuntimeException.class, () -> tson.treeReader().read(bare)).getMessage();
+        assertTrue(missing.contains("missing required field 'verb'"), missing);   // the cost: a marker, not injected
+
+        String step = """
+            !!schema:"%s"
+            !create_order { request: { sku: A-100  quantity: 2 }  verb: POST  path: "/orders" }""".formatted(API_ID);
         var value = tson.treeReader().read(step);
-        assertEquals("POST", value.get("verb").asString().orElseThrow());   // the cost: injected into every value
+        assertEquals("POST", value.get("verb").asString().orElseThrow());
 
         String bad = """
             !!schema:"%s"

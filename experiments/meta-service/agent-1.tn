@@ -1,6 +1,6 @@
-!!id:"https://tson.io/2026/35/ltr8/http/agent-1.tn"
-!!meta:"https://tson.io/2026/35/m/meta.tn"
-!!import:"https://tson.io/2026/35/m/core.tn"
+!!id:"https://tson.io/2026/36/ltr8/http/agent-1.tn"
+!!meta:"https://tson.io/2026/36/m/meta.tn"
+!!import:"https://tson.io/2026/36/m/core.tn"
 @doc:"""
   TSON Agent AST — the structured middle representation
   (draft 2, brought to 2026 Revision 35 in the meta-service experiment).
@@ -22,7 +22,7 @@
   step names MUST be identifiers; `return` reserved and final; a
   string-class token whose head segment names a prior step is a
   path, totally, with rename-not-quote as the collision resolution;
-  request completeness, REQUIRED_DEFAULT injection, and positional
+  request completeness, default injection, and positional
   sugar follow constructor application. `[*]` is reserved in the
   path grammar and has no AST form in this revision — additive
   when fan-out lands.
@@ -92,7 +92,7 @@
     """
   selector => {
     step:     name
-    segments: [segment]?
+    segments?: [segment]
   }
 
   @doc:"""
@@ -126,7 +126,7 @@
     name:    name
     method:  name
     input:   {name => arg}
-    or:      constant?
+    or?:     constant
   }
 
   @doc:"""
@@ -157,9 +157,9 @@
     `detail` the categorized diagnostic.
     """
   agent_error => {
-    step:   name?
-    at:     path?
-    call:   name?
-    detail: text?
+    step?:  name
+    at?:    path
+    call?:  name
+    detail?: text
   }
 }

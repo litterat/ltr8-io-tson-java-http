@@ -1,7 +1,7 @@
-!!id:"https://tson.io/2026/35/ltr8/http/rpc-1.tn"
-!!meta:"https://tson.io/2026/35/m/meta.tn"
-!!import:"https://tson.io/2026/35/m/core.tn"
-!!import:"https://tson.io/2026/35/ltr8/http/problem-1.tn"
+!!id:"https://tson.io/2026/36/ltr8/http/rpc-1.tn"
+!!meta:"https://tson.io/2026/36/m/meta.tn"
+!!import:"https://tson.io/2026/36/m/core.tn"
+!!import:"https://tson.io/2026/36/ltr8/http/problem-1.tn"
 @doc:"""
   The wire form of an interface: one method call and its return. A packet is DATA, so this is a user
   schema, not part of the meta layer -- the meta layer says what an interface IS; this says what calling
@@ -44,10 +44,10 @@
   call => <Req> {
     interface: uri
     method:    text
-    id:        text?
-    deadline:  duration?
-    meta:      {text => text}?
-    request:   Req?
+    id?:       text
+    deadline?: duration
+    meta?:     {text => text}
+    request?:  Req
   }
 
   @doc:"""
@@ -62,13 +62,13 @@
     whether to retry needs.
     """
   return => <Resp, Err> {
-    id: text?
+    id?: text
     ( response: Resp | error: Err | fault: problem )
   }
 
   @doc:"The return of a method that declares no errors: a response, or a fault."
   return_plain => <Resp> {
-    id: text?
+    id?: text
     ( response: Resp | fault: problem )
   }
 }

@@ -1,6 +1,6 @@
-!!id:"https://schemas.example.com/2026/35/experiment/meta-service/orders-types-1.tn"
-!!meta:"https://tson.io/2026/35/m/meta.tn"
-!!import:"https://tson.io/2026/35/m/core.tn"
+!!id:"https://schemas.example.com/2026/36/experiment/meta-service/orders-types-1.tn"
+!!meta:"https://tson.io/2026/36/m/meta.tn"
+!!import:"https://tson.io/2026/36/m/core.tn"
 @doc:"""
   The types the orders examples share. Every method takes exactly one request record, which is what lets
   a binding distribute its fields over the HTTP request -- so a parameter-only endpoint has a one-field
@@ -9,7 +9,7 @@
 {
   order       => { sku: text  quantity: int32 }
   order_ref   => { id: text }
-  order_query => { status: text?  page: int32 ~ 1  page_size: int32 ~ 20 }
-  order_page  => { items: [order]  next_page: int32? }
-  new_order   => { order: order  idempotency_key: text? }
+  order_query => { status?: text  page?: int32 ~ 1  page_size?: int32 ~ 20 }
+  order_page  => { items: [order]  next_page?: int32 }
+  new_order   => { order: order  idempotency_key?: text }
 }

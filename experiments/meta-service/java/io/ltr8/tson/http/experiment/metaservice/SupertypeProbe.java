@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * untagged value, or a bare {@code !endpoint}, is refused with <em>"'endpoint' has no data of its own to bind --
  * provide an explicit type annotation naming one of its subtypes [operation, binding]"</em>, the resolver knowing
  * the subtypes; a wrong shape under a tag is the closed-record rule; and the base's vocabulary
- * ({@code status: status_code ~ 200}) is inherited and enforced on the subtypes. The abstractness is the
+ * ({@code status?: status_code ~ 200}) is inherited and enforced on the subtypes. The abstractness is the
  * binder's: the base binds to a sealed interface, found by name, permitting the two records, and the schema
  * alone would admit a bare endpoint. The same held when the inner types were {@code data} constructors deriving
  * at constructor level; a choice {@code (operation | binding)} was measured to work too and gives the weaker
@@ -37,14 +37,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class SupertypeProbe {
 
-    static final String DOC_ID = "https://schemas.example.com/2026/35/app/probe-s-1.tn";
+    static final String DOC_ID = "https://schemas.example.com/2026/36/app/probe-s-1.tn";
 
     /** Resolves {@code r => !api { "/o" => <resource> }} and hands back the resource, or the problems. */
     static List<Diagnostic> problems(String resource, Object[] resourceOut) {
         String doc = """
             !!id:"%s"
             !!meta:"%s"
-            !!import:"https://tson.io/2026/35/m/core.tn"
+            !!import:"https://tson.io/2026/36/m/core.tn"
             {
               order => { sku: text }
               r => !api { "/o" => %s }

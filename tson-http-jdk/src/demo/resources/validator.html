@@ -154,16 +154,16 @@
   Empty the schema pane to ask for a Class&nbsp;1 read — base syntax and the built-in type vocabulary, no
   schema in scope. That is what a JSON document gets, and what a document naming no <code>!!schema</code>
   gets. The service publishes its own envelope at
-  <code><a href="/2026/35/app/validate-1.tn">/2026/35/app/validate-1.tn</a></code> and describes itself at
-  <code><a href="/2026/35/app/validate-api-1.tn">/2026/35/app/validate-api-1.tn</a></code>.
+  <code><a href="/2026/36/app/validate-1.tn">/2026/36/app/validate-1.tn</a></code> and describes itself at
+  <code><a href="/2026/36/app/validate-api-1.tn">/2026/36/app/validate-api-1.tn</a></code>.
 </footer>
 
 <script>
-const ENVELOPE = "https://schemas.example.com/2026/35/app/validate-1.tn";
+const ENVELOPE = "https://schemas.example.com/2026/36/app/validate-1.tn";
 
 const PEOPLE = `!!id:"https://example.com/people.tn"
-!!meta:"https://tson.io/2026/35/m/meta.tn"
-!!import:"https://tson.io/2026/35/m/core.tn"
+!!meta:"https://tson.io/2026/36/m/meta.tn"
+!!import:"https://tson.io/2026/36/m/core.tn"
 @doc:"The demo schema: an employee record."
 {
   @doc:"A person on the payroll."
@@ -174,7 +174,7 @@ const PEOPLE = `!!id:"https://example.com/people.tn"
     email:     email
     started:   date
     active:    boolean
-    tags:      [non_empty_text]?
+    tags?:      [non_empty_text]
   }
 }
 `;
@@ -249,8 +249,8 @@ const SCENARIOS = [
     // The schema is the thing at fault, so the data is never looked at -- which is what `phase` reports.
     id: 'badschema', label: 'broken schema',
     schema: `!!id:"https://example.com/people.tn"
-!!meta:"https://tson.io/2026/35/m/meta.tn"
-!!import:"https://tson.io/2026/35/m/core.tn"
+!!meta:"https://tson.io/2026/36/m/meta.tn"
+!!import:"https://tson.io/2026/36/m/core.tn"
 {
   employee => {
     id:   uuid

@@ -24,16 +24,16 @@ Can one meta layer hold all three, and what does the third actually need?
 (guide: [`examples.md`](examples.md)). Two entries a governed
 schema writes, and both are **maps**:
 
-- `interface => data & { extends: [type_name]?  methods: {method_name => method} }` -- a named, documented map
+- `interface => data & { extends?: [type_name]  methods: {method_name => method} }` -- a named, documented map
   of methods. A method is a map *value* under its name, so the name is scoped to its interface (two interfaces
   may both declare `place_order`), a `@doc` before the key documents it, and the `!method` tag is optional under
   the typed slot. `extends` names other interfaces whose methods this one also has.
-- `api => data & { implements: [type_name]?  not_bound: {method_name => text}?  resources: {path_template => resource} }`
+- `api => data & { implements?: [type_name]  not_bound?: {method_name => text}  resources: {path_template => resource} }`
   and `resource => data & { endpoints: {http_verb => endpoint} }` -- resources keyed by **path**, each holding
   endpoints keyed by **verb**: OpenAPI's `paths`, arrived at from the key types. A path key is data, so
   `/orders/{id}` needs no identifier minted from it and an endpoint needs no invented name.
 - `endpoint => placement & { status ~ 200 }`, with `operation => endpoint & signature` and `binding =>
-  endpoint & { method: method_name  interface: type_name? }` composing it. An `!operation` carries its
+  endpoint & { method: method_name  interface?: type_name }` composing it. An `!operation` carries its
   signature inline, for an api with no interface behind it; a `!binding` borrows a method's. The tag says
   which, and it is not optional: the base binds to a type with no bare form, so an untagged value is refused
   naming both subtypes -- the one-or-the-other rule with no reader behind it. The verb and path are the keys an
@@ -73,7 +73,7 @@ identifier the resolver does not check, because a `kind: DATA` entry cannot be r
 computes its `Placement`, and holds the `implements` claim. The probes:
 
 - `MetaServiceSketchProbe` -- the sketch resolves and its constructs behave as assumed: a `data` constructor
-  with a record mixin and no body; an error type's `REQUIRED_FIXED` status readable from the resolved schema; and the
+  with a record mixin and no body; an error type's fixed status readable from the resolved schema; and the
   rule the
   design bends around, a `data` *instance* named as a type refused at load.
 - `InterfaceMapProbe` -- the finding the map design rests on, below.
@@ -120,18 +120,20 @@ The map shape softens the cost: the names being related are keys inside two entr
 **B. A method is a type -- the type of its call record.** Under plain `meta.tn`, no meta layer at all:
 
 ```
-method => <Req, Resp> { request: Req  response: Resp?  safe: boolean ~ false  idempotent: boolean ~ false }
-http   => { verb: http_verb  path: text  status: status_code ~ 200 }
+method => <Req, Resp> { request: Req  response?: Resp  safe?: boolean ~ false  idempotent?: boolean ~ false }
+http   => { verb: http_verb  path: text  status?: status_code ~ 200 }
 
-place_order  => method<order, order> & { errors: [sku_not_found]? }
-create_order => place_order & http & { verb: = POST  path: = "/orders"  status: = 201 }
+place_order  => method<order, order> & { errors?: [sku_not_found] }
+create_order => place_order & http & { verb: = POST  path: = "/orders"  status?: = 201 }
 ```
 
-The operation IS-A its method, the binding reads back as `REQUIRED_FIXED` fields, and a plan step is a value
-of the method type -- `!create_order { request: { … } }` reads, `verb: GET` on it is refused. Two things it
-taught: `place_order => method<order, order>` alone is an alias to an instantiation with no body to compose
-with (give it `& { … }`); and schema facts stated as fields are injected into every instance, so each value
-carries its own URL. That cost is what the third option removes.
+The operation IS-A its method, the binding reads back as fixed fields, and a plan step is a value of the method
+type -- `!create_order { request: { … }  verb: POST  path: "/orders" }` reads, `verb: GET` on it is refused. Two
+things it taught: `place_order => method<order, order>` alone names an instantiation with no body to compose with
+(give it `& { … }`); and schema facts stated as fields are per-instance. `verb: = POST` pins a field whose name is
+unmarked, which [TSON-SCHEMA] §5.2 makes a *marker* the value must write -- never injected -- so each step
+restates its verb and URL, and a refinement cannot relax the base's required `verb` to an omissible one that
+would inject instead. That cost is what the third option removes.
 
 **C. The spec change.** The kernel's own 2×2 -- record (names → data), schema (names → declarations), map
 (data → data) -- has an empty cell: a keyed set of declarations whose keys are values, `!api { "/orders" => … }`.
@@ -171,7 +173,7 @@ path_template => !text ^ { pattern: "/([^/{}]+|\\{[A-Za-z_][A-Za-z0-9_]*\\})*" }
                                                     an api's keys: an RFC 3986 path with {segments}
 header_name   => !text ^ { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+" }    a `headers` value: an RFC 9110 token
 
-interface => data & { extends: [type_name]?  methods: {method_name => method} }
+interface => data & { extends?: [type_name]  methods: {method_name => method} }
 api       => data & { … resources: {path_template => resource} }
 ```
 

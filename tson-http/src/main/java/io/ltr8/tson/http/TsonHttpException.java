@@ -104,7 +104,7 @@ public final class TsonHttpException extends RuntimeException {
      * behaviour, where a schema identity under {@code tson.io} is a fact about the format. The two hosts keep
      * that apart -- the specification's, and the implementation resource that stands beside it.
      */
-    public static final String TYPES = "https://ltr8.io/2026/35/http/problems/";
+    public static final String TYPES = "https://ltr8.io/2026/36/http/problems/";
 
     /** RFC 9457's own default: no semantics beyond the status code. */
     public static final String ABOUT_BLANK = "about:blank";

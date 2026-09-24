@@ -56,12 +56,12 @@ import java.util.concurrent.Executors;
 public final class ValidatorServer {
 
     /** The envelope this service reads and writes. */
-    public static final String VALIDATE_ID = "https://schemas.example.com/2026/35/app/validate-1.tn";
+    public static final String VALIDATE_ID = "https://schemas.example.com/2026/36/app/validate-1.tn";
 
     public static final String VALIDATE = schema("validate-1.tn");
 
     /** This service's own description, published and resolved at startup like any other schema. */
-    public static final String API_ID = "https://schemas.example.com/2026/35/app/validate-api-1.tn";
+    public static final String API_ID = "https://schemas.example.com/2026/36/app/validate-api-1.tn";
 
     public static final String API = schema("validate-api-1.tn");
 
@@ -377,8 +377,8 @@ public final class ValidatorServer {
 
                 The schemas it publishes:
 
-                  curl -s http://localhost:%d/2026/35/app/validate-1.tn
-                  curl -s http://localhost:%d/2026/35/ltr8/http/deployment-1.tn
+                  curl -s http://localhost:%d/2026/36/app/validate-1.tn
+                  curl -s http://localhost:%d/2026/36/ltr8/http/deployment-1.tn
                 """.formatted(bound, bound, bound, bound, bound));
     }
 }

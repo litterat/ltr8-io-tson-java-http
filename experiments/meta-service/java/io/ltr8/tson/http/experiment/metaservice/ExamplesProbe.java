@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ExamplesProbe {
 
-    static final String EXAMPLES = "https://schemas.example.com/2026/35/experiment/meta-service/";
+    static final String EXAMPLES = "https://schemas.example.com/2026/36/experiment/meta-service/";
 
     static Tson tson() {
         Map<String, String> lib = new LinkedHashMap<>();
@@ -179,14 +179,13 @@ class ExamplesProbe {
     }
 
     /**
-     * One closed template application, as its fields: the entry is a REFERENCE onto a synthetic instantiation
-     * whose own source is the template it closes, so both halves -- which template, over what -- are readable
-     * from the resolved schema without parsing the generated name.
+     * One closed template application, as its fields: a declaration naming an application is that application's
+     * entry ([TSON-SCHEMA] §8.2), so the entry's own source is the template it closes, and both halves -- which
+     * template, over what -- are readable from the resolved schema without parsing a generated name.
      */
     static Map<String, String> closedOver(Map<String, TypeDefinition> wire, String entry, String template) {
-        TypeDefinition reference = wire.get(entry);
-        assertNotNull(reference, "the wire schema declares no '" + entry + "'");
-        TypeDefinition closed = wire.get(reference.source().orElseThrow().name());
+        TypeDefinition closed = wire.get(entry);
+        assertNotNull(closed, "the wire schema declares no '" + entry + "'");
         assertEquals(template, closed.source().orElseThrow().name(), entry + " closes the wrong template");
         Map<String, String> fields = new LinkedHashMap<>();
         assertInstanceOf(RecordBody.class, closed.body()).fields()

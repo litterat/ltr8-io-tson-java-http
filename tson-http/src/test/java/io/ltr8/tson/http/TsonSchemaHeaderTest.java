@@ -19,13 +19,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TsonSchemaHeaderTest {
 
-    private static final String V1 = "https://schemas.example.com/2026/35/app/order-1.tn";
-    private static final String V2 = "https://schemas.example.com/2026/35/app/order-2.tn";
+    private static final String V1 = "https://schemas.example.com/2026/36/app/order-1.tn";
+    private static final String V2 = "https://schemas.example.com/2026/36/app/order-2.tn";
 
     private static final String V1_SCHEMA = """
-            !!id:"https://schemas.example.com/2026/35/app/order-1.tn"
-            !!meta:"https://tson.io/2026/35/m/meta.tn"
-            !!import:"https://tson.io/2026/35/m/core.tn"
+            !!id:"https://schemas.example.com/2026/36/app/order-1.tn"
+            !!meta:"https://tson.io/2026/36/m/meta.tn"
+            !!import:"https://tson.io/2026/36/m/core.tn"
             { order => { sku: text  quantity: int32 } }
             """;
 
@@ -170,12 +170,12 @@ class TsonSchemaHeaderTest {
     @Test
     void aBodyWithNoMarkSupportIsStillReadableAfterTheLook() {
         String document = """
-                !!schema:"https://schemas.example.com/2026/35/app/order-1.tn"
+                !!schema:"https://schemas.example.com/2026/36/app/order-1.tn"
                 !order { sku: "ABC-1"  quantity: 3 }""";
 
         TsonSchemaHeader.Governing governing = TsonSchemaHeader.resolve(TSON.begin(oneShot(document)), null);
 
-        assertEquals(Optional.of("https://schemas.example.com/2026/35/app/order-1.tn"), governing.schema());
+        assertEquals(Optional.of("https://schemas.example.com/2026/36/app/order-1.tn"), governing.schema());
         var order = TSON.treeReader().read(governing.body());
         assertEquals("ABC-1", order.get("sku").asString().orElseThrow(),
                 "the value half of the document, read after the header was taken off it");
