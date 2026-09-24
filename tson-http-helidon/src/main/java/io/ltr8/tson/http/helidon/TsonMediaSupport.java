@@ -7,9 +7,8 @@ import io.helidon.http.WritableHeaders;
 import io.helidon.http.media.EntityReader;
 import io.helidon.http.media.EntityWriter;
 import io.helidon.http.media.MediaSupport;
-import io.ltr8.tson.http.TsonAcceptHeader;
 import io.ltr8.tson.http.TsonHttpCodec;
-import io.ltr8.tson.http.TsonMediaType;
+import io.ltr8.tson.http.TsonHttpException;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -42,11 +41,13 @@ import java.io.OutputStream;
  * <b>{@link TsonHandler#install} is not optional when using this</b>. Without it, Helidon renders its own error
  * page and the diagnostics are lost.
  *
- * <p><b>Support level says why it matched.</b> A request that names {@code application/tson} is
- * {@code SUPPORTED}; one that names nothing at all is {@code COMPATIBLE}, so an explicit handler for another
- * type still wins; anything that names a different type is {@code NOT_SUPPORTED}. The same three-way answer on
- * the write side reads {@code Accept} through {@link TsonAcceptHeader}, which is where q-values and
- * specificity are already handled.
+ * <p><b>Support level says why it matched.</b> A request whose body is one the codec reads -- {@code
+ * application/tson}, and JSON too where the codec was built {@code acceptingJson} -- is {@code SUPPORTED}; one
+ * that names nothing at all is {@code COMPATIBLE}, so an explicit handler for another type still wins; anything
+ * else is {@code NOT_SUPPORTED}. Which bodies those are is the codec's answer, never a second list here. The write
+ * side asks {@link TsonHttpCodec#negotiate}, which is where q-values, specificity and the choice between TSON and
+ * JSON are already handled, and writes what it chose: {@code SUPPORTED} where {@code Accept} named that type,
+ * {@code COMPATIBLE} where the client only took it through a range.
  */
 public final class TsonMediaSupport implements MediaSupport {
 
@@ -85,26 +86,28 @@ public final class TsonMediaSupport implements MediaSupport {
     public <T> WriterResponse<T> writer(GenericType<T> type, Headers requestHeaders,
                                         WritableHeaders<?> responseHeaders) {
         String accept = requestHeaders.first(HeaderNames.ACCEPT).orElse(null);
-        if (!TsonAcceptHeader.parse(accept).acceptsTson()) {
+        TsonHttpCodec.Representation representation;
+        try {
+            representation = codec.negotiate(accept);
+        } catch (TsonHttpException notAcceptable) {
             return WriterResponse.unsupported();
         }
-        // COMPATIBLE rather than SUPPORTED when the client only said */* -- it will take TSON, but it did not
+        // COMPATIBLE rather than SUPPORTED when the client only said */* -- it will take this, but it did not
         // ask for it, so a media support that was actually named should win.
-        SupportLevel level = accept != null && accept.contains(TsonMediaType.APPLICATION_TSON.toString())
+        SupportLevel level = accept != null && accept.contains(representation.mediaType().toString())
                 ? SupportLevel.SUPPORTED
                 : SupportLevel.COMPATIBLE;
-        return new WriterResponse<>(level, () -> new Writer<>(codec));
+        return new WriterResponse<>(level, () -> new Writer<>(codec, representation));
     }
 
-    /** How well this support matches what the request says its body is. */
-    private static SupportLevel level(Headers requestHeaders) {
+    /** How well this support matches what the request says its body is -- asked of the codec, which decides. */
+    private SupportLevel level(Headers requestHeaders) {
         return requestHeaders.first(HeaderNames.CONTENT_TYPE)
                 .map(contentType -> {
                     try {
-                        return TsonMediaType.parse(contentType).isTson()
-                                ? SupportLevel.SUPPORTED
-                                : SupportLevel.NOT_SUPPORTED;
-                    } catch (IllegalArgumentException notAMediaType) {
+                        codec.requireTsonBody(contentType);
+                        return SupportLevel.SUPPORTED;
+                    } catch (TsonHttpException unreadable) {
                         return SupportLevel.NOT_SUPPORTED;
                     }
                 })
@@ -134,8 +137,12 @@ public final class TsonMediaSupport implements MediaSupport {
         }
     }
 
-    /** Writes an entity by delegating to the codec, streaming into Helidon's own output stream. */
-    private record Writer<T>(TsonHttpCodec codec) implements EntityWriter<T> {
+    /**
+     * Writes an entity by delegating to the codec, in the representation {@link #writer} negotiated, streaming
+     * into Helidon's own output stream.
+     */
+    private record Writer<T>(TsonHttpCodec codec, TsonHttpCodec.Representation representation)
+            implements EntityWriter<T> {
 
         @Override
         public void write(GenericType<T> type, T object, OutputStream stream, Headers requestHeaders,
@@ -146,8 +153,8 @@ public final class TsonMediaSupport implements MediaSupport {
         @Override
         public void write(GenericType<T> type, T object, OutputStream stream,
                           WritableHeaders<?> responseHeaders) {
-            responseHeaders.set(HeaderNames.CONTENT_TYPE, TsonMediaType.APPLICATION_TSON.toString());
-            codec.writeTo(object, stream);
+            responseHeaders.set(HeaderNames.CONTENT_TYPE, representation.mediaType().toString());
+            codec.writeTo(object, representation, stream);
             try {
                 stream.close();
             } catch (java.io.IOException e) {

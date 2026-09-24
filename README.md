@@ -17,8 +17,9 @@ Four modules:
 rather than by calling handlers, because the point of three adapters is that each framework's own body and
 content-negotiation handling differs. Each proves the same loop: a schema served at its own identity path,
 fetched back over HTTP under policy, and used to validate a posted document. Serves multiple schema versions
-side by side, routed by the `TSON-Schema` header ([TSON-JSON] §3.5) or the body's own `!!schema`, and validates JSON bodies
-against TSON schemas. A service also publishes a description of itself, as a schema whose payload types the
+side by side, routed by the `TSON-Schema` header ([TSON-JSON] §3.5) or the body's own `!!schema`, and speaks JSON
+where an endpoint opts in: a JSON body validated against a TSON schema, and a JSON reply for a client that prefers
+one. A service also publishes a description of itself, as a schema whose payload types the
 compiler resolves — and the examples below are executed by a test, so they are true or the build fails.
 
 ## Try it

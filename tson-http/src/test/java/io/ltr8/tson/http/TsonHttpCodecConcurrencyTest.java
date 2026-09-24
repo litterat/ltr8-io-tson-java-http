@@ -189,6 +189,23 @@ class TsonHttpCodecConcurrencyTest {
     }
 
     /**
+     * The JSON writer, shared as the TSON one is, from a cold start: each thread writes its own value as JSON and
+     * reads it back, so a crossed or torn document is a wrong value rather than only a throw.
+     */
+    @Test
+    @Timeout(120)
+    void writesJsonConcurrentlyFromColdStart() throws Exception {
+        TsonHttpCodec both = codec.acceptingJson();
+        TsonHttpCodec.Representation json = both.negotiate("application/tson+json");
+        hammer((thread, i) -> {
+            Order expected = new Order("SKU-" + thread + "-" + i, thread * 1000 + i);
+            byte[] written = both.write(expected, json);
+            assertEquals(expected, both.readObjectAs(new ByteArrayInputStream(written), "application/tson+json",
+                    SCHEMA_ID, "order", Order.class));
+        });
+    }
+
+    /**
      * Writers hold a bind context and build a fresh emitter per call; this is the claim that they may be
      * shared -- given the descriptor for what is being written has been prepared. See {@link #setUp}.
      */

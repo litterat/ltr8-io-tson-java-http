@@ -11,6 +11,7 @@ import io.ltr8.tson.compiler.TsonDocumentPeek;
 import io.ltr8.tson.compiler.TsonObjectWriter;
 import io.ltr8.tson.compiler.TsonTreeWriter;
 import io.ltr8.tson.json.Json;
+import io.ltr8.tson.json.JsonObjectWriter;
 import io.ltr8.tson.json.tree.JsonValue;
 import io.ltr8.tson.tree.TsonValue;
 
@@ -48,9 +49,10 @@ import java.util.function.Supplier;
  * -- the write-side counterpart to reading from an {@code InputStream}. The buffering {@link #write}/
  * {@link #writeTree} remain for a caller that wants the bytes in hand, typically to set {@code Content-Length}.
  *
- * <p><b>A JSON body is opt-in, and read by the JSON reader.</b> {@link #acceptingJson} admits one and reads it
- * through [TSON-JSON]'s own reader, under the same policy, binding and registered schemas as a TSON body. See
- * that method for what it takes to read one.
+ * <p><b>JSON is opt-in, in both directions.</b> {@link #acceptingJson} admits a JSON request body and reads it
+ * through [TSON-JSON]'s own reader, under the same policy, binding and registered schemas as a TSON body, and
+ * lets {@link #negotiate} choose JSON for a response. See that method for what it takes to read one, and
+ * {@link Representation} for what a response written as JSON can and cannot carry.
  *
  * <p>{@link #writeProblem} is deliberately only buffered. Streaming an error body means a failure part-way
  * through leaves a client holding a truncated problem on a response whose status is already sent, which is worse
@@ -65,6 +67,9 @@ public final class TsonHttpCodec {
     /** The JSON encoding's front door over the same configuration, or {@code null} where JSON is not admitted. */
     private final Json json;
 
+    /** The JSON writer every JSON response goes through, or {@code null} with {@link #json}. */
+    private final JsonObjectWriter jsonWriter;
+
     /** A codec over {@code tson}, whose schemas are expected to be already resolved. */
     public TsonHttpCodec(Tson tson) {
         this(tson, null);
@@ -72,6 +77,7 @@ public final class TsonHttpCodec {
 
     private TsonHttpCodec(Tson tson, Json json) {
         this.json = json;
+        this.jsonWriter = json == null ? null : json.objectWriter();
         this.tson = tson;
         this.objectWriter = tson.objectWriter();
         this.treeWriter = tson.treeWriter();
@@ -330,6 +336,157 @@ public final class TsonHttpCodec {
     }
 
     /**
+     * Which encoding a response is written in, and under which media types -- what {@link #negotiate} chose from
+     * a request's {@code Accept}, and what an adapter holds for the rest of that request.
+     *
+     * <p><b>A JSON response carries what the JSON encoding can.</b> [TSON-JSON] has no directive syntax and
+     * tson-java's JSON writer is class-directed, so a JSON body cannot name its own schema: a response that
+     * would be self-describing in TSON names it in the {@code TSON-Schema} header alone, which is §3.5's
+     * out-of-band carrier on a response as on a request. And a tree is the TSON encoding's own model, so a
+     * {@code TsonValue} is written as TSON or not at all -- {@link #requireTson} is that rule.
+     *
+     * <p><b>A problem written as JSON is RFC 9457's own format.</b> {@code problem-1.tn}'s {@code problem} is
+     * RFC 9457's five members plus {@code errors}, an extension member, so its JSON encoding <em>is</em> an
+     * {@code application/problem+json} body, and is labelled so wherever the client accepts that type; where it
+     * accepts only the negotiated JSON type, it is labelled with that.
+     *
+     * @param mediaType        the {@code Content-Type} of an ordinary response
+     * @param problemMediaType the {@code Content-Type} of an error body
+     * @param tsonAcceptable   whether the client would also take {@code application/tson}, for a response that
+     *                         only TSON can carry
+     */
+    public record Representation(TsonMediaType mediaType, TsonMediaType problemMediaType, boolean tsonAcceptable) {
+
+        /** TSON, which every codec writes, and what a codec without {@link #acceptingJson} always negotiates. */
+        public static final Representation TSON =
+                new Representation(TsonMediaType.APPLICATION_TSON, TsonMediaType.APPLICATION_TSON, true);
+
+        /** Whether a response is written in [TSON-JSON]'s encoding. */
+        public boolean json() {
+            return !mediaType.isTson();
+        }
+
+        /**
+         * The media type of a response only TSON can carry -- a tree, or bytes a caller encoded as TSON: {@code
+         * application/tson} wherever the client will take it, even at a lower quality than the JSON it preferred,
+         * since a server may send any representation the client accepts.
+         *
+         * @throws TsonHttpException 406 where the client accepts no TSON at all
+         */
+        public TsonMediaType requireTson() {
+            if (!tsonAcceptable) {
+                throw TsonHttpException.notAcceptable("this response exists only as "
+                        + TsonMediaType.APPLICATION_TSON + ", which the request's Accept rules out");
+            }
+            return TsonMediaType.APPLICATION_TSON;
+        }
+    }
+
+    /**
+     * Chooses the representation of this request's response from its {@code Accept}, before a handler does the
+     * work of producing one. A codec without {@link #acceptingJson} produces TSON only, so this is {@link
+     * #requireTsonAcceptable} returning {@link Representation#TSON}. One built {@code acceptingJson} also offers
+     * {@code application/tson+json} and {@code application/json}, and the client's highest quality wins.
+     *
+     * <p><b>A tie goes to TSON</b> -- {@code *&#47;*}, {@code application/*}, or no {@code Accept} at all. TSON is
+     * the encoding a response can name its own schema in, so where a client has no preference it gets the
+     * self-describing one. Between the two JSON types a tie goes to {@code application/tson+json}, the one that
+     * says what the body is.
+     *
+     * @param accept the request's {@code Accept} header, or {@code null} if it sent none -- which means "anything"
+     * @throws TsonHttpException 406 if the client accepts none of what this codec produces
+     */
+    public Representation negotiate(String accept) {
+        if (json == null) {
+            requireTsonAcceptable(accept);
+            return Representation.TSON;
+        }
+        TsonAcceptHeader header = TsonAcceptHeader.parse(accept);
+        double tson = header.quality(TsonMediaType.APPLICATION_TSON);
+        TsonMediaType best = TsonMediaType.APPLICATION_TSON;
+        double bestQuality = tson;
+        for (TsonMediaType candidate : List.of(TsonMediaType.APPLICATION_TSON_JSON, TsonMediaType.APPLICATION_JSON)) {
+            double quality = header.quality(candidate);
+            if (quality > bestQuality) {
+                best = candidate;
+                bestQuality = quality;
+            }
+        }
+        if (bestQuality <= 0.0) {
+            throw TsonHttpException.notAcceptable("this endpoint produces " + TsonMediaType.APPLICATION_TSON + ", "
+                    + TsonMediaType.APPLICATION_TSON_JSON + " and " + TsonMediaType.APPLICATION_JSON + ", which '"
+                    + accept + "' accepts none of");
+        }
+        if (best.isTson()) {
+            return Representation.TSON;
+        }
+        TsonMediaType problem = header.accepts(TsonMediaType.APPLICATION_PROBLEM_JSON)
+                ? TsonMediaType.APPLICATION_PROBLEM_JSON
+                : best;
+        return new Representation(best, problem, tson > 0.0);
+    }
+
+    /** Whether this codec admits and produces JSON -- whether it was built {@link #acceptingJson}. */
+    public boolean admitsJson() {
+        return json != null;
+    }
+
+    /**
+     * {@link #writeTo(Object, OutputStream)} in {@code representation}'s encoding: TSON, or [TSON-JSON]'s through
+     * the JSON writer, over the same bindings. Streamed; the stream is flushed and not closed.
+     */
+    public void writeTo(Object value, Representation representation, OutputStream out) {
+        if (representation.json()) {
+            jsonWriter(representation).write(value, out);
+        } else {
+            objectWriter.write(value, out);
+        }
+    }
+
+    /** {@link #writeTo(Object, Representation, OutputStream)}, in hand. */
+    public byte[] write(Object value, Representation representation) {
+        return buffered(out -> writeTo(value, representation, out));
+    }
+
+    /**
+     * {@link #writeTo(Object, String, String, OutputStream)} in {@code representation}'s encoding. As TSON the
+     * document names its schema and root type in band; as JSON it cannot ({@link Representation}), so it is
+     * written bare and the caller names the schema in the {@code TSON-Schema} header -- which an adapter's {@code
+     * respondDescribed} does in both encodings.
+     */
+    public void writeTo(Object value, String schemaUri, String rootTypeName, Representation representation,
+                        OutputStream out) {
+        if (representation.json()) {
+            jsonWriter(representation).write(value, out);
+        } else {
+            writeTo(value, schemaUri, rootTypeName, out);
+        }
+    }
+
+    /**
+     * {@link #writeProblem(TsonProblem)} in {@code representation}'s encoding -- as JSON, an RFC 9457 {@code
+     * application/problem+json} body. Buffered, for the same reason.
+     */
+    public byte[] writeProblem(TsonProblem problem, Representation representation) {
+        if (!representation.json()) {
+            return writeProblem(problem);
+        }
+        try {
+            return buffered(out -> jsonWriter(representation).write(problem, out));
+        } catch (RuntimeException e) {
+            throw new IllegalStateException("failed to render this server's own problem body as JSON", e);
+        }
+    }
+
+    private JsonObjectWriter jsonWriter(Representation representation) {
+        if (jsonWriter == null) {
+            throw new IllegalStateException(representation.mediaType() + " was negotiated by a codec that does "
+                    + "not produce JSON -- negotiate with the codec that writes the response");
+        }
+        return jsonWriter;
+    }
+
+    /**
      * An error body. Kept separate from {@link #write} because it must not fail the way an ordinary write can:
      * a failure here happens while already handling a failure, and losing the original problem to a second one
      * leaves a client with nothing to act on. A problem that cannot be rendered as TSON is a fault in this
@@ -346,8 +503,9 @@ public final class TsonHttpCodec {
     /**
      * A codec that also admits a JSON body -- {@code application/tson+json}, [TSON-JSON]'s own media type, and
      * {@code application/json} or any other {@code +json} type -- <b>read by the JSON reader</b>, tson-java's
-     * {@code tson-json}. Opt-in, because "reads TSON" and "reads JSON" are different promises: an endpoint that
-     * wants only TSON goes on answering 415, and does by default.
+     * {@code tson-json} -- and that also <b>writes</b> JSON, wherever {@link #negotiate} finds the client
+     * prefers it. Opt-in, because "speaks TSON" and "speaks JSON" are different promises: an endpoint that wants
+     * only TSON goes on answering a JSON body 415 and a JSON-only {@code Accept} 406, and does by default.
      *
      * <p><b>One configuration, both encodings.</b> The JSON reader is built from this codec's own {@code Tson}:
      * the same processor policy (§9.1's limits and §8.2's name hygiene), the same {@code DataBindContext}, and the

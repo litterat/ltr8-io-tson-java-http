@@ -97,7 +97,9 @@ Package group `io.ltr8`, as in tson-java (reverse-DNS names who *publishes*, not
   types (`TsonContext`, `TsonHandler` with `asHandler`/`install`, `TsonSchemaHandler`), plus the one thing no
   other adapter can offer: **`TsonMediaSupport`**, an implementation of Helidon's `MediaSupport` SPI. Register
   it once and a plain handler reads and writes TSON through `req.content().as(Order.class)` and
-  `res.send(order)` with no TSON-specific code — same codec, same validation, same diagnostics.
+  `res.send(order)` with no TSON-specific code — same codec, same validation, same diagnostics. Over a codec
+  built `acceptingJson` it reads and writes JSON the same way: which bodies it claims is the codec's answer
+  (`requireTsonBody`), and what it writes is `negotiate`'s.
 
   **`TsonHandler.install` is not optional when using `TsonMediaSupport`.** The read happens inside Helidon's
   entity machinery, before any handler code runs, so there is no handler boundary to catch a rejection.
@@ -139,8 +141,10 @@ each other.
 `tson-http-jdk` sets the pattern the other two adapters follow. An adapter is a translation layer and holds
 no TSON knowledge of its own; what it *does* own is the error boundary, and that boundary has four jobs:
 
-1. **Check `Accept` before the handler runs.** Every route produces TSON, so a client that will not take it
-   is told before the work is done — and only the boundary can make that unforgettable.
+1. **Negotiate `Accept` before the handler runs**, through `TsonHttpCodec.negotiate`, and hold the
+   `Representation` it returns for the rest of the request. Every route produces TSON, and JSON too where the
+   codec was built `acceptingJson`, so a client that will take neither is told before the work is done — and
+   only the boundary can make that unforgettable. The response and any problem are written in what it chose.
 2. **Map a failure through `TsonHttpException.from`, and nothing else.** An adapter never re-decides a
    status. What `from` declines to classify is a fault in this server: catch the rethrow, make it a 500.
 3. **Never overwrite a committed response.** Status and headers go out together, so after a handler has
@@ -746,7 +750,7 @@ Each cost a debugging cycle here and is pinned by a test.
   used to present as `UnsupportedOperationException: no usable compiled reader`, which this project mapped to
   501 — reporting a missing line of its own configuration as "this library cannot do that". Pinned by
   `TsonHttpCodecTest.aTypeNothingBindsIsAServerFaultNotALibraryGap`.
-- **A JSON body is read by the JSON reader, and only where the endpoint opted in.** TSON is JSON-*like* and
+- **JSON is read by the JSON reader and written by the JSON writer, and only where the endpoint opted in.** TSON is JSON-*like* and
   **is not a JSON superset** ([TSON-DATA] §6); JSON is a second encoding of the same model, defined by
   **[TSON-JSON]** (spec Part 3) with its own media type, `application/tson+json`. `acceptingJson()` admits that,
   `application/json` and any other `+json` type, and reads all of them with tson-java's **`tson-json`**. The
@@ -780,9 +784,28 @@ Each cost a debugging cycle here and is pinned by a test.
   refused at `a?: T`, which is how every optional field here is spelled — omit it instead. A client writing
   `null` for such a field gets a 400, correctly; if a public schema should take one, spell the field `a?: T?`.
 
-  **Responses stay TSON.** Nothing here writes JSON, so a JSON client must still accept `application/tson`;
-  `Accept: application/json` alone is a 406. Helidon's `TsonMediaSupport` claims `application/tson` only, so a
-  JSON body there goes through a handler calling the codec, not through `req.content().as(…)`.
+  **The write side is negotiated, and has three rules of its own.** `negotiate` offers `application/tson`,
+  `application/tson+json` and `application/json` on a codec built `acceptingJson` (TSON alone otherwise) and
+  the client's highest quality wins; **a tie goes to TSON**, the encoding a response can name its schema in, so
+  `*/*` or no `Accept` at all still gets self-describing TSON. Then:
+  - **A JSON response names its schema in the header, because it cannot in band.** tson-java's JSON writer is
+    class-directed and JSON has no directive syntax, so `respondDescribed(status, value, schemaUri, rootType)`
+    — on all three adapters — sets `TSON-Schema` in both encodings and adds `!!schema` only to TSON. Prefer it
+    to `respondBytes(codec.write(value, schema, root))`, which can only ever be TSON.
+  - **A response only TSON can carry falls back to TSON, or is a 406.** A `TsonValue` is the TSON encoding's
+    tree and `respondBytes` holds bytes the caller encoded, so both are sent as `application/tson` wherever the
+    client accepts it *at all* — a server may send any representation the client accepts — and are a 406
+    where it accepts none. `Representation.requireTson()` is that rule, applied before the response commits so
+    the 406 is still a problem body. It is also why a schema route answers a JSON-only client 406: a schema
+    document is TSON text in every encoding.
+  - **A problem written as JSON is `application/problem+json`.** `problem-1.tn`'s `problem` is RFC 9457's five
+    members plus `errors`, an extension member, and the JSON writer omits an absent member rather than writing
+    `null` — so its JSON encoding *is* an RFC 9457 body. It is labelled `application/problem+json` where the
+    client's `Accept` admits that type, and with the negotiated JSON type where it does not, so a client that
+    asked only for `application/json` is not answered in a type it never named.
+
+  A failure from a *plain* route (`install` on Javalin and Helidon) negotiates too, and falls back to TSON
+  where nothing is acceptable: the failure being reported is not a 406, and the client is still owed a body.
 - **Peek a request body with `TsonHttpCodec.begin`, and pass the peek on — it *is* the body.** A body is
   one-shot, and `TsonDocumentPeek` is the continuation handle: the header has been read and a reader continues
   from just past it, so nothing is buffered and re-fed and `document()` no longer exists. `TsonSchemaHeader

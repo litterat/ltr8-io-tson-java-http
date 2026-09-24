@@ -32,6 +32,16 @@ public record TsonMediaType(String type, String subtype, Map<String, String> par
     /** The media type of every TSON document, parameterless: {@code application/tson}. */
     public static final TsonMediaType APPLICATION_TSON = new TsonMediaType("application", "tson", Map.of());
 
+    /** [TSON-JSON]'s media type: the JSON encoding of a TSON document, {@code application/tson+json}. */
+    public static final TsonMediaType APPLICATION_TSON_JSON = new TsonMediaType("application", "tson+json", Map.of());
+
+    /** Plain {@code application/json}, which a JSON-admitting codec reads and writes as [TSON-JSON]'s encoding. */
+    public static final TsonMediaType APPLICATION_JSON = new TsonMediaType("application", "json", Map.of());
+
+    /** RFC 9457's {@code application/problem+json} -- what a problem body is, written as JSON. */
+    public static final TsonMediaType APPLICATION_PROBLEM_JSON =
+            new TsonMediaType("application", "problem+json", Map.of());
+
     /** {@code *&#47;*} -- the range an absent or empty {@code Accept} header is treated as. */
     public static final TsonMediaType ANY = new TsonMediaType("*", "*", Map.of());
 
