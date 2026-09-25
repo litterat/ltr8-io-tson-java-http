@@ -107,38 +107,130 @@ Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. T
 each time a revision closes, and its convention is *cite the spec, not the argument that got it there* — so
 re-check every `SPEC-FEEDBACK.md #N` in this repo after a revision bump.
 
-### To file: name hygiene does not reach a map key, where a naming scope now lives
+### To file: `identifier` as a text family, and what it settles — map keys, and `enum.profile`
 
-**Sections:** [TSON-DATA] §8.2 (confusable names, the identifier profile, restricted scripts), §8.3 (skeleton
-distinctness and what it composes over), §2.6 (map keys are values), §7.7 (the identifier grammar);
-[TSON-SCHEMA] §2.1 (the schema body as a name-keyed map).
+**Sections:** [TSON-SCHEMA] §7.4 (enum member semantics, the `identifier` primitive, text member sets), §5.2
+(which fields may carry a value), §5.4 (discrimination class), §5.7 (refinement), §5.10 (templates and parameters),
+§8.3 (references), §9 (the meta layer), §11.4 (name hygiene at the schema layer); [TSON-DATA] §2.6 (map keys are
+values), §7.7 (the identifier grammar), §8.2 (name hygiene); the meta-kernel's `unit`, `identifier`,
+`text_type`, `enum_profile` and `enum`.
 
-**The gap.** §8.2's three rules apply to *declared names* -- a schema's declarations, a record's fields -- and
-skeleton distinctness is stated over a scope those inhabit. A map key is data, so none of it reaches one. Two
-method names in one interface with equal UTS #39 skeletons (`admin` and `аdmin`, the second with U+0430) are
-admitted, as is a mixed-script one, where the same two names as two fields of a record or two declarations of a
-schema are refused under the default Highly Restrictive identifier policy. Measured both ways in
-`experiments/meta-service/java/…/NameRoleProbe.java`, under a key typed `type_name`, one typed `method_name`
-(a role over `identifier`) and one typed `text` alike -- the role changes the grammar enforced and the name in
-the refusal, and changes nothing about hygiene.
+**The gap it starts from.** §8.2's three mechanisms reach *declared names* — a schema's declarations, a record's
+fields, an `IDENTIFIER` enum's members — and §11.4 lists the scopes the look-alike mechanism runs over. A map key
+is data, so none of it reaches one. Two method names in one interface with equal UTS #39 skeletons (`admin` and
+`аdmin`, the second with U+0430) are admitted, as is a mixed-script one, where the same two names as two fields of
+a record or two declarations of a schema are refused under the default Highly Restrictive identifier policy.
+Measured in `experiments/meta-service/java/…/NameRoleProbe.java` under a key typed `type_name`, one typed
+`method_name` (a role over `identifier`) and one typed `text` alike: the role changes the grammar enforced and the
+name in the refusal, and changes nothing about hygiene.
 
-**Why it is not merely an implementation choice.** An interface's method map is a naming scope in every sense
-§8.2 means: names a reader must tell apart, in one document, where confusing two of them is the attack. What
-moved is where such scopes live. Once a design puts members in a map keyed by an identifier role -- which is
-what a borrowed namespace looks like in TSON today, and what §4.1's `data` kind exists to make possible -- the
-spoofing surface §8.2 was written for moves with them, and the rules stay behind on the declaration map.
+An interface's method map is a naming scope in every sense §8.2 means — names a reader must tell apart, in one
+document, where confusing two of them is the attack. What moved is where such scopes live: once a design puts
+members in a map keyed by an identifier role, which is what a borrowed namespace looks like today and what §4.1's
+`data` kind exists to make possible, the spoofing surface moves with them and the rules stay behind.
 
-**What this project does meanwhile:** nothing, and says so. The experiment's `Routes` could scan its own keys,
-but a check that lives in one consumer is exactly the shape this repo argues against for the schema-fetch
-policy -- one security rule with a second implementation free to drift lenient.
+**Why the fix is a type and not a rule about maps.** Upstream has already settled that look-alike keys in a JSON
+map must be *accepted* (`design/json-unicode-policies.md`): at a map position `admin` and `аdmin` may be two
+legitimately distinct keys, and nothing about the position says they are names. A key whose declared type is an identifier is the schema
+saying exactly that. So the line runs through the key's type — `text` keys are data, judged by the token policy as
+today; identifier keys are names — and the missing piece is that `identifier` has no constraint vocabulary for the
+rules to belong to. The kernel declares it `identifier => !unit {}`, its grammar and §8.2's rules live in prose on
+§7.4, and they reach the kernel's own naming positions (`type_name`, `field_name`, `param_name`) by that prose
+rather than by the type.
 
-**Two ways it could close, and the choice is the author's.** The implementation could apply the identifier
-policy to a map whose key type resolves to an identifier role, which needs no spec change and is invisible to a
-map keyed by `text`. Or §8.2 could name such a map a scope, which is the more honest fix and reaches the other
-implementations. Either would be caught by the probe, which is written to fail when hygiene starts applying.
+**Proposal 1 — `identifier` becomes a text family.** Declare it the way `uri`, `regex` and `email` already are: a
+`text_type` composition with its specification pinned.
 
-**Priority:** low against a shipped feature, higher against the meta-service direction, since that design puts
-every method and every route name at a map key.
+```
+identifier_type => text_type & atom_specification & {
+  spec?: = "<[TSON-DATA] §7.7>"
+}
+identifier => !identifier_type {}
+```
+
+What follows:
+
+- **`identifier` IS-A `text`.** §7.4's "`IDENTIFIER` is inside `TEXT`" becomes a subtype edge rather than a
+  selector's declared order, so §5.7's narrowing follows IS-A as it does everywhere else.
+- **It inherits the text facets.** `min_length`/`max_length`/`length`, `pattern` (a naming convention such as
+  snake_case, still inside §7.7's grammar) and `members` — so `!identifier ^ { members: [...] }` is a closed
+  vocabulary of names, with §7.4's member-coherence rule applying unchanged.
+- **The per-name mechanisms ride the type.** Every value whose type is `identifier` or refines it meets §8.2's
+  character and script rules, judged by the **identifier** policy — at a map key and at a field value alike. That
+  reverses §7.4's "`identifier` is not used in data values", and moves §8.2's split from *position* (declared names
+  against data) to *type* (identifier-typed against everything else); §8.2's "Values" paragraph needs rewording to
+  match, and a document admitted today can be refused under it. Both are the point, and both should be stated.
+- **`core.tn` gains a sibling**, as it has one for `void`. Today the kernel notes "Core declares no sibling of it",
+  which is why `NameRoleProbe` has to use a kernel-governed meta layer; an ordinary schema should be able to write
+  `{identifier => handler}`.
+- **One scope is added to §11.4:** the key set of a map whose key type is an identifier. The look-alike mechanism is
+  a property of a set, so the type alone cannot carry it; this is the sentence that gives it the set, in the same
+  words §11.4 already uses for an `IDENTIFIER` enum's members.
+
+The cost to weigh: an identifier becomes a kind of string in the type system. The obligations it adds over `text` —
+the grammar and NFC — are what `spec` pins, which is the arrangement `uri_type` already has.
+
+**Proposal 2 — `enum.profile` becomes `enum.type`, which needs a bounded type reference.** Once `identifier` is a
+text family, `profile` states a fact the type system can state itself, and every row of §7.4's profile table is
+derivable from one question — *is the member type `identifier` or a refinement of it?*
+
+| §7.4 row | derived from `enum.type` |
+|---|---|
+| members | each member is a valid value of `type`, by the family's own parsing and facets |
+| hygiene | all three mechanisms when `type` IS-A `identifier`; the look-alike mechanism alone otherwise |
+| discrimination class (§5.4) | the members' shared class when `type` IS-A `identifier`; string otherwise |
+| binding | host enum generation guaranteed when `type` IS-A `identifier`; host text otherwise |
+
+And it is more expressive than the selector: an author can state `type: currency_code`, where `currency_code =>
+!text ^ { length: 3  pattern: "[A-Z]{3}" }`, and have every member checked against it, where today a `TEXT` enum's
+members are any text.
+
+**The kernel cannot spell this today**, and that is the part to decide first. A field typed `type_ref` names any
+type; there is no way to say *a type that IS-A `text`*. What is needed is an upper bound on a type reference —
+checked by the resolver against the named type's supertype chain. Two things to settle with it:
+
+- **A second use exists, and it argues for one mechanism rather than an enum-specific one.** Template parameters are
+  unbounded too (§5.10): `<T: text>` is the same question asked at a parameter. And this project's
+  `meta-http-1.tn` has the same gap at `parameter.type`, recorded in its own `@doc` as "names a scalar and nothing
+  enforces that" — a URL segment cannot carry a record. A bound serves all three.
+- **What a bound may name.** "A subtype of `text`" is a type bound. "Any scalar", which `parameter.type` wants, is a
+  base kind (`atom`). Whether a bound may name a base kind as well as a type decides whether the mechanism covers
+  both uses or only the enum's.
+
+**The default runs into §5.2.** A `~` or `=` value is admitted only on a field whose declared type resolves to an
+atom-family instance or an enum. `profile?: enum_profile ~ IDENTIFIER` is legal because `enum_profile` is an enum; a
+type reference is a record, so `type?: <bounded ref> ~ identifier` would be refused at the declaration. Two ways
+through, in order of preference:
+
+1. **`type` optional, absence defined as `identifier` in the prose of §7.4**, and resolver output omitting it
+   exactly as it omits `profile` at its default today (§8.1) — so every existing enum resolves unchanged in source
+   and output. No rule changes; the cost is that the default is stated in prose rather than visible in the kernel.
+2. **§5.2 admits a bare type name as the default of a type-reference field.** More honest, and the tidier end state,
+   but a second change riding on the first.
+
+**Refinement becomes subtyping.** A refinement may narrow `enum.type` only to a subtype of the source's `type` — the
+relation `profile`'s `IDENTIFIER`-inside-`TEXT` order stands in for today — and the member-coherence check already
+applies to whatever type is stated. What does **not** move to the type is the look-alike mechanism on the member
+set: a `TEXT` enum's members are still what a value is matched against, so two that read alike are still the hazard
+whatever `type` is. That is a property of `enum`, and §7.4 keeps saying so.
+
+**The alternatives, for the author to weigh:**
+
+- **Keep `profile`, defined by reference.** `IDENTIFIER` means each member is an `identifier` value, and the rules
+  come from Proposal 1's type rather than being restated in §7.4. No change to `enum`'s shape and no bounded
+  reference needed — the minimum that still removes the duplication, and the fallback if bounds are not wanted.
+- **Collapse `enum` into member sets** — `!identifier ^ { members: [...] }` and `!text ^ { members: [...] }`. Argued
+  against: `enum` carries what a member set does not — the binding row, unquoted spelling, and a discrimination
+  class of its own — and Revision 36 chose deliberately to keep both.
+
+**What this project does meanwhile:** nothing, and says so. The experiment's `Routes` could scan its own keys, but a
+check living in one consumer is exactly the shape this repo argues against for the schema-fetch policy — one
+security rule with a second implementation free to drift lenient. `NameRoleProbe` is written to fail when hygiene
+starts reaching an identifier key, which is when the experiment's README and this entry come out.
+
+**Priority:** low against a shipped feature; higher against the meta-service direction, which puts every method and
+every route name at a map key. Proposal 1 stands alone and closes the map-key gap; Proposal 2 depends on it and on a
+bounded type reference, and can follow.
 
 ---
 
