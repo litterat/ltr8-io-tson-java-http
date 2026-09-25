@@ -4,6 +4,7 @@ import io.javalin.http.Context;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonMediaType;
+import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaHeader;
 import io.ltr8.tson.tree.TsonValue;
 
@@ -156,8 +157,13 @@ public final class TsonContext {
         send(status, representation.requireTson(), body);
     }
 
-    /** Sends an error body the codec rendered in the negotiated representation. The boundary's, and only its. */
+    /**
+     * Sends an error body the codec rendered in the negotiated representation, naming {@code problem-1.tn} in
+     * the {@code TSON-Schema} header -- the only place a problem written as JSON can name it, and true of one
+     * written as TSON too. The boundary's, and only its.
+     */
     void respondProblem(int status, byte[] body) {
+        setHeader(TsonSchemaHeader.NAME, TsonSchemaHeader.format(TsonProblemSchema.ID));
         send(status, representation.problemMediaType(), body);
     }
 

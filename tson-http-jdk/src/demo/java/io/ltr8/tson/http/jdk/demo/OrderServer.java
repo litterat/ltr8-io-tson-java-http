@@ -8,11 +8,11 @@ import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.TsonBindings;
 import io.ltr8.tson.http.TsonHttpCodec;
+import io.ltr8.tson.http.TsonMediaType;
 import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonProblemDiagnostic;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaCatalog;
-import io.ltr8.tson.http.TsonSchemaHeader;
 import io.ltr8.tson.http.api.Operation;
 import io.ltr8.tson.http.api.TsonApiCoverage;
 import io.ltr8.tson.http.api.TsonApiDescription;
@@ -171,21 +171,26 @@ public final class OrderServer {
         // The handler never mentions validation. Reading is what validates: a body that breaks the schema
         // never reaches this code, and the client gets a 400 carrying every diagnostic at once.
         Operation create = coverage.serving("create_order");
-        server.createContext(create.path(), TsonHandler.asHttpHandler(codec, exchange -> {
+        // The description says whether the operation speaks JSON, so the route's codec follows it rather than a
+        // second statement here disagreeing with it.
+        TsonHttpCodec createCodec = create.speaksJson() ? codec.acceptingJson() : codec;
+        server.createContext(create.path(), TsonHandler.asHttpHandler(createCodec, exchange -> {
             exchange.requireMethod(create.method().name());
-            Order order = exchange.readObject(Order.class);
+            // A TSON body names its own schema; a JSON one cannot, so the operation's declared request type is
+            // its binding -- [TSON-JSON] §3.4's out-of-band route, with the description as the contract.
+            Order order = TsonMediaType.namesJson(exchange.header("Content-Type"))
+                    ? exchange.readObjectAs(SCHEMA_ID, "order", Order.class)
+                    : exchange.readObject(Order.class);
             if (UNSTOCKED_SKU.equals(order.sku())) {
                 // A business error is written, not thrown: it composes problem and carries fields no problem
                 // has, so the boundary -- which only knows how to render a problem -- could not produce it.
-                exchange.setHeader(TsonSchemaHeader.NAME, TsonSchemaHeader.format(ERRORS_ID));
-                exchange.respondBytes(404, exchange.codec()
-                        .write(SkuNotFound.of(order.sku()), ERRORS_ID, "sku_not_found"));
+                exchange.respondDescribed(404, SkuNotFound.of(order.sku()), ERRORS_ID, "sku_not_found");
                 return;
             }
-            // Self-describing: the reply names the schema governing it, which this server also publishes, so
-            // a client can validate what it got without being told anything out of band.
-            exchange.respondBytes(201, exchange.codec()
-                    .write(new Order(order.sku(), order.quantity() * 2), SCHEMA_ID, "order"));
+            // Self-describing: the reply names the schema governing it -- in band and in the header as TSON, in
+            // the header alone as JSON -- and this server publishes that schema, so a client can validate what
+            // it got without being told anything out of band.
+            exchange.respondDescribed(201, new Order(order.sku(), order.quantity() * 2), SCHEMA_ID, "order");
         }));
 
         // Publishing the schemas at their own identity paths is what makes the URL in a !!schema directive --

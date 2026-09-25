@@ -42,6 +42,14 @@
   parameter_location => !enum [PATH QUERY HEADER]
 
   @doc:"""
+    An encoding an operation's payloads travel in: TSON text, or TSON's JSON encoding ([TSON-JSON]). An
+    encoding and not a media type, because that is the contract: application/tson+json and
+    application/json are two labels for the one JSON encoding, and which label a response carries is
+    Accept's to negotiate rather than the description's to fix.
+    """
+  encoding => !enum [TSON JSON]
+
+  @doc:"""
     A parameter carried outside the body. `type` names a scalar and nothing here enforces that -- a URL
     segment cannot carry a record, and the type system has no way to say so.
 
@@ -81,8 +89,14 @@
     The entry's NAME is the operationId, and unlike OpenAPI's it lives in a namespace with a collision
     rule, so two operations cannot quietly share one.
 
+    `encodings` is what a client may send and ask back: absent means TSON alone, and an operation that also
+    speaks JSON says so, since a client reading the description has no other way to know. It covers both
+    directions at once because an endpoint that admits JSON also answers in it when asked -- the request's
+    Content-Type and the reply's Accept draw on the same list. Every operation speaks TSON, so a list is read
+    as the encodings beside it.
+
     Deliberately absent, each a decision rather than an oversight: security schemes, response headers,
-    links, callbacks, examples, tags, servers, and multi-media-type content negotiation. Adding one is
+    links, callbacks, examples, tags, servers, and media types beyond the encoding. Adding one is
     meta-http-2.tn under §3.5 once this is published, never an edit.
     """
   operation => data & {
@@ -93,5 +107,6 @@
     parameters?: [parameter]
     request?:    type_ref
     responses:   [response]
+    encodings?:  [encoding]
   }
 }

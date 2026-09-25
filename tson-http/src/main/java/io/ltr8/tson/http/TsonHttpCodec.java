@@ -587,7 +587,7 @@ public final class TsonHttpCodec {
             throw TsonHttpException.unsupportedMediaType("Content-Type '" + contentType + "' is not a media type: "
                     + malformed.getMessage());
         }
-        boolean isJson = isJson(mediaType);
+        boolean isJson = mediaType.isJson();
         if (!mediaType.isTson() && !(json != null && isJson)) {
             throw TsonHttpException.unsupportedMediaType("this endpoint reads " + TsonMediaType.APPLICATION_TSON
                     + (json != null ? " and JSON" : "") + ", not " + mediaType);
@@ -626,15 +626,6 @@ public final class TsonHttpCodec {
             throw new IllegalStateException("a JSON body was peeked, and a peek is the TSON reader's -- this route "
                     + "should read a JSON body from its stream");
         }
-    }
-
-    /**
-     * Whether {@code mediaType} is JSON: {@code application/tson+json}, [TSON-JSON]'s own, or {@code
-     * application/json} or any other {@code +json} type, all read by the JSON reader alike.
-     */
-    private static boolean isJson(TsonMediaType mediaType) {
-        return "application".equals(mediaType.type())
-                && ("json".equals(mediaType.subtype()) || mediaType.subtype().endsWith("+json"));
     }
 
     /** Runs a read, classifying anything the library throws out of it into a status. */

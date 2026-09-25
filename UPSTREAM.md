@@ -77,6 +77,30 @@ which is §3.4's "expected production route". Pinned by `UpstreamGapsTest.aJsonD
 
 ---
 
+## 3. `readAs` against a stated schema silently overrides the document's own `!!schema`
+
+**Hit:** `TsonObjectReader.withSchema(a).readAs(doc, type, cls)` and the tree reader's `readAs` read a document
+whose own `!!schema` names a *different* schema `b` as if it were `a`, with no diagnostic. Upstream's Javadoc scopes
+`readAs` to "data that isn't self-describing", but nothing refuses a self-describing document that reaches it.
+
+**Why it matters here:** `TsonHttpCodec.readObjectAs`/`readTreeAs` are this project's out-of-band reads — a route
+supplying the schema and root type, which is what a JSON body needs. A route using one on a TSON body can be sent
+a document naming some other schema, and it is validated against the route's instead. [TSON-JSON] §3.4 and §3.5
+state the posture for the equivalent JSON and header cases: where two channels supply a binding they MUST agree,
+and disagreement is an error, never a precedence question — silent precedence is how a document is validated
+against a schema nobody chose.
+
+**Change:** where the document names a schema and `withSchema` names another, report the disagreement (by
+canonical identity, §2.2.1, so scheme and pin do not count) rather than reading on. A resolver-category diagnostic
+seems right, matching §3.4's "disagreement is a resolver error".
+
+**Workaround in place:** the demos read a TSON body by its own binding (`readObject`) and use `readObjectAs` for
+JSON alone. The codec cannot check agreement itself in bind mode, because checking needs a peek and the object
+reader cannot continue one (#1) — so #1 closing is also what would let this project check it locally. Pinned by
+`UpstreamGapsTest.aStatedSchemaSilentlyOverridesTheDocumentsOwn`.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. That register renumbers from #1

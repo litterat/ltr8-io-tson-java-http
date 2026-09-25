@@ -6,8 +6,10 @@ import io.ltr8.tson.schema.meta.Data;
 import io.ltr8.tson.schema.meta.TypeRef;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * One HTTP operation, written by a schema governed by {@code meta-http-1.tn} and read back from that
@@ -23,10 +25,11 @@ import java.util.Optional;
 @Typename(name = "operation")
 public record Operation(HttpMethod method, String path, Optional<String> summary,
                         Optional<Boolean> deprecated, List<Parameter> parameters,
-                        Optional<TypeRef> request, List<Response> responses) implements Data {
+                        Optional<TypeRef> request, List<Response> responses,
+                        List<Encoding> encodings) implements Data {
 
     /**
-     * Normalises an omitted {@code parameters} to empty.
+     * Normalises an omitted {@code parameters} to empty, and an omitted {@code encodings} to TSON alone.
      *
      * <p><b>A bound class guards its own optional lists</b> — the convention this library follows for
      * {@code RecordBody}'s {@code groups}/{@code supertypes}, and for {@code TypeDefinition} and
@@ -44,6 +47,12 @@ public record Operation(HttpMethod method, String path, Optional<String> summary
      */
     public Operation {
         parameters = parameters == null ? List.of() : List.copyOf(parameters);
+        // Every operation speaks TSON; the list says what it speaks beside it.
+        Set<Encoding> spoken = EnumSet.of(Encoding.TSON);
+        if (encodings != null) {
+            spoken.addAll(encodings);
+        }
+        encodings = List.copyOf(spoken);
     }
 
     @Override
@@ -58,6 +67,15 @@ public record Operation(HttpMethod method, String path, Optional<String> summary
     /** This operation's declared response for {@code status}, or empty if it declares none. */
     public Optional<Response> responseFor(int status) {
         return responses.stream().filter(response -> response.status() == status).findFirst();
+    }
+
+    /**
+     * Whether this operation also speaks TSON's JSON encoding -- admits a JSON body and answers in JSON when asked.
+     * A server serving it builds the route's codec {@code acceptingJson}; that it did is for a test against the
+     * running server to check, since nothing in the description can see the codec.
+     */
+    public boolean speaksJson() {
+        return encodings.contains(Encoding.JSON);
     }
 
     /** Whether this operation is marked deprecated; absent means no. */

@@ -157,17 +157,22 @@ public final class OrderServer {
         // description does not declare, so a renamed operation fails at the handler that outlived it.
         TsonApiCoverage coverage = TsonApiCoverage.of(described);
 
+        // The description says whether the operation speaks JSON, so the codec its entities go through follows
+        // it rather than a second statement here disagreeing with it.
+        Operation create = coverage.serving("create_order");
+        TsonHttpCodec entities = create.speaksJson() ? codec.acceptingJson() : codec;
+
         return WebServer.builder()
                 .port(port)
                 .mediaContext(MediaContext.builder()
-                        .addMediaSupport(TsonMediaSupport.create(codec))
+                        .addMediaSupport(TsonMediaSupport.create(entities))
                         .build())
                 .routing(routing -> {
                     // Not optional alongside TsonMediaSupport: the read happens inside Helidon's entity
                     // machinery, before any handler code runs, so there is no handler boundary to catch a
                     // rejection. Without this, a body that breaks the schema loses its diagnostics to
                     // Helidon's own error page.
-                    TsonHandler.install(routing, codec);
+                    TsonHandler.install(routing, entities);
 
                     // Left as a plain Helidon handler, and so *not* self-describing, unlike the JDK and
                     // Javalin demos: the write goes through TsonMediaSupport's EntityWriter, which is handed a
@@ -175,7 +180,11 @@ public final class OrderServer {
                     // configuring the media support per type, which is its own design question. The honest
                     // demonstration is that the native seam costs this, and that a route wanting a
                     // self-describing reply writes through the codec directly, as the other two demos do.
-                    routing.post(coverage.serving("create_order").path(), (request, response) -> {
+                    //
+                    // The same seam costs a JSON body its schema on the way in: the EntityReader is handed a
+                    // class and nothing else, so a JSON order is bound by Order's own shape rather than read
+                    // against order-1.tn, where the other two demos read it at the declared request type.
+                    routing.post(create.path(), (request, response) -> {
                         Order order = request.content().as(Order.class);
                         if (UNSTOCKED_SKU.equals(order.sku())) {
                             // Written, not thrown: a business error composes problem and carries fields no

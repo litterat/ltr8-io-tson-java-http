@@ -6,6 +6,8 @@ import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.compiler.TsonDocumentHeader;
 import io.ltr8.tson.compiler.TsonDocumentPeek;
+import io.ltr8.tson.http.TsonMediaType;
+import io.ltr8.tson.http.TsonSchemaHeader;
 import io.ltr8.tson.http.api.HttpMethod;
 import io.ltr8.tson.http.api.Operation;
 import io.ltr8.tson.http.api.Parameter;
@@ -13,6 +15,7 @@ import io.ltr8.tson.http.api.ParameterLocation;
 import io.ltr8.tson.http.api.Response;
 import io.ltr8.tson.http.api.TsonApiDescription;
 import io.ltr8.tson.http.api.TsonApiSchema;
+import io.ltr8.tson.json.Json;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -148,6 +151,65 @@ class TsonApiConformanceTest {
 
         assertEquals(200, response.statusCode());
         assertTrue(response.body().contains("!!id:\"" + OrderServer.API_ID + "\""), response.body());
+    }
+
+    /**
+     * <b>An operation speaks the encodings it declares, and no others.</b> One that declares JSON is sent JSON
+     * and asked for JSON, and each reply is held to the description as a TSON one is -- the status declared,
+     * and the body read against the schema its {@code TSON-Schema} header names, at the type the description
+     * gives for that status. A JSON body has no type-ref to show, so validating it at the declared type is the
+     * check. One that does not declare JSON must refuse it, or the description understates the endpoint.
+     */
+    @Test
+    void everyOperationSpeaksTheEncodingsItDeclares() throws Exception {
+        Tson published = serverResolved();
+        Json json = Json.of(ProcessorConfig.defaults().withDataBindContext(published.dataBindContext()))
+                .withSchemas(published.schemaRegistry());
+        for (Operation operation : api.operations().values()) {
+            if (operation.request().isEmpty()) {
+                continue;   // no body to send in either encoding
+            }
+            if (!operation.speaksJson()) {
+                assertEquals(415, postJson(operation.path(), "{}").statusCode(),
+                        operation.path() + " does not declare JSON, so it must not read it");
+                continue;
+            }
+            assertJsonResponseMatches(json, operation, postJson(operation.path(),
+                    "{\"sku\": \"ABC-1\", \"quantity\": 3}"), 201);
+            assertJsonResponseMatches(json, operation, postJson(operation.path(), "{}"), 400);
+            assertJsonResponseMatches(json, operation, postJson(operation.path(),
+                    "{\"sku\": \"" + OrderServer.UNSTOCKED_SKU + "\", \"quantity\": 1}"), 404);
+        }
+    }
+
+    private HttpResponse<String> postJson(String path, String body) throws Exception {
+        return client.send(HttpRequest.newBuilder(URI.create(base + path))
+                        .header("Content-Type", "application/json")
+                        .header("Accept", "application/json, application/problem+json")
+                        .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)).build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    }
+
+    /** {@link #assertResponseMatches} for JSON: the schema from the header, the type from the description. */
+    private void assertJsonResponseMatches(Json json, Operation operation, HttpResponse<String> response,
+                                           int expectedStatus) throws Exception {
+        assertEquals(expectedStatus, response.statusCode(), response.body());
+        String mediaType = response.headers().firstValue("Content-Type").orElseThrow();
+        assertTrue(TsonMediaType.namesJson(mediaType), () -> "a JSON client was answered in " + mediaType);
+        Response declared = operation.responseFor(response.statusCode()).orElseThrow(
+                () -> new AssertionError(operation.method() + " " + operation.path() + " answered "
+                        + response.statusCode() + ", which its description does not declare"));
+        String type = declared.body().orElseThrow().name();
+
+        String schema = TsonSchemaHeader.parse(response.headers().firstValue(TsonSchemaHeader.NAME).orElse(null))
+                .orElseThrow(() -> new AssertionError("a JSON " + response.statusCode()
+                        + " names no schema, and has nowhere but the header to name one"));
+        assertEquals(200, get(URI.create(schema).getPath()).statusCode(),
+                () -> "the " + response.statusCode() + " reply names " + schema
+                        + ", which this server does not publish");
+        assertEquals(java.util.List.of(), json.validate(response.body(), schema, type),
+                () -> "the " + response.statusCode() + " body is not a " + type + " of " + schema + ": "
+                        + response.body());
     }
 
     /**

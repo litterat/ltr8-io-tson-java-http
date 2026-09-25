@@ -11,6 +11,7 @@
     path:        "/orders"
     summary:     "Place an order"
     request:     order
+    encodings:   [ JSON ]
     responses:   [
       !response { status: 201  body: order
                   description: "The confirmed order" }

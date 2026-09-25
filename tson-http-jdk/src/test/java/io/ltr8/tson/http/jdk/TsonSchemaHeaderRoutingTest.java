@@ -8,7 +8,6 @@ import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
-import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonSchemaHeader;
 import io.ltr8.tson.http.TsonSchemaVersions;
 import org.junit.jupiter.api.AfterEach;
@@ -49,7 +48,7 @@ class TsonSchemaHeaderRoutingTest {
             !!import:"https://tson.io/2026/36/m/core.tn"
             { order => { sku: text  quantity: int32  currency: text } }""";
 
-    private static final SchemaSource SOURCE = Map.of(V1_ID, V1, V2_ID, V2)::get;
+    private static final SchemaSource SOURCE = SchemaSource.ofMap(Map.of(V1_ID, V1, V2_ID, V2));
 
     @Typename(name = "order")
     public record OrderV1(String sku, int quantity) {
@@ -69,22 +68,41 @@ class TsonSchemaHeaderRoutingTest {
                 .version(V1_ID, V1, SOURCE, Map.of("order", OrderV1.class))
                 .version(V2_ID, V2, SOURCE, Map.of("order", OrderV2.class))
                 .build();
-        TsonHttpCodec boundary = versions.codecFor(V1_ID);
+        // The same two versions, every codec admitting JSON: JSON is opt-in per endpoint.
+        TsonSchemaVersions jsonVersions = TsonSchemaVersions.builder()
+                .version(V1_ID, V1, SOURCE, Map.of("order", OrderV1.class))
+                .version(V2_ID, V2, SOURCE, Map.of("order", OrderV2.class))
+                .acceptingJson()
+                .build();
 
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/orders", TsonHandler.asHttpHandler(boundary, exchange -> {
+        server.createContext("/orders", TsonHandler.asHttpHandler(versions.codecFor(V1_ID), routedBy(versions)));
+        server.createContext("/orders-json",
+                TsonHandler.asHttpHandler(jsonVersions.codecFor(V1_ID), routedBy(jsonVersions)));
+
+        server.start();
+        base = "http://127.0.0.1:" + server.getAddress().getPort();
+        client = HttpClient.newHttpClient();
+    }
+
+    /**
+     * One handler for both routes: routed by whichever channel names the version, and read by {@code
+     * readObjectAs}, which continues a TSON body's peek and reads a JSON one from its stream -- so the handler
+     * writes one read per version, not one per version per encoding. JSON names no root type, which is why it is
+     * given here.
+     */
+    private static TsonHandler routedBy(TsonSchemaVersions versions) {
+        return exchange -> {
             exchange.requireMethod("POST");
             var routed = versions.route(exchange.exchange().getRequestBody(),
-                    exchange.header(TsonSchemaHeader.NAME));
+                    exchange.header(TsonSchemaHeader.NAME), exchange.header("Content-Type"));
             String reply = switch (routed.schemaId()) {
                 case V1_ID -> {
-                    OrderV1 order = routed.codec().readObject(routed.body(),
-                            exchange.header("Content-Type"), OrderV1.class);
+                    OrderV1 order = routed.readObjectAs("order", OrderV1.class);
                     yield "v1:" + order.sku() + ":" + order.quantity();
                 }
                 case V2_ID -> {
-                    OrderV2 order = routed.codec().readObject(routed.body(),
-                            exchange.header("Content-Type"), OrderV2.class);
+                    OrderV2 order = routed.readObjectAs("order", OrderV2.class);
                     yield "v2:" + order.sku() + ":" + order.quantity() + ":" + order.currency();
                 }
                 default -> throw new IllegalStateException("unserved " + routed.schemaId());
@@ -92,29 +110,7 @@ class TsonSchemaHeaderRoutingTest {
             // The response says what governs it in both channels, which is what permitting both is for.
             exchange.setHeader(TsonSchemaHeader.NAME, TsonSchemaHeader.format(routed.schemaId()));
             exchange.respondBytes(200, reply.getBytes(StandardCharsets.UTF_8));
-        }));
-
-        // A JSON-reading route: the header is the only channel a JSON body has, and the root type comes from
-        // the route rather than the document, since JSON carries no type-ref either.
-        TsonHttpCodec json = versions.codecFor(V2_ID).acceptingJson();
-        server.createContext("/orders-json", TsonHandler.asHttpHandler(boundary, exchange -> {
-            exchange.requireMethod("POST");
-            // The header alone, and no peek: a JSON body carries no directive for one to agree with, so
-            // there is nothing to cross-check and the body is read from its first byte. (Bind mode could not
-            // continue a peek in any case -- upstream's object reader has no readAs(peek, type, class); see
-            // UPSTREAM.md.)
-            String schemaId = TsonSchemaHeader.parse(exchange.header(TsonSchemaHeader.NAME))
-                    .orElseThrow(() -> new IllegalStateException("no schema"));
-            OrderV2 order = json.readObjectAs(exchange.exchange().getRequestBody(),
-                    exchange.header("Content-Type"), schemaId, "order", OrderV2.class);
-            exchange.respondBytes(200,
-                    ("json:" + order.sku() + ":" + order.quantity() + ":" + order.currency())
-                            .getBytes(StandardCharsets.UTF_8));
-        }));
-
-        server.start();
-        base = "http://127.0.0.1:" + server.getAddress().getPort();
-        client = HttpClient.newHttpClient();
+        };
     }
 
     @AfterEach
@@ -199,7 +195,7 @@ class TsonSchemaHeaderRoutingTest {
                 "{\"sku\": \"ABC-1\", \"quantity\": 3, \"currency\": \"AUD\"}",
                 TsonSchemaHeader.format(V2_ID));
         assertEquals(200, response.statusCode(), response.body());
-        assertEquals("json:ABC-1:3:AUD", response.body());
+        assertEquals("v2:ABC-1:3:AUD", response.body());
     }
 
     /** And it is genuinely validated, not merely parsed. */
@@ -223,7 +219,28 @@ class TsonSchemaHeaderRoutingTest {
                 "{\"sku\": \"ABC\\/1\", \"quantity\": 3, \"currency\": \"AUD\"}",
                 TsonSchemaHeader.format(V2_ID));
         assertEquals(200, response.statusCode(), response.body());
-        assertEquals("json:ABC/1:3:AUD", response.body());
+        assertEquals("v2:ABC/1:3:AUD", response.body());
+    }
+
+    /**
+     * <b>A JSON body is routed by version too</b>, on the header alone and without a peek: the same endpoint reads
+     * a v1 JSON order into the v1 class, which is the safety the routing exists for.
+     */
+    @Test
+    void aJsonBodyIsRoutedToTheVersionItsHeaderNames() throws Exception {
+        HttpResponse<String> response = post("/orders-json", "application/json",
+                "{\"sku\": \"A\", \"quantity\": 3}", TsonSchemaHeader.format(V1_ID));
+        assertEquals(200, response.statusCode(), response.body());
+        assertEquals("v1:A:3", response.body());
+    }
+
+    /** A JSON body naming no version has nothing to be routed by -- it cannot carry a directive to fall back on. */
+    @Test
+    void aJsonBodyNamingNoVersionIsRefused() throws Exception {
+        HttpResponse<String> response = post("/orders-json", "application/json",
+                "{\"sku\": \"A\", \"quantity\": 3}", null);
+        assertEquals(400, response.statusCode());
+        assertTrue(response.body().contains("no-schema-declared"), response.body());
     }
 
     /** JSON is admitted only where the endpoint says so; the TSON-only route still answers 415. */

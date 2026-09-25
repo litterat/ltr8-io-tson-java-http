@@ -49,6 +49,16 @@ $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binar
 
 Both problems, in one response — a client fixing one error per round trip needs one round trip per error.
 
+The API description says `create_order` also speaks TSON's JSON encoding ([TSON-JSON]), so the same order can
+arrive as JSON and be answered in it, the schema named in the `TSON-Schema` header since a JSON body has nowhere
+else to name it:
+
+```
+$ curl -s localhost:8080/orders -H 'Content-Type: application/json' -H 'Accept: application/json' \
+    -d '{"sku": "ABC-1", "quantity": 3}'
+{"sku":"ABC-1","quantity":6}
+```
+
 ### Problem types
 
 `type` is the member to match on: it is stable where `title` is prose. Every failure this project produces
