@@ -6,6 +6,8 @@ import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonProblem;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.api.TsonApiSchema;
+import io.ltr8.tson.json.Json;
+import io.ltr8.tson.json.tree.JsonValue;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -83,14 +85,44 @@ class OrderServerTest {
         assertTrue(problem.errors().stream().allMatch(e -> e.code() == Diagnostic.Code.FIELD_REQUIRED));
     }
 
-    /** The third. */
+    /** The third: the same order as JSON, which the description says create_order speaks, answered in JSON. */
     @Test
-    void rejectsABodyThatIsNotTson() throws Exception {
+    void acceptsAJsonOrderAndAnswersInJson() throws Exception {
+        HttpResponse<String> response = postJson("{\"sku\": \"ABC-1\", \"quantity\": 3}");
+        assertEquals(201, response.statusCode(), response.body());
+        assertTrue(response.headers().firstValue("Content-Type").orElseThrow().startsWith("application/json"),
+                response.headers().toString());
+        JsonValue order = Json.parse(response.body());
+        assertEquals("ABC-1", order.get("sku").asString());
+        assertEquals(6, order.get("quantity").asInt());
+    }
+
+    /** And an invalid JSON order is refused in JSON, with every problem at once, as a TSON one is. */
+    @Test
+    void refusesAnInvalidJsonOrderInJson() throws Exception {
+        HttpResponse<String> response = postJson("{}");
+        assertEquals(400, response.statusCode(), response.body());
+        assertTrue(response.headers().firstValue("Content-Type").orElseThrow().startsWith("application/json"),
+                response.headers().toString());
+        assertEquals(400, Json.parse(response.body()).get("status").asInt());
+    }
+
+    /** The fourth. */
+    @Test
+    void rejectsABodyThatIsNeitherTsonNorJson() throws Exception {
         HttpResponse<String> response = client.send(HttpRequest.newBuilder(URI.create(base + "/orders"))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString("{}")).build(),
+                .header("Content-Type", "text/plain")
+                .POST(HttpRequest.BodyPublishers.ofString("hello")).build(),
                 HttpResponse.BodyHandlers.ofString());
         assertEquals(415, response.statusCode());
+    }
+
+    private HttpResponse<String> postJson(String body) throws Exception {
+        return client.send(HttpRequest.newBuilder(URI.create(base + "/orders"))
+                        .header("Content-Type", "application/json")
+                        .header("Accept", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)).build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
     }
 
     /** The last two: both schemas published at their own identity paths. */

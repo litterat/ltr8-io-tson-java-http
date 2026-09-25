@@ -393,6 +393,9 @@ class TsonHelidonAdapterTest {
         assertEquals(400, problem.get("status").asInt());
         assertEquals(2, problem.get("errors").asList().size(), "both missing fields");
         assertEquals("FIELD_REQUIRED", problem.get("errors").get(0).get("code").asString());
+        assertEquals(TsonSchemaHeader.format(TsonProblemSchema.ID),
+                labelled.headers().firstValue(TsonSchemaHeader.NAME).orElseThrow(),
+                "the header is the only place a JSON problem can name its schema");
 
         HttpResponse<String> plain = post("/orders", "{}", "Content-Type", "application/json",
                 "Accept", "application/json");

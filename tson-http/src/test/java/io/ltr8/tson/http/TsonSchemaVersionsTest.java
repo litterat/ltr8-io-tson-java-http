@@ -52,7 +52,7 @@ class TsonSchemaVersionsTest {
     private static final String V2_PROFILE = "orders-2";
 
     private static final Map<String, String> SCHEMAS = Map.of(V1_ID, V1, V2_ID, V2);
-    private static final SchemaSource SOURCE = SCHEMAS::get;
+    private static final SchemaSource SOURCE = SchemaSource.ofMap(SCHEMAS);
 
     /** v1's shape exactly. */
     @Typename(name = "order")
@@ -420,4 +420,54 @@ class TsonSchemaVersionsTest {
         assertTrue(refused.getMessage().contains("sf-list"), refused.getMessage());
     }
 
+
+    // ── a JSON body: routed by its header, never peeked ──────────────────────────────────────────────────
+
+    /**
+     * <b>A JSON body is routed on the {@code TSON-Schema} header alone</b>, since it can carry no directive, and is
+     * read from its stream at the root type the caller names: each version reads into its own class, which is the
+     * safety routing exists for.
+     */
+    @Test
+    void aJsonBodyIsRoutedByItsHeaderAndReadAtTheNamedRootType() {
+        TsonSchemaVersions json = TsonSchemaVersions.builder()
+                .version(V1_ID, V1, SOURCE, Map.of("order", OrderV1.class))
+                .version(V2_ID, V2, SOURCE, Map.of("order", OrderV2.class))
+                .acceptingJson()
+                .build();
+
+        var v1 = json.route(body("{\"sku\": \"A\", \"quantity\": 1}"), TsonSchemaHeader.format(V1_ID),
+                "application/tson+json");
+        assertEquals(V1_ID, v1.schemaId());
+        assertTrue(v1.json());
+        assertEquals(new OrderV1("A", 1), v1.readObjectAs("order", OrderV1.class));
+
+        var v2 = json.route(body("{\"sku\": \"B\", \"quantity\": 2, \"currency\": \"AUD\"}"),
+                TsonSchemaHeader.format(V2_ID), "application/json");
+        assertEquals(new OrderV2("B", 2, "AUD"), v2.readObjectAs("order", OrderV2.class));
+    }
+
+    /** A JSON body is never peeked, so asking for the peek is the caller's mistake, said as one. */
+    @Test
+    void aJsonBodyHasNoPeek() {
+        var routed = versions.route(body("{}"), TsonSchemaHeader.format(V1_ID), "application/json");
+        assertThrows(IllegalStateException.class, routed::body);
+    }
+
+    /** Without the opt-in a JSON body is routed, then refused by the read -- the 415 it would get unrouted. */
+    @Test
+    void aJsonBodyIsA415WhereTheVersionsDoNotAdmitJson() {
+        var routed = versions.route(body("{\"sku\": \"A\", \"quantity\": 1}"), TsonSchemaHeader.format(V1_ID),
+                "application/json");
+        assertEquals(TsonHttpException.UNSUPPORTED_MEDIA_TYPE, assertThrows(TsonHttpException.class,
+                () -> routed.readObjectAs("order", OrderV1.class)).status());
+    }
+
+    /** With no header there is nothing to route by, and no directive to fall back on. */
+    @Test
+    void aJsonBodyNamingNoVersionIsA400() {
+        TsonHttpException refused = assertThrows(TsonHttpException.class,
+                () -> versions.route(body("{}"), null, "application/json"));
+        assertEquals(TsonHttpException.BAD_REQUEST, refused.status());
+    }
 }

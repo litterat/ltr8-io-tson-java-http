@@ -22,8 +22,12 @@ final class Demo {
                   !!schema:"%s"
                   !order { }'
 
-                A body that is not TSON (415):
-                  curl -s -o /dev/null -w '%%{http_code}\\n' %s/orders -H 'Content-Type: application/json' -d '{}'
+                The same order as JSON, answered in JSON -- the description says create_order speaks it:
+                  curl -s %s/orders -H 'Content-Type: application/json' -H 'Accept: application/json' \\
+                    -d '{"sku": "ABC-1", "quantity": 3}'
+
+                A body that is neither (415):
+                  curl -s -o /dev/null -w '%%{http_code}\\n' %s/orders -H 'Content-Type: text/plain' -d 'hello'
 
                 The schema this server validates against, published at its own identity path:
                   curl -s %s/2026/36/app/order-1.tn
@@ -40,6 +44,6 @@ final class Demo {
                 """.formatted(adapter, base,
                 base, OrderServer.SCHEMA_ID,
                 base, OrderServer.SCHEMA_ID,
-                base, base, base, OrderServer.SCHEMA_ID));
+                base, base, base, base, OrderServer.SCHEMA_ID));
     }
 }

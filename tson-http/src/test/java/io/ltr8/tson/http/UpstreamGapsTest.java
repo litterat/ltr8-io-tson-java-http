@@ -629,4 +629,48 @@ class UpstreamGapsTest {
         assertFalse(inBand.isEmpty(), "the in-band route has landed -- check the agreement in TsonHttpCodec");
         assertTrue(inBand.getFirst().message().contains("$schema"), () -> "" + inBand);
     }
+
+    // ── open: a stated schema silently overrides the document's own ─────────────────────────────────
+
+    /**
+     * <b>{@code readAs} against a stated schema ignores a {@code !!schema} the document names itself</b> -- even
+     * one naming a different schema, which is read as the stated one with no diagnostic. Upstream documents
+     * {@code readAs} as being for data that is not self-describing, but a self-describing document reaching it
+     * is not refused, and [TSON-JSON] §3.4 and §3.5 state the posture for exactly this: where two routes supply
+     * a binding they MUST agree, and silent precedence is how a document gets validated against a schema nobody
+     * chose.
+     *
+     * <p>It matters here because {@code TsonHttpCodec.readObjectAs} and {@code readTreeAs} are this project's
+     * out-of-band reads, and a route using one can be sent a TSON body naming some other schema. The codec
+     * cannot check agreement itself without a peek, and bind mode cannot continue one ({@code UPSTREAM.md} #1),
+     * which is why the demos read a TSON body by its own binding and use {@code readObjectAs} for JSON alone.
+     * Both readers pinned, so the day either starts refusing the disagreement this fails.
+     */
+    @Test
+    void aStatedSchemaSilentlyOverridesTheDocumentsOwn() {
+        String id = "https://s.example.com/2026/36/j-1.tn";
+        String schema = """
+                !!id:"https://s.example.com/2026/36/j-1.tn"
+                !!meta:"https://tson.io/2026/36/m/meta.tn"
+                !!import:"https://tson.io/2026/36/m/core.tn"
+                {
+                    note => { title: text }
+                }""";
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(Map.of(id, schema))))
+                .withDataBindContext(TsonBindings.of(Map.of("note", Note.class))));
+        tson.resolve(schema);
+        String elsewhere = """
+                !!schema:"https://s.example.com/2026/36/other-1.tn"
+                !note { title: t }""";
+
+        assertEquals(new Note("t"), tson.objectReader().withSchema(id).readAs(elsewhere, "note", Note.class),
+                "the object reader read a document naming other-1.tn as j-1.tn, and said nothing");
+        assertEquals("t", tson.treeReader().withSchema(id).readAs(elsewhere, "note")
+                .get("title").asString().orElseThrow(), "and so did the tree reader");
+    }
+
+    /** Bound by {@link #aStatedSchemaSilentlyOverridesTheDocumentsOwn}. */
+    public record Note(String title) {
+    }
 }

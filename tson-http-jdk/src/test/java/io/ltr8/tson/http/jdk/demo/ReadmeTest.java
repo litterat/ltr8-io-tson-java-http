@@ -48,6 +48,7 @@ class ReadmeTest {
     private static final Pattern CURL_PATH = Pattern.compile("curl -s(?:[^\\n]*?)localhost:8080(\\S*)");
     private static final Pattern SCHEMA_URL = Pattern.compile("https://[\\w./-]+\\.tn");
     private static final Pattern POSTED_BODY = Pattern.compile("--data-binary '(.*?)'", Pattern.DOTALL);
+    private static final Pattern POSTED_JSON = Pattern.compile("-d '(\\{.*?\\})'\\n(\\{.*?\\})\\n");
 
     private static String readme;
     private HttpServer server;
@@ -174,6 +175,28 @@ class ReadmeTest {
         assertTrue(empty.body().contains("/sku") && empty.body().contains("/quantity"),
                 () -> "both problems in one response, which is the point the README makes: " + empty.body());
         assertTrue(empty.body().contains("FIELD_REQUIRED"), empty.body());
+    }
+
+    /**
+     * The JSON order the README posts, posted as JSON -- and the reply it shows, byte for byte, since a JSON reply
+     * has one spelling where a TSON one has several.
+     */
+    @Test
+    void theJsonOrderGetsTheReplyTheReadmeShows() throws Exception {
+        Matcher json = POSTED_JSON.matcher(readme);
+        assertTrue(json.find(), "the README shows a JSON order and its reply");
+
+        HttpResponse<String> reply = client.send(HttpRequest.newBuilder(URI.create(base + "/orders"))
+                        .header("Content-Type", "application/json")
+                        .header("Accept", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(json.group(1), StandardCharsets.UTF_8)).build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+        assertEquals(201, reply.statusCode(), reply.body());
+        assertEquals(json.group(2), reply.body(), "the README shows a reply the server would not send");
+        assertEquals(io.ltr8.tson.http.TsonSchemaHeader.format(OrderServer.SCHEMA_ID),
+                reply.headers().firstValue(io.ltr8.tson.http.TsonSchemaHeader.NAME).orElseThrow(),
+                "the README says the reply names its schema in the header");
     }
 
     /** The module table names the schemas this core owns; they are the ones it actually ships. */

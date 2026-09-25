@@ -63,6 +63,16 @@ import java.util.Set;
  * binds through the wrong one or not at all. Naming the profile is what makes the choice, and it is matched by
  * equality against the context's own.
  *
+ * <h2>A JSON body is routed by its header alone</h2>
+ *
+ * <p>A JSON body carries no directive, so its version comes from the {@code TSON-Schema} header ([TSON-JSON]
+ * §3.4's out-of-band route, §3.5's carrier) or the default, and nothing is peeked: a peek is the TSON reader's
+ * continuation of a header a JSON document does not have. {@link #route(InputStream, String, String)} takes the
+ * {@code Content-Type} to know which it is, and {@link Routed#readObjectAs} reads whichever arrived, so a handler
+ * switching on the version writes one read per version rather than one per version per encoding. Every
+ * version's codec must admit JSON for a JSON body to be read -- {@link Builder#acceptingJson} -- and one that
+ * does not answers 415, as it would unrouted.
+ *
  * <h2>Major versions across separate servers</h2>
  *
  * <p>Nothing here requires one process. Routing by declared schema works the same whether the versions are
@@ -119,14 +129,74 @@ public final class TsonSchemaVersions {
     }
 
     /**
-     * A document routed to the codec for the version it declares.
+     * A document routed to the codec for the version it declares, and the body that codec continues.
      *
-     * @param schemaId this endpoint's <b>registered</b> identity for the matched version, not the reference the
-     *                 document happened to spell. A client may write the same identity with a different scheme
-     *                 or a {@code ?sha256=} pin (§2.2.1), and a caller switching on the version must not see
-     *                 that; the registered id is the stable value to switch on.
+     * <p>{@link #schemaId()} is this endpoint's <b>registered</b> identity for the matched version, not the
+     * reference the document happened to spell. A client may write the same identity with a different scheme or
+     * a {@code ?sha256=} pin (§2.2.1), and a caller switching on the version must not see that; the registered id
+     * is the stable value to switch on.
+     *
+     * <p><b>A TSON body arrives as a peek, a JSON one as its stream.</b> {@link #readObjectAs} reads either, and is
+     * the read to reach for; {@link #body()} is the peek, for a caller continuing a TSON body some other way.
      */
-    public record Routed(String schemaId, TsonHttpCodec codec, TsonDocumentPeek body) {
+    public static final class Routed {
+
+        private final String schemaId;
+        private final TsonHttpCodec codec;
+        private final TsonDocumentPeek peek;
+        private final InputStream json;
+        private final String contentType;
+
+        private Routed(String schemaId, TsonHttpCodec codec, TsonDocumentPeek peek, InputStream json,
+                       String contentType) {
+            this.schemaId = schemaId;
+            this.codec = codec;
+            this.peek = peek;
+            this.json = json;
+            this.contentType = contentType;
+        }
+
+        /** The registered identity of the version this was routed to. */
+        public String schemaId() {
+            return schemaId;
+        }
+
+        /** The codec for that version. */
+        public TsonHttpCodec codec() {
+            return codec;
+        }
+
+        /** Whether the body is JSON, routed by its header and never peeked. */
+        public boolean json() {
+            return json != null;
+        }
+
+        /**
+         * The TSON body as the peek {@link #route} opened -- the header read, the rest to follow.
+         *
+         * @throws IllegalStateException for a JSON body, which is never peeked -- read it with {@link #readObjectAs}
+         */
+        public TsonDocumentPeek body() {
+            if (peek == null) {
+                throw new IllegalStateException("a JSON body is never peeked -- read it with readObjectAs");
+            }
+            return peek;
+        }
+
+        /**
+         * Reads the body into {@code targetClass} through this version's codec, whichever encoding it arrived in.
+         * A JSON body names no root type, so {@code rootTypeName} is the one it is read at, against {@link
+         * #schemaId()}; a TSON body names its own, and continues from the peek.
+         *
+         * @throws TsonHttpException 400 if the body is invalid, 415 if it is JSON and this version's codec does not
+         *                           admit JSON
+         */
+        public <T> T readObjectAs(String rootTypeName, Class<T> targetClass) {
+            if (json != null) {
+                return codec.readObjectAs(json, contentType, schemaId, rootTypeName, targetClass);
+            }
+            return codec.readObject(peek, contentType, targetClass);
+        }
     }
 
     public static Builder builder() {
@@ -167,38 +237,54 @@ public final class TsonSchemaVersions {
 
     /** {@link #route(InputStream, String)} for a message carrying no {@code TSON-Schema} header. */
     public Routed route(InputStream body) {
-        return route(body, null);
+        return route(body, null, null);
+    }
+
+    /** {@link #route(InputStream, String, String)} for a TSON body, or one with no {@code Content-Type}. */
+    public Routed route(InputStream body, String fieldValue) {
+        return route(body, fieldValue, null);
     }
 
     /**
-     * Routes {@code body} to the codec for the version that governs it, handing back the body as a peek the
-     * chosen codec continues -- the request stream read once, forwards.
+     * Routes {@code body} to the codec for the version that governs it -- the request stream read once, forwards.
      *
-     * <p>The schema comes from the {@code TSON-Schema} header, the body's own {@code !!schema}, or both -- and
-     * where both are present they must agree, which {@link TsonSchemaHeader#resolve} enforces. A JSON body has
-     * only the header, which is the case the header exists for.
+     * <p><b>A TSON body is peeked.</b> Its schema comes from the {@code TSON-Schema} header, its own {@code
+     * !!schema}, or both -- and where both are present they must agree, which {@link TsonSchemaHeader#resolve}
+     * enforces. A header cannot be trusted over a directive that contradicts it, so verification costs the same
+     * read it always did; the header's value is to whatever routed the request <em>here</em> -- a gateway that
+     * will not parse a body, and cannot parse a compressed one.
      *
-     * <p><b>This still peeks at the body.</b> A header cannot be trusted over a directive that contradicts it,
-     * so verification costs the same read it always did. The header's value is to whatever routed the request
-     * <em>here</em> -- a gateway that will not parse a body, and cannot parse a compressed one.
+     * <p><b>A JSON body is not.</b> It can carry no directive, so the header is its only channel and there is
+     * nothing to agree with; see the class note.
      *
-     * @param body       the message body
-     * @param fieldValue the {@code TSON-Schema} header value, or {@code null}
-     * @throws TsonHttpException 400 if nothing names a schema and no default is configured, if the header and
-     *                           the body disagree, or if the schema named is one this endpoint does not serve
+     * @param body        the message body
+     * @param fieldValue  the {@code TSON-Schema} header value, or {@code null}
+     * @param contentType the {@code Content-Type} header value, or {@code null} -- which is read as TSON
+     * @throws TsonHttpException 400 if nothing names a schema and no default is configured, if the header and the
+     *                           body disagree, or if the schema named is one this endpoint does not serve
      */
-    public Routed route(InputStream body, String fieldValue) {
+    public Routed route(InputStream body, String fieldValue, String contentType) {
+        if (TsonMediaType.namesJson(contentType)) {
+            String schemaId = governingSchema(TsonSchemaHeader.parse(fieldValue));
+            return new Routed(declaredIds.get(identityOf(schemaId)), codecFor(schemaId), null, body, contentType);
+        }
         // Any registered codec may open the peek: every version this builder makes shares one processor
         // policy, and a caller registering their own codec is held to the same by the read that continues.
         TsonSchemaHeader.Governing governing =
                 TsonSchemaHeader.resolve(peekWith().begin(body), fieldValue);
-        String schemaId = governing.schema().or(() -> defaultSchemaId).orElseThrow(() -> new TsonHttpException(
+        String schemaId = governingSchema(governing.schema());
+        // The registered id, not what the message spelled -- see Routed's own note.
+        return new Routed(declaredIds.get(identityOf(schemaId)), codecFor(schemaId), governing.body(), null,
+                contentType);
+    }
+
+    /** The schema a message names, else the default, else the 400 that says both were missing. */
+    private String governingSchema(Optional<String> named) {
+        return named.or(() -> defaultSchemaId).orElseThrow(() -> new TsonHttpException(
                 TsonHttpException.BAD_REQUEST, TsonHttpException.TYPES + "no-schema-declared", "No schema declared",
                 "this endpoint serves several schema versions, so a message must name the one that governs it "
                         + "-- in a " + TsonSchemaHeader.NAME + " header or a !!schema directive; it serves "
                         + schemaIds(), List.of(), null));
-        // The registered id, not what the message spelled -- see Routed's own note.
-        return new Routed(declaredIds.get(identityOf(schemaId)), codecFor(schemaId), governing.body());
     }
 
     private TsonHttpException unknownSchema(String schemaId) {
@@ -226,8 +312,19 @@ public final class TsonSchemaVersions {
         private final Map<String, String> declaredIds = new LinkedHashMap<>();
         private Optional<String> defaultSchemaId = Optional.empty();
         private Optional<String> preferredResponseId = Optional.empty();
+        private boolean acceptingJson;
 
         private Builder() {
+        }
+
+        /**
+         * Every version's codec admits and produces JSON -- {@link TsonHttpCodec#acceptingJson} applied at {@link
+         * #build} to each one that does not already, so it holds whatever order the versions were declared in.
+         * Off by default, for the reason that method gives.
+         */
+        public Builder acceptingJson() {
+            this.acceptingJson = true;
+            return this;
         }
 
         /**
@@ -332,7 +429,11 @@ public final class TsonSchemaVersions {
             });
             String preferred = preferredResponseId.map(id -> declaredIds.get(identityOf(id)))
                     .orElseGet(() -> List.copyOf(declaredIds.values()).getLast());
-            return new TsonSchemaVersions(byIdentity, declaredIds, defaultSchemaId, preferred);
+            Map<String, TsonHttpCodec> codecs = new LinkedHashMap<>(byIdentity);
+            if (acceptingJson) {
+                codecs.replaceAll((identity, codec) -> codec.admitsJson() ? codec : codec.acceptingJson());
+            }
+            return new TsonSchemaVersions(codecs, declaredIds, defaultSchemaId, preferred);
         }
 
         private static String identityOf(String schemaId) {

@@ -100,6 +100,30 @@ public record TsonMediaType(String type, String subtype, Map<String, String> par
         return "application".equals(type) && "tson".equals(subtype);
     }
 
+    /**
+     * Whether this is JSON: {@code application/json} or any {@code +json} type, [TSON-JSON]'s own {@code
+     * application/tson+json} among them -- every type a JSON-admitting codec reads with the JSON reader.
+     */
+    public boolean isJson() {
+        return "application".equals(type) && ("json".equals(subtype) || subtype.endsWith("+json"));
+    }
+
+    /**
+     * Whether a {@code Content-Type} header names JSON ({@link #isJson}) -- for a handler that reads the two
+     * encodings differently, since a JSON body names no schema or root type of its own. Absent, blank or
+     * malformed is not JSON: the read that follows answers a malformed one with the 415 it would give anyway.
+     */
+    public static boolean namesJson(String contentTypeHeader) {
+        if (contentTypeHeader == null || contentTypeHeader.isBlank()) {
+            return false;
+        }
+        try {
+            return parse(contentTypeHeader).isJson();
+        } catch (IllegalArgumentException malformed) {
+            return false;
+        }
+    }
+
     /** This type's {@code version} parameter (§7.1), absent if it carries none. */
     public Optional<String> version() {
         return parameter(VERSION);

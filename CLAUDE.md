@@ -351,8 +351,18 @@ concluding `@doc` is dropped is a mistake that looks exactly like a library bug.
 **Parameters are where TSON's document-orientation does not reach.** A URL segment cannot carry a record, so
 `parameter.type` names a scalar and nothing enforces that. Stating the limit beats papering over it.
 
+**An operation says which encodings it speaks** — `encodings?: [encoding]`, `encoding => !enum [TSON JSON]`,
+absent meaning TSON alone and a list read beside TSON, which every operation speaks. An *encoding* and not a
+media type, because that is the contract: `application/tson+json` and `application/json` are two labels for the
+one JSON encoding, and which a reply carries is `Accept`'s to negotiate. It covers both directions, since a codec
+built `acceptingJson` admits JSON and answers in it. `Operation.speaksJson()` is what a demo builds the route's
+codec from, so the description stays the one statement; `TsonApiConformanceTest.`
+`everyOperationSpeaksTheEncodingsItDeclares` holds the running server to it both ways — a declared operation
+answers JSON whose body validates, against the schema its `TSON-Schema` header names, at the type the description
+declares for that status; an undeclared one refuses JSON with a 415.
+
 **Deliberately absent**, each a decision: security schemes, response headers, links, callbacks, examples,
-tags, servers, and multi-media-type negotiation. `security` is the one that would disqualify this for a real
+tags, servers, and media types beyond the encoding. `security` is the one that would disqualify this for a real
 service. Adding any is `meta-http-2.tn` once published, never an edit.
 
 **The description is checked, not just written.** `TsonApiConformanceTest` fetches it **from the running
@@ -390,7 +400,10 @@ not assignable to the requested OrderV2"*. Tree mode has none of this difficulty
 happily, because no classes are involved. Reach for `TsonSchemaVersions` only in bind mode.
 
 **Reading is governed, writing is negotiated.** A request body names the schema that governs it and `route`
-obeys it. A response has no such anchor — a GET carries no body at all — so `chooseResponseVersion` reads the
+obeys it — a JSON one through the `TSON-Schema` header alone, since it can carry no directive: `route(body,
+header, contentType)` routes it without a peek, and `Routed.readObjectAs(rootType, class)` reads whichever
+encoding arrived, so a handler writes one read per version rather than one per version per encoding.
+`Builder.acceptingJson()` makes every version's codec admit JSON. A response has no such anchor — a GET carries no body at all — so `chooseResponseVersion` reads the
 client's `TSON-Accept-Schema` and picks from what this endpoint serves. Do not reach for `TSON-Schema` on a
 request to mean "what I want back": it means what the request body *is*, and a field whose meaning depends on
 the method is worse than two fields.
@@ -775,9 +788,9 @@ Each cost a debugging cycle here and is pinned by a test.
     `readJsonTree`/`readJsonTreeAs`, and a JSON body handed to a `TsonValue` read is an `IllegalStateException`
     — the route's fault, a 500, never a 415 blaming a client that sent what the endpoint admits.
   - **A JSON body is never peeked.** A `TsonDocumentPeek` is the TSON reader's continuation of a header, so a
-    JSON body reaching a peek-taking read is refused the same way. That is also why `TsonSchemaVersions.route`
-    does not route one: a JSON route reads the header and the stream directly, as
-    `TsonSchemaHeaderRoutingTest`'s does.
+    JSON body reaching a peek-taking read is refused the same way. `TsonSchemaVersions.route` knows this: given
+    the `Content-Type`, it routes a JSON body on the header alone and hands back its stream, and `Routed.body()`
+    — the peek — refuses to exist for one.
 
   **JSON `null` is the absent sentinel, and this repo's optional fields refuse it.** In the JSON encoding `null`
   is how `_` is written, so it is read on §5.2's terms: absence at a voidable field (`a?: T?`, `a: T?`),
@@ -798,6 +811,8 @@ Each cost a debugging cycle here and is pinned by a test.
     where it accepts none. `Representation.requireTson()` is that rule, applied before the response commits so
     the 406 is still a problem body. It is also why a schema route answers a JSON-only client 406: a schema
     document is TSON text in every encoding.
+  - **A problem names `problem-1.tn` in the `TSON-Schema` header**, in both encodings — the only place a JSON
+    one can, and true of a TSON one too. `respondProblem` sets it on all three adapters.
   - **A problem written as JSON is `application/problem+json`.** `problem-1.tn`'s `problem` is RFC 9457's five
     members plus `errors`, an extension member, and the JSON writer omits an absent member rather than writing
     `null` — so its JSON encoding *is* an RFC 9457 body. It is labelled `application/problem+json` where the
@@ -872,6 +887,13 @@ Each cost a debugging cycle here and is pinned by a test.
 - **`readAs` requires a schema URI.** Selecting a root type is meaningless without a schema to select it
   from; `readTreeAs`/`readObjectAs` therefore take one, and it must already be registered. Passing an
   unregistered URI is a server configuration error and surfaces as 500, by design.
+- **`readAs` silently overrides a TSON body's own `!!schema`.** A stated schema wins over one the document names,
+  even a different one, with no diagnostic — in both readers, pinned by
+  `UpstreamGapsTest.aStatedSchemaSilentlyOverridesTheDocumentsOwn` and staged as `UPSTREAM.md` #3. So a route
+  that reads **TSON** with `readObjectAs`/`readTreeAs` validates a body against the route's schema whatever the
+  body claims. Use `readObjectAs` for a JSON body, which names nothing, and read a TSON body by its own binding
+  (`readObject`) — which is what the demos do, branching on `TsonMediaType.namesJson(contentType)`. Checking the
+  agreement locally needs a peek, and bind mode cannot continue one (`UPSTREAM.md` #1).
 
 ## Media type and file extension
 

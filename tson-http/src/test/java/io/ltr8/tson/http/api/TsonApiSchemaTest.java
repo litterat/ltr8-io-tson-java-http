@@ -139,6 +139,34 @@ class TsonApiSchemaTest {
                 TsonApiSchema.source().lines().findFirst().orElse(""));
         assertEquals(List.of(TsonApiSchema.source()), TsonApiSchema.publishedSources());
     }
+    // ── encodings ──
+
+    /**
+     * <b>An operation says which encodings it speaks</b>, because a client reading the description has no other
+     * way to know an endpoint takes JSON. Absent is TSON alone; a list is read beside TSON, which every operation
+     * speaks.
+     */
+    @Test
+    void anOperationDeclaresTheEncodingsItSpeaks() {
+        TsonApiDescription api = TsonApiSchema.describedBy(resolved(API.replace(
+                "request:    order\n", "request:    order\n                encodings:  [ JSON ]\n")), API_ID);
+
+        Operation create = api.operations().get("create_order");
+        assertTrue(create.speaksJson());
+        assertEquals(List.of(Encoding.TSON, Encoding.JSON), create.encodings());
+
+        Operation schema = api.operations().get("get_schema");
+        assertEquals(List.of(Encoding.TSON), schema.encodings(), "absent is TSON alone");
+        assertFalse(schema.speaksJson());
+    }
+
+    /** An encoding is checked when the description loads, like everything else in it. */
+    @Test
+    void anUnknownEncodingDoesNotResolve() {
+        assertThrows(RuntimeException.class, () -> resolved(API.replace(
+                "request:    order\n", "request:    order\n                encodings:  [ XML ]\n")));
+    }
+
     // ── templates, in the shipping design ──
 
     private static final String PAGED = """
