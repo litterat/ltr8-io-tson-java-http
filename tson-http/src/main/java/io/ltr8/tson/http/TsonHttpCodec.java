@@ -3,6 +3,7 @@ package io.ltr8.tson.http;
 import io.ltr8.bind.DataBindContext;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.base.CanonicalIdentity;
 import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.DiagnosticsCollector;
 import io.ltr8.tson.base.DiagnosticsReceiver;
@@ -179,26 +180,27 @@ public final class TsonHttpCodec {
      * request thread. Passing an unregistered {@code schemaUri} is a server configuration error, not a client
      * error, and surfaces as a 500.
      *
-     * @throws TsonHttpException 415 if the body is not TSON, 400 if it is TSON but invalid
+     * <p><b>A body that names a schema of its own must name this one.</b> The reader lets a stated schema
+     * override a document's {@code !!schema} and leaves the comparison to the caller, so this makes it: the body
+     * is peeked, and a {@code !!schema} disagreeing with {@code schemaUri} by canonical identity (§2.2.1 --
+     * scheme and pin do not count) is a 400 rather than a document validated against a schema it never claimed.
+     * A body naming none is read against {@code schemaUri}, which is what stating one is for.
+     *
+     * @throws TsonHttpException 415 if the body is not TSON, 400 if it is TSON but invalid or names another schema
      */
     public TsonValue readTreeAs(InputStream body, String contentType, String schemaUri, String typeName) {
         requireTsonTree(contentType, "readJsonTreeAs");
-        DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
-        return require(read(() -> tson.treeReader().withSchema(schemaUri).withDiagnostics(problems)
-                .readAs(body, typeName)), problems);
+        return readTreeAs(begin(body), contentType, schemaUri, typeName);
     }
 
     /**
      * {@link #readTreeAs(InputStream, String, String, String)} continuing a peek this codec opened -- the shape
-     * a {@code TSON-Schema} header takes in tree mode, where the schema comes from the field and the root type
-     * from the route.
-     *
-     * <p>There is deliberately no bind-mode counterpart: upstream's object reader has no
-     * {@code readAs(peek, typeName, targetClass)}, so a body whose schema arrives only in the header must be
-     * read in tree mode or from the start. Tracked in {@code UPSTREAM.md}.
+     * a {@code TSON-Schema} header takes, where the schema comes from the field and the root type from the
+     * route. The peek's {@code !!schema}, if it has one, must agree with {@code schemaUri}.
      */
     public TsonValue readTreeAs(TsonDocumentPeek body, String contentType, String schemaUri, String typeName) {
         requirePeekable(contentType);
+        requireAgreement(body, schemaUri);
         DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
         return require(read(() -> tson.treeReader().withSchema(schemaUri).withDiagnostics(problems)
                 .readAs(body, typeName)), problems);
@@ -260,10 +262,11 @@ public final class TsonHttpCodec {
     }
 
     /**
-     * {@link #readObject} against a stated schema and root type, for a body that names neither. Same
-     * requirements as {@link #readTreeAs}.
+     * {@link #readObject} against a stated schema and root type -- the route's, or a {@code TSON-Schema}
+     * header's. Same requirements as {@link #readTreeAs}, including that a TSON body naming a schema of its own
+     * names this one. A JSON body names none, so it is read from the stream.
      *
-     * @throws TsonHttpException 415 if the body is not TSON, 400 if it is TSON but invalid
+     * @throws TsonHttpException 415 if the body is not TSON, 400 if it is TSON but invalid or names another schema
      */
     public <T> T readObjectAs(InputStream body, String contentType, String schemaUri, String typeName,
                               Class<T> targetClass) {
@@ -272,8 +275,48 @@ public final class TsonHttpCodec {
             return require(read(() -> json.objectReader().withSchema(schemaUri).withDiagnostics(problems)
                     .readAs(body, typeName, targetClass)), problems);
         }
+        return readObjectAs(begin(body), contentType, schemaUri, typeName, targetClass);
+    }
+
+    /**
+     * {@link #readObjectAs(InputStream, String, String, String, Class)} continuing a peek this codec opened -- a
+     * TSON body whose header has been read, bound against a stated type with the body read once. The peek's
+     * {@code !!schema}, if it has one, must agree with {@code schemaUri}.
+     */
+    public <T> T readObjectAs(TsonDocumentPeek body, String contentType, String schemaUri, String typeName,
+                              Class<T> targetClass) {
+        requirePeekable(contentType);
+        requireAgreement(body, schemaUri);
+        DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
         return require(read(() -> tson.objectReader().withSchema(schemaUri).withDiagnostics(problems)
                 .readAs(body, typeName, targetClass)), problems);
+    }
+
+    /**
+     * A 400 where a TSON body's own {@code !!schema} names a schema other than the one stated for it. Both are
+     * a claim about what governs the body, and silent precedence is how a document is validated against a schema
+     * nobody chose -- the posture [TSON-JSON] §3.5 takes for the header, applied to the route's statement too.
+     * A header that failed to read names no schema, so it is left to the read, which reports the failure with
+     * the rest.
+     */
+    private static void requireAgreement(TsonDocumentPeek body, String schemaUri) {
+        body.header().schema().ifPresent(named -> {
+            if (!sameIdentity(named, schemaUri)) {
+                throw new TsonHttpException(TsonHttpException.BAD_REQUEST,
+                        TsonHttpException.TYPES + "conflicting-schema", "Conflicting schema",
+                        "this body is read as '" + schemaUri + "' and its !!schema names '" + named
+                                + "'; at most one of them governs it", List.of(), null);
+            }
+        });
+    }
+
+    /** Equal canonical identities; a reference that is not an identity agrees with nothing. */
+    private static boolean sameIdentity(String named, String stated) {
+        try {
+            return CanonicalIdentity.canonicalize(named).equals(CanonicalIdentity.canonicalize(stated));
+        } catch (RuntimeException notAnIdentity) {
+            return false;
+        }
     }
 
     /**

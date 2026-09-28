@@ -184,9 +184,10 @@ public final class TsonSchemaVersions {
         }
 
         /**
-         * Reads the body into {@code targetClass} through this version's codec, whichever encoding it arrived in.
-         * A JSON body names no root type, so {@code rootTypeName} is the one it is read at, against {@link
-         * #schemaId()}; a TSON body names its own, and continues from the peek.
+         * Reads the body into {@code targetClass} through this version's codec, whichever encoding it arrived in,
+         * at {@code rootTypeName} against {@link #schemaId()} -- a JSON body from its stream, a TSON one continuing
+         * the peek. So a TSON body that named its version only in the header is still read against that version's
+         * schema, where reading it by its own binding would read it schemaless.
          *
          * @throws TsonHttpException 400 if the body is invalid, 415 if it is JSON and this version's codec does not
          *                           admit JSON
@@ -195,7 +196,7 @@ public final class TsonSchemaVersions {
             if (json != null) {
                 return codec.readObjectAs(json, contentType, schemaId, rootTypeName, targetClass);
             }
-            return codec.readObject(peek, contentType, targetClass);
+            return codec.readObjectAs(peek, contentType, schemaId, rootTypeName, targetClass);
         }
     }
 

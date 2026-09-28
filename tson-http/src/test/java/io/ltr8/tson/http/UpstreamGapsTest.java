@@ -630,21 +630,18 @@ class UpstreamGapsTest {
         assertTrue(inBand.getFirst().message().contains("$schema"), () -> "" + inBand);
     }
 
-    // ── open: a stated schema silently overrides the document's own ─────────────────────────────────
+    // ── decided upstream: a stated schema overrides the document's own ──────────────────────────────
 
     /**
-     * <b>{@code readAs} against a stated schema ignores a {@code !!schema} the document names itself</b> -- even
-     * one naming a different schema, which is read as the stated one with no diagnostic. Upstream documents
-     * {@code readAs} as being for data that is not self-describing, but a self-describing document reaching it
-     * is not refused, and [TSON-JSON] §3.4 and §3.5 state the posture for exactly this: where two routes supply
-     * a binding they MUST agree, and silent precedence is how a document gets validated against a schema nobody
-     * chose.
+     * <b>{@code readAs} against a stated schema overrides a {@code !!schema} the document names itself</b> -- even
+     * one naming a different schema, which is read as the stated one with no diagnostic. Not a gap: upstream's
+     * decision, stated on {@code TsonObjectReader.readAs(TsonDocumentPeek, …)} -- "any {@code !!schema} the
+     * document declares is overridden … a caller holding both compares {@code peek.header()} against its own".
      *
-     * <p>It matters here because {@code TsonHttpCodec.readObjectAs} and {@code readTreeAs} are this project's
-     * out-of-band reads, and a route using one can be sent a TSON body naming some other schema. The codec
-     * cannot check agreement itself without a peek, and bind mode cannot continue one ({@code UPSTREAM.md} #1),
-     * which is why the demos read a TSON body by its own binding and use {@code readObjectAs} for JSON alone.
-     * Both readers pinned, so the day either starts refusing the disagreement this fails.
+     * <p>So the comparison is this project's to make, and {@code TsonHttpCodec} makes it: its out-of-band reads
+     * peek a TSON body and answer a disagreeing {@code !!schema} 400, the posture [TSON-JSON] §3.5 takes for the
+     * header. Pinned because the codec's check exists only because the reader does not refuse -- if upstream ever
+     * starts refusing, this fails and the codec's own check becomes a second copy of the rule.
      */
     @Test
     void aStatedSchemaSilentlyOverridesTheDocumentsOwn() {
@@ -672,5 +669,46 @@ class UpstreamGapsTest {
 
     /** Bound by {@link #aStatedSchemaSilentlyOverridesTheDocumentsOwn}. */
     public record Note(String title) {
+    }
+
+    // ── fixed upstream: bind mode continues a peek against a stated type ──────────────────────────────
+
+    /**
+     * <b>The object reader continues a peek against a stated type</b> -- {@code readAs(TsonDocumentPeek, String,
+     * Class)}, the counterpart of the tree reader's {@code readAs(peek, typeName)}. It is what lets a body whose
+     * schema arrives in a {@code TSON-Schema} header be peeked, checked against its own {@code !!schema}, and bound
+     * in one pass, which {@code TsonHttpCodec.readObjectAs} and {@code TsonSchemaVersions.Routed.readObjectAs}
+     * both rely on. Over a stream that cannot be rewound, so a peek that consumed the body would fail here.
+     */
+    @Test
+    void theObjectReaderContinuesAPeekAgainstAStatedType() {
+        String id = "https://s.example.com/2026/36/j-1.tn";
+        String schema = """
+                !!id:"https://s.example.com/2026/36/j-1.tn"
+                !!meta:"https://tson.io/2026/36/m/meta.tn"
+                !!import:"https://tson.io/2026/36/m/core.tn"
+                {
+                    note => { title: text }
+                }""";
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(Map.of(id, schema))))
+                .withDataBindContext(TsonBindings.of(Map.of("note", Note.class))));
+        tson.resolve(schema);
+        java.io.InputStream unmarkable = new java.io.FilterInputStream(new java.io.ByteArrayInputStream(
+                "{ title: t }".getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
+            @Override
+            public boolean markSupported() {
+                return false;
+            }
+
+            @Override
+            public synchronized void reset() throws java.io.IOException {
+                throw new java.io.IOException("this stream cannot be rewound");
+            }
+        };
+
+        var peek = tson.begin(unmarkable);
+        assertEquals(java.util.Optional.empty(), peek.header().schema(), "the header names no schema");
+        assertEquals(new Note("t"), tson.objectReader().withSchema(id).readAs(peek, "note", Note.class));
     }
 }

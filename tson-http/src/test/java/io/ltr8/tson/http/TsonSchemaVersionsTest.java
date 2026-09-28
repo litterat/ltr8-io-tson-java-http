@@ -8,6 +8,7 @@ import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonContentHash;
 import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
@@ -469,5 +470,28 @@ class TsonSchemaVersionsTest {
         TsonHttpException refused = assertThrows(TsonHttpException.class,
                 () -> versions.route(body("{}"), null, "application/json"));
         assertEquals(TsonHttpException.BAD_REQUEST, refused.status());
+    }
+
+    /**
+     * <b>A TSON body naming its version only in the header is read against that version's schema.</b> The peek
+     * finds no directive, so reading it by its own binding would read it schemaless; {@code readObjectAs} reads it
+     * at the route's root type against the version the header named, and the diagnostics say which schema judged
+     * it.
+     */
+    @Test
+    void aTsonBodyRoutedByTheHeaderAloneIsReadAgainstThatVersion() {
+        var routed = versions.route(body("!order { sku: \"B\" quantity: 2 }"), TsonSchemaHeader.format(V2_ID));
+        assertEquals(V2_ID, routed.schemaId());
+
+        TsonHttpException refused = assertThrows(TsonHttpException.class,
+                () -> routed.readObjectAs("order", OrderV2.class));
+        assertEquals(TsonHttpException.BAD_REQUEST, refused.status());
+        assertTrue(refused.diagnostics().stream().anyMatch(d -> d.code() == Diagnostic.Code.FIELD_REQUIRED
+                        && d.schemaId().endsWith("order-2.tn")),
+                () -> "v2's missing currency, judged by v2's schema: " + refused.diagnostics());
+
+        var complete = versions.route(body("!order { sku: \"B\" quantity: 2 currency: \"AUD\" }"),
+                TsonSchemaHeader.format(V2_ID));
+        assertEquals(new OrderV2("B", 2, "AUD"), complete.readObjectAs("order", OrderV2.class));
     }
 }
