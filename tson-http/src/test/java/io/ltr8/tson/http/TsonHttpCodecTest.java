@@ -239,6 +239,69 @@ class TsonHttpCodecTest {
                 Order.class);
         assertEquals(new Order("ABC-1", 3), read);
     }
+    // ── a stated schema and the body's own ──
+
+    /**
+     * <b>A body stating a schema of its own must state the one it is read as.</b> The reader lets a stated schema
+     * override a document's {@code !!schema} and leaves the comparison to its caller, so the codec makes it: the
+     * body is peeked, and a disagreement is a 400 of its own type rather than a document validated against a
+     * schema it never claimed. Both modes, since both readers override alike.
+     */
+    @Test
+    void aBodyNamingAnotherSchemaThanTheStatedOneIsA400() {
+        String elsewhere = """
+                !!schema:"https://example.com/2026/36/app/other-1.tn"
+                !order { sku: "A"  quantity: 1 }""";
+
+        TsonHttpException bound = assertThrows(TsonHttpException.class, () -> codec.readObjectAs(body(elsewhere),
+                "application/tson", SCHEMA_ID, "order", Order.class));
+        assertEquals(TsonHttpException.BAD_REQUEST, bound.status());
+        assertEquals(TsonHttpException.TYPES + "conflicting-schema", bound.problem().type().orElseThrow());
+
+        assertEquals(TsonHttpException.BAD_REQUEST, assertThrows(TsonHttpException.class,
+                () -> codec.readTreeAs(body(elsewhere), "application/tson", SCHEMA_ID, "order")).status());
+    }
+
+    /**
+     * Agreement is by canonical identity (§2.2.1): a body naming the same schema under another scheme, or with a
+     * pin, agrees -- and one naming none is read against the stated schema, which is what stating one is for.
+     */
+    @Test
+    void aBodyAgreeingByIdentityOrNamingNoneIsRead() {
+        for (String header : List.of("!!schema:\"" + SCHEMA_ID + "\"\n",
+                "!!schema:\"" + SCHEMA_ID.replace("https://", "http://") + "\"\n", "")) {
+            assertEquals(new Order("A", 1), codec.readObjectAs(unmarkable(header + "!order { sku: \"A\"  quantity: 1 }"),
+                    "application/tson", SCHEMA_ID, "order", Order.class), header);
+        }
+    }
+
+    /**
+     * <b>The peek costs the body nothing.</b> Checking agreement reads the header and the object reader continues
+     * from just past it -- over a stream that cannot be rewound, which is the fixture that would have caught a
+     * peek eating the body.
+     */
+    @Test
+    void theAgreementCheckReadsTheBodyOnce() {
+        assertEquals(new Order("A", 1), codec.readObjectAs(
+                unmarkable("!!schema:\"" + SCHEMA_ID + "\"\n!order { sku: \"A\"  quantity: 1 }"),
+                "application/tson", SCHEMA_ID, "order", Order.class));
+    }
+
+    /** A stream that cannot be rewound: {@code markSupported} false and a {@code reset} that throws. */
+    private static InputStream unmarkable(String document) {
+        return new java.io.FilterInputStream(body(document)) {
+            @Override
+            public boolean markSupported() {
+                return false;
+            }
+
+            @Override
+            public synchronized void reset() throws java.io.IOException {
+                throw new java.io.IOException("this stream cannot be rewound");
+            }
+        };
+    }
+
     // ── a library gap inside a diagnostics list ──
 
     private static Diagnostic aGap() {

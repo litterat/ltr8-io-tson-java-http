@@ -25,40 +25,7 @@ passing unnoticed. Deleting an entry is a documentation act, never a test one.
 
 ---
 
-## 1. The object reader cannot continue a peek against a stated type
-
-**Hit:** reading a body whose schema arrives in the `TSON-Schema` header rather than in a `!!schema` directive,
-in **bind** mode. `Tson.begin` hands back a `TsonDocumentPeek`, and the readers continue on one — but only some
-of them do:
-
-| | from a stream | continuing a peek |
-|---|---|---|
-| `TsonTreeReader.read` | yes | yes |
-| `TsonTreeReader.readAs(…, typeName)` | yes | **yes** |
-| `TsonObjectReader.read` | yes | yes |
-| `TsonObjectReader.readAs(…, typeName, targetClass)` | yes | **no** |
-
-So the one combination a header-governed bind-mode read needs — schema from the field, root type from the
-route, body read once — is the missing cell. `TsonHttpCodec` mirrors the asymmetry rather than papering over
-it: it has `readTreeAs(peek, …)` and no `readObjectAs(peek, …)`.
-
-**Why the workaround is unsatisfying rather than fatal.** Where the header is the *only* channel the body has —
-a JSON body, which can carry no directive — there is nothing for a peek to cross-check, so reading from the
-start costs nothing and that is what `TsonSchemaHeaderRoutingTest`'s JSON route now does. The gap bites where a
-body could carry a directive *and* a header: enforcing rule 3's agreement requires the peek, and bind mode then
-cannot use it, so such a route must read in tree mode or give up the check.
-
-**Change:** add `readAs(TsonDocumentPeek, String typeName, Class<T> targetClass)` to `TsonObjectReader`,
-matching the tree reader's own `readAs(TsonDocumentPeek, String)`. The private `readPeeked` and
-`readDocumentAs` machinery both already exist on that class; this is the entry point that was not written, not
-a capability that is absent.
-
-**Workaround in place:** `TsonHttpCodec.readTreeAs(peek, …)` exists and its Javadoc names the gap; the JSON
-route reads from the start and says why.
-
----
-
-## 2. A JSON document cannot name its own binding
+## 1. A JSON document cannot name its own binding
 
 **Hit:** a JSON body that names its schema and root type in band. [TSON-JSON] §3.4 gives a JSON document two
 routes to its binding — out of band, supplied by the application, and in band, a root annotation object carrying
@@ -74,30 +41,6 @@ header — the JSON counterpart of what `TsonDocumentPeek` gives a TSON body.
 
 **Workaround in place:** none needed for the common case — a JSON client sends the header and a bare value,
 which is §3.4's "expected production route". Pinned by `UpstreamGapsTest.aJsonDocumentsInBandBindingIsRefused`.
-
----
-
-## 3. `readAs` against a stated schema silently overrides the document's own `!!schema`
-
-**Hit:** `TsonObjectReader.withSchema(a).readAs(doc, type, cls)` and the tree reader's `readAs` read a document
-whose own `!!schema` names a *different* schema `b` as if it were `a`, with no diagnostic. Upstream's Javadoc scopes
-`readAs` to "data that isn't self-describing", but nothing refuses a self-describing document that reaches it.
-
-**Why it matters here:** `TsonHttpCodec.readObjectAs`/`readTreeAs` are this project's out-of-band reads — a route
-supplying the schema and root type, which is what a JSON body needs. A route using one on a TSON body can be sent
-a document naming some other schema, and it is validated against the route's instead. [TSON-JSON] §3.4 and §3.5
-state the posture for the equivalent JSON and header cases: where two channels supply a binding they MUST agree,
-and disagreement is an error, never a precedence question — silent precedence is how a document is validated
-against a schema nobody chose.
-
-**Change:** where the document names a schema and `withSchema` names another, report the disagreement (by
-canonical identity, §2.2.1, so scheme and pin do not count) rather than reading on. A resolver-category diagnostic
-seems right, matching §3.4's "disagreement is a resolver error".
-
-**Workaround in place:** the demos read a TSON body by its own binding (`readObject`) and use `readObjectAs` for
-JSON alone. The codec cannot check agreement itself in bind mode, because checking needs a peek and the object
-reader cannot continue one (#1) — so #1 closing is also what would let this project check it locally. Pinned by
-`UpstreamGapsTest.aStatedSchemaSilentlyOverridesTheDocumentsOwn`.
 
 ---
 

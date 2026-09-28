@@ -833,10 +833,6 @@ Each cost a debugging cycle here and is pinned by a test.
   consumes the stream still looks intact. Test with a stream whose `markSupported()` is false and whose
   `reset()` throws, as `TsonSchemaHeaderTest` does — this project shipped a peek that ate the whole body on a
   real request and had a green test suite over the wrong fixture.
-- **Bind mode cannot continue a peek.** Upstream's object reader has `read(peek, Class)` but no
-  `readAs(peek, typeName, Class)`, where the tree reader has `readAs(peek, typeName)`. So a TSON body whose
-  schema arrives in the `TSON-Schema` header and which might also carry `!!schema` cannot be cross-checked and
-  bound in one pass; such a route reads in tree mode or gives up the check. `UPSTREAM.md` carries the ask.
 - **`describing()` needs a root type name as well as a schema URI, for an object.** A bound record writes no
   type-ref of its own, so `!!schema` alone yields a document whose reader cannot select a type. The tree form
   takes one argument, because a tree node already carries a type-ref. `TsonHttpCodec.write(value, schemaUri,
@@ -887,13 +883,18 @@ Each cost a debugging cycle here and is pinned by a test.
 - **`readAs` requires a schema URI.** Selecting a root type is meaningless without a schema to select it
   from; `readTreeAs`/`readObjectAs` therefore take one, and it must already be registered. Passing an
   unregistered URI is a server configuration error and surfaces as 500, by design.
-- **`readAs` silently overrides a TSON body's own `!!schema`.** A stated schema wins over one the document names,
-  even a different one, with no diagnostic — in both readers, pinned by
-  `UpstreamGapsTest.aStatedSchemaSilentlyOverridesTheDocumentsOwn` and staged as `UPSTREAM.md` #3. So a route
-  that reads **TSON** with `readObjectAs`/`readTreeAs` validates a body against the route's schema whatever the
-  body claims. Use `readObjectAs` for a JSON body, which names nothing, and read a TSON body by its own binding
-  (`readObject`) — which is what the demos do, branching on `TsonMediaType.namesJson(contentType)`. Checking the
-  agreement locally needs a peek, and bind mode cannot continue one (`UPSTREAM.md` #1).
+- **Upstream's `readAs` overrides a TSON body's own `!!schema`, so the codec checks agreement itself.** A stated
+  schema wins over one the document names, even a different one, with no diagnostic — in both readers, and by
+  upstream's decision: `TsonObjectReader.readAs(TsonDocumentPeek, …)` says so and leaves the comparison to the
+  caller. So `TsonHttpCodec.readObjectAs`/`readTreeAs` peek a TSON body, compare its `!!schema` with the stated
+  one by canonical identity, and answer a disagreement 400 `conflicting-schema` before reading on the peek — the
+  body read once. A body naming no schema is read against the stated one, which is what stating one is for. **Do
+  not bypass the codec with the reader's `readAs`** on a body a client wrote: that is the unchecked path.
+  `UpstreamGapsTest.aStatedSchemaSilentlyOverridesTheDocumentsOwn` pins the override, so the codec's copy of the
+  rule is noticed the day upstream starts refusing on its own. `TsonSchemaVersions.Routed.readObjectAs` goes
+  through the same path, which is why a TSON body naming its version only in the header is still read against
+  that version's schema rather than schemaless. The demos still read a TSON body by its own binding (`readObject`)
+  and use `readObjectAs` for JSON — a choice, since both are now checked.
 
 ## Media type and file extension
 
