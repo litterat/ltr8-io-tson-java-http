@@ -253,17 +253,18 @@ public final class TsonHttpException extends RuntimeException {
      * whose status depends on <em>whose</em> doing it was: {@link #fetchFailure} splits them across 400, 502 and
      * 504, and {@link #from} answers a thrown fetch failure from that same table. Nobody would supply the
      * schema, so the body was never read against one and whether it would have passed is unknown -- but a
-     * reference this deployment refuses is still the sender's to fix, where a host that timed out is not. They
-     * rank below a gap on upstream's own precedent: the CLI takes the most permanent of three, 70 over 69 over
-     * 1, since retrying reaches a gap again where an origin may recover. Among themselves they rank by
-     * {@link #FETCH_RANKING}.
+     * reference this deployment will not supply ({@code SCHEMA_NOT_PERMITTED}, {@code SCHEMA_TOO_LARGE}, both
+     * refusals) or that names nothing ({@code SCHEMA_NOT_FOUND}) is the sender's to fix, where a host that timed
+     * out is not. The three that are the sender's rank below a gap and above everything else the sender can act
+     * on, as the {@code tson} CLI's 69 does; {@link #REFERENCE_CODES} orders them.
      *
-     * <p><b>A rejection outranks the origin's two</b>, {@code SCHEMA_UNREACHABLE} and {@code SCHEMA_TIMEOUT}:
-     * a body holding a verdict or a refusal will not be accepted however the origin answers -- the {@code tson}
-     * CLI's {@code REJECTED}, which one rejection settles -- so a 502 or 504 would send the sender round a retry
-     * that cannot succeed. The answer is then the rejection's 4xx, saying in {@code detail} that part of the
-     * body went unchecked. A gap and a bind mismatch keep their place above it: an operator must act first,
-     * and a server fault answered 4xx would leave nothing to log.
+     * <p><b>The origin's two rank last</b>: {@code SCHEMA_UNREACHABLE} (502) and {@code SCHEMA_TIMEOUT} (504)
+     * answer only when they are all that is wrong, as the CLI's 75 does. A retry is advice only when nothing
+     * else needs fixing -- every other fix ends in a resend, which retries the origin for free, while a bare
+     * retry of a body holding anything else the sender must change reaches the same refusal. Beside such a
+     * problem the answer is that problem's 4xx, the {@code detail} saying part of the body went unchecked. A
+     * gap and a bind mismatch keep their place above everything: an operator must act first, and a server
+     * fault answered 4xx would leave nothing to log.
      *
      * <p><b>A [TSON-DATA] §9.1 limit refusal is a 413</b>, ranked below the fetch codes and above a §8.2
      * refusal. Both are §8.1's fifth outcome -- this processor declined, and is no verdict -- but nothing past
@@ -312,28 +313,20 @@ public final class TsonHttpException extends RuntimeException {
                             : "; the other " + (diagnostics.size() - gaps) + " problem(s) reported are real"),
                     diagnostics, cause);
         }
-        // Ranked below a gap on upstream's own precedent: its CLI takes "the most permanent of three", 70 over
-        // 69 over 1, because retrying reaches the gap again where the origin may well come back. Within the
-        // five, FETCH_RANKING orders them; the list is scanned in that order rather than in the document's,
-        // which is what keeps a mixed failure's status independent of which reference came first. A rejection
-        // beside an origin's failure skips the two world's-doing codes: the body will not be accepted however
-        // the origin answers, so a 502 or 504 would advertise a retry that cannot succeed.
-        boolean rejected = diagnostics.stream().anyMatch(d -> rejects(d.code()));
-        for (Diagnostic.Code code : FETCH_RANKING) {
-            if (rejected && isOriginFailure(code)) {
-                continue;
-            }
-            List<Diagnostic> unavailable = diagnostics.stream().filter(d -> d.code() == code).toList();
-            if (!unavailable.isEmpty()) {
+        // A reference the sender must change, ranked below a gap on upstream's own precedent: its CLI ranks 70
+        // over 69, because retrying reaches the gap again. REFERENCE_CODES is scanned in its own order rather
+        // than in the document's, so a mixed failure's status does not depend on which reference came first.
+        for (Diagnostic.Code code : REFERENCE_CODES) {
+            List<Diagnostic> unusable = diagnostics.stream().filter(d -> d.code() == code).toList();
+            if (!unusable.isEmpty()) {
                 return fetchFailure(code, "the schema governing the request body could not be obtained, so the "
-                        + "body was not checked: " + unavailable.stream().map(Diagnostic::message).toList(),
+                        + "body was not checked: " + unusable.stream().map(Diagnostic::message).toList(),
                         diagnostics, cause);
             }
         }
         // Above a §8.2 refusal because nothing below the bound was read at all, where a refused name was found
-        // by a reader that finished the document. Below the fetch codes for the reason those rank as
-        // they do: a limit is this deployment's own doing and the sender can act on it, so it goes with the
-        // three the sender holds the fix for rather than with a dependency's failure.
+        // by a reader that finished the document. Below the reference codes, whose fix comes first: nothing is
+        // read against a schema until there is one.
         List<Diagnostic> overLimit = diagnostics.stream()
                 .filter(d -> d.code() == Diagnostic.Code.LIMIT_EXCEEDED).toList();
         String unjudged = diagnostics.stream().anyMatch(d -> isOriginFailure(d.code()))
@@ -345,17 +338,20 @@ public final class TsonHttpException extends RuntimeException {
         if (!refused.isEmpty()) {
             return policyRefusal(refused, diagnostics, unjudged, cause);
         }
+        // The origin's failures last, and only when they are all that is wrong: beside anything else the
+        // sender must change, a 502 or 504 would advertise a retry that cannot succeed.
+        if (diagnostics.stream().allMatch(d -> isOriginFailure(d.code()))) {
+            for (Diagnostic.Code code : ORIGIN_CODES) {
+                List<Diagnostic> unreached = diagnostics.stream().filter(d -> d.code() == code).toList();
+                if (!unreached.isEmpty()) {
+                    return fetchFailure(code, "the schema governing the request body could not be obtained, so "
+                            + "the body was not checked: " + unreached.stream().map(Diagnostic::message).toList(),
+                            diagnostics, cause);
+                }
+            }
+        }
         return new TsonHttpException(BAD_REQUEST, TYPES + "invalid-document", "Invalid TSON document",
                 detail + unjudged, diagnostics, cause);
-    }
-
-    /**
-     * Whether a code rejects the body -- a verdict, or a refusal under this deployment's policy or limits -- the
-     * {@code tson} CLI's {@code REJECTED}. One is enough: what went unjudged beside it cannot make the body
-     * acceptable.
-     */
-    private static boolean rejects(Diagnostic.Code code) {
-        return code.verdict() || code.isRefusal();
     }
 
     /** The two fetch codes that are the origin's doing rather than the reference's, and so worth a retry. */
@@ -396,7 +392,7 @@ public final class TsonHttpException extends RuntimeException {
      * first refusal found decides</b>, and unlike the fetch codes these are deliberately not ranked: two rules
      * firing on one document is possible, all three are the same status, and the fix differs by rule rather
      * than in severity -- so there is no ordering between them that is right in general, where among the fetch
-     * codes there is one and {@link #FETCH_RANKING} states it. A
+     * codes there is one and {@link #REFERENCE_CODES} and {@link #ORIGIN_CODES} state it. A
      * mixed list -- a refusal beside ordinary violations -- takes the refusal's type, since it is the one class
      * where the fix may not be in the document, and says in {@code detail} that the rest are real.
      */
@@ -422,22 +418,23 @@ public final class TsonHttpException extends RuntimeException {
     }
 
     /**
-     * How the five fetch codes rank against each other, most permanent first.
+     * The three fetch codes whose fix is the sender's -- a reference this deployment will not supply, one that
+     * names nothing, one past the size cap -- in the order they are scanned. They share a status and a type,
+     * so the order only decides whose messages the detail quotes; it is {@link Diagnostic.Code}'s.
      *
-     * <p>The two that are the world's doing come before the three that are the document's, so a mixed
-     * failure is never blamed on the client -- the same rule the surrounding chain applies to a gap. Between
-     * those two, an origin answering with something that is not a document is less likely to right itself
-     * than one that was merely slow. The three at the tail share a status and a type and so do not rank
-     * among themselves; they are listed in {@link Diagnostic.Code} order.
-     *
-     * <p><b>Scanning in this order is what replaced a first-wins pick.</b> The status used to come from
+     * <p><b>Scanning in a fixed order is what replaced a first-wins pick.</b> The status used to come from
      * whichever reason was reported first, so a document naming two bad references got an answer that
-     * depended on which one the reader reached first -- and a 400 could beat a 5xx that way.
+     * depended on which one the reader reached first.
      */
-    private static final List<Diagnostic.Code> FETCH_RANKING = List.of(
-            Diagnostic.Code.SCHEMA_UNREACHABLE, Diagnostic.Code.SCHEMA_TIMEOUT,
-            Diagnostic.Code.SCHEMA_NOT_PERMITTED, Diagnostic.Code.SCHEMA_NOT_FOUND,
-            Diagnostic.Code.SCHEMA_TOO_LARGE);
+    private static final List<Diagnostic.Code> REFERENCE_CODES = List.of(
+            Diagnostic.Code.SCHEMA_NOT_PERMITTED, Diagnostic.Code.SCHEMA_NOT_FOUND, Diagnostic.Code.SCHEMA_TOO_LARGE);
+
+    /**
+     * The origin's two, most permanent first: an origin answering with something that is not a document is
+     * less likely to right itself than one that was merely slow. Answered only when nothing else is wrong.
+     */
+    private static final List<Diagnostic.Code> ORIGIN_CODES = List.of(
+            Diagnostic.Code.SCHEMA_UNREACHABLE, Diagnostic.Code.SCHEMA_TIMEOUT);
 
     /**
      * A schema that could not be obtained, answered by <b>whose doing it was</b>.

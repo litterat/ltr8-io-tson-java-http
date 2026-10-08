@@ -557,39 +557,43 @@ reading application, this deployment's own policy and budget, whoever was to ser
 | `SCHEMA_TIMEOUT` | the origin did not answer in time | 504 |
 | `LIMIT_EXCEEDED` | the body went past what this deployment reads | 413 |
 | `CONFUSABLE_NAMES`, `RESTRICTED_CHARACTER`, `RESTRICTED_SCRIPT` | this deployment's name policy declined it | 400 |
-| `SCHEMA_NOT_PERMITTED` | policy refused the reference | 400 |
-| `SCHEMA_NOT_FOUND` | nothing serves the reference | 400 |
-| `SCHEMA_TOO_LARGE` | the document exceeds what a schema may be | 400 |
+| `SCHEMA_NOT_PERMITTED` | this deployment will not supply it — off the allow-list, or a closed source's miss | 400 |
+| `SCHEMA_NOT_FOUND` | an origin or directory looked and found nothing at the reference | 400 |
+| `SCHEMA_TOO_LARGE` | the document exceeds this deployment's size cap | 400 |
 
-**Not being a verdict does not settle the status**, and the fetch codes are where that shows. `verdict()`
-answers *was the document judged*; a status answers *who must act*. For a reference this deployment will not
-fetch, cannot find, or finds too large, the body went unchecked **and** the sender still holds the fix — so
-those are 400s. The spec says the first half itself: [TSON-DATA] §8.1's fifth outcome is *not judged*, whose
-members are a **refusal** (§8.2's name hygiene and §9.1's limits — this processor declined, and the next may
-accept the same document in full) and an **unavailable schema** ([TSON-SCHEMA] §10.1) — so neither is a verdict
-by the spec's own account, and a `?sha256=` pin mismatch stays a resolver
-error, a finding about bytes that *were* obtained. The invariant that does hold is the other direction, and `TsonHttpCodecTest`.
-`everyCodeEarnsAStatusAndNoVerdictBecomesAServerFault` pins it: **a code `verdict()` calls true may never be
-answered 5xx.** That is the failure the classification exists to prevent — telling a sender the server broke
-when their document really was wrong sends them round a loop that cannot terminate.
+**Not being a verdict does not settle the status**, and the fetch codes are where that shows. `verdict()` answers *was the
+document judged*; a status answers *who must act*. For a reference this deployment will not fetch, cannot find, or finds too
+large, the body went unchecked **and** the sender still holds the fix — so those are 400s. The spec says the first half
+itself: [TSON-DATA] §8.1's fifth outcome is *not judged*, whose members are a **refusal** (§8.2's name hygiene and §9.1's
+limits — this processor declined, and the next may accept the same document in full) and an **unavailable schema**
+([TSON-SCHEMA] §10.1) — so neither is a verdict by the spec's own account. Upstream counts `SCHEMA_NOT_PERMITTED` and
+`SCHEMA_TOO_LARGE` as refusals too (`Code.isRefusal()`): a schema this deployment *would not* supply, where the other three
+are what the world *could not*; tson-java's `SPEC-FEEDBACK.md` carries the change to §8.1's wording, and a `?sha256=` pin
+mismatch stays a resolver error, a finding about bytes that *were* obtained. The invariant that does hold is the other
+direction, and `TsonHttpCodecTest.everyCodeEarnsAStatusAndNoVerdictBecomesAServerFault` pins it: **a code `verdict()` calls
+true may never be answered 5xx.** That is the failure the classification exists to prevent — telling a sender the server
+broke when their document really was wrong sends them round a loop that cannot terminate.
 
-Ranking, most-inward actor first: `BIND_MISMATCH` (an operator has to fix it, and until they do nothing else
-is evaluated) → `NOT_IMPLEMENTED` → `SCHEMA_UNREACHABLE` → `SCHEMA_TIMEOUT` → the three 400 fetch codes →
-`LIMIT_EXCEEDED` → §8.2 refusals → ordinary violations. The two world's-doing fetch codes come before the three document's-doing ones
-so a mixed failure is never blamed on the client; between them, an origin answering with something that is not
-a document is less likely to right itself than one that was slow. `TsonHttpException.FETCH_RANKING` states it.
+Ranking, most-inward actor first, and the `tson` CLI's exit order (`70 > 78 > 69 > 1 > 75`) wearing statuses:
+`BIND_MISMATCH` (an operator has to fix it, and until they do nothing else is evaluated) → `NOT_IMPLEMENTED` →
+the three 400 fetch codes → `LIMIT_EXCEEDED` → §8.2 refusals → ordinary violations → `SCHEMA_UNREACHABLE` →
+`SCHEMA_TIMEOUT`. `TsonHttpException.REFERENCE_CODES` and `ORIGIN_CODES` state the two fetch halves.
 **This is a scan in rank order, not a first-match on the diagnostic list** — the status used to come from
 whichever fetch reason was reported first, so document ordering decided whether the sender or the dependency
 was blamed.
 
-**One exception: a rejection outranks the origin's two.** A body holding a verdict or a refusal will not be
-accepted however the origin answers — the `tson` CLI reports it `REJECTED`, one rejection settling it — so a
-502 or 504 beside it would advertise a retry that cannot succeed. It answers the rejection's 4xx instead, with
-the detail saying part of the body went unchecked. `BIND_MISMATCH` and `NOT_IMPLEMENTED` keep their place above
-it: an operator acts first, and a server fault answered 4xx would leave nothing to log. So the status class is
-the CLI's outcome everywhere but those two and the three 400 fetch codes, which the CLI calls `UNDETERMINED`
-and this project answers 400 because the sender holds the fix. Pinned by
-`TsonHttpCodecTest.aRejectionOutranksAnOriginsFailure`.
+**The origin's two rank last, and answer only when they are all that is wrong.** A retry is advice only when
+nothing else needs fixing: every other fix ends in a resend, which retries the origin for free, while a bare retry
+of a body holding anything else the sender must change — a verdict, a refusal, a reference this deployment will
+not supply — reaches the same answer. So beside one of those a 502 or 504 is the wrong advice, and the answer is
+that problem's 4xx, the detail saying part of the body went unchecked. This reverses an older rule here ("a mixed
+failure is never blamed on the client"): the client *is* who must act first. `BIND_MISMATCH` and
+`NOT_IMPLEMENTED` keep their place above everything: an operator acts first, and a server fault answered 4xx would
+leave nothing to log. So the status answers what the CLI's exit code answers, and parts from its `outcome`
+exactly where the exit code does — a rejection beside a gap or a bind mismatch is a 500 or 501 here and
+`REJECTED` there, and `SCHEMA_NOT_FOUND` is a 400 here (exit 69, the sender most likely holds the fix) and
+`UNDETERMINED` there. Pinned by `TsonHttpCodecTest.aRejectionOutranksAnOriginsFailure` and
+`aReferenceTheSenderMustChangeOutranksAnOriginsFailure`.
 
 **`LIMIT_EXCEEDED` is a 413, and it is the one status here about what reading would *cost* rather than about
 what the body says.** §9.1's resource limits are a policy the library now enforces — nesting depth, bounded at
@@ -905,7 +909,8 @@ Each cost a debugging cycle here and is pinned by a test.
   JSON Schema, which is unanchored and needs them. `deployment-1.tn`'s `script_name` is the one pattern here.
 - **Use `SchemaSource.ofMap`, never `map::get`.** `SchemaFetchException` is the whole contract for
   "cannot supply this", and a source returning `null` is now refused by name rather than dereferenced — but
-  refused is still a failure, and `ofMap` is the form that does not fail: it throws `NOT_FOUND` for a miss and
+  refused is still a failure, and `ofMap` is the form that does not fail: it throws `NOT_PERMITTED` for a miss —
+  the map is this deployment's whole configuration, so a schema outside it is one it will not supply — and
   compares by **canonical identity**, so a reference differing only in scheme or `?sha256=` pin still resolves
   (§2.2.1). A hand-rolled map source gets the first half and misses the second. All three demos shipped
   `schemaSource(schemas::get)`, which was an NPE — and so a 500 any client could produce at will, by naming a

@@ -32,16 +32,17 @@
     its exit codes on (70, not 1) -- a 501. BIND_MISMATCH: a schema and the Java class bound to it disagree,
     or the class refused a value the schema admits, which is this server's own wiring; its message names a
     server class, so it is a 500 and the boundary drops it from the body entirely. The five SCHEMA_* codes:
-    nobody would supply the schema, one code per reason. The remaining four are [TSON-DATA] §8.1's
-    refusals: this processor declined under its own policy and limits, and the next one along may accept the
-    same body in full.
+    no schema was obtained, one code per reason. The remaining four, with SCHEMA_NOT_PERMITTED and
+    SCHEMA_TOO_LARGE, are refusals: this processor declined under its own policy and limits, and the next one
+    along may accept the same body in full.
 
     Not being a verdict does not settle the status, and the SCHEMA_* five are where that shows.
     SCHEMA_UNREACHABLE is a 502 and SCHEMA_TIMEOUT a 504 -- the reference was fine and the world was
     not. SCHEMA_NOT_PERMITTED (a reference this deployment will not fetch), SCHEMA_NOT_FOUND (one
     nothing serves) and SCHEMA_TOO_LARGE (one whose document exceeds the bytes a schema may be) are the
     document's own doing and are 400s, because the sender is who can name something else. Nothing was
-    checked in any of the five; only two of them are worth retrying.
+    checked in any of the five; only two of them are worth retrying, and those two answer only when nothing
+    else in the body is the sender's to fix, since a retry would otherwise reach the same answer.
 
     They are declared here even though a client should never see the first two, because this enum
     copies Diagnostic.Code rather than the subset one server happens to emit.

@@ -571,9 +571,13 @@ class UpstreamGapsTest {
     }
 
     /**
-     * And {@code ofMap} is the form that removes the trap: it refuses a miss with {@code NOT_FOUND}, and
+     * And {@code ofMap} is the form that removes the trap: it refuses a miss with {@code NOT_PERMITTED}, and
      * compares by canonical identity, so a reference differing only in scheme or {@code ?sha256=} pin still
      * resolves (§2.2.1). Three demos here carried a private helper doing the first half and not the second.
+     *
+     * <p>{@code NOT_PERMITTED} rather than {@code NOT_FOUND} because the map is this deployment's whole
+     * configuration: a schema outside it is one this deployment will not supply, a refusal, where {@code
+     * NOT_FOUND} is a source that looked beyond its configuration and found nothing. Both answer 400.
      */
     @Test
     void ofMapRefusesAMissAndComparesByCanonicalIdentity() {
@@ -590,7 +594,7 @@ class UpstreamGapsTest {
 
         SchemaFetchException refused = assertThrows(SchemaFetchException.class,
                 () -> source.fetch("https://example.com/2026/37/app/absent-1.tn"));
-        assertEquals(SchemaFetchException.Reason.NOT_FOUND, refused.reason());
+        assertEquals(SchemaFetchException.Reason.NOT_PERMITTED, refused.reason());
     }
 
     // ── open: RFC 6901 over TSON's map keys ─────────────────────────────────────────────────────

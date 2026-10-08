@@ -261,8 +261,12 @@ class ValidatorServerTest {
 
     /**
      * <b>The service fetches nothing.</b> A schema identity in a submitted document is an untrusted URL, so a
-     * document naming a schema the caller did not paste is reported as unavailable rather than resolved off
-     * the network. An endpoint that fetched it would be a request forger for anyone who could reach it.
+     * document naming a schema the caller did not paste is refused rather than resolved off the network. An
+     * endpoint that fetched it would be a request forger for anyone who could reach it.
+     *
+     * <p>{@code SCHEMA_NOT_PERMITTED}, a refusal, and so {@code REJECTED}: this service will not supply that
+     * schema, and the caller's fix is to paste it -- where a schema the world could not supply would leave the
+     * document undetermined.
      */
     @Test
     void aSchemaThatWasNotSubmittedIsNeverFetched() throws Exception {
@@ -270,10 +274,11 @@ class ValidatorServerTest {
                 !!schema:"https://example.com/somewhere-else.tn"
                 !employee { id: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6" }"""));
 
-        assertEquals(List.of(Diagnostic.Code.SCHEMA_NOT_FOUND),
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_NOT_PERMITTED),
                 result.diagnostics().stream().map(TsonProblemDiagnostic::code).toList(),
                 "ofMap holds only the submitted schema, so any other identity is a miss it refuses by "
                         + "contract -- nothing here goes to the network to find out");
+        assertEquals(Outcome.REJECTED, result.outcome());
     }
 
     /**

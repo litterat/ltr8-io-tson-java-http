@@ -506,22 +506,28 @@ class TsonHttpCodecTest {
     }
 
     /**
-     * <b>A mixed fetch failure is never blamed on the client.</b> Two bad references in one document -- one
-     * this deployment will not fetch, one whose origin hung -- and the status comes from the ranking rather
-     * than from whichever the reader reached first. Written with the 400-earning code first, so a first-wins
-     * pick would answer 400 and this would fail.
+     * <b>A reference the sender must change outranks an origin's failure.</b> Two bad references in one document
+     * -- one this deployment will not supply, one whose origin hung -- and the sender has to change the first
+     * whatever the origin does, so a 504 would advertise a retry that reaches the same refusal. The {@code tson}
+     * CLI ranks them alike, 69 over 75. A reference that names nothing outranks it the same way: the sender most
+     * likely holds that fix too. Written with the origin's failure first, so a first-wins pick would fail.
      *
-     * <p>That is exactly what it used to do: the status came from the first {@code fetchReason} found, so a
-     * document's ordering decided whether this server blamed the sender or its own dependency.
+     * <p>The two origin codes rank between themselves only when nothing else is wrong, unreachable first.
      */
     @Test
-    void aMixedFetchFailureRanksRatherThanTakingTheFirst() {
-        TsonHttpException thrown = TsonHttpException.invalidDocument(List.of(
-                withCode(aGap(), Diagnostic.Code.SCHEMA_NOT_PERMITTED),
-                withCode(aGap(), Diagnostic.Code.SCHEMA_TIMEOUT)));
+    void aReferenceTheSenderMustChangeOutranksAnOriginsFailure() {
+        for (Diagnostic.Code reference : List.of(Diagnostic.Code.SCHEMA_NOT_PERMITTED,
+                Diagnostic.Code.SCHEMA_NOT_FOUND, Diagnostic.Code.SCHEMA_TOO_LARGE)) {
+            TsonHttpException thrown = TsonHttpException.invalidDocument(List.of(
+                    withCode(aGap(), Diagnostic.Code.SCHEMA_TIMEOUT), withCode(aGap(), reference)));
 
-        assertEquals(TsonHttpException.GATEWAY_TIMEOUT, thrown.status());
-        assertTrue(thrown.type().endsWith("schema-origin-timeout"), thrown.type());
+            assertEquals(TsonHttpException.BAD_REQUEST, thrown.status(), reference::name);
+            assertTrue(thrown.type().endsWith("unusable-schema-reference"), thrown.type());
+        }
+
+        TsonHttpException origins = TsonHttpException.invalidDocument(List.of(
+                withCode(aGap(), Diagnostic.Code.SCHEMA_TIMEOUT), withCode(aGap(), Diagnostic.Code.SCHEMA_UNREACHABLE)));
+        assertEquals(TsonHttpException.BAD_GATEWAY, origins.status());
     }
 
     /**

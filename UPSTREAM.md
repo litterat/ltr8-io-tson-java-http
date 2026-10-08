@@ -44,57 +44,12 @@ which is §3.4's "expected production route". Pinned by `UpstreamGapsTest.aJsonD
 
 ---
 
-## 2. `tson validate` exits 75 for a file it reports `REJECTED`
-
-**Hit:** a file holding a verdict or a refusal beside a schema whose origin timed out or could not be reached —
-a scope push at an `extern` field is the ordinary way. The envelope says `REJECTED`, rightly: one rejection
-settles acceptance. The exit code is 75, `EX_TEMPFAIL`, since `TsonCli.exitCodeFor` lifts a mixed run to the most
-permanent of `70 > 78 > 69 > 75 > 1` and 75 outranks 1. So the runner is told a rerun may help, and a rerun reaches
-the same rejection. It is the one place the exit code and the envelope disagree about *what to do*, where the PR
-that introduced `outcome` meant them to disagree only about *who acts first*.
-
-**The change:** 1 above 75 — a rejection outranks an origin's failure, as a gap and a missing binding still
-outrank a rejection (70, 78), an operator acting first. 69 is untouched either way, since it advertises no rerun.
-
-**What this project does:** the same ordering over HTTP — a rejection beside `SCHEMA_UNREACHABLE` or
-`SCHEMA_TIMEOUT` is the rejection's 4xx rather than a 502 or 504
-(`TsonHttpCodecTest.aRejectionOutranksAnOriginsFailure`), so the two would agree.
-
----
-
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. That register renumbers from #1
 each time a revision closes, and its convention is *cite the spec, not the argument that got it there* — so
 re-check every `SPEC-FEEDBACK.md #N` in this repo after a revision bump.
 
-
-### To file: on `SPEC-FEEDBACK.md` #1 — a schema this deployment *would not* fetch is a refusal, not undetermined
-
-**Sections:** [TSON-DATA] §8.1 (the fifth outcome: "its policy or its network did not supply"), §9.1;
-[TSON-SCHEMA] §10.1, §11.2.
-
-**Kind:** a comment on an open entry, from the consumer whose status policy already splits the case.
-
-#1 defines a refusal as *this processor declined under its stated policy and limits, and the sender holds the
-fix*, and keeps an unavailable schema as *undetermined*. But §8.1's unavailable schema includes "its policy …
-did not supply", and two of the five fetch codes are exactly a refusal by #1's own definition:
-
-- **`SCHEMA_NOT_PERMITTED`** — the fetch allow-list is this deployment's policy, as deployment-specific as an
-  identifier policy, and the sender's fix is to name a schema it will fetch.
-- **`SCHEMA_TOO_LARGE`** — a size cap is a limit, in kind §9.1's, and a rerun shrinks nothing.
-
-Both are `UNDETERMINED` in the CLI today (exit 69), beside a timeout. The suggested split: **undetermined** is
-*could not* obtain (`SCHEMA_UNREACHABLE`, `SCHEMA_TIMEOUT`, and `SCHEMA_NOT_FOUND`, where nothing serves the
-reference and nobody judged anything); **refused** adds *would not* (`SCHEMA_NOT_PERMITTED`, `SCHEMA_TOO_LARGE`),
-and `Code.isRefusal()` would follow. §8.1's sentence then reads "its network did not supply" for undetermined, and
-policy moves to the refusal.
-
-**What this project does:** answers all three of `NOT_PERMITTED`, `NOT_FOUND` and `TOO_LARGE` 400, because the
-sender holds the fix. With the split, its 4xx/5xx boundary is the CLI's `REJECTED`/`UNDETERMINED` boundary in
-every case but `SCHEMA_NOT_FOUND`.
-
-**Priority:** medium — #1 is open, and this is cheapest settled before it is adopted.
 
 ### To file: namespaces — a `namespace` kind, a members facet records share, and a projection that names a member
 

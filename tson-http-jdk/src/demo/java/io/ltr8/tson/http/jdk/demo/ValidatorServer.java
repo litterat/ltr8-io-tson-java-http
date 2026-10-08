@@ -147,9 +147,9 @@ public final class ValidatorServer {
      * decision instead of the validator.
      *
      * <p><b>The schema source serves the submitted schema and nothing else.</b> A {@code !!schema} or
-     * {@code !!import} naming anything the caller did not paste resolves to nothing and is reported as
-     * {@code SCHEMA_NOT_FOUND} -- {@code ofMap} refuses a miss by contract. That is deliberate and it is the
-     * security boundary: the identity in a
+     * {@code !!import} naming anything the caller did not paste is refused as {@code SCHEMA_NOT_PERMITTED}
+     * -- {@code ofMap} refuses a miss by contract, the map being this service's whole configuration -- and the
+     * document is {@code REJECTED}. That is deliberate and it is the security boundary: the identity in a
      * submitted document is an untrusted URL, and an endpoint that fetched it would be a request forger for
      * anyone who could reach it.
      */
@@ -157,7 +157,7 @@ public final class ValidatorServer {
         String schemaText = request.schema().filter(text -> !text.isBlank()).orElse(null);
 
         // Serving the schema at the identity it declares, rather than at whatever the data asked for, is what
-        // makes "your document names a schema you did not paste" reachable as SCHEMA_NOT_FOUND instead of
+        // makes "your document names a schema you did not paste" reachable as SCHEMA_NOT_PERMITTED instead of
         // arriving as a confusing identity mismatch from inside the loader.
         //
         // ofMap is what refuses everything else, and refusing is the security boundary rather than a
