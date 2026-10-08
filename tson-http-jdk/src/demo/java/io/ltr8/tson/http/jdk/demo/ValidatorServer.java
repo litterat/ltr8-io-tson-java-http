@@ -33,6 +33,7 @@ import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -56,12 +57,12 @@ import java.util.concurrent.Executors;
 public final class ValidatorServer {
 
     /** The envelope this service reads and writes. */
-    public static final String VALIDATE_ID = "https://schemas.example.com/2026/36/app/validate-1.tn";
+    public static final String VALIDATE_ID = "https://schemas.example.com/2026/37/app/validate-1.tn";
 
     public static final String VALIDATE = schema("validate-1.tn");
 
     /** This service's own description, published and resolved at startup like any other schema. */
-    public static final String API_ID = "https://schemas.example.com/2026/36/app/validate-api-1.tn";
+    public static final String API_ID = "https://schemas.example.com/2026/37/app/validate-api-1.tn";
 
     public static final String API = schema("validate-api-1.tn");
 
@@ -87,9 +88,30 @@ public final class ValidatorServer {
     public record ValidationRequest(Optional<String> schema, String data) {
     }
 
-    /** The verdict. {@code elapsed_ms} times the validation alone — see {@link #verdict}. */
+    /**
+     * Whether the document will be accepted here — the {@code tson} CLI's outcome, so the two can be compared.
+     * An enum rather than a boolean because {@code if (!conforming)} reads "could not judge" as "rejected".
+     */
+    @Typename(name = "outcome")
+    public enum Outcome {
+        ACCEPTED, REJECTED, UNDETERMINED;
+
+        /**
+         * Nothing reported is accepted; any verdict or refusal rejects, one being enough, since what went
+         * unjudged beside it cannot make the document acceptable; and what is left is undetermined.
+         */
+        static Outcome of(List<Diagnostic> diagnostics) {
+            if (diagnostics.isEmpty()) {
+                return ACCEPTED;
+            }
+            return diagnostics.stream().anyMatch(d -> d.code().verdict() || d.code().isRefusal())
+                    ? REJECTED : UNDETERMINED;
+        }
+    }
+
+    /** The answer. {@code elapsed_ms} times the validation alone — see {@link #verdict}. */
     @Typename(name = "validation_result")
-    public record ValidationResult(boolean conforming, Phase phase,
+    public record ValidationResult(Outcome outcome, Phase phase,
                                    @Field("elapsed_ms") double elapsedMs,
                                    List<TsonProblemDiagnostic> diagnostics) {
     }
@@ -168,7 +190,7 @@ public final class ValidatorServer {
         }
         double elapsedMs = (System.nanoTime() - started) / 1_000_000.0;
 
-        return new ValidationResult(diagnostics.isEmpty(), phase, elapsedMs,
+        return new ValidationResult(Outcome.of(diagnostics), phase, elapsedMs,
                 diagnostics.stream().map(TsonProblemDiagnostic::from).toList());
     }
 
@@ -195,14 +217,12 @@ public final class ValidatorServer {
      * {@link #verdict} builds hold the caller's schema and are never shared with anything.
      */
     public static HttpServer start(int port, TsonDeployment deployment) throws IOException {
-        Map<String, Class<?>> bindings = Map.of(
+        Map<String, Class<?>> bindings = new HashMap<>(TsonDeployment.bindings());
+        bindings.putAll(Map.of(
                 "validation_request", ValidationRequest.class,
                 "validation_result", ValidationResult.class,
-                "diagnostic", TsonProblemDiagnostic.class,
-                "acceptance_profile", TsonDeployment.AcceptanceProfile.class,
-                "unicode_policy", TsonDeployment.Policy.class,
-                "restriction_level", io.ltr8.tson.base.policy.UnicodePolicy.Level.class,
-                "policy_unit", TsonDeployment.Unit.class);
+                "outcome", Outcome.class,
+                "diagnostic", TsonProblemDiagnostic.class));
         // deployment-1.tn is published; a descriptor governed by it never is. A client fetches the schema
         // to read the profile at /.well-known/tson-deployment, and there is nothing here to serve it the
         // descriptor itself with.
@@ -377,8 +397,8 @@ public final class ValidatorServer {
 
                 The schemas it publishes:
 
-                  curl -s http://localhost:%d/2026/36/app/validate-1.tn
-                  curl -s http://localhost:%d/2026/36/ltr8/http/deployment-1.tn
+                  curl -s http://localhost:%d/2026/37/app/validate-1.tn
+                  curl -s http://localhost:%d/2026/37/ltr8/http/deployment-1.tn
                 """.formatted(bound, bound, bound, bound, bound));
     }
 }

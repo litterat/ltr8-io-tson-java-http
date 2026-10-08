@@ -36,14 +36,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ApiProbe {
 
-    static final String IFACE_ID = "https://schemas.example.com/2026/36/app/orders-1.tn";
-    static final String API_ID = "https://schemas.example.com/2026/36/app/orders-api-1.tn";
+    static final String IFACE_ID = "https://schemas.example.com/2026/37/app/orders-1.tn";
+    static final String API_ID = "https://schemas.example.com/2026/37/app/orders-api-1.tn";
 
     /** The interface: four methods over four request records, nothing HTTP in sight. */
     static final String IFACE = """
         !!id:"%s"
         !!meta:"%s"
-        !!import:"https://tson.io/2026/36/m/core.tn"
+        !!import:"https://tson.io/2026/37/m/core.tn"
         !!import:"%s"
         {
           order       => { sku: text  quantity: int32 }
@@ -103,7 +103,7 @@ class ApiProbe {
         return """
         !!id:"%s"
         !!meta:"%s"
-        !!import:"https://tson.io/2026/36/m/core.tn"
+        !!import:"https://tson.io/2026/37/m/core.tn"
         !!import:"%s"
         {
         %s
@@ -375,6 +375,20 @@ class ApiProbe {
         assertTrue(noSuch.contains("exempts 'plaec_order'") && noSuch.contains("no implemented"), noSuch);
     }
 
+    /**
+     * A header name is held folded, as RFC 9110 §5.1 compares it: {@code header_name} is a case-folding text
+     * family, and the binding written {@code Idempotency-Key} reads back {@code idempotency-key}.
+     */
+    @Test
+    void aHeaderNameIsHeldFolded() {
+        Tson tson = tson(API);
+        assertEquals(List.of(), tson.validateSchema(API));
+        var entries = tson.schemaRegistry().get(API_ID).orElseThrow().schema().entries();
+        Api api = (Api) entries.get("orders_api").body();
+        assertEquals(Map.of("idempotency_key", "idempotency-key"),
+                api.resources().get("/orders").endpoints().get("POST").headers());
+    }
+
     /** The borrowed namespaces keep their grammars at the key: a path, a header name, a method name. */
     @Test
     void theBorrowedNamespacesKeepTheirGrammarsAtTheKey() {
@@ -405,12 +419,12 @@ class ApiProbe {
 
     // ── kept for comparison: a method as a TYPE, and the operation IS-A the method ──────────────
 
-    static final String LIB_ID = "https://tson.io/2026/36/ltr8/http/service-1.tn";
+    static final String LIB_ID = "https://tson.io/2026/37/ltr8/http/service-1.tn";
 
     static final String LIB_B = """
         !!id:"%s"
-        !!meta:"https://tson.io/2026/36/m/meta.tn"
-        !!import:"https://tson.io/2026/36/m/core.tn"
+        !!meta:"https://tson.io/2026/37/m/meta.tn"
+        !!import:"https://tson.io/2026/37/m/core.tn"
         {
           method      => <Req, Resp> { request: Req  response?: Resp  safe?: boolean ~ false  idempotent?: boolean ~ false }
           http_verb   => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
@@ -424,8 +438,8 @@ class ApiProbe {
      */
     static final String IFACE_B = """
         !!id:"%s"
-        !!meta:"https://tson.io/2026/36/m/meta.tn"
-        !!import:"https://tson.io/2026/36/m/core.tn"
+        !!meta:"https://tson.io/2026/37/m/meta.tn"
+        !!import:"https://tson.io/2026/37/m/core.tn"
         !!import:"%s"
         {
           order     => { sku: text  quantity: int32 }
@@ -436,8 +450,8 @@ class ApiProbe {
 
     static final String API_B = """
         !!id:"%s"
-        !!meta:"https://tson.io/2026/36/m/meta.tn"
-        !!import:"https://tson.io/2026/36/m/core.tn"
+        !!meta:"https://tson.io/2026/37/m/meta.tn"
+        !!import:"https://tson.io/2026/37/m/core.tn"
         !!import:"%s"
         !!import:"%s"
         {

@@ -1,14 +1,15 @@
-!!id:"https://tson.io/2026/36/ltr8/http/deployment-1.tn"
-!!meta:"https://tson.io/2026/36/m/meta.tn"
-!!import:"https://tson.io/2026/36/m/core.tn"
+!!id:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
+!!meta:"https://tson.io/2026/37/m/meta.tn"
+!!import:"https://tson.io/2026/37/m/core.tn"
 @doc:"""
   A deployment descriptor: how ONE INSTANCE is configured, as against what a document must be (a schema)
   or what an endpoint offers (an API description).
 
-  [TSON-DATA] §8.2 introduced a security control with no artifact -- a restriction level, a unit and an
-  optional script set, enforced by default, with nothing said about where the configuration lives. This is a
-  proposal for where. tson-java's SPEC-FEEDBACK.md carries the argument as filed; the short form is that the
-  two obvious homes are both wrong, and for reasons stronger than the decision being orthogonal:
+  [TSON-DATA] §8.2 introduced a security control with no artifact -- a restriction level and an optional
+  script set over values, and over names a unit and a look-alike switch as well, enforced by default, with
+  nothing said about where the configuration lives. This is a proposal for where. tson-java's SPEC-FEEDBACK.md
+  carries the argument as filed; the short form is that the two obvious homes are both wrong, and for reasons
+  stronger than the decision being orthogonal:
 
   A SCHEMA cannot hold it. An artifact that declared its own strictness would choose its own check, and a
   document carrying homographs would simply declare the level that admits them. §3.5 also makes a published
@@ -40,8 +41,8 @@
   """
 {
   @doc:"""
-    A hand-written copy of io.ltr8.tson.compiler.TsonUnicodePolicy.Level, which copies UTS #39 §5.2's six
-    levels. TsonDeploymentSchemaTest holds the two together.
+    A hand-written copy of io.ltr8.tson.base.policy.ScriptPolicy.Level, which copies UTS #39 §5.2's six
+    levels. TsonDeploymentTest holds the two together.
 
     The names are UTS #39's own, deliberately. §8.2 makes a point of it -- "the level is a UTS #39 name, so
     two implementations agree on it without reading this document" -- so a descriptor that invented OPEN and
@@ -52,13 +53,16 @@
   ]
 
   @doc:"""
-    What the level is applied to: the whole name, or each `_`/`-` delimited segment of it. §8.2 calls the
-    unit "this series' one refinement" on UTS #39, and names it as the relaxation to reach for FIRST --
-    per-segment Highly Restrictive still refuses every within-word homograph while admitting the compounds
-    that mix a Latin abbreviation with a name in another script.
+    What an identifier policy's level is applied to: the whole name, or each segment of it, divided at the
+    name's profile's own separators (`_` and `-` for the kernel's identifier). §8.2 calls the unit "this
+    series' one refinement" on UTS #39, and names it as the relaxation to reach for FIRST -- per-segment
+    Highly Restrictive still refuses every within-word homograph while admitting the compounds that mix a
+    Latin abbreviation with a name in another script.
 
     Absent means WHOLE. It is a separate field rather than more levels because level and unit are
-    independent, and folding them would give twelve names where UTS #39 has six.
+    independent, and folding them would give twelve names where UTS #39 has six. Only a name has segments:
+    `_` and `-` are separators in a name and ordinary characters in a value, so segmenting a value would
+    admit UTS #39's own `Toys-Я-Us`. That is why `script_policy` below has no unit to write.
     """
   policy_unit => !enum [WHOLE SEGMENT]
 
@@ -86,21 +90,44 @@
   script_name => !text ^ { pattern: "[A-Za-z][A-Za-z_]*" }
 
   @doc:"""
-    One §8.2 policy. `permitting` names an additional admitted script combination -- the mechanism §5.2
-    itself uses for Latin+Japanese and its siblings, and the narrowest relaxation available: a deployment
-    that knows it is Russian says [Latin Cyrillic] rather than dropping a level and losing the rule
-    everywhere else.
+    §8.2's token policy: a restriction level over each whole token, values included. `permitting` names an
+    additional admitted script combination -- the mechanism UTS #39 §5.2 itself uses for Latin+Japanese and
+    its siblings, and the narrowest relaxation available: a deployment that knows it is Russian says [Latin
+    Cyrillic] rather than dropping a level and losing the rule everywhere else.
     """
-  unicode_policy => {
-    level:      restriction_level
-    unit?:      policy_unit
+  script_policy => {
+    level:       restriction_level
     permitting?: [script_name]
   }
 
   @doc:"""
-    [TSON-DATA] §9.1's resource limits: what this processor will SPEND reading a document, where
-    `unicode_policy` above is what it will ADMIT as a name. Two settings and not one, because they answer
-    two questions and a deployment changing one has said nothing about the other.
+    §8.2's identifier policy, over declared names, field names and identifier-typed values and keys: a level
+    and script combinations as `script_policy` states them, the unit the level applies to, and
+    `skeleton_distinctness` -- the look-alike rule, that no two names in one scope share a UTS #39 skeleton.
+    That rule is no level's to relax, so it is a switch of its own; absent leaves the library's default,
+    which is on.
+
+    Its fields are written out rather than composed from `script_policy`, deliberately. A composition would
+    make an identifier policy admissible wherever a script policy is, and `tokens` would then take a unit --
+    the per-segment token policy that the library makes unwritable.
+    """
+  identifier_policy => {
+    level:                  restriction_level
+    unit?:                  policy_unit
+    skeleton_distinctness?: boolean
+    permitting?:            [script_name]
+  }
+
+  @doc:"""
+    A nesting bound: one level or more. Declared here because core no longer declares a positive integer,
+    every name core declares being reserved in each schema that imports it.
+    """
+  nesting_depth => !int32 ^ { min: 1 }
+
+  @doc:"""
+    [TSON-DATA] §9.1's resource limits: what this processor will SPEND reading a document, where the two
+    policies above are what it will ADMIT. Two settings and not one, because they answer two questions and a
+    deployment changing one has said nothing about the other.
 
     `max_depth` is the nesting bound, §9.1's own default being 64 -- the tightest in common use, so a
     document that fits travels. It is the only limit stated here because it is the only one the library
@@ -111,7 +138,7 @@
     not asked for no limit.
     """
   limits => {
-    max_depth?: positive_integer
+    max_depth?: nesting_depth
   }
 
   @doc:"Where this instance listens. Absent members leave the caller's own defaults alone."
@@ -136,8 +163,8 @@
   deployment => {
     name:         text
     listener?:    listener
-    identifiers?: unicode_policy
-    tokens?:      unicode_policy
+    identifiers?: identifier_policy
+    tokens?:      script_policy
     limits?:      limits
     schema_hosts?: [text]
   }
@@ -172,8 +199,8 @@
     """
   acceptance_profile => {
     name:                 text
-    identifiers?:         unicode_policy
-    tokens?:              unicode_policy
+    identifiers?:         identifier_policy
+    tokens?:              script_policy
     limits?:              limits
     unicode_data_version?: text
   }

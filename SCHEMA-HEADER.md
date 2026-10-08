@@ -50,7 +50,7 @@ The rest of this document is kept as the design record: the argument for each ru
 A header carrying the identity of the schema that governs the message body:
 
 ```
-TSON-Schema: "https://schemas.example.com/2026/36/app/order-1.tn"
+TSON-Schema: "https://schemas.example.com/2026/37/app/order-1.tn"
 ```
 
 **It is a projection of `!!schema`, not an alternative to it.** That framing is the whole proposal. The body
@@ -195,7 +195,7 @@ field name alongside it is coherent rather than extra machinery.
 Define it as an RFC 9651 structured field: an **Item** whose bare-item is an **sf-string**.
 
 ```
-TSON-Schema: "https://schemas.example.com/2026/36/app/order-1.tn"
+TSON-Schema: "https://schemas.example.com/2026/37/app/order-1.tn"
 ```
 
 **DECIDED: sf-string, so the quotes are mandatory.** Which also matches the directive: `!!schema`'s argument
@@ -255,8 +255,8 @@ to hold one. Something has to say which version the reply is in, and only the cl
 as `Accept`'s quality values:
 
 ```
-TSON-Accept-Schema: "https://schemas.example.com/2026/36/app/order-2.tn",
-                    "https://schemas.example.com/2026/36/app/order-1.tn";q=0.5
+TSON-Accept-Schema: "https://schemas.example.com/2026/37/app/order-2.tn",
+                    "https://schemas.example.com/2026/37/app/order-1.tn";q=0.5
 ```
 
 The rules, each pinned by a test in `TsonSchemaVersionsTest`:

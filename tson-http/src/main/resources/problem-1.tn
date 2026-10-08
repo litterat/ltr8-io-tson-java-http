@@ -1,6 +1,6 @@
-!!id:"https://tson.io/2026/36/ltr8/http/problem-1.tn"
-!!meta:"https://tson.io/2026/36/m/meta.tn"
-!!import:"https://tson.io/2026/36/m/core.tn"
+!!id:"https://tson.io/2026/37/ltr8/http/problem-1.tn"
+!!meta:"https://tson.io/2026/37/m/meta.tn"
+!!import:"https://tson.io/2026/37/m/core.tn"
 @doc:"""
   The error body this project writes when a request cannot be fulfilled.
 
@@ -27,12 +27,14 @@
     A hand-written copy of io.ltr8.tson.compiler.Diagnostic.Code, which is the source of truth;
     TsonProblemSchemaTest is the only thing that checks the two agree.
 
-    Seven members are not a verdict on the request: the body went unchecked, so "invalid" is not
-    something this server learned. They differ by who could not give one. NOT_IMPLEMENTED: this library
-    could not check a construct the body uses -- the same split the CLI rides its exit codes on (70, not
-    1) -- a 501. BIND_MISMATCH: a schema and the Java class bound to it disagree, which is this server's
-    own wiring; its message names a server class, so it is a 500 and the boundary drops it from the body
-    entirely. The five SCHEMA_* codes: nobody would supply the schema, one code per reason.
+    Eleven members are not a verdict on the request, and they differ by who could not give one.
+    NOT_IMPLEMENTED: this library could not check a construct the body uses -- the same split the CLI rides
+    its exit codes on (70, not 1) -- a 501. BIND_MISMATCH: a schema and the Java class bound to it disagree,
+    or the class refused a value the schema admits, which is this server's own wiring; its message names a
+    server class, so it is a 500 and the boundary drops it from the body entirely. The five SCHEMA_* codes:
+    nobody would supply the schema, one code per reason. The remaining four are [TSON-DATA] §8.1's
+    refusals: this processor declined under its own policy and limits, and the next one along may accept the
+    same body in full.
 
     Not being a verdict does not settle the status, and the SCHEMA_* five are where that shows.
     SCHEMA_UNREACHABLE is a 502 and SCHEMA_TIMEOUT a 504 -- the reference was fine and the world was
@@ -45,16 +47,20 @@
     copies Diagnostic.Code rather than the subset one server happens to emit.
 
     CONFUSABLE_NAMES, RESTRICTED_CHARACTER and RESTRICTED_SCRIPT are [TSON-DATA] §8.2's name hygiene,
-    one code per rule, and all three are 400 like any other verdict. They are worth calling out because
-    they are the first codes a server's own CONFIGURATION can turn on: ProcessorConfig.tokenPolicy decides
-    which scripts a token may carry, so a body refused under a raised policy is refused by this
-    deployment rather than by the format. That is still the client's to fix -- as a size limit is -- so
-    the status does not change.
+    one code per rule, and LIMIT_EXCEEDED is §9.1's nesting bound. They are this deployment's CONFIGURATION
+    speaking -- ProcessorConfig decides which scripts a name or token may carry and how deep a body may
+    nest -- so a refusal says nothing about whether the body is valid. It is still the client's to fix, by a
+    rename, a character, or a shallower body, so the three name rules are 400s and the limit a 413.
 
     The rule rides the code rather than a field beside it, which is the right shape: a consumer routes
     on the code, and the three want three different fixes -- rename one of a colliding pair, change a
     character outside the identifier profile, or relax the level. A second enum would only restate what
     the code already fixes and would be free to disagree with it.
+
+    SCOPE_NOT_ADMITTED is a body opening a schema scope (!!schema) at a position whose type is not a
+    scoped one, so the schema gives it nowhere to open -- [TSON-SCHEMA] §7.8's typed-position
+    restriction, a resolver error and a 400. A push at a scoped position that does not admit foreign
+    schemas is the cell rule's refusal instead, a VALIDATION_ERROR.
 
     An atom refuses a token in two categories, so it carries two codes. §5.2 splits the refusal -- a
     token the atom's grammar rejects is a parse error, a parsed value violating the atom's range is a
@@ -64,8 +70,8 @@
     the token, or change the value it denotes.
     """
   diagnostic_code => !enum [
-    FIELD_REQUIRED FIELD_FIXED TYPE_MISMATCH WRONG_ARITY UNKNOWN_TYPE_REF ATOM_FORM_INVALID
-    ATOM_CONSTRAINT_VIOLATION UNRECOGNIZED_FIELD DUPLICATE_MAP_KEY DUPLICATE_FIELD CONFUSABLE_NAMES
+    FIELD_REQUIRED FIELD_FIXED FIELD_GROUP TYPE_MISMATCH WRONG_ARITY UNKNOWN_TYPE_REF SCOPE_NOT_ADMITTED
+    ATOM_FORM_INVALID ATOM_CONSTRAINT_VIOLATION UNRECOGNIZED_FIELD DUPLICATE_MAP_KEY DUPLICATE_FIELD CONFUSABLE_NAMES
     RESTRICTED_CHARACTER RESTRICTED_SCRIPT SCHEMA_ERROR UNKNOWN_TYPE VALIDATION_ERROR NOT_IMPLEMENTED
     BIND_MISMATCH
     LIMIT_EXCEEDED SCHEMA_NOT_PERMITTED SCHEMA_NOT_FOUND SCHEMA_UNREACHABLE SCHEMA_TIMEOUT SCHEMA_TOO_LARGE
@@ -110,7 +116,8 @@
     type identifies the class of failure and is the member to match on: it is stable where title is
     prose, and it dereferences. Absent means RFC 9457's "about:blank" -- no semantics beyond the
     status code. title summarises the type; detail describes this one occurrence. instance
-    identifies this occurrence, and may be relative, per that RFC.
+    identifies this occurrence. Both type and instance are URI references, so either may be relative, per
+    that RFC (§3.1.1, §3.1.5) -- which is why they are uri_reference and not uri, which requires a scheme.
 
     status is restated here so a problem that is stored, logged or forwarded stays self-describing
     once separated from its response.
@@ -119,11 +126,11 @@
     unacceptable Accept -- which is why it is a list rather than a required single value.
     """
   problem => {
-    type?: uri
+    type?: uri_reference
     title: text
     status: int32
     detail?: text
-    instance?: uri
+    instance?: uri_reference
     errors: [diagnostic]
   }
 }

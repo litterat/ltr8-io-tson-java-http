@@ -23,6 +23,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * How this project uses {@link HttpSchemaSource}, which is upstream's class rather than this module's.
@@ -40,8 +41,8 @@ class TsonHttpSchemaSourceIntegrationTest {
 
     private static final String SCHEMA = """
             !!id:"%s"
-            !!meta:"https://tson.io/2026/36/m/meta.tn"
-            !!import:"https://tson.io/2026/36/m/core.tn"
+            !!meta:"https://tson.io/2026/37/m/meta.tn"
+            !!import:"https://tson.io/2026/37/m/core.tn"
             {
                 order => { sku: text  quantity: int32 }
             }""";
@@ -49,8 +50,8 @@ class TsonHttpSchemaSourceIntegrationTest {
     /** A schema with a {@code scoped} field, so a body may push a foreign scope where this one opted into it. */
     private static final String ENVELOPE = """
             !!id:"%s"
-            !!meta:"https://tson.io/2026/36/m/meta.tn"
-            !!import:"https://tson.io/2026/36/m/core.tn"
+            !!meta:"https://tson.io/2026/37/m/meta.tn"
+            !!import:"https://tson.io/2026/37/m/core.tn"
             {
                 envelope => { attachment: extern  note?: text }
             }""";
@@ -207,6 +208,39 @@ class TsonHttpSchemaSourceIntegrationTest {
                     refused.diagnostics().stream().map(Diagnostic::code).toList(),
                     "a scope push at a value position is refused by the same policy as a !!schema directive");
             assertEquals(statusFor(Reason.NOT_PERMITTED), refused.status());
+        }
+    }
+
+    /**
+     * <b>A push the schema never opted into is the sender's error, and fetches nothing.</b> [TSON-SCHEMA] §7.8
+     * makes a scope opened at a position whose type is not {@code scoped} a resolver error --
+     * {@code SCOPE_NOT_ADMITTED}, a verdict and a 400 -- so a body cannot push a scope into an ordinary record
+     * field. The pushed identity goes to a source that permits nothing: had the reader fetched before refusing,
+     * the answer would carry {@code SCHEMA_NOT_PERMITTED} and rank as a fetch failure instead.
+     */
+    @Test
+    void aPushWhereTheSchemaOpensNoScopeIsABadRequest() {
+        String envelopeUri = reference("/envelope-1.tn");
+        String envelopeSource = ENVELOPE.formatted(envelopeUri);
+        String document = """
+                !!schema:"%s"
+                !envelope { attachment: "x"  note: !!schema:"%s" !order { sku: "ABC-1"  quantity: 3 } }"""
+                .formatted(envelopeUri, reference("/order-1.tn"));
+
+        try (HttpSchemaSource denyAll = HttpSchemaSource.builder().build()) {
+            Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(
+                    uri -> uri.equals(envelopeUri) ? envelopeSource : denyAll.fetch(uri))));
+            tson.resolve(envelopeSource);
+
+            TsonHttpException refused = assertThrows(TsonHttpException.class,
+                    () -> new TsonHttpCodec(tson).readTree(body(document), "application/tson"));
+
+            assertTrue(Diagnostic.Code.SCOPE_NOT_ADMITTED.verdict());
+            assertTrue(refused.diagnostics().stream().anyMatch(d -> d.code() == Diagnostic.Code.SCOPE_NOT_ADMITTED),
+                    () -> "" + refused.diagnostics());
+            assertTrue(refused.diagnostics().stream().noneMatch(d -> d.code() == Diagnostic.Code.SCHEMA_NOT_PERMITTED),
+                    "the refused push was fetched before it was refused");
+            assertEquals(TsonHttpException.BAD_REQUEST, refused.status());
         }
     }
 

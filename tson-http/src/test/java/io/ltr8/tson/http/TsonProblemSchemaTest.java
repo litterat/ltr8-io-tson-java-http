@@ -46,7 +46,7 @@ class TsonProblemSchemaTest {
     void whatWriteProblemEmitsValidatesAgainstProblem1AndRoundTrips() {
         TsonHttpCodec codec = new TsonHttpCodec(TsonProblemSchema.tson());
         TsonProblem problem = TsonProblem.of(TsonHttpException.TYPES + "invalid-document", 400, "Invalid TSON document", "the request body has 1 problem",
-                List.of(TsonDiagnostics.ofSchemaError("https://example.com/2026/36/app/order-1.tn", "order",
+                List.of(TsonDiagnostics.ofSchemaError("https://example.com/2026/37/app/order-1.tn", "order",
                         "missing required field 'sku'", Optional.empty())));
 
         byte[] written = codec.writeProblem(problem);
@@ -66,7 +66,7 @@ class TsonProblemSchemaTest {
     void anErrorBodySaysWhatGovernsItAndReadsBackWithNothingToldOutOfBand() {
         TsonHttpCodec codec = new TsonHttpCodec(TsonProblemSchema.tson());
         TsonProblem problem = TsonProblem.of(TsonHttpException.TYPES + "invalid-document", 400, "Invalid TSON document", "the request body has 1 problem",
-                List.of(TsonDiagnostics.ofSchemaError("https://example.com/2026/36/app/order-1.tn", "order",
+                List.of(TsonDiagnostics.ofSchemaError("https://example.com/2026/37/app/order-1.tn", "order",
                         "missing required field 'sku'", Optional.empty())));
 
         String written = new String(codec.writeProblem(problem), StandardCharsets.UTF_8);
@@ -104,6 +104,23 @@ class TsonProblemSchemaTest {
         TsonProblem readBack = codec.readObjectAs(new ByteArrayInputStream(codec.writeProblem(problem)),
                 "application/tson", TsonProblemSchema.ID, "problem", TsonProblem.class);
         assertEquals(Optional.empty(), readBack.detail());
+    }
+
+    /**
+     * RFC 9457 makes {@code type} (§3.1.1) and {@code instance} (§3.1.5) URI <em>references</em>, so both may be
+     * relative, and {@link TsonProblem#at} is typically handed a request path. The schema has to say {@code
+     * uri_reference}: core's {@code uri} requires a scheme, and a problem built through this package's own API
+     * would otherwise fail the schema it names.
+     */
+    @Test
+    void aRelativeTypeAndInstanceAreValid() {
+        TsonHttpCodec codec = new TsonHttpCodec(TsonProblemSchema.tson());
+        TsonProblem problem = TsonProblem.of("/problems/out-of-stock", 409, "Out of stock", null, List.of())
+                .at("/orders/123");
+
+        TsonProblem readBack = codec.readObjectAs(new ByteArrayInputStream(codec.writeProblem(problem)),
+                "application/tson", TsonProblemSchema.ID, "problem", TsonProblem.class);
+        assertEquals(problem, readBack);
     }
 
     // ── the enum this schema copies ──────────────────────────────────────

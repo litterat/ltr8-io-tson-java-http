@@ -1,7 +1,9 @@
 package io.ltr8.tson.http;
 
 import io.ltr8.tson.base.ProcessorConfig;
-import io.ltr8.tson.base.policy.UnicodePolicy;
+import io.ltr8.tson.base.policy.IdentifierPolicy;
+import io.ltr8.tson.base.policy.ProcessorPolicy;
+import io.ltr8.tson.base.policy.ScriptPolicy;
 import io.ltr8.tson.schema.meta.EnumBody;
 import io.ltr8.tson.schema.meta.TypeDefinition;
 import org.junit.jupiter.api.Test;
@@ -20,11 +22,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TsonDeploymentTest {
 
     private static final String FULL = """
-            !!schema:"https://tson.io/2026/36/ltr8/http/deployment-1.tn"
+            !!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
             !deployment {
               name:         "production"
               listener:     { host: "127.0.0.1"  port: 8080 }
-              identifiers:  { level: HIGHLY_RESTRICTIVE  unit: SEGMENT }
+              identifiers:  { level: HIGHLY_RESTRICTIVE  unit: SEGMENT  skeleton_distinctness: false }
               tokens:       { level: MODERATELY_RESTRICTIVE  permitting: ["Latn" "cyrillic"] }
               schema_hosts: ["schemas.example.com"]
             }""";
@@ -36,26 +38,30 @@ class TsonDeploymentTest {
         assertEquals("production", deployment.name());
         assertEquals(8080, deployment.listener().orElseThrow().port().orElseThrow());
         assertEquals(List.of("schemas.example.com"), deployment.schemaHosts());
-        assertEquals(UnicodePolicy.Level.HIGHLY_RESTRICTIVE,
+        assertEquals(ScriptPolicy.Level.HIGHLY_RESTRICTIVE,
                 deployment.identifiers().orElseThrow().level());
         assertEquals(TsonDeployment.Unit.SEGMENT, deployment.identifiers().orElseThrow().unit().orElseThrow());
     }
 
-    /** The unit and the script set survive into the library's own type, which is the point of carrying them. */
+    /**
+     * The unit, the look-alike switch and the script set survive into the library's own types, which is the
+     * point of carrying them.
+     */
     @Test
-    void theUnitAndTheScriptSetReachTheLibraryPolicy() {
+    void theUnitTheSwitchAndTheScriptSetReachTheLibraryPolicy() {
         TsonDeployment deployment = TsonDeployment.read(FULL);
 
-        UnicodePolicy identifiers = deployment.identifierPolicy().orElseThrow();
+        IdentifierPolicy identifiers = deployment.identifierPolicy().orElseThrow();
         assertTrue(identifiers.isPerSegment(), "SEGMENT should reach perSegment()");
+        assertFalse(identifiers.appliesSkeletonDistinctness(), "an explicit false should switch the rule off");
 
         // `permitting` is the narrowest relaxation §8.2 offers: Cyrillic beside Latin, without dropping a
         // level and losing the rule everywhere else. A mixed Latin/Cyrillic name is refused at Moderately
         // Restrictive and admitted once that combination is named.
-        UnicodePolicy tokens = deployment.tokenPolicy().orElseThrow();
+        ScriptPolicy tokens = deployment.tokenPolicy().orElseThrow();
         assertTrue(tokens.violation("аdmin").isEmpty(),
                 () -> "LATIN+CYRILLIC was permitted: " + tokens.violation("аdmin").orElse(""));
-        assertTrue(UnicodePolicy.moderatelyRestrictive().violation("аdmin").isPresent(),
+        assertTrue(ScriptPolicy.moderatelyRestrictive().violation("аdmin").isPresent(),
                 "and is refused without it, or this asserts nothing");
     }
 
@@ -67,7 +73,7 @@ class TsonDeploymentTest {
     @Test
     void anAbsentPolicyIsNotAPermissiveOne() {
         TsonDeployment deployment = TsonDeployment.read("""
-                !!schema:"https://tson.io/2026/36/ltr8/http/deployment-1.tn"
+                !!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
                 !deployment { name: "minimal" }""");
 
         assertTrue(deployment.identifierPolicy().isEmpty());
@@ -77,6 +83,34 @@ class TsonDeploymentTest {
         // applyTo leaves a config untouched, which is only observable through what it does not throw.
         ProcessorConfig config = ProcessorConfig.defaults();
         assertEquals(config, deployment.applyTo(config));
+    }
+
+    /** The same holds one level down: a level stated with no switch leaves the look-alike rule on. */
+    @Test
+    void anUnstatedSwitchLeavesTheLookAlikeRuleOn() {
+        TsonDeployment deployment = TsonDeployment.read("""
+                !!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
+                !deployment { name: "level-only"  identifiers: { level: MODERATELY_RESTRICTIVE } }""");
+
+        assertTrue(deployment.identifierPolicy().orElseThrow().appliesSkeletonDistinctness());
+    }
+
+    /**
+     * <b>A token policy has no unit to write.</b> A value has no segments — {@code _} and {@code -} separate
+     * a name's words and are ordinary characters in a value, so segmenting one would admit UTS #39's own
+     * {@code Toys-Я-Us} — and the library makes a per-segment token policy unwritable. The schema follows it,
+     * which is why {@code identifier_policy} writes its fields out rather than composing {@code script_policy}:
+     * a composition would make one admissible where the other is expected.
+     */
+    @Test
+    void aTokenPolicyCannotBeGivenAUnit() {
+        List<io.ltr8.tson.base.Diagnostic> problems = TsonDeployment.tson().validate("""
+                !!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
+                !deployment { name: "n"  tokens: { level: HIGHLY_RESTRICTIVE  unit: SEGMENT } }""");
+
+        assertEquals(List.of(io.ltr8.tson.base.Diagnostic.Code.UNRECOGNIZED_FIELD),
+                problems.stream().map(io.ltr8.tson.base.Diagnostic::code).toList(),
+                () -> "expected the unit to be refused, got " + problems);
     }
 
     /**
@@ -89,8 +123,8 @@ class TsonDeploymentTest {
         TsonDeployment.AcceptanceProfile profile = TsonDeployment.read(FULL).profile();
 
         assertEquals("production", profile.name());
-        assertEquals(UnicodePolicy.Level.HIGHLY_RESTRICTIVE, profile.identifiers().orElseThrow().level());
-        assertEquals(UnicodePolicy.Level.MODERATELY_RESTRICTIVE, profile.tokens().orElseThrow().level());
+        assertEquals(ScriptPolicy.Level.HIGHLY_RESTRICTIVE, profile.identifiers().orElseThrow().level());
+        assertEquals(ScriptPolicy.Level.MODERATELY_RESTRICTIVE, profile.tokens().orElseThrow().level());
 
         // Nothing about what this deployment trusts, and nothing about where it listens.
         String written = TsonDeployment.tson().objectWriter()
@@ -111,10 +145,10 @@ class TsonDeploymentTest {
      */
     @Test
     void theProfileStatesTheUnicodeDataVersion() {
-        assertEquals(Optional.of(UnicodePolicy.dataVersion()),
+        assertEquals(Optional.of(ProcessorPolicy.dataVersion()),
                 TsonDeployment.read(FULL).profile().unicodeDataVersion());
         // Read, not copied: a constant here would go stale silently on a library upgrade.
-        assertFalse(UnicodePolicy.dataVersion().isBlank());
+        assertFalse(ProcessorPolicy.dataVersion().isBlank());
     }
 
     /**
@@ -141,7 +175,7 @@ class TsonDeploymentTest {
     @Test
     void anUnknownScriptNameStopsTheRead() {
         String message = assertThrows(RuntimeException.class, () -> TsonDeployment.read("""
-                !!schema:"https://tson.io/2026/36/ltr8/http/deployment-1.tn"
+                !!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
                 !deployment { name: "typo"  tokens: { level: SINGLE_SCRIPT  permitting: ["Cyrrilic"] } }"""))
                 .getMessage();
 
@@ -156,7 +190,7 @@ class TsonDeploymentTest {
     @Test
     void somethingThatIsNotEvenNameShapedIsRefusedByTheSchema() {
         List<io.ltr8.tson.base.Diagnostic> problems = TsonDeployment.tson().validate("""
-                !!schema:"https://tson.io/2026/36/ltr8/http/deployment-1.tn"
+                !!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
                 !deployment { name: "n"  tokens: { level: SINGLE_SCRIPT  permitting: [42] } }""");
 
         assertEquals(List.of(io.ltr8.tson.base.Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION),
@@ -165,7 +199,7 @@ class TsonDeploymentTest {
     }
 
     /**
-     * {@code restriction_level} is a hand-written copy of {@link UnicodePolicy.Level}, and nothing else
+     * {@code restriction_level} is a hand-written copy of {@link ScriptPolicy.Level}, and nothing else
      * checks the copy is current — the same discipline {@code problem-1.tn}'s {@code diagnostic_code} gets,
      * and for the same reason: a level added upstream would be unreadable by a descriptor that names it.
      */
@@ -174,7 +208,7 @@ class TsonDeploymentTest {
         TypeDefinition entry = TsonDeployment.compiled().schema().entries().get("restriction_level");
         List<String> declared = assertInstanceOf(EnumBody.class, entry.body(), "an enum").members();
 
-        assertEquals(Arrays.stream(UnicodePolicy.Level.values()).map(Enum::name).toList(), declared,
-                "restriction_level copies UnicodePolicy.Level, in order");
+        assertEquals(Arrays.stream(ScriptPolicy.Level.values()).map(Enum::name).toList(), declared,
+                "restriction_level copies ScriptPolicy.Level, in order");
     }
 }

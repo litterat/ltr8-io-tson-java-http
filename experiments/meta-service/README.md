@@ -171,20 +171,21 @@ type (`placement` already used the kernel's `field_name` for the record's; metho
 method_name   => identifier                                             an interface's keys
 path_template => !text ^ { pattern: "/([^/{}]+|\\{[A-Za-z_][A-Za-z0-9_]*\\})*" }
                                                     an api's keys: an RFC 3986 path with {segments}
-header_name   => !text ^ { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+" }    a `headers` value: an RFC 9110 token
+header_name   => !text_type { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+"  normalization: NFKC_CASEFOLD }
+                                                    a `headers` value: an RFC 9110 token, held folded
 
 interface => data & { extends?: [type_name]  methods: {method_name => method} }
 api       => data & { … resources: {path_template => resource} }
 ```
 
 `NameRoleProbe` measures what a role buys at a map key, and `ApiProbe` pins the three in the sketch: the identifier
-grammar, enforced, with the refusal
-naming the role -- *"'method_name': 'place order': U+0020 at index 5 cannot appear in an identifier"* -- where a
-`text` key accepts anything and `type_name` enforces the same grammar while misnaming the namespace. For the
-URL and header namespaces the authority's grammar rides as a `pattern`, I-Regexp over the whole token, the
-same device `deployment-1.tn` uses for a script name. What stays a `type_name` honestly is the *interface's own*
-name (`orders`) and `implements`/`extends`: an interface is still an entry in the type namespace, which is the
-seam the `namespace` kind would move.
+grammar, enforced, with the refusal naming the role -- *"'method_name': 'place order': U+0020 at index 5 cannot appear
+in an identifier"* -- where a `text` key accepts anything and `type_name` enforces the same grammar while misnaming
+the namespace. For the URL and header namespaces the authority's grammar rides as a `pattern`, I-Regexp over the whole
+token, the same device `deployment-1.tn` uses for a script name; a header name is also held case-folded, as RFC 9110
+§5.1 compares it, so `Idempotency-Key` reads back as `idempotency-key` (`ApiProbe.aHeaderNameIsHeldFolded`). What
+stays a `type_name` honestly is the *interface's own* name (`orders`) and `implements`/`extends`: an interface is
+still an entry in the type namespace, which is the seam a `namespace` kind would move ("What a namespace is", below).
 
 Four things follow.
 
@@ -192,16 +193,15 @@ Four things follow.
 is not a type": a foreign namespace's member filed in the wrong map, which is exactly why it could be declared
 but never referenced -- the type namespace has no reference form for non-types because it should hold none. The
 map shape moves the members out, and they are ordinary records there. What remains under `data` is `orders` and
-`orders_api`, the *namespaces themselves*, and only because `data` is the one non-type kind there is. So the fifth
-  kind the spec-feedback
-proposal ("a namespace should be a value") reaches for is not `data` but `namespace`; `data`'s one surviving job
-is to hold one, and it retires the day `namespace` exists.
+`orders_api`, the *namespaces themselves*, held there only because `data` is the one non-type kind there is. `data`
+is meant for an embedded payload a reader already knows how to read; a namespace is something the resolver must
+understand, so it is a kind of its own ("What a namespace is", below).
 
 **It says precisely why the resolver cannot check the relations.** `implements`, `method: place_order`, `{id}` in
 a path, `body: order`, `headers: { idempotency_key => … }` are all *cross-namespace references* -- api to
 interface, interface to type, URL to a record's fields -- and the resolver checks references within the one
-namespace it knows. `Routes` and `Placement` are the checks for the others. A resolver that knew namespace
-*kinds* could check `method: place_order` as it checks `request: order`: a namespace has a key type and a member
+namespace it knows. `Routes` and `Placement` are the checks for the others. A resolver that knew
+namespaces could check `method: place_order` as it checks `request: order`: a namespace has a key type and a member
 bound, and a reference is a (namespace, key) pair whose validity is that namespace's business. That is the
 mechanism behind the spec-feedback proposal, stated.
 
@@ -216,6 +216,64 @@ hierarchical and a resource keyed by full template is flat over it (the qualifie
 slash); and a data document can bind only the type namespace (`!!schema`, `!name`), so a plan document cannot
 tag a step `!place_order` -- it writes `method: place_order` as data, which is the one-hop rule doing exactly
 what it says.
+
+## What a namespace is: the test, run against everything that looked like one
+
+The section above calls an interface and an api namespaces, and the spec-feedback proposal ("a namespace should be
+a value") wants one as a kernel primitive. Before shaping that primitive, the word needs a test that says what is
+one and what is not, because "a keyed set" is every map.
+
+**A namespace is a keyed set of declarations; a map is a keyed set of values.** A declaration describes values and
+has instances of its own; a map's member *is* a value. Two tempting tests fail: unique keys (every map has them),
+and being referenced by key (a foreign key references a table row, and a row is a value). The key's type is free --
+names or data -- and so is whether the container itself has instances.
+
+| candidate | key | member | each member has instances? | container has instances? | namespace? |
+|---|---|---|---|---|---|
+| schema | `type_name` | a type | values | no | ✓ |
+| interface | `method_name` | a method | calls | implementations | ✓ |
+| record fields | `field_name` (text, under the record-fields proposal) | a field | the values at that key | record values | ✓ |
+| api | path, then verb -- **data** | an endpoint | exchanges at that route | a server | ✓ |
+| database | table name | a table | rows | no | ✓ |
+| table columns | column name | a column | cells | rows | ✓ -- record fields again |
+| table rows | primary key -- data | a row | none: it *is* one | -- | ✗ map |
+| discriminated family ([TSON-SCHEMA] §5.2) | the selector pin -- **data** | a subtype | values | the base's values | ✓ |
+| template parameters | `param_name` | a parameter, typed under #9 | arguments | applications | ✓ -- lexically scoped |
+| problem types | a type URI -- **data** | a problem declaration | problem bodies | -- | ✓ |
+| AsyncAPI channels | a channel address -- **data** | a message declaration | messages | -- | ✓ |
+| agent tools | tool name | a tool | invocations | -- | ✓ -- an interface |
+| IANA header registry | header name | a field definition | header values | -- | ✓ |
+| a request's headers | header name | a value | -- | -- | ✗ map |
+| enum | a label | a label | none: each is one | values | ✗ set -- a label's `@doc` rides as a key annotation |
+| config, environment | a key | a value | -- | -- | ✗ map |
+
+**The declaration side is a namespace and the instance side a map, every time** -- registry and message, columns and
+rows, schema and document, interface and calls. And **a namespace keyed by data is common and already specified
+once**: §5.2's selector pins, "pairwise distinct as values", are a key-uniqueness rule under value equality over a
+set of subtypes. The cell the proposal calls empty is unnamed rather than empty.
+
+Three things follow, and each moved the staged spec feedback (`UPSTREAM.md`, the namespaces entry):
+
+- **An api is a namespace.** An endpoint describes an unbounded set of exchanges, so it is a declaration, and a URL
+  is a reference to it by key -- `(api, path, verb)`. It is keyed by data and two levels deep, which is what makes it
+  the hard case: a member under a data key cannot be projected with `.` and needs the pointer form (`/orders/POST`),
+  and two levels is either nesting or a compound key, which has no pointer token
+  (`UpstreamGapsTest.aCompoundKeyHasNoPointerTokenAndTheEncodingsDisagree`). What an endpoint member *is* stays
+  open: a binding is the method plus placement and status, and making those fields injects them into every call --
+  so they ride as annotations on the member's key, or the member's body is not IS-A the method.
+- **Having members is a facet, and `namespace` is the kind whose entries are nothing else.** Record fields are a
+  namespace and a record is a product; [TSON-SCHEMA] §5.5 gives an entry one base kind, so members cannot *be* the
+  kind. The table's "container has instances?" column draws the line: with instances, a product with members
+  (`record => product & members & { … }`); without, a `namespace` (`namespace => top & members & {}`, and
+  `interface => namespace & { … }`). A namespace is what a schema document already is -- names registered then
+  bodies resolved, collisions, forward references, a look-alike scope, an `(identity, name)` reference -- at entry
+  level. It is not `data`: `data` is an embedded payload the resolver checks against its vocabulary and otherwise
+  leaves to a reader that knows it, which is what it narrows to, and its motivating case in [TSON-SCHEMA] §4.1 -- an
+  HTTP operation -- becomes a namespace member.
+- **A projection has to name the member, not its type.** Read from [TSON-SCHEMA] §8.2, since projection is not built to
+  measure: a record field's type is a use-site application, and two fields typed `method<order, order>` resolve to one entry,
+  so a projection to the field's type cannot say which method a binding binds. Two *declarations* naming one application are
+  two entries, which is what members-as-declarations gives a method: an identity of its own.
 
 ## Direction: interface, api, agent
 
@@ -429,18 +487,17 @@ relied on -- the sketch's inner types are records now -- but still measured in `
 `kind: DATA` entry" as an element type, and a map's value type is one; the implementation admits the DATA
 *constructor* there and refuses only an *instance*. The kernel's own `top`-typed slots hold DATA instances, so the
 implementation is consistent with the kernel; whether "entry" was meant to include a constructor is what to ask.
-"What the maps are", above, is the argument for answering it with a `namespace` kind rather than by widening
-`data`. **Not filed** -- confined here with the rest.
+"What a namespace is", above, makes it moot for an interface rather than answering it: under a
+`namespace` kind, methods are members and not map values. **Not filed** -- confined here with the rest.
 
-**Name hygiene does not reach map keys.** Measured in `NameRoleProbe`: two confusable method names in one
-interface (`admin`, `аdmin`), or a mixed-script one, are admitted under `type_name` and `method_name` alike,
-where the same names as two fields of a record or two declarations of a schema are refused under the default
-identifier policy. An interface's method map is a naming scope in every sense [TSON-DATA] §8.2 means -- names a
-reader must tell apart -- and once methods live in maps rather than as declarations, the spoofing surface §8.2
-exists for moves with them. Whether the fix is the implementation applying the identifier policy to
-identifier-role-keyed maps, or the spec naming such a map a scope, is the question; the probe is written to fail
-when either lands. **Staged** in `UPSTREAM.md`'s "Spec feedback to file", since it is the one question here
-that outlives the experiment: any design putting members at identifier-keyed map keys inherits it.
+**Closed: name hygiene reaches identifier-keyed maps, in data and in a governed schema.** An interface's method map
+is a naming scope in every sense [TSON-DATA] §8.2 means, and once methods live in maps rather than as declarations,
+the spoofing surface §8.2 exists for moves with them. Both places the map can sit now judge its keys as names, under
+a role over `identifier` as under `identifier` itself: a mixed-script key is refused, and two keys that read alike
+(`pass` and the all-Cyrillic `раѕѕ`) are refused at the second. That holds in a *data* document and in a *schema
+governed by a meta layer* -- where an interface's methods are written -- alike, as it does for two fields of a
+record or two declarations of a schema. `NameRoleProbe` pins both, `aDataDocumentsIdentifierKeysAreNames` and
+`aGovernedSchemasIdentifierKeysAreNamesToo`.
 
 ## Files
 

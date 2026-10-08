@@ -1,4 +1,4 @@
-!!schema:"https://tson.io/2026/36/ltr8/http/deployment-1.tn"
+!!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
 @doc:"""
   The validator demo's own deployment descriptor.
 
@@ -8,8 +8,8 @@
   it were going to be.
 
   `tokens` is set to something visibly strict so the demo demonstrates a deployment decision rather than
-  describing one: submit a document with a mixed-script value and the verdict changes. Take it out and the
-  same document conforms. That is the whole argument for the artifact, in a form you can run.
+  describing one: submit a document with a mixed-script value and this deployment refuses it. Take it out and
+  the same document conforms. That is the whole argument for the artifact, in a form you can run.
 
   `identifiers` is deliberately unstated, which leaves declared names at the library's default of Highly
   Restrictive over the whole name. An absent policy is not a permissive one.

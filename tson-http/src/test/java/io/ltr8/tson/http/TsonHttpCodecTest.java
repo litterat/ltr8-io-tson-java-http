@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -34,12 +35,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TsonHttpCodecTest {
 
-    private static final String SCHEMA_ID = "https://example.com/2026/36/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://example.com/2026/37/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://example.com/2026/36/app/order-1.tn"
-            !!meta:"https://tson.io/2026/36/m/meta.tn"
-            !!import:"https://tson.io/2026/36/m/core.tn"
+            !!id:"https://example.com/2026/37/app/order-1.tn"
+            !!meta:"https://tson.io/2026/37/m/meta.tn"
+            !!import:"https://tson.io/2026/37/m/core.tn"
             {
                 order => { sku: text  quantity: int32 }
             }""";
@@ -250,7 +251,7 @@ class TsonHttpCodecTest {
     @Test
     void aBodyNamingAnotherSchemaThanTheStatedOneIsA400() {
         String elsewhere = """
-                !!schema:"https://example.com/2026/36/app/other-1.tn"
+                !!schema:"https://example.com/2026/37/app/other-1.tn"
                 !order { sku: "A"  quantity: 1 }""";
 
         TsonHttpException bound = assertThrows(TsonHttpException.class, () -> codec.readObjectAs(body(elsewhere),
@@ -368,8 +369,8 @@ class TsonHttpCodecTest {
     void aTypeNothingBindsIsAServerFaultNotALibraryGap() {
         String schema = """
                 !!id:"https://example.test/thing-1.tn"
-                !!meta:"https://tson.io/2026/36/m/meta.tn"
-                !!import:"https://tson.io/2026/36/m/core.tn"
+                !!meta:"https://tson.io/2026/37/m/meta.tn"
+                !!import:"https://tson.io/2026/37/m/core.tn"
                 { thing => { a: text } }""";
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(uri -> schema))
@@ -386,6 +387,45 @@ class TsonHttpCodecTest {
         assertEquals(TsonHttpException.INTERNAL_SERVER_ERROR, thrown.status());
         assertTrue(thrown.getMessage() == null || !thrown.getMessage().contains("thing"),
                 "a 5xx carries no detail: " + thrown.getMessage());
+    }
+
+    /** A bound class stricter than its schema: the schema admits any {@code int32}, the class only a positive one. */
+    public record Positive(int n) {
+        public Positive {
+            if (n <= 0) {
+                throw new IllegalArgumentException("n must be positive");
+            }
+        }
+    }
+
+    /**
+     * <b>A bound class refusing a value its schema admits is this server's fault, a 500.</b> Under a schema the
+     * reader reports what a constructor throws as {@code BIND_MISMATCH} -- the class disagrees with the contract
+     * it is bound to -- so the sender, whose body the schema accepted, is not told it was wrong. A constraint a
+     * client should be held to belongs in the schema, where it is a 400 with a diagnostic the client can act on.
+     */
+    @Test
+    void aBoundClassRefusingWhatItsSchemaAdmitsIsAServerFault() {
+        String schema = """
+                !!id:"https://example.test/positive-1.tn"
+                !!meta:"https://tson.io/2026/37/m/meta.tn"
+                !!import:"https://tson.io/2026/37/m/core.tn"
+                { positive => { n: int32 } }""";
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(uri -> schema))
+                .withDataBindContext(TsonBindings.of(Map.of("positive", Positive.class))));
+        tson.resolve(schema);
+        TsonHttpCodec codec = new TsonHttpCodec(tson);
+        InputStream body = new ByteArrayInputStream(
+                ("!!schema:\"https://example.test/positive-1.tn\"\n!positive { n: 0 }")
+                        .getBytes(StandardCharsets.UTF_8));
+
+        TsonHttpException thrown = org.junit.jupiter.api.Assertions.assertThrows(TsonHttpException.class,
+                () -> codec.readObject(body, "application/tson", Positive.class));
+
+        assertEquals(List.of(Diagnostic.Code.BIND_MISMATCH),
+                thrown.diagnostics().stream().map(Diagnostic::code).toList());
+        assertEquals(TsonHttpException.INTERNAL_SERVER_ERROR, thrown.status());
     }
 
     private static Diagnostic aBindMismatch() {
@@ -511,6 +551,39 @@ class TsonHttpCodecTest {
         }
     }
 
+    /**
+     * <b>A rejection outranks an origin's failure.</b> A body holding a verdict or a refusal will not be accepted
+     * however the origin answers -- the {@code tson} CLI reports it {@code REJECTED}, one rejection settling it --
+     * so a 502 or 504 would advertise a retry that cannot succeed. The answer is the rejection's own 4xx, saying
+     * that part of the body went unchecked. Written with the origin's failure first, so a first-wins pick fails.
+     */
+    @Test
+    void aRejectionOutranksAnOriginsFailure() {
+        TsonHttpException invalid = TsonHttpException.invalidDocument(List.of(
+                withCode(aGap(), Diagnostic.Code.SCHEMA_TIMEOUT), anOrdinaryProblem()));
+        assertEquals(TsonHttpException.BAD_REQUEST, invalid.status());
+        assertTrue(invalid.type().endsWith("invalid-document"), invalid.type());
+        assertTrue(invalid.getMessage().contains("part of the body went unchecked"), invalid.getMessage());
+
+        TsonHttpException refused = TsonHttpException.invalidDocument(List.of(
+                withCode(aGap(), Diagnostic.Code.SCHEMA_UNREACHABLE),
+                withCode(anOrdinaryProblem(), Diagnostic.Code.RESTRICTED_SCRIPT)));
+        assertEquals(TsonHttpException.BAD_REQUEST, refused.status());
+        assertTrue(refused.type().endsWith("restricted-script"), refused.type());
+
+        TsonHttpException overLimit = TsonHttpException.invalidDocument(List.of(
+                withCode(aGap(), Diagnostic.Code.SCHEMA_TIMEOUT),
+                withCode(anOrdinaryProblem(), Diagnostic.Code.LIMIT_EXCEEDED)));
+        assertEquals(TsonHttpException.CONTENT_TOO_LARGE, overLimit.status());
+
+        // Nothing rejects the body here, so the origin's failure is still the answer.
+        assertEquals(TsonHttpException.GATEWAY_TIMEOUT, TsonHttpException.invalidDocument(List.of(
+                withCode(aGap(), Diagnostic.Code.SCHEMA_TIMEOUT))).status());
+        // And an operator still acts first: a gap beside a rejection and a timeout is a 501.
+        assertEquals(TsonHttpException.NOT_IMPLEMENTED, TsonHttpException.invalidDocument(List.of(
+                withCode(aGap(), Diagnostic.Code.SCHEMA_TIMEOUT), anOrdinaryProblem(), aGap())).status());
+    }
+
     /** A gap outranks it, on upstream's own precedent: retrying reaches the gap again, the origin may recover. */
     @Test
     void aGapOutranksAnUnavailableSchema() {
@@ -521,14 +594,15 @@ class TsonHttpCodecTest {
     }
 
     /**
-     * <b>Name hygiene is a verdict on the document, so it stays a 400.</b> [TSON-DATA] §8.2's three codes --
-     * one per rule -- are the first this project can meet because of its <em>own</em> configuration rather
-     * than the format's rules ({@code ProcessorConfig.tokenPolicy} decides which scripts a value may carry), and
-     * that is
-     * exactly why the status is worth pinning rather than left to the fall-through. A body refused under a
-     * raised policy is refused by this deployment, as one over a size limit is, and it is still the client's
-     * to fix; neither code says anything went unchecked, which is what the three 5xx codes have in common
-     * and these two do not.
+     * <b>Name hygiene is no verdict on the document, and still a 400.</b> [TSON-DATA] §8.1 puts a §8.2
+     * refusal in its fifth outcome: this processor declined under its own policy, and the next one along may
+     * accept the same body in full -- so {@link Diagnostic.Code#verdict()} is false for all three codes, and
+     * that half is asserted too, since a status keyed on it would turn these into 5xx. They are the first
+     * codes this project can meet because of its <em>own</em> configuration ({@code
+     * ProcessorConfig.tokenPolicy} decides which scripts a value may carry), which is exactly why the status
+     * is worth pinning rather than left to the fall-through. A body refused under a raised policy is refused
+     * as one over a depth limit is, and it is still the client's to fix: nothing went unchecked for want of
+     * this server, which is what the 5xx codes have in common and these do not.
      *
      * <p><b>But a 400 of its own type, one per code</b> -- the fix may be a rename, a character, or a look at
      * what this deployment admits, and the type is what tells a client which. The body carries nothing about
@@ -537,11 +611,12 @@ class TsonHttpCodecTest {
      * may not be in the document.
      */
     @Test
-    void nameHygieneIsAVerdictOnTheDocument() {
+    void nameHygieneIsARefusalTheSenderFixes() {
         for (Diagnostic.Code code : List.of(Diagnostic.Code.CONFUSABLE_NAMES,
                 Diagnostic.Code.RESTRICTED_CHARACTER, Diagnostic.Code.RESTRICTED_SCRIPT)) {
             TsonHttpException thrown = TsonHttpException.invalidDocument(List.of(withCode(anOrdinaryProblem(), code)));
 
+            assertFalse(code.verdict(), () -> code + " is a refusal, which §8.1 makes no verdict");
             assertEquals(TsonHttpException.BAD_REQUEST, thrown.status(), code::name);
             assertEquals(TsonHttpException.TYPES + code.name().toLowerCase().replace('_', '-'), thrown.type());
         }
@@ -553,6 +628,28 @@ class TsonHttpCodecTest {
     }
 
     /**
+     * <b>A refusal thrown at schema load answers as a collected one does.</b> A fail-fast resolve reports a
+     * §8.2 refusal as a {@code SchemaRefusalException}, a subtype of {@code SchemaValidationException}; matched
+     * as its supertype it would be an "invalid schema", where §8.2 requires a refusal be told from a malformed
+     * schema and the collected channel types it by its rule.
+     */
+    @Test
+    void aThrownSchemaRefusalIsAnsweredAsACollectedOneIs() {
+        for (Diagnostic.Code code : Arrays.stream(Diagnostic.Code.values()).filter(Diagnostic.Code::isNameRefusal)
+                .toList()) {
+            TsonHttpException thrown = TsonHttpException.from(
+                    new io.ltr8.tson.base.SchemaRefusalException(code, "the schema has a name this processor refuses",
+                            null));
+            TsonHttpException collected = TsonHttpException.invalidDocument(
+                    List.of(withCode(anOrdinaryProblem(), code)));
+
+            assertEquals(collected.status(), thrown.status(), code::name);
+            assertEquals(collected.type(), thrown.type(), code::name);
+            assertEquals(List.of(code), thrown.diagnostics().stream().map(Diagnostic::code).toList());
+        }
+    }
+
+    /**
      * <b>Every code earns a status, and no verdict is ever laundered into a 5xx.</b> That direction is the
      * load-bearing one: a 5xx tells a client the request was fine and this server was not, so answering it
      * for a document that really was checked and really was wrong sends a sender away from the fix and round
@@ -560,9 +657,10 @@ class TsonHttpCodecTest {
      *
      * <p><b>The converse is deliberately not asserted</b>, because it is false and the falseness is the
      * design. {@link Diagnostic.Code#verdict()} reports the five {@code SCHEMA_*} codes as non-verdicts --
-     * correctly, nothing was read against a schema -- and three of them are 400s anyway. {@code verdict()}
-     * answers <em>was the document judged</em>; a status answers <em>who must act</em>; for a reference this
-     * deployment will not fetch, cannot find, or finds too large, those differ.
+     * correctly, nothing was read against a schema -- and three of them are 400s anyway; so are §8.1's four
+     * refusals, which are 400s and a 413. {@code verdict()} answers <em>was the document judged</em>; a
+     * status answers <em>who must act</em>; for a reference this deployment will not fetch, cannot find, or
+     * finds too large, and for a body this deployment's policy declined, those differ.
      *
      * <p>Exhaustive over {@link Diagnostic.Code} on purpose. A code added upstream lands here rather than
      * falling into the trailing 400, which is the one outcome that would be silent -- an unclassified code

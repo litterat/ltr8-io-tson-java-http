@@ -1,6 +1,6 @@
-!!id:"https://tson.io/2026/36/ltr8/http/agent-1.tn"
-!!meta:"https://tson.io/2026/36/m/meta.tn"
-!!import:"https://tson.io/2026/36/m/core.tn"
+!!id:"https://tson.io/2026/37/ltr8/http/agent-1.tn"
+!!meta:"https://tson.io/2026/37/m/meta.tn"
+!!import:"https://tson.io/2026/37/m/core.tn"
 @doc:"""
   TSON Agent AST — the structured middle representation
   (draft 2, brought to 2026 Revision 35 in the meta-service experiment).

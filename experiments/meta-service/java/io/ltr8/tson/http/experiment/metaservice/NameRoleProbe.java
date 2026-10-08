@@ -20,20 +20,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>Measured: a role declared in the meta layer ({@code method_name => identifier}) enforces the identifier
  * grammar at a map key and <em>names itself</em> in the refusal ("'method_name': 'place order': U+0020 …"), where
- * a {@code text} key accepts anything. And a limit: [TSON-DATA] §8.2's name hygiene does not reach map keys under
- * any role, {@code type_name} included -- confusable and mixed-script method names are admitted. An interface's
- * method map is a naming scope in every sense §8.2 means, and nothing checks it today; recorded in the README.
- * The hygiene assertions are written to fail the day that changes.
+ * a {@code text} key accepts anything. [TSON-DATA] §8.2's name hygiene reaches an identifier-keyed map in a data
+ * document and in a schema governed by a meta layer alike, under any role, {@code type_name} included -- the second
+ * being where an interface's methods are written.
  */
 class NameRoleProbe {
 
-    static final String META_ID = "https://tson.io/2026/36/ltr8/http/meta-probe-n.tn";
-    static final String DOC_ID = "https://schemas.example.com/2026/36/app/probe-n-1.tn";
+    static final String META_ID = "https://tson.io/2026/37/ltr8/http/meta-probe-n.tn";
+    static final String DOC_ID = "https://schemas.example.com/2026/37/app/probe-n-1.tn";
 
     static final String META = """
         !!id:"%s"
-        !!meta:"https://tson.io/2026/36/m/meta-kernel.tn"
-        !!import:"https://tson.io/2026/36/m/meta.tn"
+        !!meta:"https://tson.io/2026/37/m/meta-kernel.tn"
+        !!import:"https://tson.io/2026/37/m/meta.tn"
         {
           signature   => { request?: type_ref  response?: type_ref  errors?: [type_ref] }
           method      => data & signature
@@ -47,7 +46,7 @@ class NameRoleProbe {
         String doc = """
             !!id:"%s"
             !!meta:"%s"
-            !!import:"https://tson.io/2026/36/m/core.tn"
+            !!import:"https://tson.io/2026/37/m/core.tn"
             {
               order => { sku: text }
             %s
@@ -93,18 +92,50 @@ class NameRoleProbe {
     }
 
     /**
-     * <b>Open:</b> §8.2's hygiene does not reach map keys under any role. Two confusable method names in one
-     * interface, or a mixed-script one, are admitted -- where the same names as two fields of one record, or two
-     * declarations of one schema, would be refused under the default identifier policy. Asserted as it is, so
-     * this fails the day the implementation or the spec extends the naming-scope rule to identifier-keyed maps.
+     * In a <em>data</em> document, an identifier-keyed map's keys are names: each meets the per-name rules and
+     * the key set is one look-alike scope ([TSON-SCHEMA] §11.4), under a role over {@code identifier} as under
+     * {@code identifier} itself. The interface below is data, so a method map written this way is checked.
      */
     @Test
-    void nameHygieneDoesNotReachMapKeysYet() {
+    void aDataDocumentsIdentifierKeysAreNames() {
+        String schemaId = "https://schemas.example.com/2026/37/app/probe-n-data-1.tn";
+        Map<String, String> lib = Map.of(schemaId, """
+            !!id:"%s"
+            !!meta:"https://tson.io/2026/37/m/meta.tn"
+            !!import:"https://tson.io/2026/37/m/core.tn"
+            {
+              identifier  => !identifier_type { continue_add: "-" }
+              method_name => identifier
+              iface       => { methods: {method_name => text} }
+            }""".formatted(schemaId));
+        Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib))));
+        String head = "!!schema:\"" + schemaId + "\"\n";
+
+        // The set rule needs two names the per-name rules admit, or the script rule refuses the second first:
+        // `раѕѕ` is wholly Cyrillic, so it is single-script and reads alike with the Latin `pass`.
+        assertEquals(List.of(Diagnostic.Code.CONFUSABLE_NAMES),
+                tson.validate(head + "!iface { methods: { pass => a  раѕѕ => b } }").stream()
+                        .map(Diagnostic::code).toList());
+        assertEquals(List.of(Diagnostic.Code.RESTRICTED_SCRIPT),
+                tson.validate(head + "!iface { methods: { pаy => a } }").stream().map(Diagnostic::code).toList());
+    }
+
+    /**
+     * In a <em>schema</em> governed by a meta layer, the same map's keys are names too -- which is where an
+     * interface's methods are written, in a schema governed by the meta layer that declares {@code interface}. Two
+     * confusable method names, or a mixed-script one, are refused here as they are as two fields of one record, two
+     * declarations of one schema, or two keys of the same map in a data document (above).
+     */
+    @Test
+    void aGovernedSchemasIdentifierKeysAreNamesToo() {
         for (String ctor : List.of("by_type_name", "by_method_name")) {
-            assertEquals(List.of(),
-                    problems("  x => !" + ctor + " { admin => { request: order }  аdmin => { request: order } }"),
+            assertEquals(List.of(Diagnostic.Code.CONFUSABLE_NAMES),
+                    problems("  x => !" + ctor + " { pass => { request: order }  раѕѕ => { request: order } }")
+                            .stream().map(Diagnostic::code).toList(),
                     ctor + " confusables");
-            assertEquals(List.of(), problems("  x => !" + ctor + " { pаy => { request: order } }"),
+            assertEquals(List.of(Diagnostic.Code.RESTRICTED_SCRIPT),
+                    problems("  x => !" + ctor + " { pаy => { request: order } }").stream().map(Diagnostic::code)
+                            .toList(),
                     ctor + " mixed script");
         }
     }
