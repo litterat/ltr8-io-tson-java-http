@@ -1,15 +1,17 @@
 !!id:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
 !!meta:"https://tson.io/2026/37/m/meta.tn"
 !!import:"https://tson.io/2026/37/m/core.tn"
+!!import:"https://tson.io/2026/37/m/policy.tn"
 @doc:"""
   A deployment descriptor: how ONE INSTANCE is configured, as against what a document must be (a schema)
   or what an endpoint offers (an API description).
 
   [TSON-DATA] §8.2 introduced a security control with no artifact -- a restriction level and an optional
   script set over values, and over names a unit and a look-alike switch as well, enforced by default, with
-  nothing said about where the configuration lives. This is a proposal for where. tson-java's SPEC-FEEDBACK.md
-  carries the argument as filed; the short form is that the two obvious homes are both wrong, and for reasons
-  stronger than the decision being orthogonal:
+  nothing said about where the configuration lives. This was the proposal for where, and Revision 37 adopted
+  it: §8.2 now says no document may name, import or otherwise select the policy it is judged under, and the
+  bundled policy.tn declares the policy's vocabulary, imported here. The short form of the argument is that
+  the two obvious homes are both wrong, and for reasons stronger than the decision being orthogonal:
 
   A SCHEMA cannot hold it. An artifact that declared its own strictness would choose its own check, and a
   document carrying homographs would simply declare the level that admits them. §3.5 also makes a published
@@ -37,21 +39,13 @@
        or a data document. The moment a document can point at a descriptor, it picks its own enforcement.
 
   Rule 2 is why `acceptance_profile` below is a separate type rather than this one served as-is: what a
-  counterparty may see is a PROJECTION, derived from the descriptor, never the descriptor.
+  counterparty may see is a PROJECTION, derived from what the processor enforces, never the descriptor.
+
+  The descriptor states only what it changes, so its three settings are this schema's own OVERRIDE shapes,
+  every part optional and an absent part leaving the library's default alone. What a counterparty sees is
+  policy.tn's `policy`, complete: what is in force, defaults included.
   """
 {
-  @doc:"""
-    A hand-written copy of io.ltr8.tson.base.policy.ScriptPolicy.Level, which copies UTS #39 §5.2's six
-    levels. TsonDeploymentTest holds the two together.
-
-    The names are UTS #39's own, deliberately. §8.2 makes a point of it -- "the level is a UTS #39 name, so
-    two implementations agree on it without reading this document" -- so a descriptor that invented OPEN and
-    RESTRICTED would spend an interop property the series bought on purpose.
-    """
-  restriction_level => !enum [
-    ASCII_ONLY SINGLE_SCRIPT HIGHLY_RESTRICTIVE MODERATELY_RESTRICTIVE MINIMALLY_RESTRICTIVE UNRESTRICTED
-  ]
-
   @doc:"""
     What an identifier policy's level is applied to: the whole name, or each segment of it, divided at the
     name's profile's own separators (`_` and `-` for the kernel's identifier). §8.2 calls the unit "this
@@ -62,7 +56,7 @@
     Absent means WHOLE. It is a separate field rather than more levels because level and unit are
     independent, and folding them would give twelve names where UTS #39 has six. Only a name has segments:
     `_` and `-` are separators in a name and ordinary characters in a value, so segmenting a value would
-    admit UTS #39's own `Toys-Я-Us`. That is why `script_policy` below has no unit to write.
+    admit UTS #39's own `Toys-Я-Us`. That is why `token_override` below has no unit to write.
     """
   policy_unit => !enum [WHOLE SEGMENT]
 
@@ -90,28 +84,29 @@
   script_name => !text ^ { pattern: "[A-Za-z][A-Za-z_]*" }
 
   @doc:"""
-    §8.2's token policy: a restriction level over each whole token, values included. `permitting` names an
-    additional admitted script combination -- the mechanism UTS #39 §5.2 itself uses for Latin+Japanese and
-    its siblings, and the narrowest relaxation available: a deployment that knows it is Russian says [Latin
-    Cyrillic] rather than dropping a level and losing the rule everywhere else.
+    §8.2's token policy, as this deployment changes it: a restriction level over each whole token, values
+    included. `permitting` names an additional admitted script combination -- the mechanism UTS #39 §5.2
+    itself uses for Latin+Japanese and its siblings, and the narrowest relaxation available: a deployment that
+    knows it is Russian says [Latin Cyrillic] rather than dropping a level and losing the rule everywhere else.
     """
-  script_policy => {
+  token_override => {
     level:       restriction_level
     permitting?: [script_name]
   }
 
   @doc:"""
-    §8.2's identifier policy, over declared names, field names and identifier-typed values and keys: a level
-    and script combinations as `script_policy` states them, the unit the level applies to, and
+    §8.2's identifier policy as this deployment changes it, over declared names, field names and
+    identifier-typed values and keys: a level and a script combination as `token_override` states them, the
+    unit the level applies to, and
     `skeleton_distinctness` -- the look-alike rule, that no two names in one scope share a UTS #39 skeleton.
     That rule is no level's to relax, so it is a switch of its own; absent leaves the library's default,
     which is on.
 
-    Its fields are written out rather than composed from `script_policy`, deliberately. A composition would
-    make an identifier policy admissible wherever a script policy is, and `tokens` would then take a unit --
-    the per-segment token policy that the library makes unwritable.
+    Its fields are written out rather than composed from `token_override`, deliberately. A composition would
+    make an identifier override admissible wherever a token override is, and `tokens` would then take a unit
+    -- the per-segment token policy that the library makes unwritable.
     """
-  identifier_policy => {
+  identifier_override => {
     level:                  restriction_level
     unit?:                  policy_unit
     skeleton_distinctness?: boolean
@@ -125,9 +120,9 @@
   nesting_depth => !int32 ^ { min: 1 }
 
   @doc:"""
-    [TSON-DATA] §9.1's resource limits: what this processor will SPEND reading a document, where the two
-    policies above are what it will ADMIT. Two settings and not one, because they answer two questions and a
-    deployment changing one has said nothing about the other.
+    [TSON-DATA] §9.1's resource limits as this deployment changes them: what this processor will SPEND reading
+    a document, where the two policies above are what it will ADMIT. Two settings and not one, because they
+    answer two questions and a deployment changing one has said nothing about the other.
 
     `max_depth` is the nesting bound, §9.1's own default being 64 -- the tightest in common use, so a
     document that fits travels. It is the only limit stated here because it is the only one the library
@@ -137,7 +132,7 @@
     Absent means the library's default, as with the two policies above: a descriptor that says nothing has
     not asked for no limit.
     """
-  limits => {
+  limits_override => {
     max_depth?: nesting_depth
   }
 
@@ -163,9 +158,9 @@
   deployment => {
     name:         text
     listener?:    listener
-    identifiers?: identifier_policy
-    tokens?:      script_policy
-    limits?:      limits
+    identifiers?: identifier_override
+    tokens?:      token_override
+    limits?:      limits_override
     schema_hosts?: [text]
   }
 
@@ -177,31 +172,24 @@
     (§2.2.1); a descriptor is precisely the artifact that must NOT have an identity, so a well-known path is
     right for it for the same reason it would be wrong for a schema.
 
-    It is DERIVED from a descriptor rather than written beside one. The fetch allow-list is internal
-    topology, and two documents maintained by hand drift.
+    `policy` is the policy IN FORCE, in policy.tn's shape -- the shape `tson policy` and the CLI's report
+    state one in -- and complete: a part the descriptor left alone appears at the library's default, so a
+    client learns what applies without knowing what any library defaults to. It is derived from the processor
+    rather than written beside the descriptor, and the fetch allow-list is internal topology, so neither can
+    drift into it.
 
     A PROFILE IS A HINT AND THE VERDICT IS THE AUTHORITY. This can be cached, and a policy can change under
     it; only the 4xx a request actually receives says what applied to that request. The refusal itself
-    carries only its code: the library states the policy once per processor (Tson.processorPolicy())
-    rather than on every refusal, and this profile is that statement for a counterparty. §8.2 asks that a
-    refusal be reported "under a stated policy and a stated data version"; the profile is where a
-    deployment states both.
+    carries only its code: §8.2 has the policy and the data version stated once per processor rather than on
+    every refusal, and this profile is that statement for a counterparty. `unicode_data_version` is stated,
+    as a report states it: §8.3 marks all three rules unstable across Unicode releases, so a refusal is only
+    interpretable against the data that produced it.
 
-    `unicode_data_version` is that second half. §8.3 marks all three rules unstable across Unicode
-    releases, so a refusal is only interpretable against the data that produced it, and two conforming
-    processors may legitimately disagree about one name. Stated here, once, for a client that would rather
-    know before it sends than after it is refused.
-
-    `limits` is here for the same reason and not for a different one: a 413 says a document went past a
-    bound, and a sender that read the bound first never writes past it. The fetch allow-list stays out
-    because it is topology; a limit is not -- it is the shape of what this endpoint accepts, which is the
-    whole subject of this projection.
+    `limits` is here for the same reason the policies are: a 413 says a document went past a bound, and a
+    sender that read the bound first never writes past it.
     """
   acceptance_profile => {
-    name:                 text
-    identifiers?:         identifier_policy
-    tokens?:              script_policy
-    limits?:              limits
-    unicode_data_version?: text
+    name:   text
+    policy: policy
   }
 }

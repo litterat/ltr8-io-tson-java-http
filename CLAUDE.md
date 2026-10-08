@@ -1036,8 +1036,10 @@ with no artifact, and this was the proposal for where it lives. **Revision 37 ad
 says no document may name, import or otherwise select the policy it is judged under, and the spec bundles
 `policy.tn` (`https://tson.io/2026/37/m/policy.tn`) as the policy's vocabulary — `restriction_level`,
 `script_policy`, `identifier_policy`, `limits` and `policy`, the shape a deployment writes its policy in and a
-processor reports it in. `deployment-1.tn` predates it and still declares its own copy of that vocabulary, with
-every member optional where `policy.tn`'s are required. The argument is in `deployment-1.tn`'s own `@doc`; the
+processor reports it in. `deployment-1.tn` imports it: the profile is a `policy.tn` `policy`, and the
+descriptor's own settings are partial *override* shapes (`identifier_override`, `token_override`,
+`limits_override`), every member optional where `policy.tn`'s are required. Whether the descriptor should
+instead hold a complete `policy` is an open decision. The argument is in `deployment-1.tn`'s own `@doc`; the
 short form:
 
 - **Not a schema.** An artifact declaring its own strictness chooses its own check, and §3.5's immutability
@@ -1067,28 +1069,32 @@ changing one has said nothing about the other. `max_depth` is the only member be
 the library enforces — §9.1 states twelve, and the rest arrive as `deployment-2.tn` rather than as a member
 nothing reads.
 
-**The profile is derived, and it is a hint.** `profile()` drops the fetch allow-list and the listener —
-internal topology — and a server publishes *that*, at `/.well-known/tson-deployment`. A well-known path
+**The profile is the policy in force, and it is a hint.** `profile(inForce)` takes the `ProcessorPolicy` the
+processor actually enforces — `applyTo(config).processorPolicy()`, or `tson.processorPolicy()` — not what the
+descriptor says, so it is **complete**: a part the descriptor left alone appears at the library's default, and a
+client needs to know no library's defaults to know what applies. It is written as `policy.tn`'s `policy`, the
+shape `tson policy` and the CLI's report use, scripts named by UAX #24 alias (`Latin`). It drops the fetch
+allow-list and the listener — internal topology — and a server publishes *that*, at
+`/.well-known/tson-deployment`. A well-known path
 because everything with an identity is served at its identity's path, and a descriptor is precisely what must
 not have one. It can be cached and go stale; only the refusal a request receives says what applied to it,
 which is where §8.2 puts the policy. **`limits` is kept in the projection** on the same argument that keeps
 the policies: a 413 says a document went past a bound, and a sender that read the bound first never writes
 past it — a limit is the shape of what this endpoint accepts, where the allow-list is topology.
-`unicode_data_version` is read from
-`ProcessorPolicy.dataVersion()` rather than copied — a constant would go stale silently on an upgrade —
+`unicode_data_version` comes from the
+`ProcessorPolicy` rather than being copied — a constant would go stale silently on an upgrade —
 and it is in the profile because §8.3 marks all three rules unstable across Unicode releases, so two
 conforming processors may legitimately disagree about one name and the version is what explains it.
 
-**The schema mirrors the library's two policy types**: `identifiers` is an `identifier_policy` (level, `unit`,
-`skeleton_distinctness`, `permitting`), `tokens` a `script_policy` (level, `permitting`). Its fields are written
-out rather than composed from `script_policy`, deliberately — a composition would make an identifier policy
-admissible at `tokens`, and a unit would be writable there after all.
+**The overrides mirror the library's two policy types**: `identifiers` is an `identifier_override` (level,
+`unit`, `skeleton_distinctness`, `permitting`), `tokens` a `token_override` (level, `permitting`). Its fields are
+written out rather than composed from `token_override`, deliberately — a composition would make an identifier
+override admissible at `tokens`, and a unit would be writable there after all.
 `TsonDeploymentTest.aTokenPolicyCannotBeGivenAUnit` pins it. An absent `skeleton_distinctness` leaves the
 library's default, which is on.
 
-**`restriction_level` copies `ScriptPolicy.Level` by hand**, held to it by
-`TsonDeploymentTest.everyRestrictionLevelIsDeclaredInTheSchema` — the same discipline `diagnostic_code` gets,
-and the same failure if it lapses: a level added upstream that a descriptor can name and nothing can read.
+**`restriction_level` is `policy.tn`'s**, imported rather than copied, so the hand-written copy and the test
+holding it to `ScriptPolicy.Level` are gone; upstream's `PolicySchemaTest` holds the bundled one.
 
 ### The validator demo (`ValidatorServer`, JDK adapter)
 
@@ -1186,7 +1192,7 @@ request exercises that.
   holds those literals to the constants — which is what the old string interpolation gave for free.
 - `tson-http/src/main/resources/deployment-1.tn` — the deployment-descriptor schema and the
   `acceptance_profile` projection published from it, carrying its own argument in its `@doc`. Revision 37
-  adopted the proposal as the bundled `policy.tn`, whose vocabulary this schema still restates.
+  adopted the proposal as the bundled `policy.tn`, which this schema imports.
 - `tson-http-jdk/src/demo/resources/` — the validator demo's own schemas (`validate-1.tn`,
   `validate-api-1.tn`) and its page (`validator.html`). **Not** in `demo/schemas/`, which is the three order
   demos' shared resource path; these belong to one demo on one adapter.

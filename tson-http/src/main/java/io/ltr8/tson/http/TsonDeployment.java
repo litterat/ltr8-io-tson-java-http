@@ -9,7 +9,6 @@ import io.ltr8.tson.base.policy.LimitsPolicy;
 import io.ltr8.tson.base.policy.ProcessorPolicy;
 import io.ltr8.tson.base.policy.ScriptPolicy;
 import io.ltr8.tson.base.source.SchemaAccess;
-import io.ltr8.tson.compiler.TsonCompiledSchema;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -17,6 +16,7 @@ import java.io.UncheckedIOException;
 import java.lang.Character.UnicodeScript;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -25,7 +25,9 @@ import java.util.Optional;
  *
  * <p>The third artifact kind, beside a schema (what a document must be) and an API description (what an
  * endpoint offers). {@code deployment-1.tn} carries the argument for why the [TSON-DATA] §8.2 policies can
- * live in neither of the other two; tson-java's {@code SPEC-FEEDBACK.md} carries the version filed with the spec author.
+ * live in neither of the other two, which Revision 37 adopted with the bundled {@code policy.tn} as the
+ * policy's vocabulary. The descriptor states only what it changes; {@link #profile} states the whole
+ * policy in force, in {@code policy.tn}'s shape.
  *
  * <p><b>Two rules this class exists to enforce by shape rather than by documentation.</b>
  *
@@ -36,7 +38,7 @@ import java.util.Optional;
  *       change a security policy with no code diff. {@link #read} takes the source text and the caller says
  *       where it came from.</li>
  *   <li><b>No document may name one.</b> Nothing here registers a descriptor with a schema source, and a
- *       server must not publish one. {@link #profile()} is what a counterparty gets, and it is derived.</li>
+ *       server must not publish one. {@link #profile} is what a counterparty gets, and it is derived.</li>
  * </ul>
  *
  * <p><b>An absent policy is not "no policy".</b> A descriptor stating neither leaves both at the library's
@@ -46,23 +48,27 @@ import java.util.Optional;
  */
 @Typename(name = "deployment")
 public record TsonDeployment(String name, Optional<Listener> listener,
-                             Optional<Identifiers> identifiers, Optional<Scripts> tokens, Optional<Limits> limits,
-                             @Field("schema_hosts") List<String> schemaHosts) {
+                             Optional<IdentifierOverride> identifiers, Optional<TokenOverride> tokens,
+                             Optional<LimitsOverride> limits, @Field("schema_hosts") List<String> schemaHosts) {
 
     /** The schema a descriptor names. Published like any other, unlike the descriptors it governs. */
     public static final String ID = "https://tson.io/2026/37/ltr8/http/deployment-1.tn";
 
     private static final String SOURCE = readResource("/deployment-1.tn");
 
-    private static final Map<String, Class<?>> BINDINGS = Map.of(
-            "deployment", TsonDeployment.class,
-            "acceptance_profile", AcceptanceProfile.class,
-            "identifier_policy", Identifiers.class,
-            "script_policy", Scripts.class,
-            "limits", Limits.class,
-            "listener", Listener.class,
-            "restriction_level", ScriptPolicy.Level.class,
-            "policy_unit", Unit.class);
+    private static final Map<String, Class<?>> BINDINGS = Map.ofEntries(
+            Map.entry("deployment", TsonDeployment.class),
+            Map.entry("acceptance_profile", AcceptanceProfile.class),
+            Map.entry("identifier_override", IdentifierOverride.class),
+            Map.entry("token_override", TokenOverride.class),
+            Map.entry("limits_override", LimitsOverride.class),
+            Map.entry("listener", Listener.class),
+            Map.entry("policy_unit", Unit.class),
+            Map.entry("restriction_level", ScriptPolicy.Level.class),
+            Map.entry("policy", Policy.class),
+            Map.entry("identifier_policy", Policy.Identifiers.class),
+            Map.entry("script_policy", Policy.Scripts.class),
+            Map.entry("limits", Policy.Limits.class));
 
     /**
      * An optional list a document omits arrives as {@code null}, and the binder does not normalise it — the
@@ -80,8 +86,8 @@ public record TsonDeployment(String name, Optional<Listener> listener,
      * <p>{@code max_depth} is the only member because it is the only limit the library enforces. §9.1 states
      * twelve; the rest arrive as {@code deployment-2.tn} rather than as a member nothing reads.
      */
-    @Typename(name = "limits")
-    public record Limits(@Field("max_depth") Optional<Integer> maxDepth) {
+    @Typename(name = "limits_override")
+    public record LimitsOverride(@Field("max_depth") Optional<Integer> maxDepth) {
 
         /** This descriptor's limits policy, or empty where it states no member and the library's stands. */
         public Optional<LimitsPolicy> toPolicy() {
@@ -104,11 +110,11 @@ public record TsonDeployment(String name, Optional<Listener> listener,
      * <p>It has no unit because a value has no segments — {@code _} and {@code -} separate a name's words and
      * are ordinary characters in a value — which the library makes unwritable rather than refused.
      */
-    @Typename(name = "script_policy")
-    public record Scripts(ScriptPolicy.Level level, List<String> permitting) {
+    @Typename(name = "token_override")
+    public record TokenOverride(ScriptPolicy.Level level, List<String> permitting) {
 
         /** @throws IllegalArgumentException if {@code permitting} names something that is not a script */
-        public Scripts {
+        public TokenOverride {
             permitting = canonicalScripts(permitting);
         }
 
@@ -119,17 +125,17 @@ public record TsonDeployment(String name, Optional<Listener> listener,
     }
 
     /**
-     * §8.2's identifier policy: a level and script combinations as {@link Scripts} states them, the unit the
-     * level applies to, and skeleton distinctness — the look-alike rule over a scope, which no level reaches
-     * and so is a switch of its own. An absent switch leaves the library's default, which is on.
+     * §8.2's identifier policy: a level and a script combination as {@link TokenOverride} states them, the
+     * unit the level applies to, and skeleton distinctness — the look-alike rule over a scope, which no level
+     * reaches and so is a switch of its own. An absent switch leaves the library's default, which is on.
      */
-    @Typename(name = "identifier_policy")
-    public record Identifiers(ScriptPolicy.Level level, Optional<Unit> unit,
-                              @Field("skeleton_distinctness") Optional<Boolean> skeletonDistinctness,
-                              List<String> permitting) {
+    @Typename(name = "identifier_override")
+    public record IdentifierOverride(ScriptPolicy.Level level, Optional<Unit> unit,
+                                     @Field("skeleton_distinctness") Optional<Boolean> skeletonDistinctness,
+                                     List<String> permitting) {
 
         /** @throws IllegalArgumentException if {@code permitting} names something that is not a script */
-        public Identifiers {
+        public IdentifierOverride {
             permitting = canonicalScripts(permitting);
         }
 
@@ -144,15 +150,79 @@ public record TsonDeployment(String name, Optional<Listener> listener,
     }
 
     /**
-     * What a counterparty may see — the policies, and nothing about what this deployment trusts.
+     * A processor's whole policy, in the shape the bundled {@code policy.tn} declares — the shape {@code tson
+     * policy} and the CLI's report state one in, so a client reads one format whichever tool it asked.
+     *
+     * <p><b>Complete, unlike the descriptor.</b> Every part is stated, a default as much as a setting, because
+     * a counterparty cannot be expected to know what any library defaults to.
+     */
+    @Typename(name = "policy")
+    public record Policy(@Field("identifier_policy") Identifiers identifierPolicy,
+                         @Field("token_policy") Scripts tokenPolicy,
+                         @Field("unicode_data_version") Optional<String> unicodeDataVersion,
+                         Limits limits) {
+
+        /** {@code policy} as this processor enforces it, data version included. */
+        public static Policy of(ProcessorPolicy policy) {
+            IdentifierPolicy identifiers = policy.identifierPolicy();
+            return new Policy(
+                    new Identifiers(identifiers.scripts().level(), identifiers.isPerSegment(),
+                            identifiers.appliesSkeletonDistinctness(), aliases(identifiers.scripts())),
+                    new Scripts(policy.tokenPolicy().level(), aliases(policy.tokenPolicy())),
+                    Optional.of(policy.unicodeDataVersion()), new Limits(policy.limits().maxDepth()));
+        }
+
+        /** {@code policy.tn}'s {@code identifier_policy}. */
+        @Typename(name = "identifier_policy")
+        public record Identifiers(ScriptPolicy.Level level, @Field("per_segment") boolean perSegment,
+                                  @Field("skeleton_distinctness") boolean skeletonDistinctness,
+                                  List<List<String>> permitting) {
+        }
+
+        /** {@code policy.tn}'s {@code script_policy}: a level and the script combinations admitted over it. */
+        @Typename(name = "script_policy")
+        public record Scripts(ScriptPolicy.Level level, List<List<String>> permitting) {
+        }
+
+        /** {@code policy.tn}'s {@code limits}. */
+        @Typename(name = "limits")
+        public record Limits(@Field("max_depth") int maxDepth) {
+        }
+
+        /** Each admitted combination as UAX #24 aliases, sorted so two deployments' profiles compare as text. */
+        private static List<List<String>> aliases(ScriptPolicy policy) {
+            return policy.permittedScripts().stream()
+                    .map(scripts -> scripts.stream().map(Policy::alias).sorted().toList()).toList();
+        }
+
+        /**
+         * A script's UAX #24 property value alias, which is how {@code policy.tn} names one: {@code Latin},
+         * {@code Old_Italic}. The JDK's constant is the alias upper-cased, so each segment is title-cased back;
+         * {@code SignWriting} is the one alias with a capital inside a segment.
+         */
+        static String alias(UnicodeScript script) {
+            if (script == UnicodeScript.SIGNWRITING) {
+                return "SignWriting";
+            }
+            StringBuilder alias = new StringBuilder();
+            for (String segment : script.name().split("_")) {
+                if (!alias.isEmpty()) {
+                    alias.append('_');
+                }
+                alias.append(segment.charAt(0)).append(segment.substring(1).toLowerCase(Locale.ROOT));
+            }
+            return alias.toString();
+        }
+    }
+
+    /**
+     * What a counterparty may see — the policy in force, and nothing about what this deployment trusts.
      *
      * <p><b>A hint, not the authority.</b> It can be cached and a policy can change under it; only the
      * refusal a request actually receives says what applied to that request, which is where §8.2 puts it.
      */
     @Typename(name = "acceptance_profile")
-    public record AcceptanceProfile(String name, Optional<Identifiers> identifiers, Optional<Scripts> tokens,
-                                    Optional<Limits> limits,
-                                    @Field("unicode_data_version") Optional<String> unicodeDataVersion) {
+    public record AcceptanceProfile(String name, Policy policy) {
     }
 
     /** This schema's own source text, for a server that publishes it. */
@@ -188,19 +258,14 @@ public record TsonDeployment(String name, Optional<Listener> listener,
         return tson;
     }
 
-    /** This schema compiled in binding mode, for a test that reads the declared enum members back. */
-    public static TsonCompiledSchema compiled() {
-        return tson().bindRegistry().get(ID);
-    }
-
     /** The identifier policy this descriptor states, or empty to leave the library's default alone. */
     public Optional<IdentifierPolicy> identifierPolicy() {
-        return identifiers.map(Identifiers::toPolicy);
+        return identifiers.map(IdentifierOverride::toPolicy);
     }
 
     /** The token policy this descriptor states, or empty to leave the library's default alone. */
     public Optional<ScriptPolicy> tokenPolicy() {
-        return tokens.map(Scripts::toPolicy);
+        return tokens.map(TokenOverride::toPolicy);
     }
 
     /**
@@ -208,7 +273,7 @@ public record TsonDeployment(String name, Optional<Listener> listener,
      * alone — 64 levels of nesting, §9.1's own default.
      */
     public Optional<LimitsPolicy> limitsPolicy() {
-        return limits.flatMap(Limits::toPolicy);
+        return limits.flatMap(LimitsOverride::toPolicy);
     }
 
     /**
@@ -226,33 +291,22 @@ public record TsonDeployment(String name, Optional<Listener> listener,
     }
 
     /**
-     * What to publish, <b>derived from this descriptor</b> rather than written beside it — which is what
-     * stops the two drifting, the same discipline a server's schema catalog follows.
+     * What to publish: this deployment's name and {@code inForce}, the policy the processor it configures
+     * actually enforces — {@code tson.processorPolicy()}, or {@code applyTo(config).processorPolicy()} before
+     * one is built.
+     *
+     * <p><b>Derived from what is enforced, not from what the descriptor says</b>, and the difference is the
+     * point. A descriptor states only what it changes, so a profile built from it would leave out every part
+     * at the library's default, and a client would have to know those defaults to know what applies. Taking
+     * the policy in force states every part, and cannot disagree with what refuses a request.
      *
      * <p>{@code schema_hosts} and {@code listener} are dropped: which origins this deployment trusts is
-     * nobody else's business, and where it listens is something a counterparty already knows.
-     *
-     * <p><b>{@code limits} is kept</b>, on the same argument that keeps the policies: a 413 says a document
-     * went past a bound, and a sender that read the bound first never writes past it. A limit is the shape of
-     * what this endpoint accepts, which is this projection's whole subject, where the allow-list is topology.
+     * nobody else's business, and where it listens is something a counterparty already knows. The limits are
+     * kept, inside {@code policy}: a 413 says a document went past a bound, and a sender that read the bound
+     * first never writes past it.
      */
-    public AcceptanceProfile profile() {
-        return new AcceptanceProfile(name, identifiers, tokens, limits, unicodeDataVersion());
-    }
-
-    /**
-     * The Unicode data version this build computes §8.2's rules against, read from the library rather than
-     * copied — a constant here would go stale silently on an upgrade, which is the failure the accessor
-     * exists to prevent.
-     *
-     * <p>It is in the profile because §8.3 marks all three rules unstable across Unicode releases, so two
-     * conforming processors may legitimately disagree about one name and the version is what explains the
-     * disagreement. A refusal does not carry it: the library states it once per processor, from {@code
-     * Tson.processorPolicy()}, and this is that statement for a client -- what it needs before it sends,
-     * not after it is refused.
-     */
-    private static Optional<String> unicodeDataVersion() {
-        return Optional.of(ProcessorPolicy.dataVersion());
+    public AcceptanceProfile profile(ProcessorPolicy inForce) {
+        return new AcceptanceProfile(name, Policy.of(inForce));
     }
 
     private static ScriptPolicy scriptPolicy(ScriptPolicy.Level level, List<String> permitting) {

@@ -163,11 +163,15 @@ sets a token policy, which you can see refuse a document the default would accep
 ```
 $ curl -s localhost:8080/.well-known/tson-deployment
 !!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
-!acceptance_profile { name: "validator-demo" tokens: { level: "SINGLE_SCRIPT" permitting: [] } }
+!acceptance_profile { name: "validator-demo" policy: {
+  identifier_policy: { level: "HIGHLY_RESTRICTIVE" per_segment: false skeleton_distinctness: true permitting: [] }
+  token_policy: { level: "SINGLE_SCRIPT" permitting: [] }
+  unicode_data_version: "16.0" limits: { max_depth: 64 } } }
 ```
 
-That is a **projection** of the descriptor, not the descriptor: which origins a deployment will fetch schemas
-from is nobody else's business. It is served at a well-known path because everything with an identity in this
+That is the policy **in force**, in the spec's `policy.tn` shape — the descriptor only set the token policy, and
+the rest is stated at the library's defaults — and not the descriptor: which origins a deployment will fetch
+schemas from is nobody else's business. It is served at a well-known path because everything with an identity in this
 series is served at its identity's path, and a descriptor is precisely the artifact that must not have one.
 And it is a hint — only the refusal a request actually receives says what applied to that request.
 

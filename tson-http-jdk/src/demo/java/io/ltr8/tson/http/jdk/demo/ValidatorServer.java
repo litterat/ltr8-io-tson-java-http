@@ -274,9 +274,10 @@ public final class ValidatorServer {
         Operation page = coverage.serving("get_page");
         Operation wellKnown = coverage.serving("get_acceptance_profile");
         coverage.serving("get_schema");
-        // Derived from the descriptor on every request rather than built once: it costs nothing, and a
-        // cached projection is how a published profile starts disagreeing with what is enforced.
-        byte[] profile = codec.write(deployment.profile(), TsonDeployment.ID, "acceptance_profile");
+        // The policy each per-request probe enforces, taken from the config verdict() builds it from rather
+        // than from the descriptor: a profile of what is enforced cannot disagree with what refuses a request.
+        byte[] profile = codec.write(deployment.profile(deployment.applyTo(ProcessorConfig.defaults())
+                .processorPolicy()), TsonDeployment.ID, "acceptance_profile");
         HttpHandler schemaHandler = TsonHandler.asHttpHandler(codec,
                 TsonSchemaHandler.of(catalog(described, schemas)));
         server.createContext("/", exchange -> {
