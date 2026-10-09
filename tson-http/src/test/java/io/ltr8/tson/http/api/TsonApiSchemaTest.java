@@ -23,24 +23,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonApiSchemaTest {
 
-    private static final String ORDER_ID = "https://schemas.example.com/2026/37/app/order-1.tn";
-    private static final String API_ID = "https://schemas.example.com/2026/37/app/orders-api-1.tn";
+    private static final String ORDER_ID = "https://schemas.example.com/2026/38/app/order-1.tn";
+    private static final String API_ID = "https://schemas.example.com/2026/38/app/orders-api-1.tn";
 
     private static final String ORDER = """
-            !!id:"https://schemas.example.com/2026/37/app/order-1.tn"
-            !!meta:"https://tson.io/2026/37/m/meta.tn"
-            !!import:"https://tson.io/2026/37/m/core.tn"
+            !!id:"https://schemas.example.com/2026/38/app/order-1.tn"
+            !!meta:"https://tson.io/2026/38/m/meta.tn"
+            !!import:"https://tson.io/2026/38/m/core.tn"
             {
               non_empty_text => !text ^ { min_length: 1 }
               order => { sku: non_empty_text  quantity: int32 }
             }""";
 
     private static final String API = """
-            !!id:"https://schemas.example.com/2026/37/app/orders-api-1.tn"
-            !!meta:"https://tson.io/2026/37/io/ltr8/http/meta-http.tn"
-            !!import:"https://schemas.example.com/2026/37/app/order-1.tn"
-            !!import:"https://tson.io/2026/37/io/ltr8/http/problem.tn"
-            !!import:"https://tson.io/2026/37/m/core.tn"
+            !!id:"https://schemas.example.com/2026/38/app/orders-api-1.tn"
+            !!meta:"https://tson.io/2026/38/io/ltr8/http/meta-http.tn"
+            !!import:"https://schemas.example.com/2026/38/app/order-1.tn"
+            !!import:"https://tson.io/2026/38/io/ltr8/http/problem.tn"
+            !!import:"https://tson.io/2026/38/m/core.tn"
             {
               @doc:"Accept an order and confirm it, with the quantity doubled."
               create_order => !operation {
@@ -173,10 +173,10 @@ class TsonApiSchemaTest {
     // ── templates, in the shipping design ──
 
     private static final String PAGED = """
-            !!id:"https://schemas.example.com/2026/37/app/orders-api-1.tn"
-            !!meta:"https://tson.io/2026/37/io/ltr8/http/meta-http.tn"
-            !!import:"https://schemas.example.com/2026/37/app/order-1.tn"
-            !!import:"https://tson.io/2026/37/m/core.tn"
+            !!id:"https://schemas.example.com/2026/38/app/orders-api-1.tn"
+            !!meta:"https://tson.io/2026/38/io/ltr8/http/meta-http.tn"
+            !!import:"https://schemas.example.com/2026/38/app/order-1.tn"
+            !!import:"https://tson.io/2026/38/m/core.tn"
             {
               page       => <T> { items: [T]  next?: uri  total: int32 }
               order_page => page<order>
@@ -266,7 +266,7 @@ class TsonApiSchemaTest {
         assertTrue(published.contains(TsonApiSchema.ID), "the meta layer, or the description will not resolve");
         assertTrue(published.contains(ORDER_ID));
         assertTrue(published.contains(TsonProblemSchema.ID));
-        assertFalse(published.stream().anyMatch(id -> id.startsWith("https://tson.io/2026/37/m/")),
+        assertFalse(published.stream().anyMatch(id -> id.startsWith("https://tson.io/2026/38/m/")),
                 () -> "the bundled standard library is not a service's to publish: " + published);
     }
 

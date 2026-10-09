@@ -45,8 +45,8 @@ class ValidatorServerTest {
     /** The schema a caller submits. Deliberately not this server's own — it arrives in the body like any. */
     private static final String PEOPLE = """
             !!id:"https://example.com/people.tn"
-            !!meta:"https://tson.io/2026/37/m/meta.tn"
-            !!import:"https://tson.io/2026/37/m/core.tn"
+            !!meta:"https://tson.io/2026/38/m/meta.tn"
+            !!import:"https://tson.io/2026/38/m/core.tn"
             {
               non_empty_text => !text ^ { min_length: 1 }
               employee => { id: uuid  name: non_empty_text  age: uint8 }
@@ -155,8 +155,8 @@ class ValidatorServerTest {
     void aBrokenSchemaIsReportedAndTheDataIsNotChecked() throws Exception {
         ValidationResult result = resultOf(validate("""
                 !!id:"https://example.com/people.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 { employee => { name: no_such_type } }""", CONFORMING));
 
         assertEquals(ValidatorServer.Phase.SCHEMA, result.phase());
@@ -189,13 +189,13 @@ class ValidatorServerTest {
     void twoCallersSharingASchemaIdDoNotSeeEachOther() throws Exception {
         String mine = """
                 !!id:"https://example.com/people.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 { employee => { handle: text } }""";
         String theirs = """
                 !!id:"https://example.com/people.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 { employee => { nickname: text } }""";
         String document = """
                 !!schema:"https://example.com/people.tn"
@@ -319,7 +319,7 @@ class ValidatorServerTest {
     @Test
     void theEnvelopeIsPublishedAtItsOwnIdentityPath() throws Exception {
         HttpResponse<String> response = client.send(HttpRequest.newBuilder(
-                        URI.create(base + "/2026/37/app/validate-1.tn")).GET().build(),
+                        URI.create(base + "/2026/38/app/validate-1.tn")).GET().build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         assertEquals(200, response.statusCode());
@@ -391,7 +391,7 @@ class ValidatorServerTest {
     @Test
     void theDescriptorIsNeverServed() throws Exception {
         HttpResponse<String> schema = client.send(HttpRequest.newBuilder(
-                        URI.create(base + "/2026/37/io/ltr8/http/deployment.tn")).GET().build(),
+                        URI.create(base + "/2026/38/io/ltr8/http/deployment.tn")).GET().build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         assertEquals(200, schema.statusCode(), "the schema is published, so a profile can be validated");
 

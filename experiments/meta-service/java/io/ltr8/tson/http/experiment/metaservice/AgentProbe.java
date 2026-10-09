@@ -34,11 +34,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class AgentProbe {
 
-    static final String PLAN_ID = "https://tson.io/2026/37/io/ltr8/http/agent.tn";
-    static final String AGENT_ID = "https://tson.io/2026/37/io/ltr8/http/agent-vm.tn";
-    static final String ORDERS_ID = "https://schemas.example.com/2026/37/experiment/meta-service/orders-1.tn";
+    static final String PLAN_ID = "https://tson.io/2026/38/io/ltr8/http/agent.tn";
+    static final String AGENT_ID = "https://tson.io/2026/38/io/ltr8/http/agent-vm.tn";
+    static final String ORDERS_ID = "https://schemas.example.com/2026/38/experiment/meta-service/orders-1.tn";
     static final String ORDER_TYPES_ID =
-            "https://schemas.example.com/2026/37/experiment/meta-service/orders-types-1.tn";
+            "https://schemas.example.com/2026/38/experiment/meta-service/orders-types-1.tn";
 
     static String read(String file) {
         try {

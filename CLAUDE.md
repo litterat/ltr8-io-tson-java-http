@@ -13,9 +13,12 @@ It is a **consumer** of the TSON library, not part of it. The library lives in t
 and consumed as a Gradle **included build** (see "Consuming tson-java" below). Destination remote:
 `https://github.com/litterat/`.
 
-**Built against 2026 Revision 37** — the sibling's `main`, which implements the published revision: its kernel,
-bundled identities and `spec/` prose are all Revision 37. Every identity in this repo
-carries `/2026/37/`, and `tson.version` names the matching `0.37.0-SNAPSHOT`. The revision series changes without
+**This branch, `r2026-38-proposal`, is built against the Revision 38 proposal** — the sibling's branch of the same
+name, whose kernel and bundled identities are Revision 38 while its `spec/` prose still reads Revision 37, the
+published one. `main` here is built against the sibling's `main`, Revision 37. The proposal is where changes this
+project needs from the spec are tried and used before they are published: the first is `net.tn`, the bundled
+network-type library with `hostname`. Every identity in this repo carries `/2026/38/`, and `tson.version` names the
+matching `0.38.0-SNAPSHOT`. The revision series changes without
 compatibility guarantees, so a `git pull` of the sibling can move the whole identity space; "Project-owned schema
 `!!id`" below says what that costs.
 
@@ -123,7 +126,7 @@ each other.
 - `TsonHttpCodec` — reads bodies (tree or bound, self-describing or against a stated schema and type),
   writes bodies, and gates on `Content-Type` and `Accept`.
 - `TsonHttpException` — status plus diagnostics. **`from(RuntimeException)` is the entire status policy**;
-  put nothing status-shaped anywhere else. Problem `type` URIs live under `https://ltr8.io/2026/37/http/problems/`
+  put nothing status-shaped anywhere else. Problem `type` URIs live under `https://ltr8.io/2026/38/http/problems/`
   — `ltr8.io` is the implementation resource, kept apart from the specification's `tson.io`, where schema
   identities live. The revision rides in it too, so a spec bump moves it with everything else.
 - `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem.tn` — the error body, its schema,
@@ -980,7 +983,7 @@ upstream revision adding a code is otherwise invisible here until an error body 
 rejects. It has caught every addition so far. Keep it.
 
 **Project-owned schema `!!id`** follows tson-java's convention with this repo's own group:
-`https://tson.io/2026/37/io/ltr8/http/<name>.tn` — `/2026/37` the spec revision, `io/ltr8` the publisher, `http`
+`https://tson.io/2026/38/io/ltr8/http/<name>.tn` — `/2026/38` the spec revision, `io/ltr8` the publisher, `http`
 the subsystem, `<name>` the schema, and **no version in the name**. That covers `problem.tn`, `deployment.tn`,
 `meta-http.tn` and the experiment's meta layers. The demos' example application (`schemas.example.com/…/app/`)
 is not project-owned and keeps its numbered names, deliberately: `order-1.tn` beside `order-2.tn` is what
@@ -1037,7 +1040,7 @@ second demo, on the JDK adapter only.
 endpoint offers): how *one instance* is configured. Revision 34 added the §8.2 policies as a security control
 with no artifact, and this was the proposal for where it lives. **Revision 37 adopted it**: [TSON-DATA] §8.2 now
 says no document may name, import or otherwise select the policy it is judged under, and the spec bundles
-`policy.tn` (`https://tson.io/2026/37/m/policy.tn`) as the policy's vocabulary — `restriction_level`,
+`policy.tn` (`https://tson.io/2026/38/m/policy.tn`) as the policy's vocabulary — `restriction_level`,
 `script_policy`, `identifier_policy`, `limits` and `policy`, the shape a deployment writes its policy in and a
 processor reports it in. `deployment.tn` imports it, and both ends are a `policy.tn` `policy`: the descriptor
 states one and the profile publishes one. The argument is in `deployment.tn`'s own `@doc`; the short form:
@@ -1067,6 +1070,12 @@ So the validator's descriptor writes out the two parts it leaves at the default.
 `TsonDeploymentTest.aPolicyStatesEveryPart` and `aStatedPolicyIsAppliedExactlyAsWritten`.
 `unicode_data_version` is left out of a descriptor: the tables are the processor's, so a descriptor naming one
 this processor does not carry stops the read.
+
+**The fetch allow-list is `[hostname]`, from the bundled `net.tn`** (Revision 38's proposal): RFC 1123 labels folded
+to lowercase, so an entry is the host a schema identity names and a port, a URL or an address is refused at read
+(`TsonDeploymentTest.theFetchAllowListHoldsHostNames`). `listener.host` stays `text`: `( hostname | ipv4 | ipv6 )`
+is not disjoint, all three being string-class (§5.4), so it would need a tag at every use. `UPSTREAM.md` proposes a
+`host` type for it.
 
 **An absent policy is not a permissive one.** The two defaults point opposite ways (Highly Restrictive over
 declared names, unrestricted over values), so a descriptor stating no `policy` returns empty from

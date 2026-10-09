@@ -1,4 +1,4 @@
-!!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
+!!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
 @doc:"""
   The validator demo's own deployment descriptor.
 

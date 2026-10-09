@@ -26,13 +26,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class NameRoleProbe {
 
-    static final String META_ID = "https://tson.io/2026/37/io/ltr8/http/meta-probe-n.tn";
-    static final String DOC_ID = "https://schemas.example.com/2026/37/app/probe-n-1.tn";
+    static final String META_ID = "https://tson.io/2026/38/io/ltr8/http/meta-probe-n.tn";
+    static final String DOC_ID = "https://schemas.example.com/2026/38/app/probe-n-1.tn";
 
     static final String META = """
         !!id:"%s"
-        !!meta:"https://tson.io/2026/37/m/meta-kernel.tn"
-        !!import:"https://tson.io/2026/37/m/meta.tn"
+        !!meta:"https://tson.io/2026/38/m/meta-kernel.tn"
+        !!import:"https://tson.io/2026/38/m/meta.tn"
         {
           signature   => { request?: type_ref  response?: type_ref  errors?: [type_ref] }
           method      => data & signature
@@ -46,7 +46,7 @@ class NameRoleProbe {
         String doc = """
             !!id:"%s"
             !!meta:"%s"
-            !!import:"https://tson.io/2026/37/m/core.tn"
+            !!import:"https://tson.io/2026/38/m/core.tn"
             {
               order => { sku: text }
             %s
@@ -98,11 +98,11 @@ class NameRoleProbe {
      */
     @Test
     void aDataDocumentsIdentifierKeysAreNames() {
-        String schemaId = "https://schemas.example.com/2026/37/app/probe-n-data-1.tn";
+        String schemaId = "https://schemas.example.com/2026/38/app/probe-n-data-1.tn";
         Map<String, String> lib = Map.of(schemaId, """
             !!id:"%s"
-            !!meta:"https://tson.io/2026/37/m/meta.tn"
-            !!import:"https://tson.io/2026/37/m/core.tn"
+            !!meta:"https://tson.io/2026/38/m/meta.tn"
+            !!import:"https://tson.io/2026/38/m/core.tn"
             {
               identifier  => !identifier_type { continue_add: "-" }
               method_name => identifier

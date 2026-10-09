@@ -163,8 +163,8 @@ interface => namespace & { key_type: = method_name    member: = method }
 api       => namespace & { key_type: = path_template  member: = resource  implements?: [<: !interface] }
 
 -- orders-1.tn: a namespace keyed by type_name, declaring two keyed by method_name
-!!id:"https://example.com/2026/37/app/orders-1.tn"
-!!meta:"https://tson.io/2026/37/io/ltr8/http/meta-service.tn"
+!!id:"https://example.com/2026/38/app/orders-1.tn"
+!!meta:"https://tson.io/2026/38/io/ltr8/http/meta-service.tn"
 {
   order     => { sku: text  quantity: int32 }
   order_ref => { id: text }
@@ -523,7 +523,6 @@ day it lands.
 port, userinfo or fragment). It is the series' own format, and the type system cannot state it:
 
 - `diagnostic.schema_id` carries the canonical form, `example.com/people.tn`, which is not a URI at all.
-- `deployment.tn`'s `schema_hosts` is `[text]`.
 - A set or map of references cannot dedupe `https://x/a.tn` against `http://x/a.tn?sha256=…`.
 
 Proposed: a reference family whose values are absolute, identifying references held to the canonical-form rule, and
@@ -531,13 +530,24 @@ whose **equality is canonical identity**, with an instance for the canonical spe
 normalization: the host folds, the path keeps its case, and the scheme and the pin are dropped rather than folded.
 tson-java's `CanonicalIdentity` is the existing implementation.
 
-**3. `hostname` (RFC 1123 labels, RFC 3986 `reg-name`) — constructor in `meta`, core instance.** Core has `ipv4` and
-`ipv6` but no host name, so an RFC 3986 host, `(hostname | ipv4 | ipv6)`, is not expressible. `deployment.tn`'s
-`listener.host` and `schema_hosts` are `text`, and §2.2.1's own identities are keyed by host. DNS names compare
-case-insensitively, which #19's `normalization: NFKC_CASEFOLD` now states — for A-labels the fold is ASCII lowercasing
-— so the family needs a grammar and a fold, not an equality of its own. Proposed ASCII (A-labels) to match `uri`, with
-IDN U-labels left to an `iri`-style sibling if wanted. `hostname` is a plausible schema-declared name, so the core
-instance is weighed against #15.
+**3. `host` (RFC 3986 §3.2.2) — `net.tn`, beside `hostname`.** Revision 38's proposal adds `net.tn` with
+`hostname` (RFC 1123 labels, ASCII-folded), and `deployment.tn`'s `schema_hosts` is now `[hostname]`. What is still
+not usable is a host as RFC 3986 spells one — a name *or* an address — which is what `listener.host` is: a bind
+address is as often `127.0.0.1` or `::1` as `localhost`. `( hostname | ipv4 | ipv6 )` resolves, but §5.4 makes all
+three string-class, so the choice is not disjoint and every value needs a tag — `host: !ipv4 "127.0.0.1"` in a file an
+operator writes by hand — and so `listener.host` stays `text`. Measured: an untagged value at that choice is refused
+with *"'host' is a choice -- a value at this position requires an explicit type annotation"*.
+
+Proposed: `host` in `net.tn`, **one string-class family** whose values are a `hostname`, an IPv4 dotted-quad or an
+IPv6 address. Two questions to settle with it:
+
+- **An atom, not a text family.** `hostname`'s equality is a fold, which a text family states; an IPv6 address's is
+  numeric — `::1` and `0:0:0:0:0:0:0:1` are one address — which no fold reaches. So `host` wants an atom constructor
+  in `meta`, reading to a host value that is a name or an address, with the `net.tn` instance beside `hostname`.
+- **Brackets.** RFC 3986 writes IPv6 in a host as an IP-literal, `[::1]`, because a URI needs the brackets to find
+  the port; a bind address or an allow-list entry has no port to separate. The value should not depend on it:
+  admit both spellings, with the unbracketed one canonical, as the address is the value and the brackets are URI
+  syntax.
 
 **4. `media_type` (RFC 6838; parameters per RFC 9110 §8.3.1) — constructor in `meta`; core instance pending.** An atom
 for its equality, which no whole-value fold can state: type, subtype and parameter names fold, while a parameter
@@ -551,7 +561,7 @@ and never granted back:
   `+json` type, which is `suffixes: [json]`.
 
 Media ranges (`*/*`, `text/*`) are `Accept` syntax and are refused. **The core instance carries the highest collision
-risk of the five:** an OpenAPI conversion naturally declares `media_type` for OpenAPI's Media Type Object. #15's
+risk of these:** an OpenAPI conversion naturally declares `media_type` for OpenAPI's Media Type Object. #15's
 evidence method answers it — grep the `ltr8-io-tson-benchmarks` conversions for type declarations named
 `media_type`, `mime_type` and `content_type` — and until then the constructor alone costs nothing. Name it after RFC
 6838's term, *media type*; "MIME type" is the legacy one.

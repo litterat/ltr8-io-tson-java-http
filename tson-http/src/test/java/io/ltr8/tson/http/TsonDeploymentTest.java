@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TsonDeploymentTest {
 
     private static final String FULL = """
-            !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
+            !!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
             !deployment {
               name:     "production"
               listener: { host: "127.0.0.1"  port: 8080 }
@@ -35,7 +35,7 @@ class TsonDeploymentTest {
     /** A descriptor whose policy is {@code policy}. */
     private static String withPolicy(String policy) {
         return """
-                !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
+                !!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
                 !deployment { name: "n"  policy: %s }""".formatted(policy);
     }
 
@@ -94,6 +94,28 @@ class TsonDeploymentTest {
     }
 
     /**
+     * <b>The fetch allow-list holds host names</b>, net.tn's {@code hostname}: RFC 1123 labels folded to
+     * lowercase, so a descriptor's spelling of a host is the host a schema identity names (§2.2.1 lowercases
+     * it), and what is not a host -- a port, a URL, a dotted-quad -- is refused before it can be an entry that
+     * matches nothing.
+     */
+    @Test
+    void theFetchAllowListHoldsHostNames() {
+        TsonDeployment deployment = TsonDeployment.read("""
+                !!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
+                !deployment { name: "n"  schema_hosts: ["Schemas.Example.COM"] }""");
+        assertEquals(List.of("schemas.example.com"), deployment.schemaHosts());
+
+        for (String notAHost : List.of("schemas.example.com:443", "https://schemas.example.com", "10.0.0.1")) {
+            List<Diagnostic> problems = TsonDeployment.tson().validate("""
+                    !!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
+                    !deployment { name: "n"  schema_hosts: ["%s"] }""".formatted(notAHost));
+
+            assertEquals(1, problems.size(), () -> notAHost + ": " + problems);
+        }
+    }
+
+    /**
      * <b>An absent policy leaves the library's defaults alone rather than meaning "no policy".</b> The two
      * defaults point opposite ways for reasons §8.2 gives, so overwriting them with something permissive would
      * be a decision nobody made.
@@ -101,7 +123,7 @@ class TsonDeploymentTest {
     @Test
     void anAbsentPolicyIsNotAPermissiveOne() {
         TsonDeployment deployment = TsonDeployment.read("""
-                !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
+                !!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
                 !deployment { name: "minimal" }""");
 
         assertTrue(deployment.processorPolicy().isEmpty());
@@ -196,7 +218,7 @@ class TsonDeploymentTest {
     @Test
     void aDescriptorWithNoPolicyPublishesTheDefaults() {
         TsonDeployment.Policy policy = profileOf(TsonDeployment.read("""
-                !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
+                !!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
                 !deployment { name: "minimal" }""")).policy();
 
         assertEquals(TsonDeployment.Policy.of(ProcessorPolicy.defaults()), policy);

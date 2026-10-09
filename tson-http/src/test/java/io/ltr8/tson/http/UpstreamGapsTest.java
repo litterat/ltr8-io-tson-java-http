@@ -51,15 +51,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class UpstreamGapsTest {
 
-    private static final String META_ID = "https://tson.io/2026/37/io/ltr8/http/meta-probe.tn";
-    private static final String API_ID = "https://schemas.example.com/2026/37/app/probe-1.tn";
+    private static final String META_ID = "https://tson.io/2026/38/io/ltr8/http/meta-probe.tn";
+    private static final String API_ID = "https://schemas.example.com/2026/38/app/probe-1.tn";
 
     /** A meta layer with a `data &` constructor, standing in for meta-http without depending on its shape. */
     private static String meta(String declarations) {
         return """
                 !!id:"%s"
-                !!meta:"https://tson.io/2026/37/m/meta-kernel.tn"
-                !!import:"https://tson.io/2026/37/m/meta.tn"
+                !!meta:"https://tson.io/2026/38/m/meta-kernel.tn"
+                !!import:"https://tson.io/2026/38/m/meta.tn"
                 {
                 %s
                 }""".formatted(META_ID, declarations);
@@ -69,7 +69,7 @@ class UpstreamGapsTest {
         return """
                 !!id:"%s"
                 !!meta:"%s"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 {
                 %s
                 }""".formatted(API_ID, META_ID, declarations);
@@ -104,9 +104,9 @@ class UpstreamGapsTest {
     @Test
     void anApplicationInsideAChoiceResolves() {
         String schema = """
-                !!id:"https://s.example.com/2026/37/p-1.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!id:"https://s.example.com/2026/38/p-1.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 {
                     order   => { sku: text }
                     problem => { title: text }
@@ -118,7 +118,7 @@ class UpstreamGapsTest {
         List<Diagnostic> problems = tson.validateSchema(schema);
         assertEquals(List.of(), problems, () -> "expected a clean resolution, got " + problems);
 
-        var entries = tson.schemaRegistry().get("https://s.example.com/2026/37/p-1.tn").orElseThrow()
+        var entries = tson.schemaRegistry().get("https://s.example.com/2026/38/p-1.tn").orElseThrow()
                 .schema().entries();
         TypeRef response = ((RecordBody) entries.get("op").body()).fields().getFirst().type();
         var variants = assertInstanceOf(ChoiceBody.class, entries.get(response.name()).body()).variants();
@@ -139,9 +139,9 @@ class UpstreamGapsTest {
     @Test
     void aValueParameterFixedFieldConstrains() {
         String schema = """
-                !!id:"https://s.example.com/2026/37/p-1.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!id:"https://s.example.com/2026/38/p-1.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 {
                     order    => { sku: text }
                     resp     => <T, S> { status: int32 = S  body: T }
@@ -149,7 +149,7 @@ class UpstreamGapsTest {
                 }""";
         Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> schema)));
         tson.resolve(schema);
-        String header = "!!schema:\"https://s.example.com/2026/37/p-1.tn\"\n";
+        String header = "!!schema:\"https://s.example.com/2026/38/p-1.tn\"\n";
 
         assertEquals(List.of(), tson.validate(header
                 + "!created { status: 201  body: !order { sku: \"a\" } }"));
@@ -168,9 +168,9 @@ class UpstreamGapsTest {
     @Test
     void aMaterialisedApplicationCarriesAFixedField() {
         String schema = """
-                !!id:"https://s.example.com/2026/37/p-1.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!id:"https://s.example.com/2026/38/p-1.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 {
                     order   => { sku: text }
                     resp    => <T, S> { status: int32 = S  body: T }
@@ -178,7 +178,7 @@ class UpstreamGapsTest {
                 }""";
         Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> schema)));
         tson.resolve(schema);
-        var entries = tson.schemaRegistry().get("https://s.example.com/2026/37/p-1.tn").orElseThrow()
+        var entries = tson.schemaRegistry().get("https://s.example.com/2026/38/p-1.tn").orElseThrow()
                 .schema().entries();
 
         assertEquals("resp", entries.get("created").source().orElseThrow().name());
@@ -340,7 +340,7 @@ class UpstreamGapsTest {
         String doc = """
                 !!id:"%s"
                 !!meta:"%s"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 {
                 %s
                 }""".formatted(API_ID, TsonApiSchema.ID, declarations);
@@ -363,9 +363,9 @@ class UpstreamGapsTest {
     @Test
     void anEntrysTwoAnnotationPositionsLandInDifferentPlaces() {
         String schema = """
-                !!id:"https://s.example.com/2026/37/p-1.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!id:"https://s.example.com/2026/38/p-1.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 {
                   @doc:"on the entry"
                   before => { a: text }
@@ -373,7 +373,7 @@ class UpstreamGapsTest {
                 }""";
         Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> schema)));
         tson.resolve(schema);
-        var entries = tson.schemaRegistry().get("https://s.example.com/2026/37/p-1.tn")
+        var entries = tson.schemaRegistry().get("https://s.example.com/2026/38/p-1.tn")
                 .orElseThrow().schema().entries();
 
         assertEquals(java.util.Optional.of("on the entry"),
@@ -389,9 +389,9 @@ class UpstreamGapsTest {
     @Test
     void anUnknownAnnotationOnAnEntryIsRefused() {
         String schema = """
-                !!id:"https://s.example.com/2026/37/p-1.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!id:"https://s.example.com/2026/38/p-1.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 {
                   @nosuchtype:"x"
                   thing => { a: text }
@@ -523,9 +523,9 @@ class UpstreamGapsTest {
     @Test
     void aDeclaredNameDefaultsToHighlyRestrictiveAndAValueToUnrestricted() {
         String schema = """
-                !!id:"https://example.com/2026/37/app/hygiene-1.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!id:"https://example.com/2026/38/app/hygiene-1.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 {
                   rec => { \u0430dmin: text }
                 }""";
@@ -557,10 +557,10 @@ class UpstreamGapsTest {
         // The import is what reaches the source at all: the meta layer and core are pre-loaded, so a schema
         // naming only those never consults it and the null is never returned.
         String schema = """
-                !!id:"https://example.com/2026/37/app/null-source-1.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
-                !!import:"https://example.com/2026/37/app/absent-1.tn"
+                !!id:"https://example.com/2026/38/app/null-source-1.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
+                !!import:"https://example.com/2026/38/app/absent-1.tn"
                 { thing => { a: text } }""";
         Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> null)));
 
@@ -582,30 +582,30 @@ class UpstreamGapsTest {
     @Test
     void ofMapRefusesAMissAndComparesByCanonicalIdentity() {
         String schema = """
-                !!id:"https://example.com/2026/37/app/ofmap-1.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!id:"https://example.com/2026/38/app/ofmap-1.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 { thing => { a: text } }""";
         SchemaSource source =
-                SchemaSource.ofMap(Map.of("https://example.com/2026/37/app/ofmap-1.tn", schema));
+                SchemaSource.ofMap(Map.of("https://example.com/2026/38/app/ofmap-1.tn", schema));
 
         // The scheme is a transport hint, not part of the name.
-        assertDoesNotThrow(() -> source.fetch("http://example.com/2026/37/app/ofmap-1.tn"));
+        assertDoesNotThrow(() -> source.fetch("http://example.com/2026/38/app/ofmap-1.tn"));
 
         SchemaFetchException refused = assertThrows(SchemaFetchException.class,
-                () -> source.fetch("https://example.com/2026/37/app/absent-1.tn"));
+                () -> source.fetch("https://example.com/2026/38/app/absent-1.tn"));
         assertEquals(SchemaFetchException.Reason.NOT_PERMITTED, refused.reason());
     }
 
     // ── open: RFC 6901 over TSON's map keys ─────────────────────────────────────────────────────
 
-    private static final String KEYS_ID = "https://s.example.com/2026/37/keys-1.tn";
+    private static final String KEYS_ID = "https://s.example.com/2026/38/keys-1.tn";
 
     private static Tson keysTson() {
         String schema = """
-                !!id:"https://s.example.com/2026/37/keys-1.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!id:"https://s.example.com/2026/38/keys-1.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 {
                   point => { x: int32  y: int32 }
                   tally => { counts?: {int32 => int32}  grid?: {point => int32}  tags?: {text => int32} }
@@ -685,11 +685,11 @@ class UpstreamGapsTest {
      */
     @Test
     void aJsonDocumentsInBandBindingIsRefused() {
-        String schemaId = "https://s.example.com/2026/37/j-1.tn";
+        String schemaId = "https://s.example.com/2026/38/j-1.tn";
         String schema = """
-                !!id:"https://s.example.com/2026/37/j-1.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!id:"https://s.example.com/2026/38/j-1.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 {
                     note => { title: text }
                 }""";
@@ -722,11 +722,11 @@ class UpstreamGapsTest {
      */
     @Test
     void aStatedSchemaSilentlyOverridesTheDocumentsOwn() {
-        String id = "https://s.example.com/2026/37/j-1.tn";
+        String id = "https://s.example.com/2026/38/j-1.tn";
         String schema = """
-                !!id:"https://s.example.com/2026/37/j-1.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!id:"https://s.example.com/2026/38/j-1.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 {
                     note => { title: text }
                 }""";
@@ -735,7 +735,7 @@ class UpstreamGapsTest {
                 .withDataBindContext(TsonBindings.of(Map.of("note", Note.class))));
         tson.resolve(schema);
         String elsewhere = """
-                !!schema:"https://s.example.com/2026/37/other-1.tn"
+                !!schema:"https://s.example.com/2026/38/other-1.tn"
                 !note { title: t }""";
 
         assertEquals(new Note("t"), tson.objectReader().withSchema(id).readAs(elsewhere, "note", Note.class),
@@ -759,11 +759,11 @@ class UpstreamGapsTest {
      */
     @Test
     void theObjectReaderContinuesAPeekAgainstAStatedType() {
-        String id = "https://s.example.com/2026/37/j-1.tn";
+        String id = "https://s.example.com/2026/38/j-1.tn";
         String schema = """
-                !!id:"https://s.example.com/2026/37/j-1.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!id:"https://s.example.com/2026/38/j-1.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 {
                     note => { title: text }
                 }""";

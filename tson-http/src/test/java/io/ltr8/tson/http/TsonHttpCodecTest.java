@@ -35,12 +35,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TsonHttpCodecTest {
 
-    private static final String SCHEMA_ID = "https://example.com/2026/37/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://example.com/2026/38/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://example.com/2026/37/app/order-1.tn"
-            !!meta:"https://tson.io/2026/37/m/meta.tn"
-            !!import:"https://tson.io/2026/37/m/core.tn"
+            !!id:"https://example.com/2026/38/app/order-1.tn"
+            !!meta:"https://tson.io/2026/38/m/meta.tn"
+            !!import:"https://tson.io/2026/38/m/core.tn"
             {
                 order => { sku: text  quantity: int32 }
             }""";
@@ -251,7 +251,7 @@ class TsonHttpCodecTest {
     @Test
     void aBodyNamingAnotherSchemaThanTheStatedOneIsA400() {
         String elsewhere = """
-                !!schema:"https://example.com/2026/37/app/other-1.tn"
+                !!schema:"https://example.com/2026/38/app/other-1.tn"
                 !order { sku: "A"  quantity: 1 }""";
 
         TsonHttpException bound = assertThrows(TsonHttpException.class, () -> codec.readObjectAs(body(elsewhere),
@@ -369,8 +369,8 @@ class TsonHttpCodecTest {
     void aTypeNothingBindsIsAServerFaultNotALibraryGap() {
         String schema = """
                 !!id:"https://example.test/thing-1.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 { thing => { a: text } }""";
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(uri -> schema))
@@ -408,8 +408,8 @@ class TsonHttpCodecTest {
     void aBoundClassRefusingWhatItsSchemaAdmitsIsAServerFault() {
         String schema = """
                 !!id:"https://example.test/positive-1.tn"
-                !!meta:"https://tson.io/2026/37/m/meta.tn"
-                !!import:"https://tson.io/2026/37/m/core.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
                 { positive => { n: int32 } }""";
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(uri -> schema))

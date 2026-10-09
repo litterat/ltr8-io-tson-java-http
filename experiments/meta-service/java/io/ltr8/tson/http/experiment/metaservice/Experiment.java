@@ -14,7 +14,7 @@ import java.util.Set;
 final class Experiment {
 
     /** The meta layer under test, read from {@code experiments/meta-service/} rather than copied into a string. */
-    static final String META_ID = "https://tson.io/2026/37/io/ltr8/http/meta-service.tn";
+    static final String META_ID = "https://tson.io/2026/38/io/ltr8/http/meta-service.tn";
 
     private Experiment() {
     }

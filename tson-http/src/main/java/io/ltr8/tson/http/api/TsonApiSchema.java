@@ -21,8 +21,8 @@ import java.util.Set;
  * <p>A schema governed by this one declares its operations as entries:
  *
  * <pre>{@code
- * !!meta:"https://tson.io/2026/37/io/ltr8/http/meta-http.tn"
- * !!import:"https://schemas.example.com/2026/37/app/order-1.tn"
+ * !!meta:"https://tson.io/2026/38/io/ltr8/http/meta-http.tn"
+ * !!import:"https://schemas.example.com/2026/38/app/order-1.tn"
  * {
  *   create_order => !operation {
  *     method: POST  path: "/orders"  parameters: []  request: order
@@ -53,7 +53,7 @@ import java.util.Set;
 public final class TsonApiSchema {
 
     /** This meta layer's identity — the {@code !!id} it declares and the URL it is served at. */
-    public static final String ID = "https://tson.io/2026/37/io/ltr8/http/meta-http.tn";
+    public static final String ID = "https://tson.io/2026/38/io/ltr8/http/meta-http.tn";
 
     private static final String SOURCE = readResource("/meta-http.tn");
 

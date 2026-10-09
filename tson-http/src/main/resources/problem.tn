@@ -1,6 +1,6 @@
-!!id:"https://tson.io/2026/37/io/ltr8/http/problem.tn"
-!!meta:"https://tson.io/2026/37/m/meta.tn"
-!!import:"https://tson.io/2026/37/m/core.tn"
+!!id:"https://tson.io/2026/38/io/ltr8/http/problem.tn"
+!!meta:"https://tson.io/2026/38/m/meta.tn"
+!!import:"https://tson.io/2026/38/m/core.tn"
 @doc:"""
   The error body this project writes when a request cannot be fulfilled.
 
