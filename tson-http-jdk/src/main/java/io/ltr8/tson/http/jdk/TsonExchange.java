@@ -166,7 +166,7 @@ public final class TsonExchange {
     }
 
     /**
-     * Sends an error body the codec rendered in the negotiated representation, naming {@code problem-1.tn} in
+     * Sends an error body the codec rendered in the negotiated representation, naming {@code problem.tn} in
      * the {@code TSON-Schema} header -- the only place a problem written as JSON can name it, and true of one
      * written as TSON too. The boundary's, and only its.
      */

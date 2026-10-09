@@ -1,6 +1,6 @@
-!!id:"https://tson.io/2026/36/ltr8/http/meta-service-1.tn"
-!!meta:"https://tson.io/2026/36/m/meta-kernel.tn"
-!!import:"https://tson.io/2026/36/m/meta.tn"
+!!id:"https://tson.io/2026/37/io/ltr8/http/meta-service.tn"
+!!meta:"https://tson.io/2026/37/m/meta-kernel.tn"
+!!import:"https://tson.io/2026/37/m/meta.tn"
 @doc:"""
   A meta layer for describing a service: what it can be asked to do (methods, grouped into interfaces)
   and how one transport exposes that (HTTP operations). A schema governed by this one is a service
@@ -105,8 +105,11 @@
   @doc:"An api's key: an RFC 3986 path, absolute, whose `{segment}`s name fields of a request record."
   path_template => !text ^ { pattern: "/|(/([^/{}]+|\\{[A-Za-z_][A-Za-z0-9_-]*\\}))+" }
 
-  @doc:"A header field name: an RFC 9110 token."
-  header_name => !text ^ { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+" }
+  @doc:"""
+    A header field name: an RFC 9110 token, compared without case as RFC 9110 §5.1 has it -- held folded, so
+    `Idempotency-Key` is `idempotency-key`, the form HTTP/2 and HTTP/3 put on the wire.
+    """
+  header_name => !text_type { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+"  normalization: NFKC_CASEFOLD }
 
   @doc:"""
     Where a request record's fields go, and the place where an interface and the web service over it
@@ -151,7 +154,7 @@
 
     Documentation is annotation, not fields: `@doc` before the verb key is the long form and `@summary` the
     short one, both surviving into the read value as the key's annotations. A summary was a field in
-    `meta-http-1.tn` because an operation's responses and parameters were values with nothing for an
+    `meta-http.tn` because an operation's responses and parameters were values with nothing for an
     annotation to attach to; an endpoint is a map value, and a map key carries annotations.
 
     Deliberately absent, each a decision: security schemes, response headers, links, callbacks,
@@ -165,7 +168,7 @@
 
   @doc:"""
     The short form of an endpoint's or a method's documentation, written before its key --
-    `@summary:"Place an order." POST => !binding { ... }`. Declared as the kernel declares `documentation`;
+    `@summary:"Place an order." POST => !binding { ... }`. Declared as the kernel declares `doc`;
     `@doc` remains the long form. Not a field, because documentation is metadata about a declaration rather
     than part of what it declares, and an annotation type declared here reaches every schema this layer
     governs (§6, one hop).

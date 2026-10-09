@@ -15,11 +15,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * This project's own {@code problem-1.tn} -- the schema every error body is written against -- as source text a
+ * This project's own {@code problem.tn} -- the schema every error body is written against -- as source text a
  * server can serve, and as a compiled schema bound to {@link TsonProblem}/{@link TsonProblemDiagnostic}.
  *
  * <p><b>{@link #source} exists because the {@code !!id} in an error body has to resolve.</b> A problem body
- * declares {@code !!schema:"…/problem-1.tn"}, and a client that wants to validate what it received needs that
+ * declares {@code !!schema:"…/problem.tn"}, and a client that wants to validate what it received needs that
  * document. Serving it from this constant is what makes the URL in the body true rather than decorative.
  *
  * <p><b>This is tson-http's own schema.</b> It began as a copy of {@code tson-cli}'s {@code diagnostics.tn} and
@@ -36,7 +36,7 @@ import java.util.Map;
 public final class TsonProblemSchema {
 
     /** The current error-body schema's identity -- the {@code !!id} it declares and the URL it is served at. */
-    public static final String ID = "https://tson.io/2026/36/ltr8/http/problem-1.tn";
+    public static final String ID = "https://tson.io/2026/37/io/ltr8/http/problem.tn";
 
     /**
      * Every version of this schema that is still published, current first -- one, today.
@@ -69,7 +69,7 @@ public final class TsonProblemSchema {
             "diagnostic", TsonProblemDiagnostic.class,
             "diagnostic_code", Diagnostic.Code.class);
 
-    private static final String SOURCE = readResource("/problem-1.tn");
+    private static final String SOURCE = readResource("/problem.tn");
 
     private TsonProblemSchema() {
     }
@@ -80,7 +80,7 @@ public final class TsonProblemSchema {
     }
 
     /**
-     * A fresh {@link Tson} with {@code problem-1.tn} resolved and bound to {@link TsonProblem}/
+     * A fresh {@link Tson} with {@code problem.tn} resolved and bound to {@link TsonProblem}/
      * {@link TsonProblemDiagnostic} -- what a client reads an error body back through.
      */
     public static Tson tson() {

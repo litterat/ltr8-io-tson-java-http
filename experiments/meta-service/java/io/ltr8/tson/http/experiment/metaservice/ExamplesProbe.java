@@ -37,14 +37,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ExamplesProbe {
 
-    static final String EXAMPLES = "https://schemas.example.com/2026/36/experiment/meta-service/";
+    static final String EXAMPLES = "https://schemas.example.com/2026/37/experiment/meta-service/";
 
     static Tson tson() {
         Map<String, String> lib = new LinkedHashMap<>();
         lib.put(Experiment.META_ID, Experiment.metaServiceSource());
         lib.put(TsonProblemSchema.ID, TsonProblemSchema.source());
-        // The wire example imports rpc-1.tn, which lives beside the sketch rather than under examples/.
-        lib.put(RpcProbe.RPC_ID, RpcProbe.read("rpc-1.tn"));
+        // The wire example imports rpc.tn, which lives beside the sketch rather than under examples/.
+        lib.put(RpcProbe.RPC_ID, RpcProbe.read("rpc.tn"));
         Path dir = Path.of(System.getProperty("experiments.dir", "../experiments")).resolve("meta-service/examples");
         try (Stream<Path> files = Files.list(dir)) {
             files.filter(f -> f.toString().endsWith(".tn")).sorted().forEach(f -> {

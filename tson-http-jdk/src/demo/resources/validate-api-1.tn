@@ -1,9 +1,9 @@
-!!id:"https://schemas.example.com/2026/36/app/validate-api-1.tn"
-!!meta:"https://tson.io/2026/36/ltr8/http/meta-http-1.tn"
-!!import:"https://schemas.example.com/2026/36/app/validate-1.tn"
-!!import:"https://tson.io/2026/36/ltr8/http/problem-1.tn"
-!!import:"https://tson.io/2026/36/ltr8/http/deployment-1.tn"
-!!import:"https://tson.io/2026/36/m/core.tn"
+!!id:"https://schemas.example.com/2026/37/app/validate-api-1.tn"
+!!meta:"https://tson.io/2026/37/io/ltr8/http/meta-http.tn"
+!!import:"https://schemas.example.com/2026/37/app/validate-1.tn"
+!!import:"https://tson.io/2026/37/io/ltr8/http/problem.tn"
+!!import:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
+!!import:"https://tson.io/2026/37/m/core.tn"
 {
   @doc:"""
     Check a document against a schema and report every problem in one pass.
@@ -21,7 +21,7 @@
     request:     validation_request
     responses:   [
       !response { status: 200  body: validation_result
-                  description: "The verdict, conforming or not" }
+                  description: "The outcome: accepted, rejected or undetermined" }
       !response { status: 400  body: problem
                   description: "The request body is not a valid validation_request" }
     ]

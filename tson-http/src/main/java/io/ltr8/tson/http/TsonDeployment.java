@@ -4,10 +4,11 @@ import io.ltr8.annotation.Field;
 import io.ltr8.annotation.Typename;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.policy.IdentifierPolicy;
 import io.ltr8.tson.base.policy.LimitsPolicy;
-import io.ltr8.tson.base.policy.UnicodePolicy;
+import io.ltr8.tson.base.policy.ProcessorPolicy;
+import io.ltr8.tson.base.policy.ScriptPolicy;
 import io.ltr8.tson.base.source.SchemaAccess;
-import io.ltr8.tson.compiler.TsonCompiledSchema;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,15 +16,18 @@ import java.io.UncheckedIOException;
 import java.lang.Character.UnicodeScript;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
 /**
- * How one instance is configured, read from a {@code deployment-1.tn} document.
+ * How one instance is configured, read from a {@code deployment.tn} document.
  *
  * <p>The third artifact kind, beside a schema (what a document must be) and an API description (what an
- * endpoint offers). {@code deployment-1.tn} carries the argument for why the [TSON-DATA] §8.2 policies can
- * live in neither of the other two; tson-java's {@code SPEC-FEEDBACK.md} carries the version filed with the spec author.
+ * endpoint offers). {@code deployment.tn} carries the argument for why the [TSON-DATA] §8.2 policies can
+ * live in neither of the other two, which Revision 37 adopted with the bundled {@code policy.tn} as the
+ * policy's vocabulary. A descriptor states a {@code policy.tn} {@code policy}, complete, and {@link #profile}
+ * publishes the policy in force in the same shape.
  *
  * <p><b>Two rules this class exists to enforce by shape rather than by documentation.</b>
  *
@@ -34,56 +38,48 @@ import java.util.Optional;
  *       change a security policy with no code diff. {@link #read} takes the source text and the caller says
  *       where it came from.</li>
  *   <li><b>No document may name one.</b> Nothing here registers a descriptor with a schema source, and a
- *       server must not publish one. {@link #profile()} is what a counterparty gets, and it is derived.</li>
+ *       server must not publish one. {@link #profile} is what a counterparty gets, and it is derived.</li>
  * </ul>
  *
- * <p><b>An absent policy is not "no policy".</b> A descriptor stating neither leaves both at the library's
- * defaults, which point opposite ways on purpose — Highly Restrictive over declared names, unrestricted over
- * values — so {@link #identifierPolicy()} and {@link #tokenPolicy()} return empty rather than something
- * permissive, and {@link #applyTo} leaves a config alone rather than overwriting it with a guess.
+ * <p><b>A stated policy is applied exactly as written; an absent one is not a permissive one.</b> There are no
+ * partial overrides falling back to the library's defaults: a default is the library's to move, and a security
+ * setting whose effect shifts under an upgrade with no diff to the descriptor is the silent relaxation §8.2
+ * exists to prevent. A descriptor stating no policy leaves the library's defaults alone — Highly Restrictive
+ * over declared names, unrestricted over values — rather than overwriting them with a guess.
  */
 @Typename(name = "deployment")
-public record TsonDeployment(String name, Optional<Listener> listener,
-                             Optional<Policy> identifiers, Optional<Policy> tokens, Optional<Limits> limits,
+public record TsonDeployment(String name, Optional<Listener> listener, Optional<Policy> policy,
                              @Field("schema_hosts") List<String> schemaHosts) {
 
     /** The schema a descriptor names. Published like any other, unlike the descriptors it governs. */
-    public static final String ID = "https://tson.io/2026/36/ltr8/http/deployment-1.tn";
+    public static final String ID = "https://tson.io/2026/37/io/ltr8/http/deployment.tn";
 
-    private static final String SOURCE = readResource("/deployment-1.tn");
+    private static final String SOURCE = readResource("/deployment.tn");
 
     private static final Map<String, Class<?>> BINDINGS = Map.of(
             "deployment", TsonDeployment.class,
             "acceptance_profile", AcceptanceProfile.class,
-            "unicode_policy", Policy.class,
-            "limits", Limits.class,
             "listener", Listener.class,
-            "restriction_level", UnicodePolicy.Level.class,
-            "policy_unit", Unit.class);
+            "restriction_level", ScriptPolicy.Level.class,
+            "policy", Policy.class,
+            "identifier_policy", Policy.Identifiers.class,
+            "script_policy", Policy.Scripts.class,
+            "limits", Policy.Limits.class);
 
     /**
      * An optional list a document omits arrives as {@code null}, and the binder does not normalise it — the
      * convention upstream follows is that the record does.
+     *
+     * @throws IllegalArgumentException if the policy names a Unicode data version this processor does not carry
      */
     public TsonDeployment {
         schemaHosts = schemaHosts == null ? List.of() : List.copyOf(schemaHosts);
-    }
-
-    /**
-     * [TSON-DATA] §9.1's resource limits — what this processor will <em>spend</em> reading a document, where
-     * {@link Policy} is what it will <em>admit</em> as a name. Two settings because they answer two questions,
-     * and a deployment changing one has said nothing about the other.
-     *
-     * <p>{@code max_depth} is the only member because it is the only limit the library enforces. §9.1 states
-     * twelve; the rest arrive as {@code deployment-2.tn} rather than as a member nothing reads.
-     */
-    @Typename(name = "limits")
-    public record Limits(@Field("max_depth") Optional<Integer> maxDepth) {
-
-        /** This descriptor's limits policy, or empty where it states no member and the library's stands. */
-        public Optional<LimitsPolicy> toPolicy() {
-            return maxDepth.map(depth -> LimitsPolicy.defaults().withMaxDepth(depth));
-        }
+        policy.flatMap(Policy::unicodeDataVersion).filter(version -> !version.equals(ProcessorPolicy.dataVersion()))
+                .ifPresent(version -> {
+                    throw new IllegalArgumentException("a deployment descriptor's policy names Unicode data "
+                            + "version " + version + ", and this processor carries " + ProcessorPolicy.dataVersion()
+                            + ": the tables are the processor's, so leave unicode_data_version out");
+                });
     }
 
     /** Where this instance listens. Absent members leave the caller's own defaults alone. */
@@ -91,73 +87,161 @@ public record TsonDeployment(String name, Optional<Listener> listener,
     public record Listener(Optional<String> host, Optional<Integer> port) {
     }
 
-    /** What a level is applied to. Absent means {@link #WHOLE}. */
-    @Typename(name = "policy_unit")
-    public enum Unit { WHOLE, SEGMENT }
+    /**
+     * A processor's whole policy, in the shape the bundled {@code policy.tn} declares — the shape {@code tson
+     * policy} and the CLI's report state one in, so a descriptor, a profile and a report are one format.
+     *
+     * <p><b>Complete.</b> Every part is stated, a default as much as a setting: a descriptor because what is in
+     * the file is what runs, and a profile because a counterparty cannot be expected to know what any library
+     * defaults to.
+     */
+    @Typename(name = "policy")
+    public record Policy(@Field("identifier_policy") Identifiers identifierPolicy,
+                         @Field("token_policy") Scripts tokenPolicy,
+                         @Field("unicode_data_version") Optional<String> unicodeDataVersion,
+                         Limits limits) {
 
-    /** One §8.2 policy: a UTS #39 level, the unit it applies to, and any extra admitted script set. */
-    @Typename(name = "unicode_policy")
-    public record Policy(UnicodePolicy.Level level, Optional<Unit> unit, List<String> permitting) {
+        /** {@code policy} as this processor enforces it, data version included. */
+        public static Policy of(ProcessorPolicy policy) {
+            IdentifierPolicy identifiers = policy.identifierPolicy();
+            return new Policy(
+                    new Identifiers(identifiers.scripts().level(), identifiers.isPerSegment(),
+                            identifiers.appliesSkeletonDistinctness(), aliases(identifiers.scripts())),
+                    new Scripts(policy.tokenPolicy().level(), aliases(policy.tokenPolicy())),
+                    Optional.of(policy.unicodeDataVersion()), new Limits(policy.limits().maxDepth()));
+        }
+
+        /** This policy as the library's own type, stamped with the data version this processor carries. */
+        public ProcessorPolicy toProcessorPolicy() {
+            IdentifierPolicy identifiers = IdentifierPolicy.of(scriptPolicy(identifierPolicy.level(),
+                    identifierPolicy.permitting()));
+            if (identifierPolicy.perSegment()) {
+                identifiers = identifiers.perSegment();
+            }
+            return ProcessorPolicy.of(identifiers.withSkeletonDistinctness(identifierPolicy.skeletonDistinctness()),
+                    scriptPolicy(tokenPolicy.level(), tokenPolicy.permitting()),
+                    LimitsPolicy.defaults().withMaxDepth(limits.maxDepth()));
+        }
+
+        /**
+         * {@code policy.tn}'s {@code identifier_policy}: a level, whether it applies to each segment of a name,
+         * the look-alike rule's own switch, and the script combinations admitted over the level.
+         */
+        @Typename(name = "identifier_policy")
+        public record Identifiers(ScriptPolicy.Level level, @Field("per_segment") boolean perSegment,
+                                  @Field("skeleton_distinctness") boolean skeletonDistinctness,
+                                  List<List<String>> permitting) {
+            /** @throws IllegalArgumentException if {@code permitting} names something that is not a script */
+            public Identifiers {
+                permitting = canonical(permitting);
+            }
+        }
+
+        /**
+         * {@code policy.tn}'s {@code script_policy}: a level and the script combinations admitted over it. It
+         * has no unit because a value has no segments — {@code _} and {@code -} separate a name's words and are
+         * ordinary characters in a value — which the library makes unwritable rather than refused.
+         */
+        @Typename(name = "script_policy")
+        public record Scripts(ScriptPolicy.Level level, List<List<String>> permitting) {
+            /** @throws IllegalArgumentException if {@code permitting} names something that is not a script */
+            public Scripts {
+                permitting = canonical(permitting);
+            }
+        }
+
+        /**
+         * {@code policy.tn}'s {@code limits}: [TSON-DATA] §9.1's resource limits, what this processor will
+         * <em>spend</em> reading a document where the two policies are what it will <em>admit</em>. {@code
+         * max_depth} is the only member because it is the only limit the library enforces.
+         */
+        @Typename(name = "limits")
+        public record Limits(@Field("max_depth") int maxDepth) {
+        }
+
+        /** Each admitted combination as UAX #24 aliases, sorted so two policies compare as text. */
+        private static List<List<String>> aliases(ScriptPolicy policy) {
+            return policy.permittedScripts().stream()
+                    .map(scripts -> scripts.stream().map(Policy::alias).sorted().toList()).toList();
+        }
 
         /**
          * <b>Script names are canonicalised here, against the authoritative table.</b> [UAX #24] gives every
-         * script a long alias and an ISO 15924 short alias and matching is case-insensitive, so {@code
-         * Latin}, {@code LATIN}, {@code latin} and {@code Latn} are four spellings of one script. The
-         * schema's {@code script_name} constrains shape and cannot constrain membership -- a set of 171
-         * values that grows with the UCD has no place in a published, immutable document -- so this is where
-         * a name becomes a script, and where two descriptors naming one set stop differing.
+         * script a long alias and an ISO 15924 short alias and matching is case-insensitive, so {@code Latin},
+         * {@code LATIN}, {@code latin} and {@code Latn} are four spellings of one script; each is written back
+         * as its long alias, a combination sorted, so two policies naming one set compare equal. {@code
+         * policy.tn} types a name as {@code text}, since a set of 171 values that grows with the UCD has no
+         * place in a published schema, so this is where a name becomes a script.
          *
-         * <p>A name that is not a script <b>stops the read</b>, which is deliberate: a descriptor is loaded
-         * at startup by the operator who wrote it, and a typo in a security setting should halt the process
-         * rather than be carried as a policy quietly missing a script.
-         *
-         * @throws IllegalArgumentException if {@code permitting} names something that is not a script
+         * <p>A name that is not a script <b>stops the read</b>, which is deliberate: a descriptor is loaded at
+         * startup by the operator who wrote it, and a typo in a security setting should halt the process rather
+         * than be carried as a policy quietly missing a script.
          */
-        public Policy {
-            permitting = permitting == null ? List.of()
-                    : permitting.stream().map(Policy::canonical).toList();
+        private static List<List<String>> canonical(List<List<String>> permitting) {
+            return permitting == null ? List.of() : permitting.stream()
+                    .map(scripts -> scripts.stream().map(name -> alias(script(name))).sorted().toList()).toList();
         }
 
-        /** This policy as the library's own type. */
-        public UnicodePolicy toPolicy() {
-            UnicodePolicy policy = UnicodePolicy.of(level);
-            if (unit.orElse(Unit.WHOLE) == Unit.SEGMENT) {
-                policy = policy.perSegment();
+        private static UnicodeScript script(String name) {
+            try {
+                return UnicodeScript.forName(name);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("'" + name + "' is not a Unicode script: a policy's "
+                        + "`permitting` names scripts by their UAX #24 Script property alias, "
+                        + "long (Latin, Canadian_Aboriginal) or ISO 15924 (Latn, Cans)", e);
             }
-            if (!permitting.isEmpty()) {
-                policy = policy.permitting(permitting.stream().map(UnicodeScript::forName)
+        }
+
+        private static ScriptPolicy scriptPolicy(ScriptPolicy.Level level, List<List<String>> permitting) {
+            ScriptPolicy policy = ScriptPolicy.of(level);
+            for (List<String> combination : permitting) {
+                policy = policy.permitting(combination.stream().map(UnicodeScript::forName)
                         .toArray(UnicodeScript[]::new));
             }
             return policy;
         }
 
-        /** A script name as {@link UnicodeScript} spells it, whichever of its aliases was written. */
-        private static String canonical(String name) {
-            try {
-                return UnicodeScript.forName(name).name();
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("'" + name + "' is not a Unicode script: a deployment "
-                        + "descriptor's `permitting` names scripts by their UAX #24 Script property alias, "
-                        + "long (Latin, Canadian_Aboriginal) or ISO 15924 (Latn, Cans)", e);
+        /**
+         * A script's UAX #24 property value alias, which is how {@code policy.tn} names one: {@code Latin},
+         * {@code Old_Italic}. The JDK's constant is the alias upper-cased, so each segment is title-cased back;
+         * {@code SignWriting} is the one alias with a capital inside a segment.
+         */
+        static String alias(UnicodeScript script) {
+            if (script == UnicodeScript.SIGNWRITING) {
+                return "SignWriting";
             }
+            StringBuilder alias = new StringBuilder();
+            for (String segment : script.name().split("_")) {
+                if (!alias.isEmpty()) {
+                    alias.append('_');
+                }
+                alias.append(segment.charAt(0)).append(segment.substring(1).toLowerCase(Locale.ROOT));
+            }
+            return alias.toString();
         }
     }
 
     /**
-     * What a counterparty may see — the policies, and nothing about what this deployment trusts.
+     * What a counterparty may see — the policy in force, and nothing about what this deployment trusts.
      *
      * <p><b>A hint, not the authority.</b> It can be cached and a policy can change under it; only the
      * refusal a request actually receives says what applied to that request, which is where §8.2 puts it.
      */
     @Typename(name = "acceptance_profile")
-    public record AcceptanceProfile(String name, Optional<Policy> identifiers, Optional<Policy> tokens,
-                                    Optional<Limits> limits,
-                                    @Field("unicode_data_version") Optional<String> unicodeDataVersion) {
+    public record AcceptanceProfile(String name, Policy policy) {
     }
 
     /** This schema's own source text, for a server that publishes it. */
     public static String source() {
         return SOURCE;
+    }
+
+    /**
+     * The bindings for every type {@code deployment.tn} declares, for a server whose own {@link Tson} reads
+     * or writes a descriptor or a profile and should not restate this schema's vocabulary.
+     */
+    public static Map<String, Class<?>> bindings() {
+        return BINDINGS;
     }
 
     /**
@@ -180,71 +264,35 @@ public record TsonDeployment(String name, Optional<Listener> listener,
         return tson;
     }
 
-    /** This schema compiled in binding mode, for a test that reads the declared enum members back. */
-    public static TsonCompiledSchema compiled() {
-        return tson().bindRegistry().get(ID);
-    }
-
-    /** The declared-name policy this descriptor states, or empty to leave the library's default alone. */
-    public Optional<UnicodePolicy> identifierPolicy() {
-        return identifiers.map(Policy::toPolicy);
-    }
-
-    /** The token policy this descriptor states, or empty to leave the library's default alone. */
-    public Optional<UnicodePolicy> tokenPolicy() {
-        return tokens.map(Policy::toPolicy);
+    /** The processor policy this descriptor states, or empty to leave the library's defaults alone. */
+    public Optional<ProcessorPolicy> processorPolicy() {
+        return policy.map(Policy::toProcessorPolicy);
     }
 
     /**
-     * The [TSON-DATA] §9.1 limits policy this descriptor states, or empty to leave the library's default
-     * alone — 64 levels of nesting, §9.1's own default.
-     */
-    public Optional<LimitsPolicy> limitsPolicy() {
-        return limits.flatMap(Limits::toPolicy);
-    }
-
-    /**
-     * {@code config} with whatever this descriptor states applied.
-     *
-     * <p>Only what it states: a descriptor with no {@code tokens} leaves the token policy at the library's
-     * default rather than setting it to something permissive, because those are different postures and only
-     * one of them was asked for. A {@link ProcessorConfig} is a value, so an absent setting is the config
-     * handed back unchanged.
+     * {@code config} with this descriptor's policy applied, whole — or handed back unchanged where it states
+     * none, since an absent policy and a permissive one are different postures and only one was asked for.
      */
     public ProcessorConfig applyTo(ProcessorConfig config) {
-        ProcessorConfig withIdentifiers = identifierPolicy().map(config::withIdentifierPolicy).orElse(config);
-        ProcessorConfig withTokens = tokenPolicy().map(withIdentifiers::withTokenPolicy).orElse(withIdentifiers);
-        return limitsPolicy().map(withTokens::withLimits).orElse(withTokens);
+        return processorPolicy().map(config::withProcessorPolicy).orElse(config);
     }
 
     /**
-     * What to publish, <b>derived from this descriptor</b> rather than written beside it — which is what
-     * stops the two drifting, the same discipline a server's schema catalog follows.
+     * What to publish: this deployment's name and {@code inForce}, the policy the processor it configures
+     * actually enforces — {@code tson.processorPolicy()}, or {@code applyTo(config).processorPolicy()} before
+     * one is built.
+     *
+     * <p><b>Derived from what is enforced, not copied from the descriptor</b>: a descriptor stating no policy
+     * still publishes the library's defaults, a client needs no library's defaults to know what applies, and
+     * what is published cannot disagree with what refuses a request.
      *
      * <p>{@code schema_hosts} and {@code listener} are dropped: which origins this deployment trusts is
-     * nobody else's business, and where it listens is something a counterparty already knows.
-     *
-     * <p><b>{@code limits} is kept</b>, on the same argument that keeps the policies: a 413 says a document
-     * went past a bound, and a sender that read the bound first never writes past it. A limit is the shape of
-     * what this endpoint accepts, which is this projection's whole subject, where the allow-list is topology.
+     * nobody else's business, and where it listens is something a counterparty already knows. The limits are
+     * kept, inside {@code policy}: a 413 says a document went past a bound, and a sender that read the bound
+     * first never writes past it.
      */
-    public AcceptanceProfile profile() {
-        return new AcceptanceProfile(name, identifiers, tokens, limits, unicodeDataVersion());
-    }
-
-    /**
-     * The Unicode data version this build computes §8.2's rules against, read from the library rather than
-     * copied — a constant here would go stale silently on an upgrade, which is the failure the accessor
-     * exists to prevent.
-     *
-     * <p>It is in the profile because §8.3 marks all three rules unstable across Unicode releases, so two
-     * conforming processors may legitimately disagree about one name and the version is what explains the
-     * disagreement. A refusal does not carry it: the library states it once per processor, from {@code
-     * Tson.processorPolicy()}, and this is that statement for a client -- what it needs before it sends,
-     * not after it is refused.
-     */
-    private static Optional<String> unicodeDataVersion() {
-        return Optional.of(UnicodePolicy.dataVersion());
+    public AcceptanceProfile profile(ProcessorPolicy inForce) {
+        return new AcceptanceProfile(name, Policy.of(inForce));
     }
 
     private static String readResource(String path) {

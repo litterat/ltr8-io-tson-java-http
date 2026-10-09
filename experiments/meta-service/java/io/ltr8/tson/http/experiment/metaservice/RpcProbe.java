@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code rpc-1.tn} -- the wire form of an interface, {@code call} and {@code return} as templates -- closed per
+ * {@code rpc.tn} -- the wire form of an interface, {@code call} and {@code return} as templates -- closed per
  * method by a wire schema ({@code examples/orders-wire-1.tn}), so that a packet is a fully typed document.
  *
  * <p>Measured: both schemas resolve, a choice of errors included as a template argument; a packet's request is
@@ -34,8 +34,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class RpcProbe {
 
-    static final String RPC_ID = "https://tson.io/2026/36/ltr8/http/rpc-1.tn";
-    static final String EXAMPLES = "https://schemas.example.com/2026/36/experiment/meta-service/";
+    static final String RPC_ID = "https://tson.io/2026/37/io/ltr8/http/rpc.tn";
+    static final String EXAMPLES = "https://schemas.example.com/2026/37/experiment/meta-service/";
     static final String WIRE_ID = EXAMPLES + "orders-wire-1.tn";
     static final String ORDERS_ID = EXAMPLES + "orders-1.tn";
 
@@ -53,7 +53,7 @@ class RpcProbe {
 
     static Tson tson() {
         Map<String, String> lib = new LinkedHashMap<>();
-        lib.put(RPC_ID, read("rpc-1.tn"));
+        lib.put(RPC_ID, read("rpc.tn"));
         lib.put(TsonProblemSchema.ID, TsonProblemSchema.source());
         lib.put(EXAMPLES + "orders-types-1.tn", read("examples/orders-types-1.tn"));
         lib.put(EXAMPLES + "orders-errors-1.tn", read("examples/orders-errors-1.tn"));
@@ -68,7 +68,7 @@ class RpcProbe {
     @Test
     void theRpcAndWireSchemasResolve() {
         Tson tson = tson();
-        assertEquals(List.of(), tson.validateSchema(read("rpc-1.tn")));
+        assertEquals(List.of(), tson.validateSchema(read("rpc.tn")));
         assertEquals(List.of(), tson.validateSchema(read("examples/orders-wire-1.tn")));
     }
 
@@ -84,7 +84,7 @@ class RpcProbe {
         assertEquals(List.of(), tson.validate(call));
 
         TsonValue value = tson.treeReader().read(call);
-        assertEquals(ORDERS_ID, value.get("interface").as(java.net.URI.class).orElseThrow().toString());
+        assertEquals(ORDERS_ID, value.get("interface").as(io.ltr8.net.Iri.class).orElseThrow().text());
         assertEquals("c1", value.get("id").asString().orElseThrow());
         assertTrue(value.get("deadline").as(Object.class).isPresent());
         assertEquals(2, value.at("/request/order/quantity").asInt().orElseThrow());
@@ -105,7 +105,7 @@ class RpcProbe {
                 "!place_order_return { id: c1  response: { sku: A-100  quantity: 4 } }")));
         assertEquals(List.of(), tson.validate(packet("""
             !place_order_return { id: c1
-              error: { type: "https://ltr8.io/2026/36/http/problems/sku-not-found"  title: "No such SKU"
+              error: { type: "https://ltr8.io/2026/37/http/problems/sku-not-found"  title: "No such SKU"
                        status: 404  sku: A-100  errors: [] } }""")));
 
         List<Diagnostic> wrongStatus = tson.validate(packet(
@@ -123,9 +123,9 @@ class RpcProbe {
         assertEquals(List.of(), tson.validate(packet(
                 "!cancel_order_return { id: c1  fault: { title: \"Not implemented\"  status: 501  errors: [] } }")));
 
+        // The group's verdict is its own code, so assert that rather than the message's wording.
         List<Diagnostic> none = tson.validate(packet("!place_order_return { id: c1 }"));
-        assertEquals(1, none.size(), () -> "" + none);
-        assertTrue(none.getFirst().message().contains("exactly one of (response | error | fault)"),
-                none.getFirst().message());
+        assertEquals(List.of(Diagnostic.Code.FIELD_GROUP), none.stream().map(Diagnostic::code).toList(),
+                () -> "" + none);
     }
 }

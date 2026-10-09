@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code meta-service-1.tn} resolves, and the constructs it leans on behave as the sketch assumes: a {@code data}
+ * {@code meta-service.tn} resolves, and the constructs it leans on behave as the sketch assumes: a {@code data}
  * constructor with a record mixin and no trailing body ({@code method => data & signature}); a
  * {@code [type_ref]} slot that resolves per element; an error type's fixed {@code status} readable from the
  * resolved schema. Plus the rule the whole design bends around: a {@code data} instance is not a type, and
@@ -28,14 +28,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class MetaServiceSketchProbe {
 
-    static final String ERR_ID = "https://schemas.example.com/2026/36/app/orders-errors-1.tn";
-    static final String DOC_ID = "https://schemas.example.com/2026/36/app/orders-1.tn";
+    static final String ERR_ID = "https://schemas.example.com/2026/37/app/orders-errors-1.tn";
+    static final String DOC_ID = "https://schemas.example.com/2026/37/app/orders-1.tn";
 
     /** An error type pins the status it inherits from {@code problem}, which is how an operation's errors get one. */
     static final String ERRORS = """
             !!id:"%s"
-            !!meta:"https://tson.io/2026/36/m/meta.tn"
-            !!import:"https://tson.io/2026/36/m/core.tn"
+            !!meta:"https://tson.io/2026/37/m/meta.tn"
+            !!import:"https://tson.io/2026/37/m/core.tn"
             !!import:"%s"
             {
               sku_not_found   => problem & { status: = 404  sku: text }
@@ -46,7 +46,7 @@ class MetaServiceSketchProbe {
         return """
             !!id:"%s"
             !!meta:"%s"
-            !!import:"https://tson.io/2026/36/m/core.tn"
+            !!import:"https://tson.io/2026/37/m/core.tn"
             !!import:"%s"
             {
               order       => { sku: text  quantity: int32 }

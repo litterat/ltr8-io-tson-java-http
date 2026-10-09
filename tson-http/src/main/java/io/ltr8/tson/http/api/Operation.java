@@ -12,7 +12,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * One HTTP operation, written by a schema governed by {@code meta-http-1.tn} and read back from that
+ * One HTTP operation, written by a schema governed by {@code meta-http.tn} and read back from that
  * schema's resolved entries.
  *
  * <p><b>{@link #references()} is what makes the payload types real.</b> The linker follows what it returns,

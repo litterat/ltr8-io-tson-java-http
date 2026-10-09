@@ -48,12 +48,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonHelidonAdapterTest {
 
-    private static final String SCHEMA_ID = "https://schemas.example.com/2026/36/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://schemas.example.com/2026/37/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/36/app/order-1.tn"
-            !!meta:"https://tson.io/2026/36/m/meta.tn"
-            !!import:"https://tson.io/2026/36/m/core.tn"
+            !!id:"https://schemas.example.com/2026/37/app/order-1.tn"
+            !!meta:"https://tson.io/2026/37/m/meta.tn"
+            !!import:"https://tson.io/2026/37/m/core.tn"
             {
                 order => { sku: text  quantity: int32 }
             }""";
@@ -377,7 +377,7 @@ class TsonHelidonAdapterTest {
     }
 
     /**
-     * <b>A JSON client's problem is RFC 9457's own format</b>: {@code problem-1.tn}'s {@code problem} written as
+     * <b>A JSON client's problem is RFC 9457's own format</b>: {@code problem.tn}'s {@code problem} written as
      * JSON is an {@code application/problem+json} body, labelled so where the client accepts that type and with
      * the JSON type it asked for where it does not.
      */

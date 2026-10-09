@@ -21,8 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The agent's two resolved layers -- {@code agent-1.tn}, the plan a surface grammar reads to, and
- * {@code agent-vm-1.tn}, the agent it compiles to -- resolve at Revision 35 and read, up to one gap.
+ * The agent's two resolved layers -- {@code agent.tn}, the plan a surface grammar reads to, and
+ * {@code agent-vm.tn}, the agent it compiles to -- resolve at Revision 35 and read, up to one gap.
  *
  * <p>Read here: a plan whose arguments are references only ({@code arg} recursing through {@code record} to a
  * {@code selector}); a compiled agent whose pool holds names, a type and a method, and whose {@code code} mixes
@@ -30,15 +30,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * And a constant, which Revision 35 closed: {@code constant => dynamic} is [TSON-DATA] §7.8's scope push, so a
  * literal argument names its own type -- from this schema's namespace, or from a foreign one it names with a
  * nested {@code !!schema} -- and is validated in full against whatever it named. The same slot serves
- * {@code rpc-1.tn}'s payload.
+ * {@code rpc.tn}'s payload.
  */
 class AgentProbe {
 
-    static final String PLAN_ID = "https://tson.io/2026/36/ltr8/http/agent-1.tn";
-    static final String AGENT_ID = "https://tson.io/2026/36/ltr8/http/agent-vm-1.tn";
-    static final String ORDERS_ID = "https://schemas.example.com/2026/36/experiment/meta-service/orders-1.tn";
+    static final String PLAN_ID = "https://tson.io/2026/37/io/ltr8/http/agent.tn";
+    static final String AGENT_ID = "https://tson.io/2026/37/io/ltr8/http/agent-vm.tn";
+    static final String ORDERS_ID = "https://schemas.example.com/2026/37/experiment/meta-service/orders-1.tn";
     static final String ORDER_TYPES_ID =
-            "https://schemas.example.com/2026/36/experiment/meta-service/orders-types-1.tn";
+            "https://schemas.example.com/2026/37/experiment/meta-service/orders-types-1.tn";
 
     static String read(String file) {
         try {
@@ -51,8 +51,8 @@ class AgentProbe {
 
     static Tson tson() {
         Map<String, String> lib = new LinkedHashMap<>();
-        lib.put(PLAN_ID, read("agent-1.tn"));
-        lib.put(AGENT_ID, read("agent-vm-1.tn"));
+        lib.put(PLAN_ID, read("agent.tn"));
+        lib.put(AGENT_ID, read("agent-vm.tn"));
         // A constant may name a foreign type, so the schema declaring it has to be reachable from here.
         lib.put(ORDER_TYPES_ID, read("examples/orders-types-1.tn"));
         return Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib))));
@@ -61,8 +61,8 @@ class AgentProbe {
     @Test
     void bothLayersResolve() {
         Tson tson = tson();
-        assertEquals(List.of(), tson.validateSchema(read("agent-1.tn")));
-        assertEquals(List.of(), tson.validateSchema(read("agent-vm-1.tn")));
+        assertEquals(List.of(), tson.validateSchema(read("agent.tn")));
+        assertEquals(List.of(), tson.validateSchema(read("agent-vm.tn")));
     }
 
     /** A plan of two steps, the second's input a reference into the first's response, the return a reference. */

@@ -37,14 +37,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class SupertypeProbe {
 
-    static final String DOC_ID = "https://schemas.example.com/2026/36/app/probe-s-1.tn";
+    static final String DOC_ID = "https://schemas.example.com/2026/37/app/probe-s-1.tn";
 
     /** Resolves {@code r => !api { "/o" => <resource> }} and hands back the resource, or the problems. */
     static List<Diagnostic> problems(String resource, Object[] resourceOut) {
         String doc = """
             !!id:"%s"
             !!meta:"%s"
-            !!import:"https://tson.io/2026/36/m/core.tn"
+            !!import:"https://tson.io/2026/37/m/core.tn"
             {
               order => { sku: text }
               r => !api { "/o" => %s }

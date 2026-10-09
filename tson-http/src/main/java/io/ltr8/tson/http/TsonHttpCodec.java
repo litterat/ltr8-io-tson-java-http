@@ -40,7 +40,7 @@ import java.util.function.Supplier;
  * See {@code CLAUDE.md}.
  *
  * <p><b>An error body says what governs it.</b> {@link #writeProblem} writes through a {@code describing}
- * writer, so a problem carries {@code !!schema:"…/problem-1.tn"} and reads back with no out-of-band knowledge --
+ * writer, so a problem carries {@code !!schema:"…/problem.tn"} and reads back with no out-of-band knowledge --
  * and this project's own schema handler publishes that document, so the URL in it resolves. Every other write
  * is bare unless a caller asks otherwise, because the codec cannot know what governs an arbitrary object; the
  * overloads taking a schema and root type are how an application says.
@@ -82,7 +82,7 @@ public final class TsonHttpCodec {
         this.tson = tson;
         this.objectWriter = tson.objectWriter();
         this.treeWriter = tson.treeWriter();
-        // Built once: an error body always names problem-1.tn and its root type, so there is nothing per-call
+        // Built once: an error body always names problem.tn and its root type, so there is nothing per-call
         // to decide. Both arguments are required -- a bound record writes no type-ref of its own, so a
         // !!schema without one produces a document a reader cannot select a type from.
         this.problemWriter = objectWriter.describing(TsonProblemSchema.ID, "problem");
@@ -388,7 +388,7 @@ public final class TsonHttpCodec {
      * out-of-band carrier on a response as on a request. And a tree is the TSON encoding's own model, so a
      * {@code TsonValue} is written as TSON or not at all -- {@link #requireTson} is that rule.
      *
-     * <p><b>A problem written as JSON is RFC 9457's own format.</b> {@code problem-1.tn}'s {@code problem} is
+     * <p><b>A problem written as JSON is RFC 9457's own format.</b> {@code problem.tn}'s {@code problem} is
      * RFC 9457's five members plus {@code errors}, an extension member, so its JSON encoding <em>is</em> an
      * {@code application/problem+json} body, and is labelled so wherever the client accepts that type; where it
      * accepts only the negotiated JSON type, it is labelled with that.
@@ -533,7 +533,7 @@ public final class TsonHttpCodec {
      * An error body. Kept separate from {@link #write} because it must not fail the way an ordinary write can:
      * a failure here happens while already handling a failure, and losing the original problem to a second one
      * leaves a client with nothing to act on. A problem that cannot be rendered as TSON is a fault in this
-     * library or in {@code problem-1.tn}, so it surfaces as one rather than as an empty 500.
+     * library or in {@code problem.tn}, so it surfaces as one rather than as an empty 500.
      */
     public byte[] writeProblem(TsonProblem problem) {
         try {

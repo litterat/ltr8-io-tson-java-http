@@ -8,6 +8,7 @@ import io.ltr8.tson.http.TsonBindings;
 import io.ltr8.tson.http.TsonDeployment;
 import io.ltr8.tson.http.TsonProblemDiagnostic;
 import io.ltr8.tson.http.TsonProblemSchema;
+import io.ltr8.tson.http.jdk.demo.ValidatorServer.Outcome;
 import io.ltr8.tson.http.jdk.demo.ValidatorServer.ValidationResult;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +23,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -43,9 +45,10 @@ class ValidatorServerTest {
     /** The schema a caller submits. Deliberately not this server's own — it arrives in the body like any. */
     private static final String PEOPLE = """
             !!id:"https://example.com/people.tn"
-            !!meta:"https://tson.io/2026/36/m/meta.tn"
-            !!import:"https://tson.io/2026/36/m/core.tn"
+            !!meta:"https://tson.io/2026/37/m/meta.tn"
+            !!import:"https://tson.io/2026/37/m/core.tn"
             {
+              non_empty_text => !text ^ { min_length: 1 }
               employee => { id: uuid  name: non_empty_text  age: uint8 }
             }""";
 
@@ -110,7 +113,7 @@ class ValidatorServerTest {
     void aConformingDocumentIsReportedAsConforming() throws Exception {
         ValidationResult result = resultOf(validate(PEOPLE, CONFORMING));
 
-        assertTrue(result.conforming(), () -> "expected no diagnostics, got " + result.diagnostics());
+        assertEquals(Outcome.ACCEPTED, result.outcome(), () -> "expected no diagnostics, got " + result.diagnostics());
         assertEquals(ValidatorServer.Phase.DATA, result.phase());
         assertEquals(List.of(), result.diagnostics());
     }
@@ -127,7 +130,7 @@ class ValidatorServerTest {
                 !!schema:"https://example.com/people.tn"
                 !employee { id: "not-a-uuid"  name: ""  age: 300  nickname: "Countess" }"""));
 
-        assertFalse(result.conforming());
+        assertEquals(Outcome.REJECTED, result.outcome());
         assertEquals(ValidatorServer.Phase.DATA, result.phase());
         // Every fault in one pass, which is the claim the page makes: three bad values and one field nobody
         // declared, not the first of them.
@@ -152,8 +155,8 @@ class ValidatorServerTest {
     void aBrokenSchemaIsReportedAndTheDataIsNotChecked() throws Exception {
         ValidationResult result = resultOf(validate("""
                 !!id:"https://example.com/people.tn"
-                !!meta:"https://tson.io/2026/36/m/meta.tn"
-                !!import:"https://tson.io/2026/36/m/core.tn"
+                !!meta:"https://tson.io/2026/37/m/meta.tn"
+                !!import:"https://tson.io/2026/37/m/core.tn"
                 { employee => { name: no_such_type } }""", CONFORMING));
 
         assertEquals(ValidatorServer.Phase.SCHEMA, result.phase());
@@ -186,61 +189,84 @@ class ValidatorServerTest {
     void twoCallersSharingASchemaIdDoNotSeeEachOther() throws Exception {
         String mine = """
                 !!id:"https://example.com/people.tn"
-                !!meta:"https://tson.io/2026/36/m/meta.tn"
-                !!import:"https://tson.io/2026/36/m/core.tn"
+                !!meta:"https://tson.io/2026/37/m/meta.tn"
+                !!import:"https://tson.io/2026/37/m/core.tn"
                 { employee => { handle: text } }""";
         String theirs = """
                 !!id:"https://example.com/people.tn"
-                !!meta:"https://tson.io/2026/36/m/meta.tn"
-                !!import:"https://tson.io/2026/36/m/core.tn"
+                !!meta:"https://tson.io/2026/37/m/meta.tn"
+                !!import:"https://tson.io/2026/37/m/core.tn"
                 { employee => { nickname: text } }""";
         String document = """
                 !!schema:"https://example.com/people.tn"
                 !employee { handle: "ada" }""";
 
-        assertTrue(resultOf(validate(mine, document)).conforming());
+        assertEquals(Outcome.ACCEPTED, resultOf(validate(mine, document)).outcome());
         // The same document against the other caller's shape: `handle` is unknown there, `nickname` missing.
-        assertFalse(resultOf(validate(theirs, document)).conforming());
+        assertEquals(Outcome.REJECTED, resultOf(validate(theirs, document)).outcome());
         // And back again -- neither call left anything behind for the other to trip over.
-        assertTrue(resultOf(validate(mine, document)).conforming(),
+        assertEquals(Outcome.ACCEPTED, resultOf(validate(mine, document)).outcome(),
                 "a previous caller's schema is still registered somewhere");
     }
 
     /**
-     * <b>The page's own copy of the non-verdict set is held to {@link Diagnostic.Code#verdict()}.</b> The
-     * browser shows those codes as a caution rather than an error, because nothing was checked and there is
-     * no verdict to report -- and it has to name them itself, having no way to ask a Java enum.
+     * <b>The page's own copy of the undetermined set is held to {@link Diagnostic.Code}.</b> The browser shows
+     * those codes as a caution rather than an error -- nothing present could judge the document, so nothing
+     * rejected it -- and it has to name them itself, having no way to ask a Java enum. They are the codes
+     * that are neither a {@link Diagnostic.Code#verdict()} nor a {@link Diagnostic.Code#isRefusal()}.
      *
      * <p>Nothing else would catch a stale copy. A code added upstream and forgotten here renders as an error,
-     * which tells someone comparing two implementations that this one reached a verdict it never reached --
-     * the one claim this whole service exists not to make. The same discipline {@code problem-1.tn}'s
-     * {@code diagnostic_code} gets, for the same reason and with the same failure if it lapses.
+     * which tells someone comparing two implementations that this one rejected what it never judged. The
+     * headline itself is the server's {@code outcome}, so only the per-code colour rides on this copy.
      *
      * <p>Read out of the page rather than duplicated here: a third copy would only prove two of them agree.
      */
     @Test
-    void thePagesNonVerdictSetMatchesTheEnum() throws Exception {
+    void thePagesUndeterminedSetMatchesTheEnum() throws Exception {
         String page = new String(Objects.requireNonNull(
                 ValidatorServer.class.getResourceAsStream("/validator.html"),
                 "validator.html is not on the demo classpath").readAllBytes(), StandardCharsets.UTF_8);
 
-        Matcher declaration = Pattern.compile("const GAPS = new Set\\(\\[(.*?)]\\);", Pattern.DOTALL)
+        Matcher declaration = Pattern.compile("const UNDETERMINED = new Set\\(\\[(.*?)]\\);", Pattern.DOTALL)
                 .matcher(page);
-        assertTrue(declaration.find(), "validator.html no longer declares a GAPS set");
+        assertTrue(declaration.find(), "validator.html no longer declares an UNDETERMINED set");
         Set<String> shown = Pattern.compile("'([A-Z_]+)'").matcher(declaration.group(1)).results()
                 .map(m -> m.group(1)).collect(Collectors.toSet());
 
-        Set<String> nonVerdicts = Arrays.stream(Diagnostic.Code.values()).filter(c -> !c.verdict())
-                .map(Enum::name).collect(Collectors.toSet());
-        assertEquals(nonVerdicts, shown,
-                "validator.html's GAPS must be exactly the codes Diagnostic.Code.verdict() reports as "
-                        + "non-verdicts, or the page calls an unchecked document rejected");
+        Set<String> undetermined = Arrays.stream(Diagnostic.Code.values())
+                .filter(c -> !c.verdict() && !c.isRefusal()).map(Enum::name).collect(Collectors.toSet());
+        assertEquals(undetermined, shown,
+                "validator.html's UNDETERMINED must be exactly the codes that neither are a verdict nor a refusal, "
+                        + "or the page colours a rejection as a caution or the reverse");
+    }
+
+    /**
+     * <b>The outcome is the {@code tson} CLI's rule</b>: one verdict or refusal rejects, whatever else went
+     * unjudged beside it; only what nobody present could judge leaves a document undetermined.
+     */
+    @Test
+    void anOutcomeIsRejectedByOneRejectionAndUndeterminedOnlyWithoutOne() {
+        Diagnostic notFound = coded(Diagnostic.Code.SCHEMA_NOT_FOUND);
+        assertEquals(Outcome.ACCEPTED, Outcome.of(List.of()));
+        assertEquals(Outcome.UNDETERMINED, Outcome.of(List.of(notFound)));
+        assertEquals(Outcome.REJECTED, Outcome.of(List.of(notFound,
+                coded(Diagnostic.Code.TYPE_MISMATCH))));
+        assertEquals(Outcome.REJECTED, Outcome.of(List.of(coded(Diagnostic.Code.LIMIT_EXCEEDED))));
+    }
+
+    private static Diagnostic coded(Diagnostic.Code code) {
+        return new Diagnostic(Optional.empty(), Optional.empty(), "", code, "m", "", "", Optional.empty(),
+                Optional.empty());
     }
 
     /**
      * <b>The service fetches nothing.</b> A schema identity in a submitted document is an untrusted URL, so a
-     * document naming a schema the caller did not paste is reported as unavailable rather than resolved off
-     * the network. An endpoint that fetched it would be a request forger for anyone who could reach it.
+     * document naming a schema the caller did not paste is refused rather than resolved off the network. An
+     * endpoint that fetched it would be a request forger for anyone who could reach it.
+     *
+     * <p>{@code SCHEMA_NOT_PERMITTED}, a refusal, and so {@code REJECTED}: this service will not supply that
+     * schema, and the caller's fix is to paste it -- where a schema the world could not supply would leave the
+     * document undetermined.
      */
     @Test
     void aSchemaThatWasNotSubmittedIsNeverFetched() throws Exception {
@@ -248,10 +274,11 @@ class ValidatorServerTest {
                 !!schema:"https://example.com/somewhere-else.tn"
                 !employee { id: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6" }"""));
 
-        assertEquals(List.of(Diagnostic.Code.SCHEMA_NOT_FOUND),
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_NOT_PERMITTED),
                 result.diagnostics().stream().map(TsonProblemDiagnostic::code).toList(),
                 "ofMap holds only the submitted schema, so any other identity is a miss it refuses by "
                         + "contract -- nothing here goes to the network to find out");
+        assertEquals(Outcome.REJECTED, result.outcome());
     }
 
     /**
@@ -269,7 +296,7 @@ class ValidatorServerTest {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         assertEquals(400, response.statusCode(), response.body());
-        assertTrue(response.body().contains("problem-1.tn"), response.body());
+        assertTrue(response.body().contains("problem.tn"), response.body());
     }
 
     /** The page is served at the path its own description declares, and is not answered as TSON. */
@@ -292,7 +319,7 @@ class ValidatorServerTest {
     @Test
     void theEnvelopeIsPublishedAtItsOwnIdentityPath() throws Exception {
         HttpResponse<String> response = client.send(HttpRequest.newBuilder(
-                        URI.create(base + "/2026/36/app/validate-1.tn")).GET().build(),
+                        URI.create(base + "/2026/37/app/validate-1.tn")).GET().build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         assertEquals(200, response.statusCode());
@@ -310,14 +337,15 @@ class ValidatorServerTest {
         // Latin "dmin" behind a Cyrillic first letter: the homograph the rule exists for.
         ValidationResult mixed = resultOf(validate(null, "{ display: \"\u0430dmin\" }"));
 
-        assertFalse(mixed.conforming());
+        assertEquals(Outcome.REJECTED, mixed.outcome());
         assertEquals(List.of(Diagnostic.Code.RESTRICTED_SCRIPT),
                 mixed.diagnostics().stream().map(TsonProblemDiagnostic::code).toList());
         // The refusal carries its code and nothing about the policy: the level and the Unicode data version
         // are the processor's, stated once at /.well-known/tson-deployment rather than on each refusal.
 
         // Wholly Cyrillic is one script, so it is admitted -- the rule is about mixing, not about Cyrillic.
-        assertTrue(resultOf(validate(null, "{ display: \"\u0430\u0434\u043c\u0438\u043d\" }")).conforming());
+        assertEquals(Outcome.ACCEPTED,
+                resultOf(validate(null, "{ display: \"\u0430\u0434\u043c\u0438\u043d\" }")).outcome());
     }
 
     /**
@@ -359,11 +387,11 @@ class ValidatorServerTest {
         assertFalse(response.body().contains("listener"), response.body());
     }
 
-    /** The descriptor governs the demo but is not itself served -- deployment-1.tn's rule 2. */
+    /** The descriptor governs the demo but is not itself served -- deployment.tn's rule 2. */
     @Test
     void theDescriptorIsNeverServed() throws Exception {
         HttpResponse<String> schema = client.send(HttpRequest.newBuilder(
-                        URI.create(base + "/2026/36/ltr8/http/deployment-1.tn")).GET().build(),
+                        URI.create(base + "/2026/37/io/ltr8/http/deployment.tn")).GET().build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         assertEquals(200, schema.statusCode(), "the schema is published, so a profile can be validated");
 

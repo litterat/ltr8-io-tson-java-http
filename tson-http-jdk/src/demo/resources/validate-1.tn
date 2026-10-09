@@ -1,7 +1,7 @@
-!!id:"https://schemas.example.com/2026/36/app/validate-1.tn"
-!!meta:"https://tson.io/2026/36/m/meta.tn"
-!!import:"https://tson.io/2026/36/m/core.tn"
-!!import:"https://tson.io/2026/36/ltr8/http/problem-1.tn"
+!!id:"https://schemas.example.com/2026/37/app/validate-1.tn"
+!!meta:"https://tson.io/2026/37/m/meta.tn"
+!!import:"https://tson.io/2026/37/m/core.tn"
+!!import:"https://tson.io/2026/37/io/ltr8/http/problem.tn"
 @doc:"""
   The validator demo's own envelope: a schema and a document go in, the diagnostics come back.
 
@@ -15,7 +15,7 @@
   service's whole job is to say whether they are well-formed, so a schema that rejected a malformed
   one at the envelope would answer the question by refusing to be asked it.
 
-  It imports problem-1.tn for `diagnostic` rather than declaring its own. A diagnostic is a
+  It imports problem.tn for `diagnostic` rather than declaring its own. A diagnostic is a
   diagnostic whether it rides in an error body or in a result, and two shapes for one thing is how
   a client ends up with two renderers.
   """
@@ -42,12 +42,25 @@
   }
 
   @doc:"""
-    The verdict. `conforming` is `diagnostics` being empty, restated so a client can branch without
-    reasoning about a list, and `elapsed_ms` times the validation alone -- not the request, and not
-    the per-request bootstrap the service pays to keep one caller's schema out of another's.
+    Whether the document will be accepted by the processor that judged it -- the `tson` CLI's own
+    outcome, so this service and `tson validate` can be put side by side. ACCEPTED: nothing was
+    reported. REJECTED: the document is invalid, or this deployment refused it under its [TSON-DATA]
+    §8.2 policy or §9.1 limits; one rejection settles it whatever else went unjudged. UNDETERMINED:
+    nothing rejected it, but something could not be judged -- a schema not supplied, a construct this
+    library has not implemented -- so acceptance cannot be stated. Which kind each problem is rides on
+    its diagnostic's code.
+
+    An enum and not a boolean, because `if (!conforming)` reads "undetermined" as "rejected".
+    """
+  outcome => !enum [ACCEPTED REJECTED UNDETERMINED]
+
+  @doc:"""
+    The answer. `outcome` restates `diagnostics` so a client can branch without reasoning about a
+    list, and `elapsed_ms` times the validation alone -- not the request, and not the per-request
+    bootstrap the service pays to keep one caller's schema out of another's.
     """
   validation_result => {
-    conforming:  boolean
+    outcome:     outcome
     phase:       validation_phase
     elapsed_ms:  float64
     diagnostics: [diagnostic]

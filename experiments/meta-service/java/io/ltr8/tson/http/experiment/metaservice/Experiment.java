@@ -14,7 +14,7 @@ import java.util.Set;
 final class Experiment {
 
     /** The meta layer under test, read from {@code experiments/meta-service/} rather than copied into a string. */
-    static final String META_ID = "https://tson.io/2026/36/ltr8/http/meta-service-1.tn";
+    static final String META_ID = "https://tson.io/2026/37/io/ltr8/http/meta-service.tn";
 
     private Experiment() {
     }
@@ -23,7 +23,7 @@ final class Experiment {
     static String metaServiceSource() {
         Path dir = Path.of(System.getProperty("experiments.dir", "../experiments"));
         try {
-            return Files.readString(dir.resolve("meta-service/meta-service-1.tn"));
+            return Files.readString(dir.resolve("meta-service/meta-service.tn"));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
