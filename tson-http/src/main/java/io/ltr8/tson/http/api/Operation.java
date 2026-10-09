@@ -59,7 +59,7 @@ public record Operation(HttpMethod method, String path, Optional<String> summary
     /**
      * The variables {@code path}'s URI template names, in order -- {@code schemaPath} for both {@code
      * /{schemaPath}} and {@code /{+schemaPath}}, the operator being how a value expands rather than which
-     * value. {@code http.tn}'s {@code uri_template} admits one variable to an expression, so each is one name.
+     * value. {@code meta-http.tn}'s {@code uri_template} admits one variable to an expression, so each is one name.
      */
     public List<String> pathVariables() {
         return PATH_VARIABLE.matcher(path).results().map(match -> match.group(1)).toList();

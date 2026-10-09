@@ -86,7 +86,7 @@ public final class TsonApiDescription {
 
     /**
      * <b>An operation's path template names exactly its PATH parameters</b> -- the one check a description
-     * needs that neither the resolver nor {@code http.tn}'s {@code uri_template} pattern can make, since it
+     * needs that neither the resolver nor {@code meta-http.tn}'s {@code uri_template} pattern can make, since it
      * relates two fields. A variable no parameter declares is a segment a server has no type for, and a PATH
      * parameter the template never names is one no request can carry. Either is the description's author's
      * mistake, so the model is refused rather than built: as with a payload type nothing declares, a server

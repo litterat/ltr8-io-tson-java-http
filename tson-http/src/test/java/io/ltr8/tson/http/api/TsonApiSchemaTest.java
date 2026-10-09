@@ -105,8 +105,8 @@ class TsonApiSchemaTest {
     }
 
     /**
-     * <b>A path is a URI template, checked by its shape at schema load</b> -- {@code http.tn}'s {@code
-     * uri_template}, levels 1 and 2. {@code {+schemaPath}} (reserved expansion, what a path with slashes in it
+     * <b>A path is a URI template, checked by its shape at schema load</b> -- {@code meta-http.tn}'s
+     * {@code uri_template}, levels 1 and 2. {@code {+schemaPath}} (reserved expansion, what a path with slashes in it
      * needs) and {@code {#frag}} are admitted; a level-3 form, an unclosed brace and a space are not.
      */
     @Test

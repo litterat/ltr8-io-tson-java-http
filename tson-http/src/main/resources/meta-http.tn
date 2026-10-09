@@ -1,7 +1,6 @@
 !!id:"https://tson.io/2026/38/io/ltr8/http/meta-http.tn"
 !!meta:"https://tson.io/2026/38/m/meta-kernel.tn"
 !!import:"https://tson.io/2026/38/m/meta.tn"
-!!import:"https://tson.io/2026/38/io/ltr8/http/http.tn"
 @doc:"""
   A meta layer adding HTTP operations to the type system: a schema governed by this one describes an
   HTTP API, and its request and response payloads are type references the compiler resolves.
@@ -32,10 +31,39 @@
 
   Governed directly by the meta-kernel, which is not a style choice: declaring a constructor is
   permitted only in a schema whose own !!meta is the kernel. So this is a SIBLING of meta.tn, and
-  imports it for the vocabulary its own declarations use -- and http.tn, kernel-governed as this layer is,
-  for HTTP's: http_method, status_code and uri_template.
+  imports it for the vocabulary its own declarations use.
+
+  HTTP's own vocabulary -- http_method, status_code, uri_template -- is declared here, at this layer's level,
+  and nowhere else. An API is defined at the schema level because a request and its data are the projection
+  of an API as data is the projection of a schema, so the definition belongs above them, and a meta layer
+  owns the vocabulary its constructors use. The cost is stated rather than hidden: an ordinary schema does
+  not import these types (an import should not cross governing levels), and one wanting the same terms --
+  an error schema's status, say -- declares its own.
   """
 {
+  @doc:"A request method (RFC 9110 §9), the ones an API description has a use for."
+  http_method => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
+
+  @doc:"A response status code (RFC 9110 §15): three digits, 100 to 599. Refined, so 42 is not a status."
+  status_code => !integer_type { min: 100  max: 599 }
+
+  @doc:"""
+    A URI template (RFC 6570) at levels 1 and 2: literal text with `{var}` expressions, where `{+var}`
+    (reserved expansion) leaves a value's `/`, `?` and `#` unencoded and `{#var}` adds a fragment. Level 2 is
+    the line because `{+var}` is what an identity path needs -- `/{+schemaPath}` serves a path with slashes in
+    it, where `/{schemaPath}` would percent-encode them -- and levels 3 and 4 (several variables to an
+    expression, `{?q,page}` query forms, prefixes and explode) describe expansion rather than a route a
+    server can match.
+
+    A variable name is ASCII letters, digits and `_`, dot-separated; RFC 6570's percent-encoded name
+    characters are not admitted. A pattern checks the shape. What it cannot check is the template against
+    what declares its variables -- an operation's PATH parameters -- which TsonApiDescription checks when it
+    reads a description.
+    """
+  uri_template => !text_type {
+    pattern: "([^\\p{Cc} \"'%<>\\\\^`{|}]|%[0-9A-Fa-f]{2}|\\{[+#]?[A-Za-z0-9_]+([.][A-Za-z0-9_]+)*\\})*"
+  }
+
   parameter_location => !enum [PATH QUERY HEADER]
 
   @doc:"""
@@ -83,7 +111,7 @@
     read from the TypeDefinition. Both are retained. Looking only at the second and concluding @doc was
     dropped is the mistake.
 
-    `path` is a URI template (http.tn's, RFC 6570 levels 1 and 2), and its variables are exactly the
+    `path` is a URI template (RFC 6570 levels 1 and 2, above), and its variables are exactly the
     operation's PATH parameters -- checked when the description is read, since no pattern relates two fields.
     A value with slashes in it is `{+name}`, reserved expansion; `{name}` would percent-encode them.
 

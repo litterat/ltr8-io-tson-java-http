@@ -255,6 +255,15 @@ operations. That is what makes `request: order` a *reference the compiler resolv
 the property no data-shaped design can have, because a data document can name a schema but cannot hold a
 reference to a type.
 
+**And it is at the schema level by design, not only by necessity.** Data is the projection of a schema; a
+request and its data are the projection of an API — so an API's definition belongs at the schema level, above
+the documents that project it. A `type_reference` value type in data (a field whose value names a type, checked
+against the document's scope) was weighed as a way to write a description as data and avoid the meta layer's
+restrictions, and set aside for that reason: the restrictions come with the level and are accepted. **The meta
+layer owns the vocabulary its constructors use** — `http_method`, `status_code` and `uri_template` are declared
+in `meta-http.tn` itself, not imported, since an import should not cross governing levels (`UPSTREAM.md` #4) —
+and an ordinary schema wanting the same terms declares its own: `problem.tn`'s `status` is an `int32`.
+
 **The spec makes both halves of that shape normative, and names this as the case they exist for.**
 [TSON-SCHEMA] §4.1 declares `data` as the fourth base kind — "an HTTP operation binding request and response
 types by name is the motivating case" — with `operation => data & { … }` as its own worked example, and makes
@@ -265,9 +274,8 @@ identity — and it names `request`/`response` as the example. (Revision 35 drop
 `@alias` with it: a reference is a hop the resolved output keeps, and a processor collapses the chain when it
 compiles readers. Nothing here depended on the rewrite, only on the slot being a reference at all.)
 
-**The wiring is three things**: this schema and the `http.tn` it imports reachable from the `schemaSource` —
-`TsonApiSchema.publishedById()` is both, keyed by identity, and wiring `meta-http.tn` alone leaves an unresolved
-import — the bound classes in
+**The wiring is three things**: this schema reachable from the `schemaSource` (`TsonApiSchema.publishedById()`),
+the bound classes in
 `io.ltr8.tson.http.api`, and `TsonApiSchema.metaNameBinder()` on the config — **not** `bindings`, which binds
 the data a schema describes. A meta layer's vocabulary is a separate namespace on purpose.
 
@@ -358,7 +366,7 @@ concluding `@doc` is dropped is a mistake that looks exactly like a library bug.
 **Parameters are where TSON's document-orientation does not reach.** A URL segment cannot carry a record, so
 `parameter.type` names a scalar and nothing enforces that. Stating the limit beats papering over it.
 
-**A path is a URI template, and its variables are its PATH parameters.** `operation.path` is `http.tn`'s
+**A path is a URI template, and its variables are its PATH parameters.** `operation.path` is `meta-http.tn`'s
 `uri_template` — RFC 6570 levels 1 and 2, checked at schema load — so `{+schemaPath}`, the reserved expansion an
 identity path with slashes in it needs, is what the demos declare, where `{schemaPath}` would percent-encode the
 slashes. What no pattern can check is the template against the parameters, since it relates two fields, so
@@ -1229,13 +1237,6 @@ request exercises that.
 - `tson-http-jdk/src/demo/resources/` — the validator demo's own schemas (`validate-1.tn`,
   `validate-api-1.tn`) and its page (`validator.html`). **Not** in `demo/schemas/`, which is the three order
   demos' shared resource path; these belong to one demo on one adapter.
-- `tson-http/src/main/resources/http.tn` (`TsonHttpSchema`) — HTTP's own vocabulary as a library a schema imports:
-  `http_method`, `status_code`, `header_name`, `uri_template`. This project's, not the spec's — HTTP terms rather
-  than formats every schema needs. **Governed by the meta-kernel**, at `meta-http.tn`'s level, because a meta layer
-  and an ordinary schema stand at different levels and an import should not cross them — the library does not
-  refuse one today (`UPSTREAM.md` #4, pinned by `UpstreamGapsTest.anImportAcrossGoverningLevelsIsNotRefused`). So an
-  ordinary schema does not import it, and `problem.status` stays `int32` until #4 says how the two levels share a
-  vocabulary.
 - `tson-http/src/main/resources/meta-http.tn` — the meta layer an API description names. Picked out of four
   designs explored side by side (three as schemas, one as data); the comparison is in git history, and why this
   one won is in "Describing an API" above.

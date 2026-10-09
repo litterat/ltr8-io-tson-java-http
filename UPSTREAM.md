@@ -89,7 +89,7 @@ today. Pinned by `UpstreamGapsTest.anIdentityWithANonAsciiHostCannotBeAllowListe
 
 ---
 
-## 4. An import across governing levels is not refused — and a meta layer has no other way to a shared vocabulary
+## 4. An import across governing levels is not refused
 
 **Hit:** this project's `meta-http.tn` is a meta layer — governed by the meta-kernel, because declaring a constructor
 (`operation => data & {…}`) is permitted only there. Its constructors want HTTP's vocabulary: `operation.method` an
@@ -105,27 +105,15 @@ schema must stand at the importer's level. The rule wanted is that it must — i
 the bundled chain as the existing case it fits (`meta.tn` is kernel-governed and imports the kernel). Pinned, both
 directions, by `UpstreamGapsTest.anImportAcrossGoverningLevelsIsNotRefused`.
 
-**The dilemma the fix exposes**, which is the spec half. An API description is the motivating case for a meta layer
-(§4.1's `data` kind cites it), and an API's constructors want type names that ordinarily live in schemas — HTTP's
-methods, status codes, URI templates; and, beyond this project, `net.tn`'s `host` for a server list, which a meta
-layer cannot import from `meta.tn`'s level either. With the level rule, a meta layer gets them only by declaring
-them at its own level, and the schemas it governs — or an application's error schema wanting the same
-`status_code` — cannot import that declaration back. So one vocabulary is declared twice, once per level, with
-nothing relating the two copies. Options to weigh:
-
-- **A level-neutral library**: a schema governed by the kernel that declares only types built from kernel
-  constructors, importable from either level — which is what `http.tn` now happens to be. The spec would say what
-  makes a library level-neutral and that importing one is not a crossing.
-- **The governed schema sees its meta's vocabulary**: a meta layer's imported types reachable from the schemas it
-  governs, so `status_code` declared once at the meta level is nameable below it. §3.3.1 already places the
-  kernel's structural vocabulary in a meta-governed schema's namespace by this route; it would generalise it.
-- **Bundled libraries at both levels**: `net.tn` and its kind published for meta layers as well, which solves the
-  bundled case and leaves a project's own vocabulary (this one's `http.tn`) with the problem.
-
-**What this project does meanwhile:** `http.tn` is governed by the meta-kernel and imports nothing, so `meta-http.tn`
-imports it at its own level. Its types are all built from kernel constructors (`enum`, `integer_type`, `text_type`),
-which is why that works. An application schema importing it — `problem.tn`'s `status`, for one — would cross the other
-way, so `problem.status` stays an `int32` until this is settled.
+**What the rule costs, and this project's answer.** A meta layer's constructors often want type names that
+ordinarily live in schemas — HTTP's vocabulary here, `net.tn`'s `host` for a server list elsewhere — and under the
+rule a meta layer cannot import them; it declares them at its own level, and the schemas it governs cannot import
+them back. This project takes that as right rather than as a gap: an API is defined at the schema level because a
+request and its data are the projection of an API as data is the projection of a schema, so a meta layer owns the
+vocabulary its constructors use. `meta-http.tn` declares `http_method`, `status_code` and `uri_template` itself, and
+an ordinary schema wanting the same terms declares its own (`problem.tn`'s `status` is an `int32`). A value type for
+naming a type in data, which would have let a description be data instead, was weighed and set aside on that
+ground. The spec should say the rule and, beside it, that a meta layer's vocabulary is its own.
 
 ---
 
@@ -634,7 +622,7 @@ evidence method answers it — grep the `ltr8-io-tson-benchmarks` conversions fo
 
 **Deliberately not proposed:** `status_code`, `http_method`, `header_name` and `uri_template` as types in core or
 `net.tn`. They are HTTP vocabulary rather than formats, and exactly the names #15 shows converted schemas declare for
-themselves, so they belong in a library a schema opts into, which this project now has: `http.tn` (below). A URI
+themselves, so they belong with what uses them: here, `meta-http.tn` (below). A URI
 template in particular builds a URI rather than naming a host, so it is not `net.tn`'s, and its uses outside
 describing an API — HAL links, OpenAPI and AsyncAPI paths, JSON Hyper-Schema — are all that same use. **Raise it
 again** if a consumer outside API description needs RFC 6570, or a description needs levels 3–4; the shape then is a
@@ -646,12 +634,11 @@ constructor in `meta` beside `uri_type`, which reserves no name, with no instanc
   RFC (§3.1.1, §3.1.5) and `TsonProblem.at` is typically handed a request path. Pinned by
   `TsonProblemSchemaTest.aRelativeTypeAndInstanceAreValid`.
 - `diagnostic.path`, `schema_pointer` and `schema_id` stay `text` until 1 and 2 exist.
-- The HTTP vocabulary is `http.tn` here — `http_method`, `status_code`, `header_name` and `uri_template` (RFC 6570
-  levels 1–2, so `{+var}` is expressible) — governed by the meta-kernel so the meta layer `meta-http.tn` imports it at
-  its own level (`UPSTREAM.md` #4). Its `operation.path` is a `uri_template`, and `TsonApiDescription` checks each
-  template's variables against the operation's PATH parameters, which no pattern can. `problem.status` and the
-  meta-service experiment's own `status_code`, `path_template` and `header_name` stay where they are until #4 says
-  how a schema shares that vocabulary.
+- The HTTP vocabulary lives in `meta-http.tn`, the meta layer that uses it — `http_method`, `status_code` and
+  `uri_template` (RFC 6570 levels 1–2, so `{+var}` is expressible) — since a meta layer owns the vocabulary its
+  constructors use (#4). `TsonApiDescription` checks each operation's template variables against its PATH
+  parameters, which no pattern can. `problem.status` stays `int32`, and the meta-service experiment keeps its own
+  `status_code`, `path_template` and `header_name`.
 
 **Priority:** 1 and 2 medium-high, since the library emits values its own schemas cannot describe; 3 medium to low,
 serving one use here.

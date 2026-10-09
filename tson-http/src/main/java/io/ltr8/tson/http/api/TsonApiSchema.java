@@ -3,7 +3,6 @@ package io.ltr8.tson.http.api;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.ProcessorConfig;
-import io.ltr8.tson.http.TsonHttpSchema;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -77,15 +76,12 @@ public final class TsonApiSchema {
     }
 
     /**
-     * This meta layer and the library it imports, keyed by identity -- what a schema source needs to resolve a
-     * description governed by it, and what a server publishing one serves beside it. {@code http.tn} is in it
-     * because {@code meta-http.tn} imports it for {@code http_method}, {@code status_code} and {@code
-     * uri_template}; a caller wiring only {@link #source()} gets an unresolved import.
+     * The published history keyed by identity -- what a schema source needs to resolve a description governed by
+     * this meta layer, and what a server publishing one serves beside it. One entry today; wiring this rather
+     * than {@link #source()} keeps a call site right when the history grows.
      */
     public static Map<String, String> publishedById() {
-        Map<String, String> sources = new java.util.LinkedHashMap<>(TsonHttpSchema.publishedById());
-        sources.put(ID, SOURCE);
-        return Map.copyOf(sources);
+        return Map.of(ID, SOURCE);
     }
 
     /**
