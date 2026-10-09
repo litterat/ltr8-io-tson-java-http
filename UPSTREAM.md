@@ -44,6 +44,48 @@ which is §3.4's "expected production route". Pinned by `UpstreamGapsTest.aJsonD
 
 ---
 
+## 2. An unresolved name a bundled library declares does not say which library
+
+**Hit:** a schema naming `ipv4` without importing `net.tn` gets *"'server' field 'addr' has an unresolved reference
+'ipv4'"*. It reads like a typo, and the fix is an import. Revision 38 moved `ipv4`, `ipv6`, `cidr4`, `cidr6` and
+`mac` out of core into `net.tn`, and Revision 37 trimmed core before it, so every such move turns a working schema
+into this message. This project recorded the core trim as a trap in `CLAUDE.md` for exactly that reason.
+
+**The change:** the bundled libraries are fixed and known (`TsonBundledSchemas`), so where an unresolved reference
+is a name one of them declares, the diagnostic can say so — *"… 'ipv4', which `https://tson.io/2026/38/m/net.tn`
+declares; import it"* — as `expected`, or in the message. No resolution changes; a schema still has to import what
+it uses. It turns a move between libraries from a debugging session into a one-line fix.
+
+**Workaround in place:** none needed here — nothing in this project used the moved types. Pinned by
+`UpstreamGapsTest.anUnresolvedNameABundledLibraryDeclaresDoesNotNameTheLibrary`, which fails the day the message
+names the library.
+
+---
+
+## 3. `HttpSchemaSource` cannot allow-list an identity whose host is not ASCII
+
+**Hit:** Revision 37 made a schema identity an IRI-reference, so `https://bücher.example/a.tn` is an identity, held
+and compared as written. But no configuration of `HttpSchemaSource` fetches it:
+
+- `allowHost("bücher.example")` is refused, *"is not an absolute URI with a host"*;
+- `allowHost("xn--bcher-kva.example")`, its A-label spelling, is accepted and does not match: the fetch is refused
+  `NOT_PERMITTED`, *"host 'bücher.example' is not one of [xn--bcher-kva.example]"*;
+- and the two spellings are two canonical identities (`CanonicalIdentity`), so a document naming one does not
+  resolve against the other.
+
+So the identity space admits names the fetching source cannot reach. For this project that is the server-side
+loader: a request body naming such a schema is refused as off the allow-list, which tells the sender to fix a
+reference the spec calls valid.
+
+**The change:** decide how a U-label host and its A-label relate (the spec entry below), then make `allowHost` and
+the policy check follow it — at minimum, accept a Unicode host in `allowHost` and compare it as `CanonicalIdentity`
+does, so an operator can allow-list what a document can name.
+
+**Workaround in place:** none; no schema this project publishes or serves has a non-ASCII host. Pinned by
+`UpstreamGapsTest.anIdentityWithANonAsciiHostCannotBeAllowListed`.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. That register renumbers from #1
@@ -452,6 +494,36 @@ header names onto request fields directly rather than by a consumer-side check.
 key position by role, now that #6's field half is withdrawn, and
 its point 1 should be settled before any schema-side text key is admitted, since that is the one part that touches
 Part 1.
+
+### To file: a non-ASCII host — one identity or two, and a host name that can say it
+
+**Sections:** [TSON-DATA] §2.2.1 (canonical identity: lowercase host plus path; identities as IRI-references since
+Revision 37); [TSON-SCHEMA] §10.1, §11.2 (fetching and its allow-lists); Revision 38's `net.tn` (`hostname`).
+
+**Kind:** underspecification, from the consumer whose fetch path meets it (`UPSTREAM.md` #3 is the library half).
+
+**The gap.** An IRI host may be written in U-labels (`bücher.example`) or A-labels (`xn--bcher-kva.example`), and
+the two name one DNS host. §2.2.1 lowercases a host and compares the rest as written, so today they are two
+identities, and nothing says whether that is intended. Either answer is defensible, and each has a consequence the
+spec should state:
+
+- **Two identities, by rule.** Simple, and canonical identity stays a string operation. Then a publisher must
+  pick one spelling and a document must use it, and §2.2.1 should say that the host is compared as written, with
+  no IDNA mapping — so an implementation does not quietly add one.
+- **One identity, through IDNA (UTS #46 to A-labels).** Matches DNS, and lets a document use either spelling.
+  Then canonical identity depends on IDNA tables, which move with Unicode releases, the way §8.3 marks the name
+  hygiene rules unstable — a reason to prefer the first answer for something content-addressed.
+
+**And `net.tn` needs a host name that can be said either way.** `hostname` is A-labels only, which is right for a
+DNS-facing value, but a deployment's fetch allow-list names the host a schema identity names, and that may be a
+U-label. Whichever answer §2.2.1 takes, an allow-list entry has to be able to spell it: under the first, an
+`idn_hostname`-style sibling (U-labels, NFC, case-folded); under the second, `hostname` plus the mapping.
+
+**What this project does meanwhile:** `deployment.tn`'s `schema_hosts` is `[hostname]`, so it allow-lists ASCII hosts
+only, which is everything it serves today. Pinned by `UpstreamGapsTest.anIdentityWithANonAsciiHostCannotBeAllowListed`.
+
+**Priority:** medium — low frequency, but it is a place the identity space and the fetch path disagree, and the
+earlier it is settled the fewer published identities depend on the answer.
 
 ### To file: formats this project needs and the vocabulary cannot state — five types, by strength of evidence
 

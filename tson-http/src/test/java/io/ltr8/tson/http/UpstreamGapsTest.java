@@ -3,11 +3,13 @@ package io.ltr8.tson.http;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.BindMismatchException;
+import io.ltr8.tson.base.CanonicalIdentity;
 import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.DiagnosticsReceiver;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.SchemaFetchException;
 import io.ltr8.tson.base.policy.LimitsPolicy;
+import io.ltr8.tson.base.source.HttpSchemaSource;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.api.TsonApiSchema;
@@ -705,6 +707,64 @@ class UpstreamGapsTest {
                 "{\"$schema\": \"" + schemaId + "\", \"$type\": \"note\", \"title\": \"t\"}", schemaId, "note");
         assertFalse(inBand.isEmpty(), "the in-band route has landed -- check the agreement in TsonHttpCodec");
         assertTrue(inBand.getFirst().message().contains("$schema"), () -> "" + inBand);
+    }
+
+    // ── open: an unresolved name a bundled library declares does not name the library ────────────
+
+    /**
+     * <b>A schema naming {@code ipv4} without importing {@code net.tn} is told only that the reference is
+     * unresolved</b> -- which reads like a typo, where the fix is an import. Revision 38 moved the network types
+     * out of core, and Revision 37 trimmed core before it; each move turns a working schema into this message.
+     * The bundled libraries are fixed and known, so the resolver could say which one declares the name. Fails
+     * the day the message names the library.
+     */
+    @Test
+    void anUnresolvedNameABundledLibraryDeclaresDoesNotNameTheLibrary() {
+        String schema = """
+                !!id:"https://example.com/2026/38/app/net-hint.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
+                { server => { addr: ipv4 } }""";
+        Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(uri -> schema)));
+
+        List<Diagnostic> problems = tson.validateSchema(schema);
+
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), problems.stream().map(Diagnostic::code).toList());
+        assertTrue(problems.getFirst().message().contains("unresolved reference 'ipv4'"), problems::toString);
+        assertFalse(problems.getFirst().message().contains("net.tn"),
+                "the message names the library now -- delete UPSTREAM.md's entry and flip this");
+        // And the import is the whole fix.
+        assertEquals(List.of(), tson.validateSchema(schema.replace("net-hint.tn", "net-hint-2.tn")
+                .replace("{ server", "!!import:\"https://tson.io/2026/38/m/net.tn\"\n{ server")));
+    }
+
+    // ── open: a schema identity whose host is not ASCII ─────────────────────────────────────────────
+
+    /**
+     * <b>An identity with a non-ASCII host can be named but not fetched.</b> Revision 37 made identities
+     * IRI-references, so {@code https://bücher.example/a.tn} is an identity, held and compared as written. But
+     * {@link HttpSchemaSource} cannot allow-list that host -- {@code allowHost} refuses it as no host at all --
+     * and allowing its A-label spelling does not match it, there being no IDNA mapping between the two. So no
+     * configuration fetches it. {@code net.tn}'s {@code hostname} is A-labels only, so a deployment
+     * descriptor's {@code schema_hosts} could not name it either.
+     *
+     * <p>The two spellings are two canonical identities today, pinned so that a decision either way -- one
+     * identity, or two by rule -- is noticed here.
+     */
+    @Test
+    void anIdentityWithANonAsciiHostCannotBeAllowListed() {
+        assertThrows(IllegalArgumentException.class,
+                () -> HttpSchemaSource.builder().allowHost("bücher.example").build().close());
+
+        try (HttpSchemaSource aLabel = HttpSchemaSource.builder().allowHost("xn--bcher-kva.example").build()) {
+            SchemaFetchException refused = assertThrows(SchemaFetchException.class,
+                    () -> aLabel.fetch("https://bücher.example/a.tn"));
+            assertEquals(SchemaFetchException.Reason.NOT_PERMITTED, refused.reason());
+        }
+
+        assertFalse(CanonicalIdentity.canonicalize("https://bücher.example/a.tn")
+                        .equals(CanonicalIdentity.canonicalize("https://xn--bcher-kva.example/a.tn")),
+                "a U-label host and its A-label are one identity now -- check the allow-list follows");
     }
 
     // ── decided upstream: a stated schema overrides the document's own ──────────────────────────────
