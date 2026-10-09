@@ -3,46 +3,56 @@
   The validator demo's own deployment descriptor.
 
   It is NOT published and NOT resolvable: no schema imports it, no data document names it, and the catalog
-  never serves it. What a caller may see is the projection at /.well-known/tson-deployment, derived from this
-  by TsonDeployment.profile. That is deployment.tn's rule 2, and this file is where it would be broken if
-  it were going to be.
+  never serves it. What a caller may see is the projection at /.well-known/tson-deployment, derived from the
+  policy this configures by TsonDeployment.profile. That is deployment.tn's rule 2, and this file is where it
+  would be broken if it were going to be.
 
-  `tokens` is set to something visibly strict so the demo demonstrates a deployment decision rather than
-  describing one: submit a document with a mixed-script value and this deployment refuses it. Take it out and
-  the same document conforms. That is the whole argument for the artifact, in a form you can run.
+  The policy is stated whole, as policy.tn's `policy`, and runs exactly as written. Two parts are the
+  library's defaults written out -- the identifier policy and the nesting bound -- and that is the point of
+  stating them: a library upgrade that moved a default would not move this deployment.
 
-  `identifiers` is deliberately unstated, which leaves declared names at the library's default of Highly
-  Restrictive over the whole name. An absent policy is not a permissive one.
+  `token_policy` is set to something visibly strict so the demo demonstrates a deployment decision rather
+  than describing one: submit a document with a mixed-script value and this deployment refuses it. Lower it
+  to UNRESTRICTED and the same document conforms. That is the whole argument for the artifact, in a form you
+  can run.
 
   Note where the annotations sit. [TSON-DATA] §2.5 admits no directive, annotation or type annotation before a
-  FIELD NAME -- metadata about a field attaches to the field's VALUE. Writing `@doc:"..." tokens: {...}` is a
-  parse error, and it is the natural thing to reach for after writing a few schemas, where the entry position
-  takes one.
+  FIELD NAME -- metadata about a field attaches to the field's VALUE. Writing `@doc:"..." token_policy: {...}`
+  is a parse error, and it is the natural thing to reach for after writing a few schemas, where the entry
+  position takes one.
   """
 !deployment {
   name: "validator-demo"
 
   listener: { port: 8080 }
 
-  tokens: @doc:"""
-      Stricter than the default, which is unrestricted. A service that renders or matches what it reads faces
-      on values the spoofing surface [TSON-DATA] §9.4 raises for names, and §8.2 says such a deployment
-      applies a level knowingly. SINGLE_SCRIPT refuses a token that mixes scripts: a wholly Cyrillic display
-      name is fine, and a Latin word with one Cyrillic letter in it is not.
-      """
-    { level: SINGLE_SCRIPT }
+  policy: {
+    identifier_policy: @doc:"""
+        The library's default, written out: UTS #39's Highly Restrictive over the whole of each declared
+        name, with the look-alike rule on.
+        """
+      { level: HIGHLY_RESTRICTIVE  per_segment: false  skeleton_distinctness: true  permitting: [] }
 
-  limits: @doc:"""
-      [TSON-DATA] §9.1's resource limits, stated at the library's own default rather than left absent. A
-      validator is exactly the service that should bound what it reads -- both the schema and the document
-      come from the request -- so the posture is worth writing down even where it changes nothing.
+    token_policy: @doc:"""
+        Stricter than the default, which is unrestricted. A service that renders or matches what it reads
+        faces on values the spoofing surface [TSON-DATA] §9.4 raises for names, and §8.2 says such a
+        deployment applies a level knowingly. SINGLE_SCRIPT refuses a token that mixes scripts: a wholly
+        Cyrillic display name is fine, and a Latin word with one Cyrillic letter in it is not.
+        """
+      { level: SINGLE_SCRIPT  permitting: [] }
 
-      64 and not less, deliberately. This demo is a conformance tool: it runs the same scenarios the
-      TypeScript implementation runs in a browser so the two verdicts can be compared, and a bound tighter
-      than §9.1's default would make them disagree about a deep document for a reason that is this
-      deployment's and not the format's.
-      """
-    { max_depth: 64 }
+    limits: @doc:"""
+        [TSON-DATA] §9.1's resource limits at the library's own default. A validator is exactly the service
+        that should bound what it reads -- both the schema and the document come from the request -- so the
+        posture is worth writing down even where it changes nothing.
+
+        64 and not less, deliberately. This demo is a conformance tool: it runs the same scenarios the
+        TypeScript implementation runs in a browser so the two verdicts can be compared, and a bound tighter
+        than §9.1's default would make them disagree about a deep document for a reason that is this
+        deployment's and not the format's.
+        """
+      { max_depth: 64 }
+  }
 
   schema_hosts: @doc:"Empty, and a real posture: this service resolves only the schema sent with a request." []
 }

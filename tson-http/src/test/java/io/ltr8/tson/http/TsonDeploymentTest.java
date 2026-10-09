@@ -1,5 +1,6 @@
 package io.ltr8.tson.http;
 
+import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.policy.IdentifierPolicy;
 import io.ltr8.tson.base.policy.ProcessorPolicy;
@@ -20,12 +21,26 @@ class TsonDeploymentTest {
     private static final String FULL = """
             !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
             !deployment {
-              name:         "production"
-              listener:     { host: "127.0.0.1"  port: 8080 }
-              identifiers:  { level: HIGHLY_RESTRICTIVE  unit: SEGMENT  skeleton_distinctness: false }
-              tokens:       { level: MODERATELY_RESTRICTIVE  permitting: ["Latn" "cyrillic"] }
+              name:     "production"
+              listener: { host: "127.0.0.1"  port: 8080 }
+              policy: {
+                identifier_policy: { level: HIGHLY_RESTRICTIVE  per_segment: true  skeleton_distinctness: false
+                                     permitting: [] }
+                token_policy:      { level: MODERATELY_RESTRICTIVE  permitting: [["Latn" "cyrillic"]] }
+                limits:            { max_depth: 32 }
+              }
               schema_hosts: ["schemas.example.com"]
             }""";
+
+    /** A descriptor whose policy is {@code policy}. */
+    private static String withPolicy(String policy) {
+        return """
+                !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
+                !deployment { name: "n"  policy: %s }""".formatted(policy);
+    }
+
+    private static final String DEFAULT_IDENTIFIERS =
+            "{ level: HIGHLY_RESTRICTIVE  per_segment: false  skeleton_distinctness: true  permitting: [] }";
 
     @Test
     void aDescriptorReadsAsWritten() {
@@ -34,27 +49,29 @@ class TsonDeploymentTest {
         assertEquals("production", deployment.name());
         assertEquals(8080, deployment.listener().orElseThrow().port().orElseThrow());
         assertEquals(List.of("schemas.example.com"), deployment.schemaHosts());
-        assertEquals(ScriptPolicy.Level.HIGHLY_RESTRICTIVE,
-                deployment.identifiers().orElseThrow().level());
-        assertEquals(TsonDeployment.Unit.SEGMENT, deployment.identifiers().orElseThrow().unit().orElseThrow());
+        TsonDeployment.Policy policy = deployment.policy().orElseThrow();
+        assertEquals(ScriptPolicy.Level.HIGHLY_RESTRICTIVE, policy.identifierPolicy().level());
+        assertTrue(policy.identifierPolicy().perSegment());
+        assertEquals(32, policy.limits().maxDepth());
     }
 
     /**
-     * The unit, the look-alike switch and the script set survive into the library's own types, which is the
-     * point of carrying them.
+     * The unit, the look-alike switch, the script combinations and the limit all survive into the library's own
+     * types, which is the point of carrying them.
      */
     @Test
-    void theUnitTheSwitchAndTheScriptSetReachTheLibraryPolicy() {
-        TsonDeployment deployment = TsonDeployment.read(FULL);
+    void everyPartReachesTheLibraryPolicy() {
+        ProcessorPolicy policy = TsonDeployment.read(FULL).processorPolicy().orElseThrow();
 
-        IdentifierPolicy identifiers = deployment.identifierPolicy().orElseThrow();
-        assertTrue(identifiers.isPerSegment(), "SEGMENT should reach perSegment()");
+        IdentifierPolicy identifiers = policy.identifierPolicy();
+        assertTrue(identifiers.isPerSegment(), "per_segment should reach perSegment()");
         assertFalse(identifiers.appliesSkeletonDistinctness(), "an explicit false should switch the rule off");
+        assertEquals(32, policy.limits().maxDepth());
 
         // `permitting` is the narrowest relaxation §8.2 offers: Cyrillic beside Latin, without dropping a
         // level and losing the rule everywhere else. A mixed Latin/Cyrillic name is refused at Moderately
         // Restrictive and admitted once that combination is named.
-        ScriptPolicy tokens = deployment.tokenPolicy().orElseThrow();
+        ScriptPolicy tokens = policy.tokenPolicy();
         assertTrue(tokens.violation("аdmin").isEmpty(),
                 () -> "LATIN+CYRILLIC was permitted: " + tokens.violation("аdmin").orElse(""));
         assertTrue(ScriptPolicy.moderatelyRestrictive().violation("аdmin").isPresent(),
@@ -62,9 +79,24 @@ class TsonDeploymentTest {
     }
 
     /**
-     * <b>An absent policy leaves the library's default alone rather than meaning "no policy".</b> The two
-     * defaults point opposite ways for reasons §8.2 gives, so overwriting an unstated one with something
-     * permissive would be a decision nobody made.
+     * <b>A stated policy is what runs, and what is published.</b> A descriptor's policy applied to a config and
+     * read back from the processor is the same policy, stamped with the processor's data version -- nothing the
+     * library defaults to was filled in or moved.
+     */
+    @Test
+    void aStatedPolicyIsAppliedExactlyAsWritten() {
+        TsonDeployment deployment = TsonDeployment.read(FULL);
+        TsonDeployment.Policy stated = deployment.policy().orElseThrow();
+        ProcessorPolicy inForce = deployment.applyTo(ProcessorConfig.defaults()).processorPolicy();
+
+        assertEquals(new TsonDeployment.Policy(stated.identifierPolicy(), stated.tokenPolicy(),
+                Optional.of(ProcessorPolicy.dataVersion()), stated.limits()), TsonDeployment.Policy.of(inForce));
+    }
+
+    /**
+     * <b>An absent policy leaves the library's defaults alone rather than meaning "no policy".</b> The two
+     * defaults point opposite ways for reasons §8.2 gives, so overwriting them with something permissive would
+     * be a decision nobody made.
      */
     @Test
     void anAbsentPolicyIsNotAPermissiveOne() {
@@ -72,46 +104,63 @@ class TsonDeploymentTest {
                 !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
                 !deployment { name: "minimal" }""");
 
-        assertTrue(deployment.identifierPolicy().isEmpty());
-        assertTrue(deployment.tokenPolicy().isEmpty());
+        assertTrue(deployment.processorPolicy().isEmpty());
         assertEquals(List.of(), deployment.schemaHosts(), "an omitted list is empty, not null");
-
-        // applyTo leaves a config untouched, which is only observable through what it does not throw.
         ProcessorConfig config = ProcessorConfig.defaults();
         assertEquals(config, deployment.applyTo(config));
     }
 
-    /** The same holds one level down: a level stated with no switch leaves the look-alike rule on. */
+    /**
+     * <b>A policy is stated whole or not at all.</b> A descriptor setting only the token policy is refused by
+     * the schema: there is no partial override for the library's defaults to fill in, since a default is the
+     * library's to move and the descriptor is what is meant to say what runs.
+     */
     @Test
-    void anUnstatedSwitchLeavesTheLookAlikeRuleOn() {
-        TsonDeployment deployment = TsonDeployment.read("""
-                !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
-                !deployment { name: "level-only"  identifiers: { level: MODERATELY_RESTRICTIVE } }""");
+    void aPolicyStatesEveryPart() {
+        List<Diagnostic> problems = TsonDeployment.tson().validate(
+                withPolicy("{ token_policy: { level: SINGLE_SCRIPT  permitting: [] } }"));
 
-        assertTrue(deployment.identifierPolicy().orElseThrow().appliesSkeletonDistinctness());
+        assertEquals(List.of(Diagnostic.Code.FIELD_REQUIRED, Diagnostic.Code.FIELD_REQUIRED),
+                problems.stream().map(Diagnostic::code).toList(),
+                () -> "expected identifier_policy and limits to be required, got " + problems);
     }
 
     /**
-     * <b>A token policy has no unit to write.</b> A value has no segments — {@code _} and {@code -} separate
+     * <b>A token policy cannot be given a unit.</b> A value has no segments — {@code _} and {@code -} separate
      * a name's words and are ordinary characters in a value, so segmenting one would admit UTS #39's own
-     * {@code Toys-Я-Us} — and the library makes a per-segment token policy unwritable. The schema follows it,
-     * which is why {@code identifier_override} writes its fields out rather than composing {@code
-     * token_override}: a composition would make one admissible where the other is expected.
+     * {@code Toys-Я-Us} — and {@code policy.tn}'s {@code script_policy} has no {@code per_segment} to write.
      */
     @Test
     void aTokenPolicyCannotBeGivenAUnit() {
-        List<io.ltr8.tson.base.Diagnostic> problems = TsonDeployment.tson().validate("""
-                !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
-                !deployment { name: "n"  tokens: { level: HIGHLY_RESTRICTIVE  unit: SEGMENT } }""");
+        List<Diagnostic> problems = TsonDeployment.tson().validate(withPolicy("""
+                { identifier_policy: %s
+                  token_policy: { level: HIGHLY_RESTRICTIVE  per_segment: true  permitting: [] }
+                  limits: { max_depth: 64 } }""".formatted(DEFAULT_IDENTIFIERS)));
 
-        assertEquals(List.of(io.ltr8.tson.base.Diagnostic.Code.UNRECOGNIZED_FIELD),
-                problems.stream().map(io.ltr8.tson.base.Diagnostic::code).toList(),
+        assertEquals(List.of(Diagnostic.Code.UNRECOGNIZED_FIELD),
+                problems.stream().map(Diagnostic::code).toList(),
                 () -> "expected the unit to be refused, got " + problems);
     }
 
-    /** The profile of a processor configured from the library's defaults with {@code deployment} applied. */
-    private static TsonDeployment.AcceptanceProfile profileOf(TsonDeployment deployment) {
-        return deployment.profile(deployment.applyTo(ProcessorConfig.defaults()).processorPolicy());
+    /**
+     * <b>The data version is the processor's, not the deployment's.</b> A descriptor naming one this processor
+     * does not carry would describe a processor that does not exist, so it stops the read; naming the one it
+     * does carry is harmless, as a copied report would.
+     */
+    @Test
+    void aDescriptorNamingAnotherDataVersionStopsTheRead() {
+        String policy = """
+                { identifier_policy: %s
+                  token_policy: { level: UNRESTRICTED  permitting: [] }
+                  unicode_data_version: "%s"
+                  limits: { max_depth: 64 } }""";
+
+        String message = assertThrows(RuntimeException.class, () -> TsonDeployment.read(
+                withPolicy(policy.formatted(DEFAULT_IDENTIFIERS, "1.1")))).getMessage();
+        assertTrue(message.contains("1.1"), message);
+
+        assertTrue(TsonDeployment.read(withPolicy(policy.formatted(DEFAULT_IDENTIFIERS,
+                ProcessorPolicy.dataVersion()))).policy().isPresent());
     }
 
     /**
@@ -124,10 +173,6 @@ class TsonDeploymentTest {
         TsonDeployment.AcceptanceProfile profile = profileOf(TsonDeployment.read(FULL));
 
         assertEquals("production", profile.name());
-        TsonDeployment.Policy.Identifiers identifiers = profile.policy().identifierPolicy();
-        assertEquals(ScriptPolicy.Level.HIGHLY_RESTRICTIVE, identifiers.level());
-        assertTrue(identifiers.perSegment());
-        assertFalse(identifiers.skeletonDistinctness());
         assertEquals(ScriptPolicy.Level.MODERATELY_RESTRICTIVE, profile.policy().tokenPolicy().level());
 
         // Nothing about what this deployment trusts, and nothing about where it listens.
@@ -138,13 +183,18 @@ class TsonDeploymentTest {
         assertFalse(written.contains("8080"), written);
     }
 
+    /** The profile of a processor configured from the library's defaults with {@code deployment} applied. */
+    private static TsonDeployment.AcceptanceProfile profileOf(TsonDeployment deployment) {
+        return deployment.profile(deployment.applyTo(ProcessorConfig.defaults()).processorPolicy());
+    }
+
     /**
-     * <b>The profile states the whole policy in force, defaults included.</b> A descriptor states only what it
-     * changes, so a profile built from it would leave a client to know what the library defaults to; one built
-     * from what is enforced says it.
+     * <b>A descriptor stating no policy still publishes one</b>: the library's defaults, since the profile is
+     * what is enforced rather than what the descriptor said, and a client needs no library's defaults to know
+     * what applies.
      */
     @Test
-    void aPartTheDescriptorLeavesAloneIsStatedAtTheDefault() {
+    void aDescriptorWithNoPolicyPublishesTheDefaults() {
         TsonDeployment.Policy policy = profileOf(TsonDeployment.read("""
                 !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
                 !deployment { name: "minimal" }""")).policy();
@@ -179,57 +229,40 @@ class TsonDeploymentTest {
     void theProfileStatesTheUnicodeDataVersion() {
         assertEquals(Optional.of(ProcessorPolicy.dataVersion()),
                 profileOf(TsonDeployment.read(FULL)).policy().unicodeDataVersion());
-        // Read, not copied: a constant here would go stale silently on a library upgrade.
         assertFalse(ProcessorPolicy.dataVersion().isBlank());
     }
 
     /**
      * <b>Script names are canonicalised against the authoritative table, not by the schema.</b> [UAX #24]
      * gives every script a long alias and an ISO 15924 short alias, matched case-insensitively, so {@code
-     * Latn} and {@code cyrillic} name the same two scripts as {@code Latin} and {@code Cyrillic}. The schema
-     * cannot enforce membership — 171 values that grow with the UCD have no place in a published immutable
-     * document — so it constrains shape and this is where a name becomes a script.
+     * Latn} and {@code cyrillic} name the same two scripts as {@code Latin} and {@code Cyrillic}, and each
+     * combination is held sorted -- so two descriptors naming one set look alike, and look like the CLI's
+     * report of it.
      */
     @Test
     void scriptNamesAreCanonicalisedWhicheverAliasIsWritten() {
         TsonDeployment deployment = TsonDeployment.read(FULL);
 
-        assertEquals(List.of("LATIN", "CYRILLIC"), deployment.tokens().orElseThrow().permitting());
-        // The profile writes each combination as policy.tn names scripts, by UAX #24 alias, sorted -- so two
-        // deployments naming one set look alike, and look like the CLI's report of it.
+        assertEquals(List.of(List.of("Cyrillic", "Latin")),
+                deployment.policy().orElseThrow().tokenPolicy().permitting());
         assertEquals(List.of(List.of("Cyrillic", "Latin")),
                 profileOf(deployment).policy().tokenPolicy().permitting());
     }
 
     /**
      * A typo in a security setting stops the read, rather than being carried as a policy quietly missing a
-     * script. {@code Cyrrilic} is well-shaped, so {@code script_name}'s pattern admits it and only the
-     * authoritative table can refuse it.
+     * script -- {@code policy.tn} types a script name as {@code text}, so only the authoritative table can
+     * refuse {@code Cyrrilic}, or a {@code 42}, which a {@code text} position admits.
      */
     @Test
     void anUnknownScriptNameStopsTheRead() {
-        String message = assertThrows(RuntimeException.class, () -> TsonDeployment.read("""
-                !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
-                !deployment { name: "typo"  tokens: { level: SINGLE_SCRIPT  permitting: ["Cyrrilic"] } }"""))
-                .getMessage();
+        for (String name : List.of("\"Cyrrilic\"", "42")) {
+            String message = assertThrows(RuntimeException.class, () -> TsonDeployment.read(withPolicy("""
+                    { identifier_policy: %s
+                      token_policy: { level: SINGLE_SCRIPT  permitting: [[%s]] }
+                      limits: { max_depth: 64 } }""".formatted(DEFAULT_IDENTIFIERS, name)))).getMessage();
 
-        assertTrue(message.contains("Cyrrilic"), message);
+            assertTrue(message.contains(name.replace("\"", "")), message);
+        }
     }
-
-    /**
-     * And the shape rule catches what it can before that: a script name is a name, so a bare number is not
-     * one. Worth pinning because a {@code text} field would have accepted it — [TSON-DATA] §4 does not apply
-     * base type resolution at a schema-typed position, so {@code 42} is a perfectly good {@code text}.
-     */
-    @Test
-    void somethingThatIsNotEvenNameShapedIsRefusedByTheSchema() {
-        List<io.ltr8.tson.base.Diagnostic> problems = TsonDeployment.tson().validate("""
-                !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
-                !deployment { name: "n"  tokens: { level: SINGLE_SCRIPT  permitting: [42] } }""");
-
-        assertEquals(List.of(io.ltr8.tson.base.Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION),
-                problems.stream().map(io.ltr8.tson.base.Diagnostic::code).toList(),
-                () -> "expected the pattern to refuse it, got " + problems);
-    }
-
 }

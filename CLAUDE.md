@@ -1039,11 +1039,8 @@ with no artifact, and this was the proposal for where it lives. **Revision 37 ad
 says no document may name, import or otherwise select the policy it is judged under, and the spec bundles
 `policy.tn` (`https://tson.io/2026/37/m/policy.tn`) as the policy's vocabulary — `restriction_level`,
 `script_policy`, `identifier_policy`, `limits` and `policy`, the shape a deployment writes its policy in and a
-processor reports it in. `deployment.tn` imports it: the profile is a `policy.tn` `policy`, and the
-descriptor's own settings are partial *override* shapes (`identifier_override`, `token_override`,
-`limits_override`), every member optional where `policy.tn`'s are required. Whether the descriptor should
-instead hold a complete `policy` is an open decision. The argument is in `deployment.tn`'s own `@doc`; the
-short form:
+processor reports it in. `deployment.tn` imports it, and both ends are a `policy.tn` `policy`: the descriptor
+states one and the profile publishes one. The argument is in `deployment.tn`'s own `@doc`; the short form:
 
 - **Not a schema.** An artifact declaring its own strictness chooses its own check, and §3.5's immutability
   means raising a level mints a new identity, so every document pinning the old one keeps the old policy.
@@ -1061,12 +1058,21 @@ image change a security policy with no code diff. And no document may name a des
 with a schema source, and the catalog never serves one. `deployment.tn` itself *is* published, because a
 client needs it to read the profile.
 
-**An absent policy is not a permissive one.** The two defaults point opposite ways (Highly Restrictive over
-declared names, unrestricted over values), so `identifierPolicy()`/`tokenPolicy()` return empty and `applyTo`
-leaves a config alone rather than overwriting it with a guess. `limitsPolicy()` is the same shape for §9.1's
-`limits` record: absent leaves the library's 64-level nesting bound where it is.
+**A descriptor states its policy whole, and it is applied exactly as written.** `policy?: policy` is
+`policy.tn`'s, every part required — identifier policy, token policy, limits — and `applyTo` hands the
+`ProcessorPolicy` it makes to `ProcessorConfig.withProcessorPolicy`. There are **no partial overrides** falling
+back to the library's defaults, deliberately: a default is the library's to move, and a security setting whose
+effect shifts under an upgrade with no diff to the descriptor is the silent relaxation §8.2 exists to prevent.
+So the validator's descriptor writes out the two parts it leaves at the default. Pinned by
+`TsonDeploymentTest.aPolicyStatesEveryPart` and `aStatedPolicyIsAppliedExactlyAsWritten`.
+`unicode_data_version` is left out of a descriptor: the tables are the processor's, so a descriptor naming one
+this processor does not carry stops the read.
 
-**`limits` is the third setting and it is beside the two, not inside them.** §8.2's policies say what this
+**An absent policy is not a permissive one.** The two defaults point opposite ways (Highly Restrictive over
+declared names, unrestricted over values), so a descriptor stating no `policy` returns empty from
+`processorPolicy()` and `applyTo` leaves a config alone rather than overwriting it with a guess.
+
+**`limits` is the third part and it is beside the two policies, not inside them.** §8.2's policies say what this
 processor will *admit as a name*; §9.1's say what it will *spend reading a document*, and a deployment changing
 one has said nothing about the other. `max_depth` is the only member because it is the only limit the library
 enforces — §9.1 states twelve, and the rest are added as the library enforces them rather than as a member
@@ -1074,8 +1080,8 @@ nothing reads.
 
 **The profile is the policy in force, and it is a hint.** `profile(inForce)` takes the `ProcessorPolicy` the
 processor actually enforces — `applyTo(config).processorPolicy()`, or `tson.processorPolicy()` — not what the
-descriptor says, so it is **complete**: a part the descriptor left alone appears at the library's default, and a
-client needs to know no library's defaults to know what applies. It is written as `policy.tn`'s `policy`, the
+descriptor says, so a descriptor stating no policy still publishes the library's defaults, and a client needs
+to know no library's defaults to know what applies. It is written as `policy.tn`'s `policy`, the
 shape `tson policy` and the CLI's report use, scripts named by UAX #24 alias (`Latin`). It drops the fetch
 allow-list and the listener — internal topology — and a server publishes *that*, at
 `/.well-known/tson-deployment`. A well-known path
@@ -1089,12 +1095,12 @@ past it — a limit is the shape of what this endpoint accepts, where the allow-
 and it is in the profile because §8.3 marks all three rules unstable across Unicode releases, so two
 conforming processors may legitimately disagree about one name and the version is what explains it.
 
-**The overrides mirror the library's two policy types**: `identifiers` is an `identifier_override` (level,
-`unit`, `skeleton_distinctness`, `permitting`), `tokens` a `token_override` (level, `permitting`). Its fields are
-written out rather than composed from `token_override`, deliberately — a composition would make an identifier
-override admissible at `tokens`, and a unit would be writable there after all.
-`TsonDeploymentTest.aTokenPolicyCannotBeGivenAUnit` pins it. An absent `skeleton_distinctness` leaves the
-library's default, which is on.
+**`policy.tn` mirrors the library's two policy types**: `identifier_policy` is a level, `per_segment`,
+`skeleton_distinctness` and `permitting`, `script_policy` a level and `permitting` — no unit, since a value has
+no segments, so a per-segment token policy is unwritable (`TsonDeploymentTest.aTokenPolicyCannotBeGivenAUnit`).
+`permitting` is a list of script combinations, each named by UAX #24 alias; `TsonDeployment.Policy` canonicalises
+every spelling (`Latn`, `cyrillic`) to the long alias, sorted within a combination, and a name that is not a
+script — `policy.tn` types it as `text` — stops the read.
 
 **`restriction_level` is `policy.tn`'s**, imported rather than copied, so the hand-written copy and the test
 holding it to `ScriptPolicy.Level` are gone; upstream's `PolicySchemaTest` holds the bundled one.
