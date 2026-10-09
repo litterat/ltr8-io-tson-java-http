@@ -62,34 +62,7 @@ names the library.
 
 ---
 
-## 3. `HttpSchemaSource` cannot allow-list an identity whose host is not ASCII
-
-**Hit:** Revision 37 made a schema identity an IRI-reference, so `https://bücher.example/a.tn` is an identity, held
-and compared as written. But no configuration of `HttpSchemaSource` fetches it:
-
-- `allowHost("bücher.example")` is refused, *"is not an absolute URI with a host"*;
-- `allowHost("xn--bcher-kva.example")`, its A-label spelling, is accepted and does not match: the fetch is refused
-  `NOT_PERMITTED`, *"host 'bücher.example' is not one of [xn--bcher-kva.example]"*;
-- and the two spellings are two canonical identities (`CanonicalIdentity`), so a document naming one does not
-  resolve against the other.
-
-So the identity space admits names the fetching source cannot reach. For this project that is the server-side
-loader: a request body naming such a schema is refused as off the allow-list, which tells the sender to fix a
-reference the spec calls valid.
-
-**The change:** the spec side is now tson-java's `SPEC-FEEDBACK.md` #4, with #5 and #6 built: `net.tn`'s `hostname`
-and `host` are atoms whose equality makes `bücher.example` and `xn--bcher-kva.example` one value (`io.ltr8.net`'s
-`HostName`/`Host`). What remains is the library following it: canonical identity taking an identity's host as a
-`host` value (#4, next upstream), and `allowHost` taking a `Host` — either label form, or an address — and comparing
-by its equality, so the allow-list this project's `deployment.tn` now types as `set<host>` matches as the type does.
-
-**Workaround in place:** none; no schema this project publishes or serves has a non-ASCII host. `TsonDeployment`
-reads `schema_hosts` to each host's canonical text (U-label names), which `allowHost` refuses for a non-ASCII name
-today. Pinned by `UpstreamGapsTest.anIdentityWithANonAsciiHostCannotBeAllowListed`.
-
----
-
-## 4. An import across governing levels is not refused
+## 3. An import across governing levels is not refused
 
 **Hit:** this project's `meta-http.tn` is a meta layer — governed by the meta-kernel, because declaring a constructor
 (`operation => data & {…}`) is permitted only there. Its constructors want HTTP's vocabulary: `operation.method` an
@@ -526,7 +499,7 @@ key position by role, now that #6's field half is withdrawn, and
 its point 1 should be settled before any schema-side text key is admitted, since that is the one part that touches
 Part 1.
 
-### To file: formats this project needs and the vocabulary cannot state — three types, by strength of evidence
+### To file: formats this project needs and the vocabulary cannot state — two types, by strength of evidence
 
 **Sections:** [TSON-SCHEMA] §2.2.3 (a name an import binds is reserved), §4.2 and §5.5 (atom families and their
 equality), §7.4 (text member sets), §9 (core's contents); [TSON-DATA] §2.2.1 (canonical identity), §2.6 (map key
@@ -603,23 +576,6 @@ whose **equality is canonical identity**, with an instance for the canonical spe
 normalization: the host folds, the path keeps its case, and the scheme and the pin are dropped rather than folded.
 tson-java's `CanonicalIdentity` is the existing implementation.
 
-**3. `media_type` (RFC 6838; parameters per RFC 9110 §8.3.1) — constructor in `meta`; core instance pending.** An atom
-for its equality, which no whole-value fold can state: type, subtype and parameter names fold, while a parameter
-*value* keeps its case unless its own registration says otherwise — `charset`'s does, `boundary`'s does not — and
-`charset="utf-8"` equals `charset=utf-8`. Proposed facets, following `uri_type`'s rule that permissions are withdrawn
-and never granted back:
-
-- `allow_parameters?` (default false: a media type proper, not a `Content-Type` value);
-- `types?`, a set of top-level types;
-- `suffixes?`, RFC 6839's structured suffixes. This project's `acceptingJson` admits `application/json` and any
-  `+json` type, which is `suffixes: [json]`.
-
-Media ranges (`*/*`, `text/*`) are `Accept` syntax and are refused. **The core instance carries the highest collision
-risk of these:** an OpenAPI conversion naturally declares `media_type` for OpenAPI's Media Type Object. #15's
-evidence method answers it — grep the `ltr8-io-tson-benchmarks` conversions for type declarations named
-`media_type`, `mime_type` and `content_type` — and until then the constructor alone costs nothing. Name it after RFC
-6838's term, *media type*; "MIME type" is the legacy one.
-
 **Deliberately not proposed:** `status_code`, `http_method`, `header_name` and `uri_template` as types in core or
 `net.tn`. They are HTTP vocabulary rather than formats, and exactly the names #15 shows converted schemas declare for
 themselves, so they belong with what uses them: here, `meta-http.tn` (below). A URI
@@ -636,12 +592,11 @@ constructor in `meta` beside `uri_type`, which reserves no name, with no instanc
 - `diagnostic.path`, `schema_pointer` and `schema_id` stay `text` until 1 and 2 exist.
 - The HTTP vocabulary lives in `meta-http.tn`, the meta layer that uses it — `http_method`, `status_code` and
   `uri_template` (RFC 6570 levels 1–2, so `{+var}` is expressible) — since a meta layer owns the vocabulary its
-  constructors use (#4). `TsonApiDescription` checks each operation's template variables against its PATH
+  constructors use (#3). `TsonApiDescription` checks each operation's template variables against its PATH
   parameters, which no pattern can. `problem.status` stays `int32`, and the meta-service experiment keeps its own
   `status_code`, `path_template` and `header_name`.
 
-**Priority:** 1 and 2 medium-high, since the library emits values its own schemas cannot describe; 3 medium to low,
-serving one use here.
+**Priority:** medium-high, since the library emits values its own schemas cannot describe.
 
 ---
 
@@ -649,7 +604,8 @@ serving one use here.
 artifact, which Revision 37 closed with the bundled `policy.tn`; naming a schema for a document that cannot carry
 `!!schema`; no shorthand for a template application at a `type_ref` slot in data; a namespace should be a value (all
 four on 2026-09-01), now being reworked upstream against Revision 38; and `identifier` as a text family with `enum`
-stating its type, adopted in Revision 37. And the host names: `hostname` and `host` (built on `r2026-38-proposal`)
-and a non-ASCII identity's host (SPEC-FEEDBACK #4, open), which tson-java filed from this project's review. Prose in
+stating its type, adopted in Revision 37. From this project's review, tson-java also filed and built on
+`r2026-38-proposal`: `hostname` and `host`, a non-ASCII identity's host as one identity in either label form
+(SPEC-FEEDBACK #4), and `media_type` in `net.tn` (#8). Prose in
 this repo names each by its subject, not its number. A new finding goes here in the same shape: a `### To file:`
 heading naming the spec sections, the gap, what this project does meanwhile, and a priority.

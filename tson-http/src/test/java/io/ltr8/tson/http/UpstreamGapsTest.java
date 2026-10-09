@@ -740,33 +740,21 @@ class UpstreamGapsTest {
                 .replace("{ server", "!!import:\"https://tson.io/2026/38/m/net.tn\"\n{ server")));
     }
 
-    // ── open: a schema identity whose host is not ASCII ─────────────────────────────────────────────
+    // ── fixed upstream: an identity's host is a host value, in either label form ─────────────────────
 
     /**
-     * <b>An identity with a non-ASCII host can be named but not fetched.</b> Revision 37 made identities
-     * IRI-references, so {@code https://bücher.example/a.tn} is an identity, held and compared as written. But
-     * {@link HttpSchemaSource} cannot allow-list that host -- {@code allowHost} refuses it as no host at all --
-     * and allowing its A-label spelling does not match it, there being no IDNA mapping between the two. So no
-     * configuration fetches it. {@code net.tn}'s {@code hostname} is A-labels only, so a deployment
-     * descriptor's {@code schema_hosts} could not name it either.
-     *
-     * <p>The two spellings are two canonical identities today, pinned so that a decision either way -- one
-     * identity, or two by rule -- is noticed here.
+     * <b>A non-ASCII host is one identity in either label form, and the allow-list takes it.</b> Canonical
+     * identity reads an identity's host as a {@code host} value, so {@code bücher.example} and its A-label
+     * spelling {@code xn--bcher-kva.example} are one identity, canonically the U-label; and {@link
+     * HttpSchemaSource#builder()}'s {@code allowHost} accepts the U-label, where it used to refuse it as no host
+     * at all. Pinned so a regression to two identities, or a refusal, fails here.
      */
     @Test
-    void anIdentityWithANonAsciiHostCannotBeAllowListed() {
-        assertThrows(IllegalArgumentException.class,
-                () -> HttpSchemaSource.builder().allowHost("bücher.example").build().close());
-
-        try (HttpSchemaSource aLabel = HttpSchemaSource.builder().allowHost("xn--bcher-kva.example").build()) {
-            SchemaFetchException refused = assertThrows(SchemaFetchException.class,
-                    () -> aLabel.fetch("https://bücher.example/a.tn"));
-            assertEquals(SchemaFetchException.Reason.NOT_PERMITTED, refused.reason());
-        }
-
-        assertFalse(CanonicalIdentity.canonicalize("https://bücher.example/a.tn")
-                        .equals(CanonicalIdentity.canonicalize("https://xn--bcher-kva.example/a.tn")),
-                "a U-label host and its A-label are one identity now -- check the allow-list follows");
+    void aNonAsciiHostIsOneIdentityInEitherLabelForm() {
+        assertEquals(CanonicalIdentity.canonicalize("https://bücher.example/a.tn"),
+                CanonicalIdentity.canonicalize("https://xn--bcher-kva.example/a.tn"));
+        assertEquals("bücher.example/a.tn", CanonicalIdentity.canonicalize("https://xn--bcher-kva.example/a.tn"));
+        assertDoesNotThrow(() -> HttpSchemaSource.builder().allowHost("bücher.example").build().close());
     }
 
     // ── open: an import across governing levels is not refused ───────────────────────────────────
@@ -783,7 +771,7 @@ class UpstreamGapsTest {
      *   <li>an ordinary schema importing a kernel-governed library.</li>
      * </ul>
      *
-     * Fails the day either is refused. {@code UPSTREAM.md} #4 carries it.
+     * Fails the day either is refused. {@code UPSTREAM.md} #3 carries it.
      */
     @Test
     void anImportAcrossGoverningLevelsIsNotRefused() {
@@ -800,7 +788,7 @@ class UpstreamGapsTest {
         Tson kernelOverMeta = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(
                 Map.of("https://example.com/2026/38/app/levels-lib.tn", library)))));
         assertEquals(List.of(), kernelOverMeta.validateSchema(layer),
-                "a kernel-governed layer importing a meta.tn-governed library is refused now -- see UPSTREAM.md #4");
+                "a kernel-governed layer importing a meta.tn-governed library is refused now -- see UPSTREAM.md #3");
 
         String kernelLibrary = """
                 !!id:"https://example.com/2026/38/app/levels-kernel-lib.tn"
@@ -815,7 +803,7 @@ class UpstreamGapsTest {
         Tson metaOverKernel = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(
                 Map.of("https://example.com/2026/38/app/levels-kernel-lib.tn", kernelLibrary)))));
         assertEquals(List.of(), metaOverKernel.validateSchema(application),
-                "a meta.tn-governed schema importing a kernel-governed library is refused now -- see UPSTREAM.md #4");
+                "a meta.tn-governed schema importing a kernel-governed library is refused now -- see UPSTREAM.md #3");
     }
 
     // ── decided upstream: a stated schema overrides the document's own ──────────────────────────────

@@ -261,7 +261,7 @@ the documents that project it. A `type_reference` value type in data (a field wh
 against the document's scope) was weighed as a way to write a description as data and avoid the meta layer's
 restrictions, and set aside for that reason: the restrictions come with the level and are accepted. **The meta
 layer owns the vocabulary its constructors use** — `http_method`, `status_code` and `uri_template` are declared
-in `meta-http.tn` itself, not imported, since an import should not cross governing levels (`UPSTREAM.md` #4) —
+in `meta-http.tn` itself, not imported, since an import should not cross governing levels (`UPSTREAM.md` #3) —
 and an ordinary schema wanting the same terms declares its own: `problem.tn`'s `status` is an `int32`.
 
 **The spec makes both halves of that shape normative, and names this as the case they exist for.**
@@ -1097,8 +1097,9 @@ address, one string-class atom, so `listener.host` takes `localhost`, `"127.0.0.
 `set<host>`, compared by the type's equality: `bücher.example` is `xn--bcher-kva.example`, `Example.COM` is
 `example.com`, `[::1]` is `0:0:0:0:0:0:0:1`, so one host twice is refused whatever the spellings, and a port, a URL,
 a trailing dot or a zone identifier is refused at read with its fix named. A `String` component binds the canonical
-text (U-label names, RFC 5952 for IPv6). `TsonDeploymentTest`'s four host tests pin all of it. `allowHost` does not
-yet take a non-ASCII name — `UPSTREAM.md` #3.
+text (U-label names, RFC 5952 for IPv6). `TsonDeploymentTest`'s four host tests pin all of it. Canonical identity
+reads an identity's host the same way, so `allowHost` takes either label form and an entry matches a reference in
+the other (`UpstreamGapsTest.aNonAsciiHostIsOneIdentityInEitherLabelForm`).
 
 **An absent policy is not a permissive one.** The two defaults point opposite ways (Highly Restrictive over
 declared names, unrestricted over values), so a descriptor stating no `policy` returns empty from
