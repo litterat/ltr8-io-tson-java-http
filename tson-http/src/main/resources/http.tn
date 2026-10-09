@@ -1,0 +1,47 @@
+!!id:"https://tson.io/2026/38/io/ltr8/http/http.tn"
+!!meta:"https://tson.io/2026/38/m/meta.tn"
+@doc:"""
+  HTTP's own vocabulary, for a schema that describes or carries HTTP: a method, a status code, a header field
+  name, and a URI template.
+
+  This project's library rather than the spec's, deliberately. These are HTTP's terms, not formats every
+  schema needs, and exactly the names a converted API description declares for itself -- so they belong in a
+  library a schema opts into by importing, where they reserve their names only in the schemas that asked for
+  them. tson-java's bundled net.tn is the same shape for network identifiers; a URI template is not one of
+  those (it builds a URI rather than naming a host), and its uses outside describing an API are few.
+
+  It imports nothing, as net.tn does: every type is built from meta's own constructors, so a schema may import
+  it beside core and a meta layer may import it beside meta.tn -- meta-http.tn does, for its operations --
+  without one name reaching it twice.
+  """
+{
+  @doc:"A request method (RFC 9110 §9), the ones an API description has a use for."
+  http_method => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
+
+  @doc:"A response status code (RFC 9110 §15): three digits, 100 to 599. Refined, so 42 is not a status."
+  status_code => !integer_type { min: 100  max: 599 }
+
+  @doc:"""
+    A header field name (RFC 9110 §5.1): a token, compared case-insensitively. Held folded
+    (NFKC_CASEFOLD, which over a token's ASCII characters is lowercasing), so `Content-Type` and
+    `content-type` are one value.
+    """
+  header_name => !text_type { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+"  normalization: NFKC_CASEFOLD }
+
+  @doc:"""
+    A URI template (RFC 6570) at levels 1 and 2: literal text with `{var}` expressions, where `{+var}`
+    (reserved expansion) leaves a value's `/`, `?` and `#` unencoded and `{#var}` adds a fragment. Level 2 is
+    the line because `{+var}` is what an identity path needs -- `/{+schemaPath}` serves a path with slashes in
+    it, where `/{schemaPath}` would percent-encode them -- and levels 3 and 4 (several variables to an
+    expression, `{?q,page}` query forms, prefixes and explode) describe expansion rather than a route a
+    server can match.
+
+    A variable name is ASCII letters, digits and `_`, dot-separated; RFC 6570's percent-encoded name
+    characters are not admitted. A pattern checks the shape. What it cannot check is the template against
+    what declares its variables -- an operation's PATH parameters -- which TsonApiDescription checks when it
+    reads a description.
+    """
+  uri_template => !text_type {
+    pattern: "([^\\p{Cc} \"'%<>\\\\^`{|}]|%[0-9A-Fa-f]{2}|\\{[+#]?[A-Za-z0-9_]+([.][A-Za-z0-9_]+)*\\})*"
+  }
+}

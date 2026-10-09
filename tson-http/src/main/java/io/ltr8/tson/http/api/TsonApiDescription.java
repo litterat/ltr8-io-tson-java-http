@@ -75,12 +75,45 @@ public final class TsonApiDescription {
             // An operation is found by what its body IS, not by a naming convention -- the `data` base kind
             // is what lets an entry say it is not a type, and this is the payoff.
             if (definition.body() instanceof Operation operation) {
+                requirePathMatchesItsParameters(name, operation);
                 found.put(name, operation);
                 entries.getAnnotations(name).value("doc", String.class)
                         .ifPresent(text -> docs.put(name, text));
             }
         });
         return new TsonApiDescription(tson, schemaId, found, docs);
+    }
+
+    /**
+     * <b>An operation's path template names exactly its PATH parameters</b> -- the one check a description
+     * needs that neither the resolver nor {@code http.tn}'s {@code uri_template} pattern can make, since it
+     * relates two fields. A variable no parameter declares is a segment a server has no type for, and a PATH
+     * parameter the template never names is one no request can carry. Either is the description's author's
+     * mistake, so the model is refused rather than built: as with a payload type nothing declares, a server
+     * fails at startup rather than publishing a contract nobody can act on.
+     *
+     * <p>A path is a path: it starts with {@code /}. A full URI template belongs to a server list, which this
+     * meta layer deliberately does not have.
+     *
+     * @throws IllegalArgumentException naming the operation and what disagrees
+     */
+    private static void requirePathMatchesItsParameters(String name, Operation operation) {
+        if (!operation.path().startsWith("/")) {
+            throw new IllegalArgumentException("operation '" + name + "': path '" + operation.path()
+                    + "' is not a path -- it must start with '/'");
+        }
+        List<String> variables = operation.pathVariables();
+        List<String> declared = operation.pathParameters();
+        List<String> undeclared = variables.stream().filter(variable -> !declared.contains(variable)).toList();
+        List<String> unused = declared.stream().filter(parameter -> !variables.contains(parameter)).toList();
+        if (!undeclared.isEmpty() || !unused.isEmpty()) {
+            throw new IllegalArgumentException("operation '" + name + "': path '" + operation.path()
+                    + "' and its PATH parameters disagree"
+                    + (undeclared.isEmpty() ? "" : " -- the template names " + undeclared
+                            + " and no PATH parameter declares " + (undeclared.size() == 1 ? "it" : "them"))
+                    + (unused.isEmpty() ? "" : " -- PATH parameter" + (unused.size() == 1 ? " " : "s ") + unused
+                            + " never appear" + (unused.size() == 1 ? "s" : "") + " in the template"));
+        }
     }
 
     /** The description schema's identity. */

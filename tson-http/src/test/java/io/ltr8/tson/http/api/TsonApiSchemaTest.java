@@ -56,7 +56,7 @@ class TsonApiSchemaTest {
 
               get_schema => !operation {
                 method:     GET
-                path:       "/{schemaPath}"
+                path:       "/{+schemaPath}"
                 deprecated:  true
                 parameters: [
                   !parameter { name: "schemaPath"  in: PATH  type: text  required: true
@@ -68,7 +68,7 @@ class TsonApiSchemaTest {
 
     private static Tson resolved(String api) {
         Map<String, String> lib = new LinkedHashMap<>();
-        lib.put(TsonApiSchema.ID, TsonApiSchema.source());
+        lib.putAll(TsonApiSchema.publishedById());
         lib.put(ORDER_ID, ORDER);
         lib.putAll(TsonProblemSchema.publishedById());
         lib.put(API_ID, api);
@@ -99,10 +99,57 @@ class TsonApiSchemaTest {
         assertFalse(create.isDeprecated());
     }
 
+    /** {@link #API} with {@code get_schema}'s path replaced. */
+    private static String withSchemaPath(String path) {
+        return API.replace("path:       \"/{+schemaPath}\"", "path:       \"" + path + "\"");
+    }
+
+    /**
+     * <b>A path is a URI template, checked by its shape at schema load</b> -- {@code http.tn}'s {@code
+     * uri_template}, levels 1 and 2. {@code {+schemaPath}} (reserved expansion, what a path with slashes in it
+     * needs) and {@code {#frag}} are admitted; a level-3 form, an unclosed brace and a space are not.
+     */
+    @Test
+    void aPathIsAUriTemplateCheckedAtSchemaLoad() {
+        for (String admitted : List.of("/{schemaPath}", "/{+schemaPath}", "/schemas/{+schemaPath}{#frag}")) {
+            String api = withSchemaPath(admitted);
+            if (admitted.contains("frag")) {
+                api = api.replace("description: \"The path component of the schema's own !!id\" }",
+                        "description: \"The path component of the schema's own !!id\" }\n"
+                                + "      !parameter { name: \"frag\"  in: PATH  type: text  required: true }");
+            }
+            assertEquals(admitted, TsonApiSchema.describedBy(resolved(api), API_ID).operations().get("get_schema")
+                    .path());
+        }
+        for (String refused : List.of("/{?schemaPath}", "/{schemaPath", "/a b/{schemaPath}")) {
+            assertThrows(RuntimeException.class, () -> resolved(withSchemaPath(refused)), refused);
+        }
+    }
+
+    /**
+     * <b>An operation's template names exactly its PATH parameters</b>, which no pattern can check since it
+     * relates two fields: a variable nothing declares, a PATH parameter the template never names, and a path
+     * that is not a path are each refused when the description is read, naming the operation.
+     */
+    @Test
+    void aTemplateAndItsPathParametersMustAgree() {
+        String undeclared = assertThrows(IllegalArgumentException.class, () -> TsonApiSchema.describedBy(
+                resolved(withSchemaPath("/{+schemaPath}/{version}")), API_ID)).getMessage();
+        assertTrue(undeclared.contains("get_schema") && undeclared.contains("[version]"), undeclared);
+
+        String unused = assertThrows(IllegalArgumentException.class, () -> TsonApiSchema.describedBy(
+                resolved(withSchemaPath("/schemas")), API_ID)).getMessage();
+        assertTrue(unused.contains("[schemaPath]") && unused.contains("never appears"), unused);
+
+        String notAPath = assertThrows(IllegalArgumentException.class, () -> TsonApiSchema.describedBy(
+                resolved(withSchemaPath("{+schemaPath}")), API_ID)).getMessage();
+        assertTrue(notAPath.contains("must start with '/'"), notAPath);
+    }
+
     @Test
     void aParameterAndADeprecationAreCarried() {
         TsonApiDescription api = TsonApiSchema.describedBy(resolved(API), API_ID);
-        Operation get = api.operation(HttpMethod.GET, "/{schemaPath}").orElseThrow();
+        Operation get = api.operation(HttpMethod.GET, "/{+schemaPath}").orElseThrow();
 
         assertTrue(get.isDeprecated());
         Parameter parameter = get.parameters().getFirst();

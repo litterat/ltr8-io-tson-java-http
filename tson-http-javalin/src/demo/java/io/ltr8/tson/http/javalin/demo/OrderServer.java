@@ -22,6 +22,7 @@ import io.ltr8.tson.http.javalin.TsonSchemaHandler;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -124,9 +125,9 @@ public final class OrderServer {
      */
     public static Javalin start(int port) {
         Map<String, Class<?>> bindings = Map.of("order", Order.class, "sku_not_found", SkuNotFound.class);
-        Map<String, String> schemas = Map.of(SCHEMA_ID, SCHEMA, ERRORS_ID, ERRORS,
-                TsonProblemSchema.ID, TsonProblemSchema.source(),
-                TsonApiSchema.ID, TsonApiSchema.source(), API_ID, API);
+        Map<String, String> schemas = new HashMap<>(Map.of(SCHEMA_ID, SCHEMA, ERRORS_ID, ERRORS,
+                TsonProblemSchema.ID, TsonProblemSchema.source(), API_ID, API));
+        schemas.putAll(TsonApiSchema.publishedById());
         // metaNameBinder, not bindings: one binds the data a schema describes, the other a governing meta's
         // own vocabulary. Without it the API schema below declares `operation` and nothing can build one.
         Tson tson = Tson.of(ProcessorConfig.defaults()
@@ -184,7 +185,7 @@ public final class OrderServer {
             tsonContext.respondDescribed(201, new Order(order.sku(), order.quantity() * 2), SCHEMA_ID, "order");
         }));
 
-        // `<path>` rather than the declared `{schemaPath}`: an identity path has slashes in it, and only the
+        // `<path>` rather than the declared `{+schemaPath}`: an identity path has slashes in it, and only the
         // angle form matches across them -- which is exactly why coverage is claimed by name rather than by
         // comparing paths. Publishing at the identity path is what makes a !!schema URL dereferenceable, and
         // the API description is a schema too, so the catalog serves it like everything else.

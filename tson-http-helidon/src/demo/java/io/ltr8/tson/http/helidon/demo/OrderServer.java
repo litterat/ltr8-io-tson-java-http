@@ -24,6 +24,7 @@ import io.ltr8.tson.http.helidon.TsonSchemaHandler;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -127,9 +128,9 @@ public final class OrderServer {
      */
     public static WebServer start(int port) {
         Map<String, Class<?>> bindings = Map.of("order", Order.class, "sku_not_found", SkuNotFound.class);
-        Map<String, String> schemas = Map.of(SCHEMA_ID, SCHEMA, ERRORS_ID, ERRORS,
-                TsonProblemSchema.ID, TsonProblemSchema.source(),
-                TsonApiSchema.ID, TsonApiSchema.source(), API_ID, API);
+        Map<String, String> schemas = new HashMap<>(Map.of(SCHEMA_ID, SCHEMA, ERRORS_ID, ERRORS,
+                TsonProblemSchema.ID, TsonProblemSchema.source(), API_ID, API));
+        schemas.putAll(TsonApiSchema.publishedById());
         // metaNameBinder, not bindings: one binds the data a schema describes, the other a governing meta's
         // own vocabulary. Without it the API schema below declares `operation` and nothing can build one.
         Tson tson = Tson.of(ProcessorConfig.defaults()
@@ -199,7 +200,7 @@ public final class OrderServer {
 
                     // Publishing at the identity path is what makes a !!schema URL dereferenceable. any(),
                     // because the paths served are the schemas' own, not routes Helidon knows about -- and
-                    // not the declared `{schemaPath}` either, which is why coverage is claimed by name.
+                    // not the declared `{+schemaPath}` either, which is why coverage is claimed by name.
                     // The API description is a schema too, so the catalog serves it like everything else.
                     coverage.serving("get_schema");
                     routing.any(TsonHandler.asHandler(codec,

@@ -287,11 +287,13 @@ class UpstreamGapsTest {
                   order => { sku: text }
                   fetch => <T> !operation {
                     method: GET  path: "/orders/{id}"
+                    parameters: [ { name: "id"  in: PATH  type: text  required: true } ]
                     responses: [ { status: 200  body: T  description: "found" } ]
                   }
                   getOrder => fetch<order>
                   putOrder => !operation {
                     method: PUT  path: "/orders/{id}"
+                    parameters: [ { name: "id"  in: PATH  type: text  required: true } ]
                     request: order
                     responses: [ { status: 200  body: order  description: "replaced" } ]
                   }""";
@@ -324,7 +326,7 @@ class UpstreamGapsTest {
                   }
                   getOrder => fetch<order>""";
 
-        for (String path : List.of("x", "/x", "/orders/{id}", "/путь")) {
+        for (String path : List.of("/", "/x", "/orders/42", "/путь")) {
             var operations = assertDoesNotThrow(() -> TsonApiSchema.describedBy(
                     resolveAgainstApiMeta(body.formatted(path)), API_ID).operations(), path);
             assertEquals(path, operations.get("getOrder").path());
@@ -347,7 +349,7 @@ class UpstreamGapsTest {
                 %s
                 }""".formatted(API_ID, TsonApiSchema.ID, declarations);
         Tson tson = Tson.of(ProcessorConfig.defaults()
-                .withSchemaAccess(SchemaAccess.of(u -> TsonApiSchema.ID.equals(u) ? TsonApiSchema.source() : null))
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(TsonApiSchema.publishedById())))
                 .withMetaNameBinder(TsonApiSchema.metaNameBinder()));
         tson.resolve(doc);
         return tson;

@@ -498,7 +498,7 @@ key position by role, now that #6's field half is withdrawn, and
 its point 1 should be settled before any schema-side text key is admitted, since that is the one part that touches
 Part 1.
 
-### To file: formats this project needs and the vocabulary cannot state — four types, by strength of evidence
+### To file: formats this project needs and the vocabulary cannot state — three types, by strength of evidence
 
 **Sections:** [TSON-SCHEMA] §2.2.3 (a name an import binds is reserved), §4.2 and §5.5 (atom families and their
 equality), §7.4 (text member sets), §9 (core's contents); [TSON-DATA] §2.2.1 (canonical identity), §2.6 (map key
@@ -592,16 +592,13 @@ evidence method answers it — grep the `ltr8-io-tson-benchmarks` conversions fo
 `media_type`, `mime_type` and `content_type` — and until then the constructor alone costs nothing. Name it after RFC
 6838's term, *media type*; "MIME type" is the legacy one.
 
-**4. `uri_template` (RFC 6570) — constructor in `meta` beside `uri_type`; core instance.** `meta-http.tn`'s
-`operation.path` is `text`, so nothing checks a template's variables against the declared `PATH` parameters. One
-demo template is wrong under the RFC: `/{schemaPath}` percent-encodes the slashes the value carries, where the
-servers serve `{+schemaPath}`. The meta-service experiment's `path_template` approximates level 1 with a pattern. A
-`level?` facet (1–4) bounds the expression operators admitted, since only the low levels can be matched as well as
-expanded. Collision risk is low.
-
-**Deliberately not proposed:** `status_code`, `http_method` and `header_name` as types in core. They are HTTP
-vocabulary rather than formats, and exactly the names #15 shows converted schemas declare for themselves, so they
-belong in a library a schema opts into. This project owns that library (below).
+**Deliberately not proposed:** `status_code`, `http_method`, `header_name` and `uri_template` as types in core or
+`net.tn`. They are HTTP vocabulary rather than formats, and exactly the names #15 shows converted schemas declare for
+themselves, so they belong in a library a schema opts into, which this project now has: `http.tn` (below). A URI
+template in particular builds a URI rather than naming a host, so it is not `net.tn`'s, and its uses outside
+describing an API — HAL links, OpenAPI and AsyncAPI paths, JSON Hyper-Schema — are all that same use. **Raise it
+again** if a consumer outside API description needs RFC 6570, or a description needs levels 3–4; the shape then is a
+constructor in `meta` beside `uri_type`, which reserves no name, with no instance in core or `net.tn`.
 
 **What this project does meanwhile:**
 
@@ -609,13 +606,15 @@ belong in a library a schema opts into. This project owns that library (below).
   RFC (§3.1.1, §3.1.5) and `TsonProblem.at` is typically handed a request path. Pinned by
   `TsonProblemSchemaTest.aRelativeTypeAndInstanceAreValid`.
 - `diagnostic.path`, `schema_pointer` and `schema_id` stay `text` until 1 and 2 exist.
-- The HTTP vocabulary becomes an `http-1.tn` here when wanted: `status_code`, declared identically in
-  `meta-http.tn` and the experiment while `problem.status` is an `int32` that admits `42`; `http_method`, declared
-  twice under two names; and `header_name`, which the meta-service experiment already declares as a case-folding
-  text family (`ApiProbe.aHeaderNameIsHeldFolded`).
+- The HTTP vocabulary is `http.tn` here — `http_method`, `status_code`, `header_name` and `uri_template` (RFC 6570
+  levels 1–2, so `{+var}` is expressible) — importing nothing, as `net.tn` does, so a meta layer and a core-importing
+  schema may both import it. `meta-http.tn` does: its `operation.path` is a `uri_template`, and
+  `TsonApiDescription` checks each template's variables against the operation's PATH parameters, which no pattern
+  can. Still to move onto it: `problem.status`, an `int32` that admits `42`, and the meta-service experiment's own
+  `status_code`, `path_template` and `header_name`.
 
-**Priority:** 1 and 2 medium-high, since the library emits values its own schemas cannot describe; 3 and 4 medium to
-low, each serving one use here.
+**Priority:** 1 and 2 medium-high, since the library emits values its own schemas cannot describe; 3 medium to low,
+serving one use here.
 
 ---
 

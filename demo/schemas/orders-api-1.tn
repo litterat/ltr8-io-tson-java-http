@@ -25,7 +25,7 @@
   @doc:"Every schema this service names is served at its own identity's path."
   get_schema => !operation {
     method:      GET
-    path:        "/{schemaPath}"
+    path:        "/{+schemaPath}"
     summary:     "Fetch a published schema"
     parameters:  [
       !parameter { name: "schemaPath"  in: PATH  type: text  required: true

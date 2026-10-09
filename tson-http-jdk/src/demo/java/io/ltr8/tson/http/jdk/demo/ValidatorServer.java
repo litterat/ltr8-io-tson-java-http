@@ -226,10 +226,10 @@ public final class ValidatorServer {
         // deployment.tn is published; a descriptor governed by it never is. A client fetches the schema
         // to read the profile at /.well-known/tson-deployment, and there is nothing here to serve it the
         // descriptor itself with.
-        Map<String, String> schemas = Map.of(VALIDATE_ID, VALIDATE, API_ID, API,
+        Map<String, String> schemas = new HashMap<>(Map.of(VALIDATE_ID, VALIDATE, API_ID, API,
                 TsonProblemSchema.ID, TsonProblemSchema.source(),
-                TsonDeployment.ID, TsonDeployment.source(),
-                TsonApiSchema.ID, TsonApiSchema.source());
+                TsonDeployment.ID, TsonDeployment.source()));
+        schemas.putAll(TsonApiSchema.publishedById());
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(schemas)))
                 .withDataBindContext(TsonBindings.of(bindings))

@@ -71,8 +71,9 @@ class TsonApiConformanceTest {
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withMetaNameBinder(TsonApiSchema.metaNameBinder())
                 .withSchemaAccess(SchemaAccess.of(uri -> {
-                    if (uri.startsWith(TsonApiSchema.ID)) {
-                        return TsonApiSchema.source();
+                    String metaLayer = TsonApiSchema.publishedById().get(uri);
+                    if (metaLayer != null) {
+                        return metaLayer;
                     }
                     try {
                         return get(URI.create(uri).getPath()).body();
@@ -133,7 +134,7 @@ class TsonApiConformanceTest {
     /** A status the description does not declare is a contract violation even if the body is fine. */
     @Test
     void theSchemaRouteMatchesItsDeclaredResponsesToo() throws Exception {
-        Operation getSchema = api.operation(HttpMethod.GET, "/{schemaPath}").orElseThrow();
+        Operation getSchema = api.operation(HttpMethod.GET, "/{+schemaPath}").orElseThrow();
         assertEquals(200, get("/2026/38/app/order-1.tn").statusCode());
         assertTrue(getSchema.responseFor(200).isPresent());
         assertResponseMatches(getSchema, get("/2026/38/app/nope-1.tn"), 404);

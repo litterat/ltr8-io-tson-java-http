@@ -265,7 +265,9 @@ identity — and it names `request`/`response` as the example. (Revision 35 drop
 `@alias` with it: a reference is a hop the resolved output keeps, and a processor collapses the chain when it
 compiles readers. Nothing here depended on the rewrite, only on the slot being a reference at all.)
 
-**The wiring is three things**: this schema reachable from the `schemaSource`, the bound classes in
+**The wiring is three things**: this schema and the `http.tn` it imports reachable from the `schemaSource` —
+`TsonApiSchema.publishedById()` is both, keyed by identity, and wiring `meta-http.tn` alone leaves an unresolved
+import — the bound classes in
 `io.ltr8.tson.http.api`, and `TsonApiSchema.metaNameBinder()` on the config — **not** `bindings`, which binds
 the data a schema describes. A meta layer's vocabulary is a separate namespace on purpose.
 
@@ -309,7 +311,7 @@ position with a rationale*, not a flag meaning "be sloppy". An opinionated helpe
 not.
 
 **It checks coverage, not path equality, and that is what keeps it framework-agnostic.** The registered path
-and the declared path may differ and often must — the JDK demo serves `/{schemaPath}` from a
+and the declared path may differ and often must — the JDK demo serves `/{+schemaPath}` from a
 `createContext("/")` prefix, Javalin needs `/<path>` because an identity path has slashes that only the angle
 form matches across, and Helidon uses `any()`. Comparing paths would need a translation table per framework,
 and a wrong entry there is a route that silently never matches: a worse failure than the one being prevented.
@@ -355,6 +357,16 @@ concluding `@doc` is dropped is a mistake that looks exactly like a library bug.
 
 **Parameters are where TSON's document-orientation does not reach.** A URL segment cannot carry a record, so
 `parameter.type` names a scalar and nothing enforces that. Stating the limit beats papering over it.
+
+**A path is a URI template, and its variables are its PATH parameters.** `operation.path` is `http.tn`'s
+`uri_template` — RFC 6570 levels 1 and 2, checked at schema load — so `{+schemaPath}`, the reserved expansion an
+identity path with slashes in it needs, is what the demos declare, where `{schemaPath}` would percent-encode the
+slashes. What no pattern can check is the template against the parameters, since it relates two fields, so
+`TsonApiDescription` checks it when it reads a description: a variable no PATH parameter declares, a PATH
+parameter the template never names, or a path not starting with `/` refuses the model with
+`IllegalArgumentException` naming the operation — a startup failure, as an undeclared payload type is.
+`TsonApiSchemaTest.aTemplateAndItsPathParametersMustAgree` pins it. The check is the one exception to "no
+`validate`" above, and for the reason that rule exists: an unsound description has no model.
 
 **An operation says which encodings it speaks** — `encodings?: [encoding]`, `encoding => !enum [TSON JSON]`,
 absent meaning TSON alone and a list read beside TSON, which every operation speaks. An *encoding* and not a
@@ -1217,6 +1229,10 @@ request exercises that.
 - `tson-http-jdk/src/demo/resources/` — the validator demo's own schemas (`validate-1.tn`,
   `validate-api-1.tn`) and its page (`validator.html`). **Not** in `demo/schemas/`, which is the three order
   demos' shared resource path; these belong to one demo on one adapter.
+- `tson-http/src/main/resources/http.tn` (`TsonHttpSchema`) — HTTP's own vocabulary as a library a schema imports:
+  `http_method`, `status_code`, `header_name`, `uri_template`. This project's, not the spec's — HTTP terms rather
+  than formats every schema needs — and it imports nothing, as `net.tn` does, so a meta layer and a core-importing
+  schema can both import it (a meta layer that imported a core-importing schema would reach `void` twice).
 - `tson-http/src/main/resources/meta-http.tn` — the meta layer an API description names. Picked out of four
   designs explored side by side (three as schemas, one as data); the comparison is in git history, and why this
   one won is in "Describing an API" above.

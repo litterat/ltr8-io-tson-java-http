@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -127,9 +128,9 @@ public final class OrderServer {
      */
     public static HttpServer start(int port) throws IOException {
         Map<String, Class<?>> bindings = Map.of("order", Order.class, "sku_not_found", SkuNotFound.class);
-        Map<String, String> schemas = Map.of(SCHEMA_ID, SCHEMA, ERRORS_ID, ERRORS,
-                TsonProblemSchema.ID, TsonProblemSchema.source(),
-                TsonApiSchema.ID, TsonApiSchema.source(), API_ID, API);
+        Map<String, String> schemas = new HashMap<>(Map.of(SCHEMA_ID, SCHEMA, ERRORS_ID, ERRORS,
+                TsonProblemSchema.ID, TsonProblemSchema.source(), API_ID, API));
+        schemas.putAll(TsonApiSchema.publishedById());
         // metaNameBinder, not bindings: one binds the data a schema describes, the other a governing meta's
         // own vocabulary. Without it the API schema below declares `operation` and nothing can build one.
         Tson tson = Tson.of(ProcessorConfig.defaults()
@@ -196,7 +197,7 @@ public final class OrderServer {
         // Publishing the schemas at their own identity paths is what makes the URL in a !!schema directive --
         // and the one in an error body -- something a client can actually dereference. The API description is
         // a schema too, so it needs no route of its own: the catalog serves it like everything else.
-        // A prefix, not the declared `/{schemaPath}`: an identity path has slashes and this framework matches
+        // A prefix, not the declared `/{+schemaPath}`: an identity path has slashes and this framework matches
         // a prefix rather than a pattern. Coverage is claimed by name for exactly this reason -- checking the
         // paths were equal would need a translation table per framework, and a wrong entry there is a route
         // that silently never matches.

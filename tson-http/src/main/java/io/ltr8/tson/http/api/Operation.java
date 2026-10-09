@@ -10,6 +10,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * One HTTP operation, written by a schema governed by {@code meta-http.tn} and read back from that
@@ -54,6 +55,23 @@ public record Operation(HttpMethod method, String path, Optional<String> summary
         }
         encodings = List.copyOf(spoken);
     }
+
+    /**
+     * The variables {@code path}'s URI template names, in order -- {@code schemaPath} for both {@code
+     * /{schemaPath}} and {@code /{+schemaPath}}, the operator being how a value expands rather than which
+     * value. {@code http.tn}'s {@code uri_template} admits one variable to an expression, so each is one name.
+     */
+    public List<String> pathVariables() {
+        return PATH_VARIABLE.matcher(path).results().map(match -> match.group(1)).toList();
+    }
+
+    /** The parameters carried in the path -- the ones its template must name. */
+    public List<String> pathParameters() {
+        return parameters.stream().filter(parameter -> parameter.in() == ParameterLocation.PATH)
+                .map(Parameter::name).toList();
+    }
+
+    private static final Pattern PATH_VARIABLE = Pattern.compile("\\{[+#]?([^}]+)}");
 
     @Override
     public List<TypeRef> references() {

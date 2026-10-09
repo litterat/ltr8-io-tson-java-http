@@ -24,8 +24,8 @@ import java.util.TreeSet;
  * <h2>Coverage, not path equality — which is what keeps this framework-agnostic</h2>
  *
  * <p><b>The registered path and the declared path are allowed to differ, and often must.</b> The JDK demo
- * serves {@code /{schemaPath}} from a {@code createContext("/")} prefix; Javalin needs {@code /<path>} where
- * the description says {@code /{schemaPath}}, an identity path having slashes that only the angle form matches
+ * serves {@code /{+schemaPath}} from a {@code createContext("/")} prefix; Javalin needs {@code /<path>} where
+ * the description says {@code /{+schemaPath}}, an identity path having slashes that only the angle form matches
  * across. Checking that the paths are *equal* would demand a translation table per framework, and a wrong
  * entry there means a route that silently never matches — a worse failure than the one being prevented.
  *
