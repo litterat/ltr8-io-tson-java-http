@@ -14,6 +14,10 @@ import java.util.Map;
  * needs, and the names a converted API description declares for itself, so they are imported where wanted and
  * reserve their names nowhere else. {@code meta-http.tn} imports it, so a server publishing an API description
  * publishes this too ({@code TsonApiSchema.publishedById()} carries both).
+ *
+ * <p><b>Governed by the meta-kernel</b>, at {@code meta-http.tn}'s level, since an import should not cross
+ * governing levels. An ordinary schema importing it would cross the other way, which the library does not
+ * refuse today but should; how such a schema shares this vocabulary is this project's {@code UPSTREAM.md} #4.
  */
 public final class TsonHttpSchema {
 

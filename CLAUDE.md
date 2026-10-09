@@ -1231,8 +1231,11 @@ request exercises that.
   demos' shared resource path; these belong to one demo on one adapter.
 - `tson-http/src/main/resources/http.tn` (`TsonHttpSchema`) — HTTP's own vocabulary as a library a schema imports:
   `http_method`, `status_code`, `header_name`, `uri_template`. This project's, not the spec's — HTTP terms rather
-  than formats every schema needs — and it imports nothing, as `net.tn` does, so a meta layer and a core-importing
-  schema can both import it (a meta layer that imported a core-importing schema would reach `void` twice).
+  than formats every schema needs. **Governed by the meta-kernel**, at `meta-http.tn`'s level, because a meta layer
+  and an ordinary schema stand at different levels and an import should not cross them — the library does not
+  refuse one today (`UPSTREAM.md` #4, pinned by `UpstreamGapsTest.anImportAcrossGoverningLevelsIsNotRefused`). So an
+  ordinary schema does not import it, and `problem.status` stays `int32` until #4 says how the two levels share a
+  vocabulary.
 - `tson-http/src/main/resources/meta-http.tn` — the meta layer an API description names. Picked out of four
   designs explored side by side (three as schemas, one as data); the comparison is in git history, and why this
   one won is in "Describing an API" above.

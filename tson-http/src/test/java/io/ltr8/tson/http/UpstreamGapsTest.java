@@ -769,6 +769,52 @@ class UpstreamGapsTest {
                 "a U-label host and its A-label are one identity now -- check the allow-list follows");
     }
 
+    // ── open: an import across governing levels is not refused ───────────────────────────────────
+
+    /**
+     * <b>A schema may import one governed by a different meta level, and nothing refuses it.</b> A meta layer
+     * is governed by the meta-kernel; an ordinary schema by {@code meta.tn}. They are different levels -- one
+     * declares the constructors the other's entries are built with -- and an import that crosses them mixes
+     * a structure namespace with a type namespace. Both directions resolve today:
+     *
+     * <ul>
+     *   <li>a meta layer importing a {@code meta.tn}-governed library, which is how this project first built
+     *       {@code meta-http.tn} on {@code http.tn} before moving {@code http.tn} to the kernel;</li>
+     *   <li>an ordinary schema importing a kernel-governed library -- {@code http.tn} as it now is.</li>
+     * </ul>
+     *
+     * Fails the day either is refused. {@code UPSTREAM.md} #4 carries the bug and the question it opens: how a
+     * meta layer and the schemas it governs are to share a vocabulary, if not by import.
+     */
+    @Test
+    void anImportAcrossGoverningLevelsIsNotRefused() {
+        String library = """
+                !!id:"https://example.com/2026/38/app/levels-lib.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                { stock_code => !text_type { pattern: "[A-Z]{3}" } }""";
+        String layer = """
+                !!id:"https://example.com/2026/38/app/levels-layer.tn"
+                !!meta:"https://tson.io/2026/38/m/meta-kernel.tn"
+                !!import:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://example.com/2026/38/app/levels-lib.tn"
+                { item => data & { code: stock_code } }""";
+        Tson kernelOverMeta = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(
+                Map.of("https://example.com/2026/38/app/levels-lib.tn", library)))));
+        assertEquals(List.of(), kernelOverMeta.validateSchema(layer),
+                "a kernel-governed layer importing a meta.tn-governed library is refused now -- see UPSTREAM.md #4");
+
+        String application = """
+                !!id:"https://example.com/2026/38/app/levels-app.tn"
+                !!meta:"https://tson.io/2026/38/m/meta.tn"
+                !!import:"https://tson.io/2026/38/m/core.tn"
+                !!import:"%s"
+                { reply => { status: status_code } }""".formatted(TsonHttpSchema.ID);
+        Tson metaOverKernel = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(TsonHttpSchema.publishedById()))));
+        assertEquals(List.of(), metaOverKernel.validateSchema(application),
+                "a meta.tn-governed schema importing kernel-governed http.tn is refused now -- see UPSTREAM.md #4");
+    }
+
     // ── decided upstream: a stated schema overrides the document's own ──────────────────────────────
 
     /**

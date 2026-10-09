@@ -1,5 +1,5 @@
 !!id:"https://tson.io/2026/38/io/ltr8/http/http.tn"
-!!meta:"https://tson.io/2026/38/m/meta.tn"
+!!meta:"https://tson.io/2026/38/m/meta-kernel.tn"
 @doc:"""
   HTTP's own vocabulary, for a schema that describes or carries HTTP: a method, a status code, a header field
   name, and a URI template.
@@ -10,9 +10,10 @@
   them. tson-java's bundled net.tn is the same shape for network identifiers; a URI template is not one of
   those (it builds a URI rather than naming a host), and its uses outside describing an API are few.
 
-  It imports nothing, as net.tn does: every type is built from meta's own constructors, so a schema may import
-  it beside core and a meta layer may import it beside meta.tn -- meta-http.tn does, for its operations --
-  without one name reaching it twice.
+  Governed by the meta-kernel, because meta-http.tn -- a meta layer, and so kernel-governed -- imports it for
+  its operations, and an import should not cross governing levels. Every type is built from a kernel
+  constructor (enum, integer_type, text_type), and it imports nothing. How an ordinary schema shares this
+  vocabulary -- an error schema wanting the same status_code -- is open: this project's UPSTREAM.md #4.
   """
 {
   @doc:"A request method (RFC 9110 §9), the ones an API description has a use for."

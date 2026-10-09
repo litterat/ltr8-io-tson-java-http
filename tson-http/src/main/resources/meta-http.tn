@@ -32,8 +32,8 @@
 
   Governed directly by the meta-kernel, which is not a style choice: declaring a constructor is
   permitted only in a schema whose own !!meta is the kernel. So this is a SIBLING of meta.tn, and
-  imports it for the vocabulary its own declarations use -- and http.tn for HTTP's: http_method,
-  status_code and uri_template.
+  imports it for the vocabulary its own declarations use -- and http.tn, kernel-governed as this layer is,
+  for HTTP's: http_method, status_code and uri_template.
   """
 {
   parameter_location => !enum [PATH QUERY HEADER]

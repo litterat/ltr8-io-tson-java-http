@@ -89,6 +89,46 @@ today. Pinned by `UpstreamGapsTest.anIdentityWithANonAsciiHostCannotBeAllowListe
 
 ---
 
+## 4. An import across governing levels is not refused — and a meta layer has no other way to a shared vocabulary
+
+**Hit:** this project's `meta-http.tn` is a meta layer — governed by the meta-kernel, because declaring a constructor
+(`operation => data & {…}`) is permitted only there. Its constructors want HTTP's vocabulary: `operation.method` an
+`http_method`, `response.status` a `status_code`, `operation.path` a `uri_template`. Those were first declared in an
+ordinary library, `http.tn` governed by `meta.tn`, and `meta-http.tn` imported it. That resolved, and it should not
+have: the two are different levels — one declares the constructors the other's entries are built with — and an
+import across them mixes a structure namespace with a type namespace. The other direction resolves too: an ordinary
+schema (`meta.tn`, importing core) importing a kernel-governed library.
+
+**The bug:** the resolver refuses neither. [TSON-SCHEMA] §2.2.3 and §3.3.1 describe a namespace built from `!!meta`
+and `!!import`, and §3.1's ladder (document → schema → meta-schema → kernel) has levels, but nothing says an imported
+schema must stand at the importer's level. The rule wanted is that it must — its `!!meta` the importer's own — with
+the bundled chain as the existing case it fits (`meta.tn` is kernel-governed and imports the kernel). Pinned, both
+directions, by `UpstreamGapsTest.anImportAcrossGoverningLevelsIsNotRefused`.
+
+**The dilemma the fix exposes**, which is the spec half. An API description is the motivating case for a meta layer
+(§4.1's `data` kind cites it), and an API's constructors want type names that ordinarily live in schemas — HTTP's
+methods, status codes, URI templates; and, beyond this project, `net.tn`'s `host` for a server list, which a meta
+layer cannot import from `meta.tn`'s level either. With the level rule, a meta layer gets them only by declaring
+them at its own level, and the schemas it governs — or an application's error schema wanting the same
+`status_code` — cannot import that declaration back. So one vocabulary is declared twice, once per level, with
+nothing relating the two copies. Options to weigh:
+
+- **A level-neutral library**: a schema governed by the kernel that declares only types built from kernel
+  constructors, importable from either level — which is what `http.tn` now happens to be. The spec would say what
+  makes a library level-neutral and that importing one is not a crossing.
+- **The governed schema sees its meta's vocabulary**: a meta layer's imported types reachable from the schemas it
+  governs, so `status_code` declared once at the meta level is nameable below it. §3.3.1 already places the
+  kernel's structural vocabulary in a meta-governed schema's namespace by this route; it would generalise it.
+- **Bundled libraries at both levels**: `net.tn` and its kind published for meta layers as well, which solves the
+  bundled case and leaves a project's own vocabulary (this one's `http.tn`) with the problem.
+
+**What this project does meanwhile:** `http.tn` is governed by the meta-kernel and imports nothing, so `meta-http.tn`
+imports it at its own level. Its types are all built from kernel constructors (`enum`, `integer_type`, `text_type`),
+which is why that works. An application schema importing it — `problem.tn`'s `status`, for one — would cross the other
+way, so `problem.status` stays an `int32` until this is settled.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. That register renumbers from #1
@@ -607,11 +647,11 @@ constructor in `meta` beside `uri_type`, which reserves no name, with no instanc
   `TsonProblemSchemaTest.aRelativeTypeAndInstanceAreValid`.
 - `diagnostic.path`, `schema_pointer` and `schema_id` stay `text` until 1 and 2 exist.
 - The HTTP vocabulary is `http.tn` here — `http_method`, `status_code`, `header_name` and `uri_template` (RFC 6570
-  levels 1–2, so `{+var}` is expressible) — importing nothing, as `net.tn` does, so a meta layer and a core-importing
-  schema may both import it. `meta-http.tn` does: its `operation.path` is a `uri_template`, and
-  `TsonApiDescription` checks each template's variables against the operation's PATH parameters, which no pattern
-  can. Still to move onto it: `problem.status`, an `int32` that admits `42`, and the meta-service experiment's own
-  `status_code`, `path_template` and `header_name`.
+  levels 1–2, so `{+var}` is expressible) — governed by the meta-kernel so the meta layer `meta-http.tn` imports it at
+  its own level (`UPSTREAM.md` #4). Its `operation.path` is a `uri_template`, and `TsonApiDescription` checks each
+  template's variables against the operation's PATH parameters, which no pattern can. `problem.status` and the
+  meta-service experiment's own `status_code`, `path_template` and `header_name` stay where they are until #4 says
+  how a schema shares that vocabulary.
 
 **Priority:** 1 and 2 medium-high, since the library emits values its own schemas cannot describe; 3 medium to low,
 serving one use here.
