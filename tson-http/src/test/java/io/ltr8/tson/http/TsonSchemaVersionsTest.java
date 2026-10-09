@@ -176,6 +176,13 @@ class TsonSchemaVersionsTest {
         assertTrue(refused.getMessage().contains("!!schema"), refused.getMessage());
     }
 
+    /**
+     * <b>A document naming no version is read against the default one</b> -- through {@link
+     * TsonSchemaVersions.Routed#readObjectAs}, which states the version's schema. Reading the body by its own
+     * binding reads it schemaless, since it names no schema, and a schemaless read refuses a tag outside the
+     * built-in vocabulary: the second half pins that, so a handler taking that path gets a 400 rather than an
+     * unchecked document. It used to pass silently, a schemaless bind accepting a tag naming the bound class.
+     */
     @Test
     void anExplicitDefaultVersionIsUsedWhenADocumentNamesNone() {
         TsonSchemaVersions withDefault = TsonSchemaVersions.builder()
@@ -186,8 +193,14 @@ class TsonSchemaVersionsTest {
 
         var routed = withDefault.route(body("!order { sku: \"A\" quantity: 1 }"));
         assertEquals(V1_ID, routed.schemaId());
-        assertEquals(new OrderV1("A", 1),
-                routed.codec().readObject(routed.body(), "application/tson", OrderV1.class));
+        assertEquals(new OrderV1("A", 1), routed.readObjectAs("order", OrderV1.class));
+
+        var unchecked = withDefault.route(body("!order { sku: \"A\" quantity: 1 }"));
+        TsonHttpException refused = assertThrows(TsonHttpException.class,
+                () -> unchecked.codec().readObject(unchecked.body(), "application/tson", OrderV1.class));
+        assertEquals(TsonHttpException.BAD_REQUEST, refused.status());
+        assertEquals(List.of(Diagnostic.Code.UNKNOWN_TYPE_REF),
+                refused.diagnostics().stream().map(Diagnostic::code).toList());
     }
 
     /**

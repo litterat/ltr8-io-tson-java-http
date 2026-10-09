@@ -9,6 +9,7 @@ import io.ltr8.tson.base.policy.LimitsPolicy;
 import io.ltr8.tson.base.policy.ProcessorPolicy;
 import io.ltr8.tson.base.policy.ScriptPolicy;
 import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.unicode.RestrictionLevel;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -60,7 +61,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
             "deployment", TsonDeployment.class,
             "acceptance_profile", AcceptanceProfile.class,
             "listener", Listener.class,
-            "restriction_level", ScriptPolicy.Level.class,
+            "restriction_level", RestrictionLevel.class,
             "policy", Policy.class,
             "identifier_policy", Policy.Identifiers.class,
             "script_policy", Policy.Scripts.class,
@@ -128,7 +129,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
          * the look-alike rule's own switch, and the script combinations admitted over the level.
          */
         @Typename(name = "identifier_policy")
-        public record Identifiers(ScriptPolicy.Level level, @Field("per_segment") boolean perSegment,
+        public record Identifiers(RestrictionLevel level, @Field("per_segment") boolean perSegment,
                                   @Field("skeleton_distinctness") boolean skeletonDistinctness,
                                   List<List<String>> permitting) {
             /** @throws IllegalArgumentException if {@code permitting} names something that is not a script */
@@ -143,7 +144,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
          * ordinary characters in a value — which the library makes unwritable rather than refused.
          */
         @Typename(name = "script_policy")
-        public record Scripts(ScriptPolicy.Level level, List<List<String>> permitting) {
+        public record Scripts(RestrictionLevel level, List<List<String>> permitting) {
             /** @throws IllegalArgumentException if {@code permitting} names something that is not a script */
             public Scripts {
                 permitting = canonical(permitting);
@@ -192,7 +193,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
             }
         }
 
-        private static ScriptPolicy scriptPolicy(ScriptPolicy.Level level, List<List<String>> permitting) {
+        private static ScriptPolicy scriptPolicy(RestrictionLevel level, List<List<String>> permitting) {
             ScriptPolicy policy = ScriptPolicy.of(level);
             for (List<String> combination : permitting) {
                 policy = policy.permitting(combination.stream().map(UnicodeScript::forName)

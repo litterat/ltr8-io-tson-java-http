@@ -1071,11 +1071,14 @@ So the validator's descriptor writes out the two parts it leaves at the default.
 `unicode_data_version` is left out of a descriptor: the tables are the processor's, so a descriptor naming one
 this processor does not carry stops the read.
 
-**The fetch allow-list is `[hostname]`, from the bundled `net.tn`** (Revision 38's proposal): RFC 1123 labels folded
-to lowercase, so an entry is the host a schema identity names and a port, a URL or an address is refused at read
-(`TsonDeploymentTest.theFetchAllowListHoldsHostNames`). `listener.host` stays `text`: `( hostname | ipv4 | ipv6 )`
-is not disjoint, all three being string-class (§5.4), so it would need a tag at every use. `UPSTREAM.md` proposes a
-`host` type for it.
+**Hosts are `net.tn`'s `host`** (Revision 38's proposal): a host name in either label form or an IPv4 or IPv6
+address, one string-class atom, so `listener.host` takes `localhost`, `"127.0.0.1"` and `"[::1]"` untagged — where
+`( hostname | ipv4 | ipv6 )` is not disjoint under §5.4 and would need a tag on every value. `schema_hosts` is a
+`set<host>`, compared by the type's equality: `bücher.example` is `xn--bcher-kva.example`, `Example.COM` is
+`example.com`, `[::1]` is `0:0:0:0:0:0:0:1`, so one host twice is refused whatever the spellings, and a port, a URL,
+a trailing dot or a zone identifier is refused at read with its fix named. A `String` component binds the canonical
+text (U-label names, RFC 5952 for IPv6). `TsonDeploymentTest`'s four host tests pin all of it. `allowHost` does not
+yet take a non-ASCII name — `UPSTREAM.md` #3.
 
 **An absent policy is not a permissive one.** The two defaults point opposite ways (Highly Restrictive over
 declared names, unrestricted over values), so a descriptor stating no `policy` returns empty from

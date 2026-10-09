@@ -52,12 +52,11 @@
   @doc:"""
     Where this instance listens. Absent members leave the caller's own defaults alone.
 
-    `host` is `text`, not net.tn's types: a listener is as often `127.0.0.1` or `::1` as `localhost`, and
-    `( hostname | ipv4 | ipv6 )` is not disjoint -- all three are string-class ([TSON-SCHEMA] §5.4) -- so the
-    choice would need `!ipv4 "127.0.0.1"` written at every use, which is a trap in a file an operator writes.
+    `host` is net.tn's: a host name or an IPv4 or IPv6 address, one string-class type, so `localhost`,
+    `"127.0.0.1"`, `"::1"` and `"[::1]"` are written untagged, and an address compares as an address.
     """
   listener => {
-    host?: text
+    host?: host
     port?: uint16
   }
 
@@ -76,16 +75,18 @@
     security setting halts the process rather than being carried as a policy quietly missing a script.
 
     `schema_hosts` is the fetch allow-list: which schema identities this deployment will load over the
-    network, each a net.tn `hostname` -- RFC 1123 labels, case-folded, so `Schemas.Example.COM` is the host
-    `schemas.example.com` names and a URL, a port or a path is refused when the descriptor is read. Empty means none, which is a real posture rather than a missing setting -- a service that
-    resolves only what it was given fetches nothing. It is deliberately NOT in `acceptance_profile`: a
-    counterparty has no business knowing which origins this deployment trusts.
+    network, each a net.tn `host` -- a host name in either label form (`bücher.example` is
+    `xn--bcher-kva.example`, and `Example.COM` is `example.com`), or an address. An entry is compared by the
+    type's own equality, so the spelling an operator writes does not decide what matches, and a URL, a port or
+    a path is refused when the descriptor is read. Empty means none, which is a real posture rather than a
+    missing setting -- a service that resolves only what it was given fetches nothing. It is deliberately NOT
+    in `acceptance_profile`: a counterparty has no business knowing which origins this deployment trusts.
     """
   deployment => {
     name:          text
     listener?:     listener
     policy?:       policy
-    schema_hosts?: [hostname]
+    schema_hosts?: set<host>
   }
 
   @doc:"""

@@ -5,6 +5,7 @@ import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.policy.IdentifierPolicy;
 import io.ltr8.tson.base.policy.ProcessorPolicy;
 import io.ltr8.tson.base.policy.ScriptPolicy;
+import io.ltr8.unicode.RestrictionLevel;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -50,7 +51,7 @@ class TsonDeploymentTest {
         assertEquals(8080, deployment.listener().orElseThrow().port().orElseThrow());
         assertEquals(List.of("schemas.example.com"), deployment.schemaHosts());
         TsonDeployment.Policy policy = deployment.policy().orElseThrow();
-        assertEquals(ScriptPolicy.Level.HIGHLY_RESTRICTIVE, policy.identifierPolicy().level());
+        assertEquals(RestrictionLevel.HIGHLY_RESTRICTIVE, policy.identifierPolicy().level());
         assertTrue(policy.identifierPolicy().perSegment());
         assertEquals(32, policy.limits().maxDepth());
     }
@@ -93,26 +94,73 @@ class TsonDeploymentTest {
                 Optional.of(ProcessorPolicy.dataVersion()), stated.limits()), TsonDeployment.Policy.of(inForce));
     }
 
+    /** A descriptor with this {@code schema_hosts} and, where given, this {@code listener.host}. */
+    private static String withHosts(String hosts, String listenerHost) {
+        return """
+                !!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
+                !deployment { name: "n"  %s schema_hosts: [%s] }""".formatted(
+                listenerHost == null ? "" : "listener: { host: " + listenerHost + " }", hosts);
+    }
+
     /**
-     * <b>The fetch allow-list holds host names</b>, net.tn's {@code hostname}: RFC 1123 labels folded to
-     * lowercase, so a descriptor's spelling of a host is the host a schema identity names (§2.2.1 lowercases
-     * it), and what is not a host -- a port, a URL, a dotted-quad -- is refused before it can be an entry that
-     * matches nothing.
+     * <b>The fetch allow-list holds hosts, compared by net.tn's {@code host} equality.</b> A host name in either
+     * label form, any ASCII case, or an address in any spelling, reads to one canonical text -- the U-label name,
+     * the dotted-quad, RFC 5952 for IPv6 -- so the spelling an operator writes never decides what matches. A
+     * {@code String} component binds that text.
      */
     @Test
-    void theFetchAllowListHoldsHostNames() {
-        TsonDeployment deployment = TsonDeployment.read("""
-                !!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
-                !deployment { name: "n"  schema_hosts: ["Schemas.Example.COM"] }""");
-        assertEquals(List.of("schemas.example.com"), deployment.schemaHosts());
+    void theFetchAllowListReadsEachHostToItsCanonicalText() {
+        assertEquals(List.of("example.com", "bücher.example", "bücher.example", "10.0.0.1", "::1", "::1"),
+                List.of("\"Example.COM\"", "\"bücher.example\"", "\"xn--bcher-kva.example\"", "\"10.0.0.1\"",
+                        "\"[::1]\"", "\"0:0:0:0:0:0:0:1\"").stream()
+                        .map(host -> TsonDeployment.read(withHosts(host, null)).schemaHosts().getFirst()).toList());
+    }
 
-        for (String notAHost : List.of("schemas.example.com:443", "https://schemas.example.com", "10.0.0.1")) {
-            List<Diagnostic> problems = TsonDeployment.tson().validate("""
-                    !!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
-                    !deployment { name: "n"  schema_hosts: ["%s"] }""".formatted(notAHost));
-
-            assertEquals(1, problems.size(), () -> notAHost + ": " + problems);
+    /**
+     * <b>It is a set, so one host twice is refused under any two spellings</b> -- which is the type's equality
+     * at work, not the text's. An IPv4 address and its IPv4-mapped IPv6 form are two hosts, each family keeping
+     * its own equality.
+     */
+    @Test
+    void oneHostTwiceIsRefusedWhicheverSpellingsAreUsed() {
+        for (String twice : List.of("\"bücher.example\" \"xn--bcher-kva.example\"", "\"Example.COM\" \"example.com\"",
+                "\"::1\" \"[::1]\"", "\"::1\" \"0:0:0:0:0:0:0:1\"")) {
+            List<Diagnostic> problems = TsonDeployment.tson().validate(withHosts(twice, null));
+            assertEquals(1, problems.size(), () -> twice + ": " + problems);
+            assertTrue(problems.getFirst().message().contains("unique"), problems::toString);
         }
+        assertEquals(List.of("127.0.0.1", "::ffff:127.0.0.1"),
+                TsonDeployment.read(withHosts("\"127.0.0.1\" \"::ffff:127.0.0.1\"", null)).schemaHosts());
+    }
+
+    /**
+     * <b>What is not a host is refused when the descriptor is read, and the refusal names the fix</b> -- a port,
+     * a URL, percent-encoding, a trailing dot, an uppercase letter beyond ASCII, a zone identifier. Each would
+     * otherwise be an entry that matches nothing.
+     */
+    @Test
+    void whatIsNotAHostIsRefusedWithItsFix() {
+        for (String notAHost : List.of("example.com:443", "https://example.com", "b%C3%BCcher.example",
+                "example.com.", "BÜCHER.example", "fe80::1%eth0")) {
+            List<Diagnostic> problems = TsonDeployment.tson().validate(withHosts("\"" + notAHost + "\"", null));
+            assertEquals(List.of(Diagnostic.Code.ATOM_FORM_INVALID), problems.stream().map(Diagnostic::code).toList(),
+                    () -> notAHost + ": " + problems);
+        }
+        assertTrue(TsonDeployment.tson().validate(withHosts("\"BÜCHER.example\"", null)).getFirst().message()
+                .contains("write 'bücher.example'"));
+    }
+
+    /**
+     * <b>A listener's host is a name or an address, written untagged.</b> net.tn's {@code host} is one
+     * string-class type, so the choice {@code ( hostname | ipv4 | ipv6 )} -- not disjoint under §5.4, and so
+     * needing a tag on every value -- is not needed.
+     */
+    @Test
+    void aListenerHostIsANameOrAnAddressUntagged() {
+        assertEquals(List.of("localhost", "127.0.0.1", "::1"),
+                List.of("localhost", "\"127.0.0.1\"", "\"[::1]\"").stream()
+                        .map(host -> TsonDeployment.read(withHosts("", host)).listener().orElseThrow().host()
+                                .orElseThrow()).toList());
     }
 
     /**
@@ -195,7 +243,7 @@ class TsonDeploymentTest {
         TsonDeployment.AcceptanceProfile profile = profileOf(TsonDeployment.read(FULL));
 
         assertEquals("production", profile.name());
-        assertEquals(ScriptPolicy.Level.MODERATELY_RESTRICTIVE, profile.policy().tokenPolicy().level());
+        assertEquals(RestrictionLevel.MODERATELY_RESTRICTIVE, profile.policy().tokenPolicy().level());
 
         // Nothing about what this deployment trusts, and nothing about where it listens.
         String written = TsonDeployment.tson().objectWriter()
@@ -222,8 +270,8 @@ class TsonDeploymentTest {
                 !deployment { name: "minimal" }""")).policy();
 
         assertEquals(TsonDeployment.Policy.of(ProcessorPolicy.defaults()), policy);
-        assertEquals(ScriptPolicy.Level.HIGHLY_RESTRICTIVE, policy.identifierPolicy().level());
-        assertEquals(ScriptPolicy.Level.UNRESTRICTED, policy.tokenPolicy().level());
+        assertEquals(RestrictionLevel.HIGHLY_RESTRICTIVE, policy.identifierPolicy().level());
+        assertEquals(RestrictionLevel.UNRESTRICTED, policy.tokenPolicy().level());
         assertEquals(64, policy.limits().maxDepth());
     }
 

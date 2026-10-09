@@ -394,6 +394,10 @@ public final class TsonSchemaVersions {
          * not said which contract they are writing to, and picking for them is how a v2 client silently gets
          * v1 behaviour -- the failure this whole class exists to prevent. Configure it only where an older
          * unversioned client has to keep working.
+         *
+         * <p><b>Read a defaulted body with {@link Routed#readObjectAs}</b>, which states the version's schema. The
+         * body names none, so reading it by its own binding reads it schemaless, and a schemaless read refuses its
+         * root tag as outside the built-in vocabulary.
          */
         public Builder defaultVersion(String schemaId) {
             this.defaultSchemaId = Optional.of(schemaId);

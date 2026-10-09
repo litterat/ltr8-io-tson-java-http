@@ -77,12 +77,15 @@ So the identity space admits names the fetching source cannot reach. For this pr
 loader: a request body naming such a schema is refused as off the allow-list, which tells the sender to fix a
 reference the spec calls valid.
 
-**The change:** decide how a U-label host and its A-label relate (the spec entry below), then make `allowHost` and
-the policy check follow it — at minimum, accept a Unicode host in `allowHost` and compare it as `CanonicalIdentity`
-does, so an operator can allow-list what a document can name.
+**The change:** the spec side is now tson-java's `SPEC-FEEDBACK.md` #4, with #5 and #6 built: `net.tn`'s `hostname`
+and `host` are atoms whose equality makes `bücher.example` and `xn--bcher-kva.example` one value (`io.ltr8.net`'s
+`HostName`/`Host`). What remains is the library following it: canonical identity taking an identity's host as a
+`host` value (#4, next upstream), and `allowHost` taking a `Host` — either label form, or an address — and comparing
+by its equality, so the allow-list this project's `deployment.tn` now types as `set<host>` matches as the type does.
 
-**Workaround in place:** none; no schema this project publishes or serves has a non-ASCII host. Pinned by
-`UpstreamGapsTest.anIdentityWithANonAsciiHostCannotBeAllowListed`.
+**Workaround in place:** none; no schema this project publishes or serves has a non-ASCII host. `TsonDeployment`
+reads `schema_hosts` to each host's canonical text (U-label names), which `allowHost` refuses for a non-ASCII name
+today. Pinned by `UpstreamGapsTest.anIdentityWithANonAsciiHostCannotBeAllowListed`.
 
 ---
 
@@ -495,37 +498,7 @@ key position by role, now that #6's field half is withdrawn, and
 its point 1 should be settled before any schema-side text key is admitted, since that is the one part that touches
 Part 1.
 
-### To file: a non-ASCII host — one identity or two, and a host name that can say it
-
-**Sections:** [TSON-DATA] §2.2.1 (canonical identity: lowercase host plus path; identities as IRI-references since
-Revision 37); [TSON-SCHEMA] §10.1, §11.2 (fetching and its allow-lists); Revision 38's `net.tn` (`hostname`).
-
-**Kind:** underspecification, from the consumer whose fetch path meets it (`UPSTREAM.md` #3 is the library half).
-
-**The gap.** An IRI host may be written in U-labels (`bücher.example`) or A-labels (`xn--bcher-kva.example`), and
-the two name one DNS host. §2.2.1 lowercases a host and compares the rest as written, so today they are two
-identities, and nothing says whether that is intended. Either answer is defensible, and each has a consequence the
-spec should state:
-
-- **Two identities, by rule.** Simple, and canonical identity stays a string operation. Then a publisher must
-  pick one spelling and a document must use it, and §2.2.1 should say that the host is compared as written, with
-  no IDNA mapping — so an implementation does not quietly add one.
-- **One identity, through IDNA (UTS #46 to A-labels).** Matches DNS, and lets a document use either spelling.
-  Then canonical identity depends on IDNA tables, which move with Unicode releases, the way §8.3 marks the name
-  hygiene rules unstable — a reason to prefer the first answer for something content-addressed.
-
-**And `net.tn` needs a host name that can be said either way.** `hostname` is A-labels only, which is right for a
-DNS-facing value, but a deployment's fetch allow-list names the host a schema identity names, and that may be a
-U-label. Whichever answer §2.2.1 takes, an allow-list entry has to be able to spell it: under the first, an
-`idn_hostname`-style sibling (U-labels, NFC, case-folded); under the second, `hostname` plus the mapping.
-
-**What this project does meanwhile:** `deployment.tn`'s `schema_hosts` is `[hostname]`, so it allow-lists ASCII hosts
-only, which is everything it serves today. Pinned by `UpstreamGapsTest.anIdentityWithANonAsciiHostCannotBeAllowListed`.
-
-**Priority:** medium — low frequency, but it is a place the identity space and the fetch path disagree, and the
-earlier it is settled the fewer published identities depend on the answer.
-
-### To file: formats this project needs and the vocabulary cannot state — five types, by strength of evidence
+### To file: formats this project needs and the vocabulary cannot state — four types, by strength of evidence
 
 **Sections:** [TSON-SCHEMA] §2.2.3 (a name an import binds is reserved), §4.2 and §5.5 (atom families and their
 equality), §7.4 (text member sets), §9 (core's contents); [TSON-DATA] §2.2.1 (canonical identity), §2.6 (map key
@@ -602,26 +575,7 @@ whose **equality is canonical identity**, with an instance for the canonical spe
 normalization: the host folds, the path keeps its case, and the scheme and the pin are dropped rather than folded.
 tson-java's `CanonicalIdentity` is the existing implementation.
 
-**3. `host` (RFC 3986 §3.2.2) — `net.tn`, beside `hostname`.** Revision 38's proposal adds `net.tn` with
-`hostname` (RFC 1123 labels, ASCII-folded), and `deployment.tn`'s `schema_hosts` is now `[hostname]`. What is still
-not usable is a host as RFC 3986 spells one — a name *or* an address — which is what `listener.host` is: a bind
-address is as often `127.0.0.1` or `::1` as `localhost`. `( hostname | ipv4 | ipv6 )` resolves, but §5.4 makes all
-three string-class, so the choice is not disjoint and every value needs a tag — `host: !ipv4 "127.0.0.1"` in a file an
-operator writes by hand — and so `listener.host` stays `text`. Measured: an untagged value at that choice is refused
-with *"'host' is a choice -- a value at this position requires an explicit type annotation"*.
-
-Proposed: `host` in `net.tn`, **one string-class family** whose values are a `hostname`, an IPv4 dotted-quad or an
-IPv6 address. Two questions to settle with it:
-
-- **An atom, not a text family.** `hostname`'s equality is a fold, which a text family states; an IPv6 address's is
-  numeric — `::1` and `0:0:0:0:0:0:0:1` are one address — which no fold reaches. So `host` wants an atom constructor
-  in `meta`, reading to a host value that is a name or an address, with the `net.tn` instance beside `hostname`.
-- **Brackets.** RFC 3986 writes IPv6 in a host as an IP-literal, `[::1]`, because a URI needs the brackets to find
-  the port; a bind address or an allow-list entry has no port to separate. The value should not depend on it:
-  admit both spellings, with the unbracketed one canonical, as the address is the value and the brackets are URI
-  syntax.
-
-**4. `media_type` (RFC 6838; parameters per RFC 9110 §8.3.1) — constructor in `meta`; core instance pending.** An atom
+**3. `media_type` (RFC 6838; parameters per RFC 9110 §8.3.1) — constructor in `meta`; core instance pending.** An atom
 for its equality, which no whole-value fold can state: type, subtype and parameter names fold, while a parameter
 *value* keeps its case unless its own registration says otherwise — `charset`'s does, `boundary`'s does not — and
 `charset="utf-8"` equals `charset=utf-8`. Proposed facets, following `uri_type`'s rule that permissions are withdrawn
@@ -638,7 +592,7 @@ evidence method answers it — grep the `ltr8-io-tson-benchmarks` conversions fo
 `media_type`, `mime_type` and `content_type` — and until then the constructor alone costs nothing. Name it after RFC
 6838's term, *media type*; "MIME type" is the legacy one.
 
-**5. `uri_template` (RFC 6570) — constructor in `meta` beside `uri_type`; core instance.** `meta-http.tn`'s
+**4. `uri_template` (RFC 6570) — constructor in `meta` beside `uri_type`; core instance.** `meta-http.tn`'s
 `operation.path` is `text`, so nothing checks a template's variables against the declared `PATH` parameters. One
 demo template is wrong under the RFC: `/{schemaPath}` percent-encodes the slashes the value carries, where the
 servers serve `{+schemaPath}`. The meta-service experiment's `path_template` approximates level 1 with a pattern. A
@@ -660,7 +614,7 @@ belong in a library a schema opts into. This project owns that library (below).
   twice under two names; and `header_name`, which the meta-service experiment already declares as a case-folding
   text family (`ApiProbe.aHeaderNameIsHeldFolded`).
 
-**Priority:** 1 and 2 medium-high, since the library emits values its own schemas cannot describe; 3–5 medium to
+**Priority:** 1 and 2 medium-high, since the library emits values its own schemas cannot describe; 3 and 4 medium to
 low, each serving one use here.
 
 ---
@@ -669,6 +623,7 @@ low, each serving one use here.
 artifact, which Revision 37 closed with the bundled `policy.tn`; naming a schema for a document that cannot carry
 `!!schema`; no shorthand for a template application at a `type_ref` slot in data; a namespace should be a value (all
 four on 2026-09-01), now being reworked upstream against Revision 38; and `identifier` as a text family with `enum`
-stating its type, adopted in Revision 37. Prose in
+stating its type, adopted in Revision 37. And the host names: `hostname` and `host` (built on `r2026-38-proposal`)
+and a non-ASCII identity's host (SPEC-FEEDBACK #4, open), which tson-java filed from this project's review. Prose in
 this repo names each by its subject, not its number. A new finding goes here in the same shape: a `### To file:`
 heading naming the spec sections, the gap, what this project does meanwhile, and a priority.
