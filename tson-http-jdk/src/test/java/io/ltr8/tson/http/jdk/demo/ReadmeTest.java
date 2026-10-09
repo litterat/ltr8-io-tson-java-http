@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p><b>Why this exists.</b> This project's own rule is that a demo nobody exercises is documentation that
  * quietly stops being true — which is why every demo server here is driven by a test rather than only
  * printed. The README was the one place the rule was not applied, and it duly went stale: its {@code curl}
- * examples named {@code problem-1.tn} through three version bumps that made them wrong, and nothing noticed
+ * examples named {@code problem.tn} through three version bumps that made them wrong, and nothing noticed
  * until the versions were collapsed back and the examples became accidentally correct again.
  *
  * <p><b>Two servers, because the README documents two demos.</b> A schema URL or a path it prints has to be
@@ -202,9 +202,9 @@ class ReadmeTest {
     /** The module table names the schemas this core owns; they are the ones it actually ships. */
     @Test
     void theModuleTableNamesTheSchemasThatExist() {
-        assertTrue(readme.contains("`problem-1.tn`"),
+        assertTrue(readme.contains("`problem.tn`"),
                 "the table should name the error-body schema it ships");
-        assertTrue(readme.contains("`meta-http-1.tn`"),
+        assertTrue(readme.contains("`meta-http.tn`"),
                 "the table should name the API-description meta layer it ships");
         assertTrue(readme.contains(io.ltr8.tson.http.TsonProblemSchema.ID.substring(
                         io.ltr8.tson.http.TsonProblemSchema.ID.lastIndexOf('/') + 1)),

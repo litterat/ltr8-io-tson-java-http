@@ -1,4 +1,4 @@
-!!id:"https://tson.io/2026/37/ltr8/http/agent-1.tn"
+!!id:"https://tson.io/2026/37/io/ltr8/http/agent.tn"
 !!meta:"https://tson.io/2026/37/m/meta.tn"
 !!import:"https://tson.io/2026/37/m/core.tn"
 @doc:"""
@@ -48,7 +48,7 @@
     successor to what earlier revisions spelled `unknown` -- the value names its own type, from this
     schema's namespace or from a foreign one it names with a nested !!schema, and is validated in full
     against whatever it named. A value naming no type at all is a validation error here, so this is not
-    an `any` that goes unchecked. rpc-1.tn's payload slot is the same slot.
+    an `any` that goes unchecked. rpc.tn's payload slot is the same slot.
     """
   constant => dynamic
 
@@ -131,7 +131,7 @@
 
   @doc:"""
     A complete plan, resolved -- the AST, named as a resolved schema is named against its source: the
-    surface is plan SOURCE, this is the plan, and an `agent` (agent-vm-1.tn) is what it compiles to.
+    surface is plan SOURCE, this is the plan, and an `agent` (agent-vm.tn) is what it compiles to.
     `steps` order is document order, is
     def-before-use order, and is slot assignment for the lowering;
     the step count is the budget. Admission verification is one

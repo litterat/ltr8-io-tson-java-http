@@ -259,7 +259,7 @@ class ApiProbe {
         assertEquals("order_ref", routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow().request().orElseThrow().name());
     }
 
-    /** A URL segment cannot carry a record: the limit `meta-http-1.tn` could only state, checked. */
+    /** A URL segment cannot carry a record: the limit `meta-http.tn` could only state, checked. */
     @Test
     void aContainerFieldCannotRideInThePath() {
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
@@ -419,7 +419,7 @@ class ApiProbe {
 
     // ── kept for comparison: a method as a TYPE, and the operation IS-A the method ──────────────
 
-    static final String LIB_ID = "https://tson.io/2026/37/ltr8/http/service-1.tn";
+    static final String LIB_ID = "https://tson.io/2026/37/io/ltr8/http/service.tn";
 
     static final String LIB_B = """
         !!id:"%s"

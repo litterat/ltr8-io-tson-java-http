@@ -1,10 +1,10 @@
-!!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
+!!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
 @doc:"""
   The validator demo's own deployment descriptor.
 
   It is NOT published and NOT resolvable: no schema imports it, no data document names it, and the catalog
   never serves it. What a caller may see is the projection at /.well-known/tson-deployment, derived from this
-  by TsonDeployment.profile. That is deployment-1.tn's rule 2, and this file is where it would be broken if
+  by TsonDeployment.profile. That is deployment.tn's rule 2, and this file is where it would be broken if
   it were going to be.
 
   `tokens` is set to something visibly strict so the demo demonstrates a deployment decision rather than

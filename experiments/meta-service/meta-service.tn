@@ -1,4 +1,4 @@
-!!id:"https://tson.io/2026/37/ltr8/http/meta-service-1.tn"
+!!id:"https://tson.io/2026/37/io/ltr8/http/meta-service.tn"
 !!meta:"https://tson.io/2026/37/m/meta-kernel.tn"
 !!import:"https://tson.io/2026/37/m/meta.tn"
 @doc:"""
@@ -154,7 +154,7 @@
 
     Documentation is annotation, not fields: `@doc` before the verb key is the long form and `@summary` the
     short one, both surviving into the read value as the key's annotations. A summary was a field in
-    `meta-http-1.tn` because an operation's responses and parameters were values with nothing for an
+    `meta-http.tn` because an operation's responses and parameters were values with nothing for an
     annotation to attach to; an endpoint is a map value, and a map key carries annotations.
 
     Deliberately absent, each a decision: security schemes, response headers, links, callbacks,

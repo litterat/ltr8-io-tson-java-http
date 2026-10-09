@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The shipping API-description design: operations declared in a schema governed by {@code meta-http-1.tn},
+ * The shipping API-description design: operations declared in a schema governed by {@code meta-http.tn},
  * with payload types the compiler resolves.
  */
 class TsonApiSchemaTest {
@@ -37,9 +37,9 @@ class TsonApiSchemaTest {
 
     private static final String API = """
             !!id:"https://schemas.example.com/2026/37/app/orders-api-1.tn"
-            !!meta:"https://tson.io/2026/37/ltr8/http/meta-http-1.tn"
+            !!meta:"https://tson.io/2026/37/io/ltr8/http/meta-http.tn"
             !!import:"https://schemas.example.com/2026/37/app/order-1.tn"
-            !!import:"https://tson.io/2026/37/ltr8/http/problem-1.tn"
+            !!import:"https://tson.io/2026/37/io/ltr8/http/problem.tn"
             !!import:"https://tson.io/2026/37/m/core.tn"
             {
               @doc:"Accept an order and confirm it, with the quantity doubled."
@@ -174,7 +174,7 @@ class TsonApiSchemaTest {
 
     private static final String PAGED = """
             !!id:"https://schemas.example.com/2026/37/app/orders-api-1.tn"
-            !!meta:"https://tson.io/2026/37/ltr8/http/meta-http-1.tn"
+            !!meta:"https://tson.io/2026/37/io/ltr8/http/meta-http.tn"
             !!import:"https://schemas.example.com/2026/37/app/order-1.tn"
             !!import:"https://tson.io/2026/37/m/core.tn"
             {

@@ -33,7 +33,7 @@ final class Demo {
                   curl -s %s/2026/37/app/order-1.tn
 
                 The schema its error bodies conform to:
-                  curl -s %s/2026/37/ltr8/http/problem-1.tn
+                  curl -s %s/2026/37/io/ltr8/http/problem.tn
 
                 Note the schema's identity is %s, not localhost:
                 [TSON-DATA] §2.2.1 forbids a port in an identifying URI, so a name and a

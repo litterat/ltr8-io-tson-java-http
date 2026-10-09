@@ -1,7 +1,7 @@
-!!id:"https://tson.io/2026/37/ltr8/http/rpc-1.tn"
+!!id:"https://tson.io/2026/37/io/ltr8/http/rpc.tn"
 !!meta:"https://tson.io/2026/37/m/meta.tn"
 !!import:"https://tson.io/2026/37/m/core.tn"
-!!import:"https://tson.io/2026/37/ltr8/http/problem-1.tn"
+!!import:"https://tson.io/2026/37/io/ltr8/http/problem.tn"
 @doc:"""
   The wire form of an interface: one method call and its return. A packet is DATA, so this is a user
   schema, not part of the meta layer -- the meta layer says what an interface IS; this says what calling
@@ -16,10 +16,10 @@
   fetched like any other; examples/orders-wire-1.tn is one written by hand to show the shape.
 
   Both gateways translate INTO this. An api gateway turns an HTTP request into a call by the binding's
-  placement run in reverse; an agent processor executes a compiled agent (agent-vm-1.tn), each of whose
+  placement run in reverse; an agent processor executes a compiled agent (agent-vm.tn), each of whose
   CALL instructions is one of these. In-process Java dispatch is the first transport; a remote one is one
   more. Several calls in one request, with data flowing between them, is the agent's business: a plan
-  (agent-1.tn) is the AST that compiles to it.
+  (agent.tn) is the AST that compiles to it.
 
   The method's address is a content-addressed identity: the interface's `!!id` and the method's key,
   unambiguous across every service a gateway fronts, versioned by the identity, with no registry and no
@@ -30,7 +30,7 @@
   its frames-plus-end-status model for a stream; JSON-RPC 2.0's self-contained envelope and correlation
   id; Avro's per-method declared errors, returned as typed values rather than codes. (Cap'n Proto's
   promised answers -- a call naming an earlier call's result by id and a path into it -- are the agent's
-  precedent, in agent-1.tn's selectors.)
+  precedent, in agent.tn's selectors.)
   """
 {
   @doc:"""

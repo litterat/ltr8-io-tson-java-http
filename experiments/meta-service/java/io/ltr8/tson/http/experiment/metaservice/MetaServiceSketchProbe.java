@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code meta-service-1.tn} resolves, and the constructs it leans on behave as the sketch assumes: a {@code data}
+ * {@code meta-service.tn} resolves, and the constructs it leans on behave as the sketch assumes: a {@code data}
  * constructor with a record mixin and no trailing body ({@code method => data & signature}); a
  * {@code [type_ref]} slot that resolves per element; an error type's fixed {@code status} readable from the
  * resolved schema. Plus the rule the whole design bends around: a {@code data} instance is not a type, and

@@ -1,4 +1,4 @@
-!!id:"https://tson.io/2026/37/ltr8/http/problem-1.tn"
+!!id:"https://tson.io/2026/37/io/ltr8/http/problem.tn"
 !!meta:"https://tson.io/2026/37/m/meta.tn"
 !!import:"https://tson.io/2026/37/m/core.tn"
 @doc:"""
@@ -17,10 +17,10 @@
   RFC 9457's per-error shape -- that RFC suggests detail and pointer, which would throw away the
   code vocabulary, the two-ended location model and the source positions §8.1 requires.
 
-  Versioning, per §3.5: a shape change to a PUBLISHED schema is a new name, never an edit, because a
-  document that named the old one must go on resolving. Nothing here is published yet, so this file
-  is edited in place and stays -1. When that changes, adding so much as an enum member below becomes
-  problem-2.tn, and this document keeps being served alongside it.
+  Versioning, per §3.5: a shape change to a PUBLISHED schema is a new identity, never an edit, because
+  a document that named the old one must go on resolving. Nothing here is published yet, so this file
+  is edited in place under the one identity it has. Once a release fixes it, adding so much as an enum
+  member below is a new identity, and this document keeps being served alongside it.
   """
 {
   @doc:"""

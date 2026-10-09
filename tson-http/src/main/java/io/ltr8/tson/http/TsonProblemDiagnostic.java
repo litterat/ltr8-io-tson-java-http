@@ -11,7 +11,7 @@ import java.util.Optional;
 /**
  * The on-the-wire shape of one {@link Diagnostic} inside a {@link TsonProblem} -- same fields, with
  * {@code dataPosition}/{@code schemaPosition} pre-rendered to {@code "line:column:byteOffset"} strings, matching
- * {@code problem-1.tn}'s own {@code text} fields.
+ * {@code problem.tn}'s own {@code text} fields.
  *
  * <p><b>An absent field is absent, not empty.</b> {@link Diagnostic} spells "nothing to say here" as {@code ""}
  * for {@code schemaId}/{@code expected}/{@code actual}, and now says so once itself --
@@ -56,7 +56,7 @@ public record TsonProblemDiagnostic(Optional<String> path, @Field("schema_pointe
                 diagnostic.schemaPosition().map(TsonProblemDiagnostic::render));
     }
 
-    /** The position format {@code problem-1.tn} states for consumers. */
+    /** The position format {@code problem.tn} states for consumers. */
     private static String render(SourcePosition position) {
         return position.line() + ":" + position.column() + ":" + position.byteOffset();
     }

@@ -296,7 +296,7 @@ class ValidatorServerTest {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         assertEquals(400, response.statusCode(), response.body());
-        assertTrue(response.body().contains("problem-1.tn"), response.body());
+        assertTrue(response.body().contains("problem.tn"), response.body());
     }
 
     /** The page is served at the path its own description declares, and is not answered as TSON. */
@@ -387,11 +387,11 @@ class ValidatorServerTest {
         assertFalse(response.body().contains("listener"), response.body());
     }
 
-    /** The descriptor governs the demo but is not itself served -- deployment-1.tn's rule 2. */
+    /** The descriptor governs the demo but is not itself served -- deployment.tn's rule 2. */
     @Test
     void theDescriptorIsNeverServed() throws Exception {
         HttpResponse<String> schema = client.send(HttpRequest.newBuilder(
-                        URI.create(base + "/2026/37/ltr8/http/deployment-1.tn")).GET().build(),
+                        URI.create(base + "/2026/37/io/ltr8/http/deployment.tn")).GET().build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         assertEquals(200, schema.statusCode(), "the schema is published, so a profile can be validated");
 

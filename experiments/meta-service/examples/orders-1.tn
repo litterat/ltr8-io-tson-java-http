@@ -1,5 +1,5 @@
 !!id:"https://schemas.example.com/2026/37/experiment/meta-service/orders-1.tn"
-!!meta:"https://tson.io/2026/37/ltr8/http/meta-service-1.tn"
+!!meta:"https://tson.io/2026/37/io/ltr8/http/meta-service.tn"
 !!import:"https://schemas.example.com/2026/37/experiment/meta-service/orders-types-1.tn"
 !!import:"https://schemas.example.com/2026/37/experiment/meta-service/orders-errors-1.tn"
 @doc:"""

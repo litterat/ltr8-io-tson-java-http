@@ -1,4 +1,4 @@
-!!id:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
+!!id:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
 !!meta:"https://tson.io/2026/37/m/meta.tn"
 !!import:"https://tson.io/2026/37/m/core.tn"
 !!import:"https://tson.io/2026/37/m/policy.tn"
@@ -126,7 +126,7 @@
 
     `max_depth` is the nesting bound, §9.1's own default being 64 -- the tightest in common use, so a
     document that fits travels. It is the only limit stated here because it is the only one the library
-    enforces; §9.1 states twelve, and the rest arrive as this schema's successor rather than as a member
+    enforces; §9.1 states twelve, and the rest are added as the library enforces them rather than as a member
     nothing reads.
 
     Absent means the library's default, as with the two policies above: a descriptor that says nothing has

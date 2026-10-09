@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class NameRoleProbe {
 
-    static final String META_ID = "https://tson.io/2026/37/ltr8/http/meta-probe-n.tn";
+    static final String META_ID = "https://tson.io/2026/37/io/ltr8/http/meta-probe-n.tn";
     static final String DOC_ID = "https://schemas.example.com/2026/37/app/probe-n-1.tn";
 
     static final String META = """

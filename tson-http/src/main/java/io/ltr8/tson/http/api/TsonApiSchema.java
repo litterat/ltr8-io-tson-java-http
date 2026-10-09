@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * {@code meta-http-1.tn} — the meta layer a schema names to describe an HTTP API — as source text a server
+ * {@code meta-http.tn} — the meta layer a schema names to describe an HTTP API — as source text a server
  * can publish, and as the binder that makes it usable.
  *
  * <h2>What this is for</h2>
@@ -21,7 +21,7 @@ import java.util.Set;
  * <p>A schema governed by this one declares its operations as entries:
  *
  * <pre>{@code
- * !!meta:"https://tson.io/2026/37/ltr8/http/meta-http-1.tn"
+ * !!meta:"https://tson.io/2026/37/io/ltr8/http/meta-http.tn"
  * !!import:"https://schemas.example.com/2026/37/app/order-1.tn"
  * {
  *   create_order => !operation {
@@ -53,9 +53,9 @@ import java.util.Set;
 public final class TsonApiSchema {
 
     /** This meta layer's identity — the {@code !!id} it declares and the URL it is served at. */
-    public static final String ID = "https://tson.io/2026/37/ltr8/http/meta-http-1.tn";
+    public static final String ID = "https://tson.io/2026/37/io/ltr8/http/meta-http.tn";
 
-    private static final String SOURCE = readResource("/meta-http-1.tn");
+    private static final String SOURCE = readResource("/meta-http.tn");
 
     private TsonApiSchema() {
     }

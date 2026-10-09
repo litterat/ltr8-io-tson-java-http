@@ -223,7 +223,7 @@ public final class ValidatorServer {
                 "validation_result", ValidationResult.class,
                 "outcome", Outcome.class,
                 "diagnostic", TsonProblemDiagnostic.class));
-        // deployment-1.tn is published; a descriptor governed by it never is. A client fetches the schema
+        // deployment.tn is published; a descriptor governed by it never is. A client fetches the schema
         // to read the profile at /.well-known/tson-deployment, and there is nothing here to serve it the
         // descriptor itself with.
         Map<String, String> schemas = Map.of(VALIDATE_ID, VALIDATE, API_ID, API,
@@ -370,7 +370,7 @@ public final class ValidatorServer {
      * diff. The call site says which file; the file says what is in it.
      */
     public static TsonDeployment deployment() {
-        return TsonDeployment.read(resource("deployment.tn"));
+        return TsonDeployment.read(resource("validator-deployment.tn"));
     }
 
     public static void main(String[] args) throws IOException {
@@ -399,7 +399,7 @@ public final class ValidatorServer {
                 The schemas it publishes:
 
                   curl -s http://localhost:%d/2026/37/app/validate-1.tn
-                  curl -s http://localhost:%d/2026/37/ltr8/http/deployment-1.tn
+                  curl -s http://localhost:%d/2026/37/io/ltr8/http/deployment.tn
                 """.formatted(bound, bound, bound, bound, bound));
     }
 }

@@ -1,7 +1,7 @@
 !!id:"https://schemas.example.com/2026/37/app/validate-1.tn"
 !!meta:"https://tson.io/2026/37/m/meta.tn"
 !!import:"https://tson.io/2026/37/m/core.tn"
-!!import:"https://tson.io/2026/37/ltr8/http/problem-1.tn"
+!!import:"https://tson.io/2026/37/io/ltr8/http/problem.tn"
 @doc:"""
   The validator demo's own envelope: a schema and a document go in, the diagnostics come back.
 
@@ -15,7 +15,7 @@
   service's whole job is to say whether they are well-formed, so a schema that rejected a malformed
   one at the envelope would answer the question by refusing to be asked it.
 
-  It imports problem-1.tn for `diagnostic` rather than declaring its own. A diagnostic is a
+  It imports problem.tn for `diagnostic` rather than declaring its own. A diagnostic is a
   diagnostic whether it rides in an error body or in a result, and two shapes for one thing is how
   a client ends up with two renderers.
   """

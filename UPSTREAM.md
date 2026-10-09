@@ -158,13 +158,13 @@ each key against `key_type`, as it checks a record's field names.
 **An extension meta-schema and a schema it governs:**
 
 ```
--- meta-service-1.tn
+-- meta-service.tn
 interface => namespace & { key_type: = method_name    member: = method }
 api       => namespace & { key_type: = path_template  member: = resource  implements?: [<: !interface] }
 
 -- orders-1.tn: a namespace keyed by type_name, declaring two keyed by method_name
 !!id:"https://example.com/2026/37/app/orders-1.tn"
-!!meta:"https://tson.io/2026/37/ltr8/http/meta-service-1.tn"
+!!meta:"https://tson.io/2026/37/io/ltr8/http/meta-service.tn"
 {
   order     => { sku: text  quantity: int32 }
   order_ref => { id: text }
@@ -326,7 +326,7 @@ same check a slot type.
    own, for two things that need no namespace:
    - **`enum_type` as structure:** `type: <T: text>  members: set<T>` replaces §7.4's conformance and bound rules,
      which #7 Proposal 2 currently states in prose and the linker enforces.
-   - **This project's `meta-http-1.tn`**, whose `parameter.type` carries a `@doc` saying it "names a scalar and
+   - **This project's `meta-http.tn`**, whose `parameter.type` carries a `@doc` saying it "names a scalar and
      nothing here enforces that" — `<: !atom`.
 5. **Hold: general nesting, visibility and named imports.** A namespace as a member beyond step 3's case, a private
    member an importer does not see, and `!!import` binding a name are each a decision about §2.2.3's flat namespace
@@ -342,8 +342,8 @@ questions.
 meta-service probes join `tson-http`'s test build, so each step shows up as a probe changing state: at step 1
 `interface` moves from `data &` to `namespace &` and `extends` becomes `&`; at step 2 `binding.method` becomes a
 `type_ref` and `Routes` keeps only the IS-A half of that check and its `implements` check; `api` and `resource`
-follow at step 3; at step 4 both of those become resolver checks and `meta-http-1.tn`'s `parameter.type` takes
-`<: !atom`. `meta-http-1.tn` (`operation => data & { … }`) is the one published-shape consumer §4.1's narrowing
+follow at step 3; at step 4 both of those become resolver checks and `meta-http.tn`'s `parameter.type` takes
+`<: !atom`. `meta-http.tn` (`operation => data & { … }`) is the one published-shape consumer §4.1's narrowing
 touches, and migrates to an `api` namespace rather than being grandfathered — the evidence #2's point 4 asked for.
 `InterfaceMapProbe` keeps measuring §4.1's open reading — whether a `data` *constructor* may be a map's value type —
 which the kind makes moot for an interface, its methods becoming members rather than map values.
@@ -443,8 +443,8 @@ leaving both open leaves no stated reason to prefer either. #3 declined to relax
 shape. TSON text spells them already, so the need is not JSON's alone. Filing this should retire #3 explicitly.
 
 **What this project does meanwhile:** nothing. A JSON body with such members is typed as a map or is not readable
-as a record; `problem-1.tn` is unaffected, RFC 9457's members all being identifiers. What it would gain:
-`acceptingJson` reading `_id`/`@context`-shaped APIs as records rather than maps, `meta-http-1.tn` parameter names
+as a record; `problem.tn` is unaffected, RFC 9457's members all being identifiers. What it would gain:
+`acceptingJson` reading `_id`/`@context`-shaped APIs as records rather than maps, `meta-http.tn` parameter names
 that are not identifiers (`page[size]`), and the experiment's `Placement` mapping URL segments, query keys and
 header names onto request fields directly rather than by a consumer-side check.
 
@@ -475,7 +475,7 @@ each *core instance* reserves its name in every schema importing core, so placem
 constructor in `meta` reserves nothing a schema declares, while a core instance does.
 
 **1. `json_pointer` (RFC 6901) — core instance.** `Diagnostic`'s own contract makes `path` and `schemaPointer` RFC 6901
-JSON Pointers (`/orders/3/total`). `problem-1.tn`'s `diagnostic` can type them only as `text`, and so can tson-cli's
+JSON Pointers (`/orders/3/total`). `problem.tn`'s `diagnostic` can type them only as `text`, and so can tson-cli's
 `diagnostics.tn`. A pattern states the grammar (`""` or `/`-prefixed segments, `~` only as `~0`/`~1`), but an atom
 gives a host value of decoded segments, which is what a consumer walking a pointer wants. Equality is `text`'s, since
 the escape is a bijection. Collision risk is low. This one comes first because the library emits the values.
@@ -523,7 +523,7 @@ day it lands.
 port, userinfo or fragment). It is the series' own format, and the type system cannot state it:
 
 - `diagnostic.schema_id` carries the canonical form, `example.com/people.tn`, which is not a URI at all.
-- `deployment-1.tn`'s `schema_hosts` is `[text]`.
+- `deployment.tn`'s `schema_hosts` is `[text]`.
 - A set or map of references cannot dedupe `https://x/a.tn` against `http://x/a.tn?sha256=…`.
 
 Proposed: a reference family whose values are absolute, identifying references held to the canonical-form rule, and
@@ -532,7 +532,7 @@ normalization: the host folds, the path keeps its case, and the scheme and the p
 tson-java's `CanonicalIdentity` is the existing implementation.
 
 **3. `hostname` (RFC 1123 labels, RFC 3986 `reg-name`) — constructor in `meta`, core instance.** Core has `ipv4` and
-`ipv6` but no host name, so an RFC 3986 host, `(hostname | ipv4 | ipv6)`, is not expressible. `deployment-1.tn`'s
+`ipv6` but no host name, so an RFC 3986 host, `(hostname | ipv4 | ipv6)`, is not expressible. `deployment.tn`'s
 `listener.host` and `schema_hosts` are `text`, and §2.2.1's own identities are keyed by host. DNS names compare
 case-insensitively, which #19's `normalization: NFKC_CASEFOLD` now states — for A-labels the fold is ASCII lowercasing
 — so the family needs a grammar and a fold, not an equality of its own. Proposed ASCII (A-labels) to match `uri`, with
@@ -556,7 +556,7 @@ evidence method answers it — grep the `ltr8-io-tson-benchmarks` conversions fo
 `media_type`, `mime_type` and `content_type` — and until then the constructor alone costs nothing. Name it after RFC
 6838's term, *media type*; "MIME type" is the legacy one.
 
-**5. `uri_template` (RFC 6570) — constructor in `meta` beside `uri_type`; core instance.** `meta-http-1.tn`'s
+**5. `uri_template` (RFC 6570) — constructor in `meta` beside `uri_type`; core instance.** `meta-http.tn`'s
 `operation.path` is `text`, so nothing checks a template's variables against the declared `PATH` parameters. One
 demo template is wrong under the RFC: `/{schemaPath}` percent-encodes the slashes the value carries, where the
 servers serve `{+schemaPath}`. The meta-service experiment's `path_template` approximates level 1 with a pattern. A
@@ -569,12 +569,12 @@ belong in a library a schema opts into. This project owns that library (below).
 
 **What this project does meanwhile:**
 
-- `problem-1.tn` types RFC 9457's `type` and `instance` as `uri_reference`, since both are URI references by that
+- `problem.tn` types RFC 9457's `type` and `instance` as `uri_reference`, since both are URI references by that
   RFC (§3.1.1, §3.1.5) and `TsonProblem.at` is typically handed a request path. Pinned by
   `TsonProblemSchemaTest.aRelativeTypeAndInstanceAreValid`.
 - `diagnostic.path`, `schema_pointer` and `schema_id` stay `text` until 1 and 2 exist.
 - The HTTP vocabulary becomes an `http-1.tn` here when wanted: `status_code`, declared identically in
-  `meta-http-1.tn` and the experiment while `problem.status` is an `int32` that admits `42`; `http_method`, declared
+  `meta-http.tn` and the experiment while `problem.status` is an `int32` that admits `42`; `http_method`, declared
   twice under two names; and `header_name`, which the meta-service experiment already declares as a case-folding
   text family (`ApiProbe.aHeaderNameIsHeldFolded`).
 

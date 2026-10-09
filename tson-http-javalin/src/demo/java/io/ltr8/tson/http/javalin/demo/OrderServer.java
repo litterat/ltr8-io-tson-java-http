@@ -57,7 +57,7 @@ public final class OrderServer {
     public static final String ERRORS = schema("orders-errors-1.tn");
 
     /**
-     * A description of this service, as a schema governed by {@code meta-http-1.tn} -- published, resolved at
+     * A description of this service, as a schema governed by {@code meta-http.tn} -- published, resolved at
      * startup, and checked by a conformance test.
      *
      * <p><b>The payload types are references, not strings.</b> {@code request: order} is resolved through the

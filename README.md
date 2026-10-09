@@ -8,7 +8,7 @@ Four modules:
 
 | Module | What it is |
 |---|---|
-| `tson-http` | Server-agnostic core: media type and `Accept` negotiation, codec, status policy, TSON error body (`problem-1.tn`), API description (`meta-http-1.tn`), schema catalog. No external dependencies. |
+| `tson-http` | Server-agnostic core: media type and `Accept` negotiation, codec, status policy, TSON error body (`problem.tn`), API description (`meta-http.tn`), schema catalog. No external dependencies. |
 | `tson-http-jdk` | Adapter for the JDK's own `com.sun.net.httpserver`, plus schema serving. No external dependencies. |
 | `tson-http-javalin` | Adapter for [Javalin](https://javalin.io) 6. |
 | `tson-http-helidon` | Adapter for [Helidon](https://helidon.io) 4 SE, plus `TsonMediaSupport` so plain handlers read and write TSON natively. |
@@ -40,7 +40,7 @@ $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binar
 $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binary '
   !!schema:"https://schemas.example.com/2026/37/app/order-1.tn"
   !order { }'
-!!schema:"https://tson.io/2026/37/ltr8/http/problem-1.tn"
+!!schema:"https://tson.io/2026/37/io/ltr8/http/problem.tn"
 !problem { status: 400 title: "Invalid TSON document" detail: "the request body has 2 problems" errors: [
   { path: "/sku" schema_pointer: "/order/sku" code: "FIELD_REQUIRED"
     message: "missing required field \'sku\' for \'order\'" data_position: "3:8:70" ... }
@@ -94,8 +94,8 @@ Both replies name the schema that governs them, and the server publishes both do
 validate what it received with nothing told out of band:
 
 ```
-$ curl -s localhost:8080/2026/37/ltr8/http/problem-1.tn | head -1
-!!id:"https://tson.io/2026/37/ltr8/http/problem-1.tn"
+$ curl -s localhost:8080/2026/37/io/ltr8/http/problem.tn | head -1
+!!id:"https://tson.io/2026/37/io/ltr8/http/problem.tn"
 ```
 
 ```java
@@ -162,7 +162,7 @@ sets a token policy, which you can see refuse a document the default would accep
 
 ```
 $ curl -s localhost:8080/.well-known/tson-deployment
-!!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
+!!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
 !acceptance_profile { name: "validator-demo" policy: {
   identifier_policy: { level: "HIGHLY_RESTRICTIVE" per_segment: false skeleton_distinctness: true permitting: [] }
   token_policy: { level: "SINGLE_SCRIPT" permitting: [] }

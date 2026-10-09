@@ -51,7 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class UpstreamGapsTest {
 
-    private static final String META_ID = "https://tson.io/2026/37/ltr8/http/meta-probe.tn";
+    private static final String META_ID = "https://tson.io/2026/37/io/ltr8/http/meta-probe.tn";
     private static final String API_ID = "https://schemas.example.com/2026/37/app/probe-1.tn";
 
     /** A meta layer with a `data &` constructor, standing in for meta-http without depending on its shape. */
@@ -330,7 +330,7 @@ class UpstreamGapsTest {
     }
 
     /**
-     * Resolves {@code declarations} as a schema governed by this project's own {@code meta-http-1.tn}. The
+     * Resolves {@code declarations} as a schema governed by this project's own {@code meta-http.tn}. The
      * probe meta the other tests use would do for the parse, but not past it: it declares a deliberately
      * minimal {@code operation}, and once these declarations resolve far enough to bind, that shape disagrees
      * with {@link io.ltr8.tson.http.api.Operation} and the mismatch arrives instead of the answer being asked
@@ -484,7 +484,7 @@ class UpstreamGapsTest {
      * {@code TsonHttpException} maps it to a 413.
      *
      * <p>All three facts are pinned together because each protects a different decision here. The default is
-     * what {@code deployment-1.tn}'s profile publishes when a descriptor states no {@code max_depth}. That it
+     * what {@code deployment.tn}'s profile publishes when a descriptor states no {@code max_depth}. That it
      * is reported rather than thrown is why the codec meets it as a diagnostic among others. And that
      * {@link Diagnostic.Code#verdict()} calls it false is what keeps the validator demo from labelling an
      * unread document rejected, and what makes 413-not-400 a considered answer rather than an accident.

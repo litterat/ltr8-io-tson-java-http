@@ -319,7 +319,7 @@ const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) =>
 // answers 4xx or 5xx by who must act; here they are the answer to a question, so they arrive as data.
 //
 // Mirrors the codes for which neither Diagnostic.Code.verdict() nor isRefusal() holds -- a hand-written copy
-// for the same reason problem-1.tn's diagnostic_code is one, this page having no way to ask the Java enum.
+// for the same reason problem.tn's diagnostic_code is one, this page having no way to ask the Java enum.
 const UNDETERMINED = new Set(['NOT_IMPLEMENTED', 'BIND_MISMATCH', 'SCHEMA_NOT_FOUND', 'SCHEMA_UNREACHABLE',
                               'SCHEMA_TIMEOUT']);
 
@@ -332,7 +332,7 @@ function positionLabel(d) {
   return `${d.data_position ? 'data' : 'schema'} ${line}:${column}`;
 }
 
-/** A UTF-8 byte offset, as `problem-1.tn` states positions, to a UTF-16 index a textarea can select. */
+/** A UTF-8 byte offset, as `problem.tn` states positions, to a UTF-16 index a textarea can select. */
 function utf16IndexOfByteOffset(text, offset) {
   let bytes = 0;
   for (let i = 0; i < text.length; ) {
@@ -452,7 +452,7 @@ async function run() {
  * implementation to read the answer would put a second implementation's bugs in the way of that.
  *
  * It reads exactly the shape `validation_result` declares -- scalars, then the diagnostics array -- and
- * nothing else. `problem-1.tn` writes every diagnostic field as text or an enum member, so there is no
+ * nothing else. `problem.tn` writes every diagnostic field as text or an enum member, so there is no
  * nesting to descend into.
  */
 function parseResult(tson) {

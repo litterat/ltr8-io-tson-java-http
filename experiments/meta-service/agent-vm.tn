@@ -1,10 +1,10 @@
-!!id:"https://tson.io/2026/37/ltr8/http/agent-vm-1.tn"
+!!id:"https://tson.io/2026/37/io/ltr8/http/agent-vm.tn"
 !!meta:"https://tson.io/2026/37/m/meta.tn"
 !!import:"https://tson.io/2026/37/m/core.tn"
-!!import:"https://tson.io/2026/37/ltr8/http/agent-1.tn"
+!!import:"https://tson.io/2026/37/io/ltr8/http/agent.tn"
 @doc:"""
   TSON Agent VM — the resolved form of an agent plan
-  (draft 2, brought to 2026 Revision 35; companion to agent-1.tn, whose `name` and `constant` it imports).
+  (draft 2, brought to 2026 Revision 35; companion to agent.tn, whose `name` and `constant` it imports).
 
   An agent is what a plan compiles to: the plan reading's resolved
   output, as a resolved schema is to its source. Compilation is
@@ -23,7 +23,7 @@
   execute in sequence; no jumps. Selection instructions are
   absence-absorbing: if the operand consumed is the absent
   sentinel, the result is the absent sentinel. Unhandled call
-  failure aborts with agent_error (agent-1.tn), reported in source
+  failure aborts with agent_error (agent.tn), reported in source
   terms via `debug`.
   """
 {

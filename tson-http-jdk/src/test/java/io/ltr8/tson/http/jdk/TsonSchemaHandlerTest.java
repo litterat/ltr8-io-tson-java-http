@@ -70,7 +70,7 @@ class TsonSchemaHandlerTest {
     /** The path is the identity's path, taken from the document -- never chosen by whoever registered it. */
     @Test
     void servesEachSchemaAtItsOwnIdentityPath() throws Exception {
-        assertEquals(Set.of(SCHEMA_PATH, "/2026/37/ltr8/http/problem-1.tn"),
+        assertEquals(Set.of(SCHEMA_PATH, "/2026/37/io/ltr8/http/problem.tn"),
                 TsonSchemaHandler.of(SCHEMA, TsonProblemSchema.source()).paths());
 
         HttpResponse<String> response = get(SCHEMA_PATH);

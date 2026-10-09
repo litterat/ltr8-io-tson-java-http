@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TsonDeploymentTest {
 
     private static final String FULL = """
-            !!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
+            !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
             !deployment {
               name:         "production"
               listener:     { host: "127.0.0.1"  port: 8080 }
@@ -69,7 +69,7 @@ class TsonDeploymentTest {
     @Test
     void anAbsentPolicyIsNotAPermissiveOne() {
         TsonDeployment deployment = TsonDeployment.read("""
-                !!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
+                !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
                 !deployment { name: "minimal" }""");
 
         assertTrue(deployment.identifierPolicy().isEmpty());
@@ -85,7 +85,7 @@ class TsonDeploymentTest {
     @Test
     void anUnstatedSwitchLeavesTheLookAlikeRuleOn() {
         TsonDeployment deployment = TsonDeployment.read("""
-                !!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
+                !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
                 !deployment { name: "level-only"  identifiers: { level: MODERATELY_RESTRICTIVE } }""");
 
         assertTrue(deployment.identifierPolicy().orElseThrow().appliesSkeletonDistinctness());
@@ -101,7 +101,7 @@ class TsonDeploymentTest {
     @Test
     void aTokenPolicyCannotBeGivenAUnit() {
         List<io.ltr8.tson.base.Diagnostic> problems = TsonDeployment.tson().validate("""
-                !!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
+                !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
                 !deployment { name: "n"  tokens: { level: HIGHLY_RESTRICTIVE  unit: SEGMENT } }""");
 
         assertEquals(List.of(io.ltr8.tson.base.Diagnostic.Code.UNRECOGNIZED_FIELD),
@@ -146,7 +146,7 @@ class TsonDeploymentTest {
     @Test
     void aPartTheDescriptorLeavesAloneIsStatedAtTheDefault() {
         TsonDeployment.Policy policy = profileOf(TsonDeployment.read("""
-                !!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
+                !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
                 !deployment { name: "minimal" }""")).policy();
 
         assertEquals(TsonDeployment.Policy.of(ProcessorPolicy.defaults()), policy);
@@ -209,7 +209,7 @@ class TsonDeploymentTest {
     @Test
     void anUnknownScriptNameStopsTheRead() {
         String message = assertThrows(RuntimeException.class, () -> TsonDeployment.read("""
-                !!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
+                !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
                 !deployment { name: "typo"  tokens: { level: SINGLE_SCRIPT  permitting: ["Cyrrilic"] } }"""))
                 .getMessage();
 
@@ -224,7 +224,7 @@ class TsonDeploymentTest {
     @Test
     void somethingThatIsNotEvenNameShapedIsRefusedByTheSchema() {
         List<io.ltr8.tson.base.Diagnostic> problems = TsonDeployment.tson().validate("""
-                !!schema:"https://tson.io/2026/37/ltr8/http/deployment-1.tn"
+                !!schema:"https://tson.io/2026/37/io/ltr8/http/deployment.tn"
                 !deployment { name: "n"  tokens: { level: SINGLE_SCRIPT  permitting: [42] } }""");
 
         assertEquals(List.of(io.ltr8.tson.base.Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION),

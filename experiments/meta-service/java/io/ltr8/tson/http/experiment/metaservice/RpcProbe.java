@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code rpc-1.tn} -- the wire form of an interface, {@code call} and {@code return} as templates -- closed per
+ * {@code rpc.tn} -- the wire form of an interface, {@code call} and {@code return} as templates -- closed per
  * method by a wire schema ({@code examples/orders-wire-1.tn}), so that a packet is a fully typed document.
  *
  * <p>Measured: both schemas resolve, a choice of errors included as a template argument; a packet's request is
@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class RpcProbe {
 
-    static final String RPC_ID = "https://tson.io/2026/37/ltr8/http/rpc-1.tn";
+    static final String RPC_ID = "https://tson.io/2026/37/io/ltr8/http/rpc.tn";
     static final String EXAMPLES = "https://schemas.example.com/2026/37/experiment/meta-service/";
     static final String WIRE_ID = EXAMPLES + "orders-wire-1.tn";
     static final String ORDERS_ID = EXAMPLES + "orders-1.tn";
@@ -53,7 +53,7 @@ class RpcProbe {
 
     static Tson tson() {
         Map<String, String> lib = new LinkedHashMap<>();
-        lib.put(RPC_ID, read("rpc-1.tn"));
+        lib.put(RPC_ID, read("rpc.tn"));
         lib.put(TsonProblemSchema.ID, TsonProblemSchema.source());
         lib.put(EXAMPLES + "orders-types-1.tn", read("examples/orders-types-1.tn"));
         lib.put(EXAMPLES + "orders-errors-1.tn", read("examples/orders-errors-1.tn"));
@@ -68,7 +68,7 @@ class RpcProbe {
     @Test
     void theRpcAndWireSchemasResolve() {
         Tson tson = tson();
-        assertEquals(List.of(), tson.validateSchema(read("rpc-1.tn")));
+        assertEquals(List.of(), tson.validateSchema(read("rpc.tn")));
         assertEquals(List.of(), tson.validateSchema(read("examples/orders-wire-1.tn")));
     }
 

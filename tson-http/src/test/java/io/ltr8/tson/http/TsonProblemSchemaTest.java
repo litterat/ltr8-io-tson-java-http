@@ -28,7 +28,7 @@ class TsonProblemSchemaTest {
     @Test
     void theSchemaDeclaresTheIdThisPackageServesItAt() {
         assertTrue(TsonProblemSchema.source().contains("!!id:\"" + TsonProblemSchema.ID + "\""),
-                "problem-1.tn's own !!id must match the constant a server serves it at");
+                "problem.tn's own !!id must match the constant a server serves it at");
     }
 
     /** On a clean instance -- {@link TsonProblemSchema#tson()} has already registered it, and registering twice is an error. */
@@ -139,7 +139,7 @@ class TsonProblemSchemaTest {
     }
 
     /**
-     * {@code problem-1.tn}'s {@code diagnostic_code} is a hand-written copy of {@link Diagnostic.Code}, and
+     * {@code problem.tn}'s {@code diagnostic_code} is a hand-written copy of {@link Diagnostic.Code}, and
      * nothing else checks that the copy is current. Add a member upstream and forget this schema, and an error
      * body emits a code its own schema rejects -- which no other test here would catch, because no fixture has
      * ever produced a code that is new.
@@ -153,8 +153,8 @@ class TsonProblemSchemaTest {
         List<String> declared = declaredCodes();
         for (Diagnostic.Code code : Diagnostic.Code.values()) {
             assertTrue(declared.contains(code.name()),
-                    () -> "Diagnostic.Code." + code + " is missing from problem-1.tn's diagnostic_code: "
-                            + declared + " -- add it there under a new schema version (\u00a710)");
+                    () -> "Diagnostic.Code." + code + " is missing from problem.tn's diagnostic_code: "
+                            + declared + " -- add it there, in place while the schema is unpublished");
         }
     }
 
@@ -168,7 +168,7 @@ class TsonProblemSchemaTest {
     @Test
     void theSchemaCarriesNoSecondCarrierForAFetchFailure() {
         assertNull(TsonProblemSchema.compiled().schema().entries().get("fetch_reason"),
-                "problem-1.tn declares a fetch_reason enum: the reason is the code, and two carriers for one "
+                "problem.tn declares a fetch_reason enum: the reason is the code, and two carriers for one "
                         + "fact are free to disagree");
 
         TypeDefinition diagnostic = TsonProblemSchema.compiled().schema().entries().get("diagnostic");
@@ -184,7 +184,7 @@ class TsonProblemSchemaTest {
         List<String> known = Arrays.stream(Diagnostic.Code.values()).map(Enum::name).toList();
         for (String declared : declaredCodes()) {
             assertTrue(known.contains(declared),
-                    () -> "problem-1.tn declares '" + declared + "', which is not a Diagnostic.Code: " + known
+                    () -> "problem.tn declares '" + declared + "', which is not a Diagnostic.Code: " + known
                             + " -- a value no reader can ever produce");
         }
     }

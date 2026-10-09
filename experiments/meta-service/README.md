@@ -1,10 +1,10 @@
-# `meta-service-1.tn` -- interfaces and operations in one meta layer
+# `meta-service.tn` -- interfaces and operations in one meta layer
 
-**Status: experiment.** Nothing here is served, published or depended on. `meta-http-1.tn` remains the meta layer
+**Status: experiment.** Nothing here is served, published or depended on. `meta-http.tn` remains the meta layer
 the demos use.
 
-**Scope: the descriptor, for RPC- and API-style endpoints.** `meta-service-1.tn` describing an interface, a web
-service over it, and the endpoints of both is the work in hand; `rpc-1.tn` is its wire form and belongs to that
+**Scope: the descriptor, for RPC- and API-style endpoints.** `meta-service.tn` describing an interface, a web
+service over it, and the endpoints of both is the work in hand; `rpc.tn` is its wire form and belongs to that
 scope. **The agent is future work and is here only to shape the descriptor** -- a third consumer of an interface
 whose demands say whether the meta layer holds up, in the way a second implementation says whether an API does.
 Its layers are worth keeping resolved and probed for that reason and no other. Nothing in the order of work
@@ -12,7 +12,7 @@ below waits on them, and a decision that is the agent's alone is not a reason to
 
 ## The question
 
-`meta-http-1.tn` describes an HTTP API: a schema governed by it declares `!operation` entries whose `request`
+`meta-http.tn` describes an HTTP API: a schema governed by it declares `!operation` entries whose `request`
 and `response` are type references the compiler resolves. Underneath an HTTP API there is usually a
 transport-neutral interface -- methods with a request, a response and errors -- and a service may want to
 declare just that, or just its web service, or both, with an HTTP operation being one *projection* of a method.
@@ -20,7 +20,7 @@ Can one meta layer hold all three, and what does the third actually need?
 
 ## The sketch
 
-[`meta-service-1.tn`](meta-service-1.tn), with three uses as real documents under [`examples/`](examples/)
+[`meta-service.tn`](meta-service.tn), with three uses as real documents under [`examples/`](examples/)
 (guide: [`examples.md`](examples.md)). Two entries a governed
 schema writes, and both are **maps**:
 
@@ -86,7 +86,7 @@ computes its `Placement`, and holds the `implements` claim. The probes:
 - `SupertypeProbe` -- the mechanism `!binding` rides on: a derived constructor's instance admitted at its
   base-typed slot, the base abstract for free, its constraints inherited.
 - `NameRoleProbe` -- what a naming role buys at a map key, and the hygiene gap below.
-- `RpcProbe` -- `rpc-1.tn` and the wire schema resolve; a call is typed by the interface's own types and a bad
+- `RpcProbe` -- `rpc.tn` and the wire schema resolve; a call is typed by the interface's own types and a bad
   request is refused at its field; a return carries the declared response or error with its status pin enforced,
   and exactly one outcome.
 - `AgentProbe` -- both agent layers resolve; a plan of references and a compiled agent read, the `@disjoint`
@@ -182,7 +182,7 @@ api       => data & { … resources: {path_template => resource} }
 grammar, enforced, with the refusal naming the role -- *"'method_name': 'place order': U+0020 at index 5 cannot appear
 in an identifier"* -- where a `text` key accepts anything and `type_name` enforces the same grammar while misnaming
 the namespace. For the URL and header namespaces the authority's grammar rides as a `pattern`, I-Regexp over the whole
-token, the same device `deployment-1.tn` uses for a script name; a header name is also held case-folded, as RFC 9110
+token, the same device `deployment.tn` uses for a script name; a header name is also held case-folded, as RFC 9110
 §5.1 compares it, so `Idempotency-Key` reads back as `idempotency-key` (`ApiProbe.aHeaderNameIsHeldFolded`). What
 stays a `type_name` honestly is the *interface's own* name (`orders`) and `implements`/`extends`: an interface is
 still an entry in the type namespace, which is the seam a `namespace` kind would move ("What a namespace is", below).
@@ -280,7 +280,7 @@ Three things follow, and each moved the staged spec feedback (`UPSTREAM.md`, the
 Three projections of one interface, and the order they arrive in. The first two are the current scope; the third
 is listed because what it needs of an interface is evidence about the descriptor, not because it is being built.
 
-- **The interface is the canonical layer, and its wire form is the RPC packet.** [`rpc-1.tn`](rpc-1.tn):
+- **The interface is the canonical layer, and its wire form is the RPC packet.** [`rpc.tn`](rpc.tn):
   `call => <Req> { … }` -- address `(interface !!id, method key)`, correlation `id`, `deadline`, opaque `meta`,
   the method's `request` -- and `return => <Resp, Err> { … }`, exactly one of `response`, a declared `error` (a
   typed value composing `problem`, its status pinned on the type) or a `fault` (the transport's or processor's
@@ -295,12 +295,12 @@ is listed because what it needs of an interface is evidence about the descriptor
   `Placement` run in reverse -- `id` from the path segment, `order_query` from the query string, `order` from
   the body beside `Idempotency-Key` -- is its request path, producing a `call`. Which is why a generic gateway
   process can read an `!api` and an RPC address and need no code per service.
-- **The agent is three layers, as a compiler has** -- [`agent-1.tn`](agent-1.tn) and
-  [`agent-vm-1.tn`](agent-vm-1.tn), below. A plan SOURCE (a surface grammar, still to write) is read to a
+- **The agent is three layers, as a compiler has** -- [`agent.tn`](agent.tn) and
+  [`agent-vm.tn`](agent-vm.tn), below. A plan SOURCE (a surface grammar, still to write) is read to a
   `plan` (the AST: steps in order, references parsed to selectors, constants folded, `or` a field because it
   is executed), which compiles deterministically to an `agent` (a constant pool, write-once memory slots, and
   straight-line stack code with no jumps) that a server admits, verifies in one forward pass against the
-  pinned interface, and executes -- each CALL being one `call` of rpc-1.tn. The likely deployment is a
+  pinned interface, and executes -- each CALL being one `call` of rpc.tn. The likely deployment is a
   gateway agent processor whose calls are RPC to the box hosting each interface; the api gateway does the same
   for one call.
 
@@ -311,24 +311,24 @@ that presses hardest on an interface -- it needs a method addressable, its reque
 errors declared -- so sketching it is how the interface layer gets tested against something that is not HTTP.
 Building it is not on the order of work below.
 
-`agent-1.tn` is the plan, resolved -- named as a resolved schema is named against its source: the surface is
+`agent.tn` is the plan, resolved -- named as a resolved schema is named against its source: the surface is
 plan source, this is the plan, and an `agent` is what it compiles to. Everything the surface leaves implicit is
 structural here: a reference is a `selector` (a step, then `segment`s -- `field`, `index`, or a `filter`),
 distinguished from a constant by shape; an argument is an `arg` tree whose canonical form folds constants
 maximally, so `record` and `array` appear only on the spine above a reference; `or` is a step's failure
-substitute, a field because it is executed. `agent-vm-1.tn` is the lowering: memory slots are step indices, so
+substitute, a field because it is executed. `agent-vm.tn` is the lowering: memory slots are step indices, so
 flattening is slot assignment; the pool interns names, constants, types and methods, kind-checked by index; the
 `instruction` choice is `@disjoint` -- a bare mnemonic beside a labelled operand record -- and reads tag-free.
 Admission is one forward pass in both layers: straight-line code has no merge points, so checking and
 inference coincide, and the return's inferred type is the derived response contract, known before execution.
 
 This is the dataflow design the README argued for by another route -- Cap'n Proto's promised answers as the
-precedent -- arrived at as a compiler rather than a packet, and it supersedes the `plan`/`step` sketch rpc-1.tn
-briefly carried. `rpc-1.tn` is now `call` and `return` only.
+precedent -- arrived at as a compiler rather than a packet, and it supersedes the `plan`/`step` sketch rpc.tn
+briefly carried. `rpc.tn` is now `call` and `return` only.
 
 **Brought to fit, mechanically** (measured by `AgentProbe`): both at Revision 35 under this repo's identities,
-`…/ltr8/http/agent-1.tn` and `agent-vm-1.tn`, with no placeholder pins -- a malformed `?sha256=` is refused
-outright; `token`, which is not in core, replaced by a `name` role declared once in `agent-1.tn` (the identifier
+`…/io/ltr8/http/agent.tn` and `agent-vm.tn`, with no placeholder pins -- a malformed `?sha256=` is refused
+outright; `token`, which is not in core, replaced by a `name` role declared once in `agent.tn` (the identifier
 grammar as a pattern, since a user schema cannot reach `identifier`) and imported by the VM; the inline
 `filter` record at a group-member position named, as §5.2 requires; `value`, which is the kernel's and not
 core's, replaced by `constant => dynamic`; and the AST's top type renamed `plan`, since the VM imports the AST
@@ -343,7 +343,7 @@ and two `agent`s collide in a flat namespace.
    interface declared that call's errors as typed values composing `problem`; the abort should carry the one
    that occurred, and `agent_error` should compose `problem` like every other error here, so the api gateway
    and the agent processor answer failures in one shape.
-3. **`version: uint8 = 2`** on the agent duplicates what the identity `agent-vm-1.tn` already says (§3.5); keep
+3. **`version: uint8 = 2`** on the agent duplicates what the identity `agent-vm.tn` already says (§3.5); keep
    it only if the binary form wants a magic byte, and say so.
 4. **The surface grammar reads schemaless**, method names as preserved unknown type refs and `@or`/`@interface`
    as preserved annotations -- which sidesteps "which namespace may a document bind" rather than answering it.
@@ -351,7 +351,7 @@ and two `agent`s collide in a flat namespace.
    `text` would be parsed as the built-in, not preserved. The surface needs to reserve those or qualify method
    names.
 5. `name` is a pattern over `text`, so §8.2's hygiene does not reach it (nor would it reach a map key); the
-   admission verifier refuses confusable step names, as `agent-1.tn` now says.
+   admission verifier refuses confusable step names, as `agent.tn` now says.
 
 **What the precedents contributed.** gRPC: the closed set of transport-level statuses, the deadline, and
 frames-plus-end-status for a stream -- but no self-contained packet, its outcome in HTTP/2 trailers. JSON-RPC
@@ -363,7 +363,7 @@ the HTTP/1.1-friendly unary shape and an enveloped end-of-stream frame. Taken fr
 method ids -- the identity URI plus key carries more for the same purpose.
 
 **Two things TSON has that they lack, and the packet leans on both.** Templates closed per method give a typed
-envelope with no per-service code: `rpc-1.tn` imports no service's types, the wire schema closes its templates
+envelope with no per-service code: `rpc.tn` imports no service's types, the wire schema closes its templates
 over them, and the packet is checked end to end by the resolver -- `quantity: two` in a call is an `int32`
 violation at `/request/order/quantity`, an error's fixed `status` is enforced, and where a method declares several
 errors the value carries the error's tag. (An earlier draft scoped the payload in place with `!!schema` at an
@@ -401,7 +401,7 @@ description wrote and the framework's registered path stays free to differ, but 
 argument in `CLAUDE.md` has to be rewritten around it. **This decides the reader's public surface, so it comes
 first.**
 
-**The RPC address names a document, not an interface.** `rpc-1.tn`'s `call` addresses `(interface: uri, method:
+**The RPC address names a document, not an interface.** `rpc.tn`'s `call` addresses `(interface: uri, method:
 text)`, and this README calls that pair unambiguous across every service. It is not: `examples/orders-1.tn`
 declares two interfaces at one `!!id`, and two unrelated ones declaring `place_order` would be
 indistinguishable in a call. The wire schema has the same flaw a layer up -- `place_order_call` is a flat type
@@ -465,7 +465,7 @@ or more than one, is a spec question; the URL namespace being hierarchical (`/or
 answer should serve both.
 
 
-**A disjoint choice with an enum variant is not read tag-free.** `agent-vm-1.tn`'s `instruction => ( simple_op
+**A disjoint choice with an enum variant is not read tag-free.** `agent-vm.tn`'s `instruction => ( simple_op
 | op )` is `@disjoint` -- string class beside brace class -- and the resolver accepts the assertion, but the
 reader refuses a bare `RET` at that position and asks for a tag. Measured precisely in `AgentProbe`: `(text |
 integer)` reads untagged, so tag-free dispatch exists; an enum variant is what it does not cover. Until it
@@ -501,10 +501,10 @@ record or two declarations of a schema. `NameRoleProbe` pins both, `aDataDocumen
 
 ## Files
 
-- `meta-service-1.tn` -- the sketch, its reasoning in its own `@doc`s.
-- `rpc-1.tn` -- the wire form: `call` and `return` as templates; the direction above, in its own `@doc`s.
+- `meta-service.tn` -- the sketch, its reasoning in its own `@doc`s.
+- `rpc.tn` -- the wire form: `call` and `return` as templates; the direction above, in its own `@doc`s.
 - `examples/orders-wire-1.tn` -- the templates closed per method of the orders interface: what a generator emits.
-- `agent-1.tn`, `agent-vm-1.tn` -- the plan (AST) and the agent (bytecode) it compiles to; the section above.
+- `agent.tn`, `agent-vm.tn` -- the plan (AST) and the agent (bytecode) it compiles to; the section above.
 - `examples/` -- real documents: the shared types and errors, the interface only, the web service only, and
   both, each at its own `!!id`; `examples.md` is the guide to them and the placement table. `ExamplesProbe`
   resolves every file and runs both apis through `Routes`.

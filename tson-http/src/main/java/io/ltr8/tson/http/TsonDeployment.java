@@ -21,10 +21,10 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * How one instance is configured, read from a {@code deployment-1.tn} document.
+ * How one instance is configured, read from a {@code deployment.tn} document.
  *
  * <p>The third artifact kind, beside a schema (what a document must be) and an API description (what an
- * endpoint offers). {@code deployment-1.tn} carries the argument for why the [TSON-DATA] §8.2 policies can
+ * endpoint offers). {@code deployment.tn} carries the argument for why the [TSON-DATA] §8.2 policies can
  * live in neither of the other two, which Revision 37 adopted with the bundled {@code policy.tn} as the
  * policy's vocabulary. The descriptor states only what it changes; {@link #profile} states the whole
  * policy in force, in {@code policy.tn}'s shape.
@@ -52,9 +52,9 @@ public record TsonDeployment(String name, Optional<Listener> listener,
                              Optional<LimitsOverride> limits, @Field("schema_hosts") List<String> schemaHosts) {
 
     /** The schema a descriptor names. Published like any other, unlike the descriptors it governs. */
-    public static final String ID = "https://tson.io/2026/37/ltr8/http/deployment-1.tn";
+    public static final String ID = "https://tson.io/2026/37/io/ltr8/http/deployment.tn";
 
-    private static final String SOURCE = readResource("/deployment-1.tn");
+    private static final String SOURCE = readResource("/deployment.tn");
 
     private static final Map<String, Class<?>> BINDINGS = Map.ofEntries(
             Map.entry("deployment", TsonDeployment.class),
@@ -84,7 +84,7 @@ public record TsonDeployment(String name, Optional<Listener> listener,
      * and a deployment changing one has said nothing about the other.
      *
      * <p>{@code max_depth} is the only member because it is the only limit the library enforces. §9.1 states
-     * twelve; the rest arrive as {@code deployment-2.tn} rather than as a member nothing reads.
+     * twelve; the rest are added as the library enforces them, rather than as a member nothing reads.
      */
     @Typename(name = "limits_override")
     public record LimitsOverride(@Field("max_depth") Optional<Integer> maxDepth) {
@@ -231,7 +231,7 @@ public record TsonDeployment(String name, Optional<Listener> listener,
     }
 
     /**
-     * The bindings for every type {@code deployment-1.tn} declares, for a server whose own {@link Tson} reads
+     * The bindings for every type {@code deployment.tn} declares, for a server whose own {@link Tson} reads
      * or writes a descriptor or a profile and should not restate this schema's vocabulary.
      */
     public static Map<String, Class<?>> bindings() {

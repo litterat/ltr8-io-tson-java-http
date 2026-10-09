@@ -21,10 +21,10 @@ compatibility guarantees, so a `git pull` of the sibling can move the whole iden
 
 **Status.** All four modules are built and tested, each adapter with a runnable demo server and a concurrency
 suite driving it under load. Responses are self-describing in both directions: an error body names
-`problem-1.tn`, a demo's order reply names the schema governing it, and the server publishes both so those
+`problem.tn`, a demo's order reply names the schema governing it, and the server publishes both so those
 URLs resolve. Every adapter proves the full loop: a schema served at its identity path, fetched back by
 `HttpSchemaSource`, and used to validate a document. A service also publishes a description of itself
-(`meta-http-1.tn`), from which it derives what to publish and what to warm.
+(`meta-http.tn`), from which it derives what to publish and what to warm.
 
 **Don't state a count of anything here.** Test counts and file counts go stale within a day and nothing
 maintains them; `ReadmeTest` enforces that rule for the README and it applies equally to this file. Say what
@@ -126,7 +126,7 @@ each other.
   put nothing status-shaped anywhere else. Problem `type` URIs live under `https://ltr8.io/2026/37/http/problems/`
   — `ltr8.io` is the implementation resource, kept apart from the specification's `tson.io`, where schema
   identities live. The revision rides in it too, so a spec bump moves it with everything else.
-- `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem-1.tn` — the error body, its schema,
+- `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem.tn` — the error body, its schema,
   and the reader that proves the two agree. **This project's own schema, maintained here** — it began as a copy
   of `tson-cli`'s `diagnostics.tn` and has diverged on purpose: a CLI reports on files and a server reports on
   requests, and lifting the two into a shared module was asked for upstream and rightly rejected. `problem`
@@ -234,19 +234,19 @@ error, and what it names is checked in full.
 Two consequences:
 
 - **Anything whose job is to relate types must be a schema**, not a data document governed by one. That is why
-  the API description is a **schema** governed by `meta-http-1.tn`, and why a description written as *data*
+  the API description is a **schema** governed by `meta-http.tn`, and why a description written as *data*
   cannot check anything it says.
 - **The recurring `(schema identity, root type name)` pair is the data layer's workaround for this.**
   `describing(…)`, `readObjectAs(…)`, the `TSON-Schema` header plus a route-supplied type: two strings
   reassembled at every call site, because the thing they name cannot be referenced.
 
-### Describing an API (`meta-http-1.tn`, `io.ltr8.tson.http.api`)
+### Describing an API (`meta-http.tn`, `io.ltr8.tson.http.api`)
 
 An OpenAPI-shaped description of an HTTP API whose payloads are TSON — minus the part OpenAPI mostly is.
 OpenAPI embeds a schema language because JSON has none; TSON already has published, identity-addressed
 schemas, so an operation **references** one.
 
-**The description is a schema, not a document governed by one.** `meta-http-1.tn` is a meta layer declaring
+**The description is a schema, not a document governed by one.** `meta-http.tn` is a meta layer declaring
 `operation => data & { … }`, and a service's description is a schema governed by it whose entries are
 operations. That is what makes `request: order` a *reference the compiler resolves* rather than a string —
 the property no data-shaped design can have, because a data document can name a schema but cannot hold a
@@ -336,7 +336,7 @@ method declared *elsewhere* must refer to it, and a `kind: DATA` entry cannot be
 that work today and the spec change that would settle it are measured and written up there.
 
 **Its scope is the descriptor — RPC- and API-style endpoints — and the agent sketches in it are future work.**
-`agent-1.tn` and `agent-vm-1.tn` are there to press on the interface layer from a direction that is not HTTP, so
+`agent.tn` and `agent-vm.tn` are there to press on the interface layer from a direction that is not HTTP, so
 that the meta layer is shaped by more than one consumer; they are kept resolved and probed for that and nothing
 else. Do not build toward them, and do not let a decision that is the agent's alone move the descriptor.
 
@@ -365,7 +365,7 @@ declares for that status; an undeclared one refuses JSON with a 415.
 
 **Deliberately absent**, each a decision: security schemes, response headers, links, callbacks, examples,
 tags, servers, and media types beyond the encoding. `security` is the one that would disqualify this for a real
-service. Adding any is `meta-http-2.tn` once published, never an edit.
+service. Adding any is an edit in place until this is published, and a new identity after.
 
 **The description is checked, not just written.** `TsonApiConformanceTest` fetches it **from the running
 server**, resolves it through a schema source that fetches from that same server — which proves in one step
@@ -379,11 +379,11 @@ thrown**. It composes `problem` (§5.8) so it carries RFC 9457's members and add
 boundary cannot produce it: the boundary only knows how to render a `problem`, and a `sku_not_found` has a field
 `problem` does not.
 
-These types belong in the **application's** schema, importing `problem-1.tn` — `tson-http` owns the transport
+These types belong in the **application's** schema, importing `problem.tn` — `tson-http` owns the transport
 envelope, the service owns "SKU not found". One rule that costs time otherwise:
 
 - **Imports are transitive, but name what you use anyway.** A name reaches you through what you import, so
-  `orders-errors-1.tn` would get `text` through `problem-1.tn` without saying so. Name `core.tn` too: a
+  `orders-errors-1.tn` would get `text` through `problem.tn` without saying so. Name `core.tn` too: a
   collision is judged by the *declaring schema's identity*, not by how many routes reach it, so naming a
   shared dependency twice is redundant rather than an error.
 - **`errors` stays data-level.** A business failure carries `errors: []` and its own fields. They never
@@ -622,7 +622,7 @@ and 502 collected. The agreement tests stay
 `TsonHttpSchemaSourceIntegrationTest.bothChannelsAnswerAnUnfetchableSchemaAlike`).
 
 **The reason is the code, and must not also be a field.** `Diagnostic.fetchReason` is gone upstream and
-`problem-1.tn` no longer declares a `fetch_reason` enum or field. A second carrier for one fact is free to
+`problem.tn` no longer declares a `fetch_reason` enum or field. A second carrier for one fact is free to
 disagree with the first — on the wire that means a body stating a code and a reason that contradict each
 other, which the schema would still call valid. Pinned by
 `TsonProblemSchemaTest.theSchemaCarriesNoSecondCarrierForAFetchFailure`.
@@ -641,7 +641,7 @@ violating the atom's range is `ATOM_CONSTRAINT_VIOLATION` (a validation one). Bo
 400; they are two codes because the fixes differ — rewrite the token, or change the value it denotes. `"not-a-
 uuid"` at a `uuid` field is the first, an `age` of 300 against a `max` the second, and
 `ValidatorServerTest.aFaultingDocumentIsAnAnswerRatherThanAFailure` shows both in one document. Adding it to
-`problem-1.tn`'s `diagnostic_code` is exactly the drift `TsonProblemSchemaTest` exists to catch, and it did.
+`problem.tn`'s `diagnostic_code` is exactly the drift `TsonProblemSchemaTest` exists to catch, and it did.
 
 **`SchemaFetchException` lives in `io.ltr8.tson.base`**, beside the `SchemaSource` interface whose
 contract it is — `fetch` names it as the one way a source says "cannot supply this", which is what lets the
@@ -690,7 +690,7 @@ not position**: an identifier-typed field value, an identifier-keyed map's keys 
 are names and meet all three rules, the key and element sets being look-alike scopes — in a data document and in a
 schema governed by a meta layer alike, where a `data` body's payload and an annotation value are read under the same
 policy. `NameRoleProbe` pins both places.
-Over HTTP the once-statement is `deployment-1.tn`'s acceptance profile at `/.well-known/tson-deployment`. §8.3
+Over HTTP the once-statement is `deployment.tn`'s acceptance profile at `/.well-known/tson-deployment`. §8.3
 is why any of it matters: all three rules are unstable across Unicode releases, so two conforming processors
 may legitimately disagree about one name and the version is what explains it.
 
@@ -754,7 +754,7 @@ Each cost a debugging cycle here and is pinned by a test.
   types — two of which live in an unexported package, so no caller here could
   `catch` them — and **rethrows anything else**, which is what stops an unexpected fault becoming a false
   verdict about the request. Do not delete it for being unreachable.
-- **`problem-1.tn`'s `diagnostic_code` is a hand-written copy of `Diagnostic.Code`.** Nothing but
+- **`problem.tn`'s `diagnostic_code` is a hand-written copy of `Diagnostic.Code`.** Nothing but
   `TsonProblemSchemaTest` checks it is current, and an error body emitting a code its own schema rejects would
   not otherwise be caught, since no fixture produces a code that is new. The Java enum is the source of truth —
   never check this schema against tson-cli's, which would only prove they drifted together.
@@ -859,9 +859,9 @@ Each cost a debugging cycle here and is pinned by a test.
     where it accepts none. `Representation.requireTson()` is that rule, applied before the response commits so
     the 406 is still a problem body. It is also why a schema route answers a JSON-only client 406: a schema
     document is TSON text in every encoding.
-  - **A problem names `problem-1.tn` in the `TSON-Schema` header**, in both encodings — the only place a JSON
+  - **A problem names `problem.tn` in the `TSON-Schema` header**, in both encodings — the only place a JSON
     one can, and true of a TSON one too. `respondProblem` sets it on all three adapters.
-  - **A problem written as JSON is `application/problem+json`.** `problem-1.tn`'s `problem` is RFC 9457's five
+  - **A problem written as JSON is `application/problem+json`.** `problem.tn`'s `problem` is RFC 9457's five
     members plus `errors`, an extension member, and the JSON writer omits an absent member rather than writing
     `null` — so its JSON encoding *is* an RFC 9457 body. It is labelled `application/problem+json` where the
     client's `Accept` admits that type, and with the negotiated JSON type where it does not, so a client that
@@ -906,7 +906,7 @@ Each cost a debugging cycle here and is pinned by a test.
   no anchors, and writing them adds two literal characters no token has. It fails in the worst way: the
   schema compiles, and every value is refused with *"'Latn' does not match the required pattern
   `^[A-Za-z][A-Za-z_]*$`"* — a message that reads like the value is wrong when the pattern is. Reflex from
-  JSON Schema, which is unanchored and needs them. `deployment-1.tn`'s `script_name` is the one pattern here.
+  JSON Schema, which is unanchored and needs them. `deployment.tn`'s `script_name` is the one pattern here.
 - **Use `SchemaSource.ofMap`, never `map::get`.** `SchemaFetchException` is the whole contract for
   "cannot supply this", and a source returning `null` is now refused by name rather than dereferenced — but
   refused is still a failure, and `ofMap` is the form that does not fail: it throws `NOT_PERMITTED` for a miss —
@@ -961,32 +961,30 @@ is a re-pinning exercise across every `!!id`, `!!import` and constant here, not 
 
 **Immutability binds a *published* schema, and nothing here is published yet.** §3.5 makes a schema immutable
 once it is available for someone else to pin — that is what the rule protects: a document that named it must go
-on resolving. Until this project is released, **edit the file in place and do not bump the version.**
+on resolving. Until this project is released, **edit the file in place**: a project-owned name carries no
+version (below), so there is nothing to bump. A release fixes each document under its identity.
 
-This was learned the expensive way. `problem-1.tn` was bumped to `-2`, `-3` and `-4` because each new
-`Diagnostic.Code` member is a shape change — which it is, but the rule only starts applying at release. Three
-bumps, sixteen files each, for a document nothing outside this repo had ever seen. They have since been
-collapsed back to a single `problem-1.tn`.
-
-**Once this *is* published**, the rule is the real one and the machinery is already here:
-`TsonProblemSchema.publishedSources()` returns the whole history (one entry today) and the demos publish all of
-it; `publishedById()` is the same keyed by identity, for a caller wiring a schema source by hand. Two traps
-worth keeping from the bumps:
+**Once this *is* published**, the rule is the real one and the machinery is already here: a shape change is a new
+identity beside the old, `TsonProblemSchema.publishedSources()` returns the whole history (one entry today) and
+the demos publish all of it; `publishedById()` is the same keyed by identity, for a caller wiring a schema source
+by hand. Two traps worth knowing:
 
 - **A hand-wired source serving the current text at a superseded URI fails as an "identity mismatch"** from
   the loader — a long way from the map that was actually wrong. Use `publishedById()` even at one version.
-- **Don't restate the current version in a document that could interpolate it.** The demos' own error schemas
-  build their `!!import` from `TsonProblemSchema.ID`; most of those sixteen files were demos hardcoding a
-  constant.
+- **Don't restate an identity in a document that could interpolate it.** The demos' own error schemas build
+  their `!!import` from `TsonProblemSchema.ID`, so the next identity change is one constant rather than a file
+  per demo.
 
 **`TsonProblemSchemaTest` is what catches a stale `diagnostic_code`**, and it is the only thing that does: an
 upstream revision adding a code is otherwise invisible here until an error body emits one its own schema
 rejects. It has caught every addition so far. Keep it.
 
 **Project-owned schema `!!id`** follows tson-java's convention with this repo's own group:
-`https://tson.io/2026/37/ltr8/http/<name>-<version>.tn` — `/2026/37` the spec revision, `ltr8` the
-publishing org, `http` the subsystem. The version in the name is real, but see above for when bumping it is
-required rather than reflexive.
+`https://tson.io/2026/37/io/ltr8/http/<name>.tn` — `/2026/37` the spec revision, `io/ltr8` the publisher, `http`
+the subsystem, `<name>` the schema, and **no version in the name**. That covers `problem.tn`, `deployment.tn`,
+`meta-http.tn` and the experiment's meta layers. The demos' example application (`schemas.example.com/…/app/`)
+is not project-owned and keeps its numbered names, deliberately: `order-1.tn` beside `order-2.tn` is what
+`TsonSchemaVersions` exists to route, an application that has published two versions.
 
 **A spec revision moves every identity in the repo**, this project's own and the three bundled ones alike, and
 it is one substitution across everything — `.tn` sources, Java constants, test fixtures, `README.md`,
@@ -1033,7 +1031,7 @@ second demo, on the JDK adapter only.
 ./gradlew :tson-http-jdk:runDemo -Pport=9000
 ```
 
-### Deployment descriptors (`deployment-1.tn`, `TsonDeployment`)
+### Deployment descriptors (`deployment.tn`, `TsonDeployment`)
 
 **The third artifact kind**, beside a schema (what a document must be) and an API description (what an
 endpoint offers): how *one instance* is configured. Revision 34 added the §8.2 policies as a security control
@@ -1041,10 +1039,10 @@ with no artifact, and this was the proposal for where it lives. **Revision 37 ad
 says no document may name, import or otherwise select the policy it is judged under, and the spec bundles
 `policy.tn` (`https://tson.io/2026/37/m/policy.tn`) as the policy's vocabulary — `restriction_level`,
 `script_policy`, `identifier_policy`, `limits` and `policy`, the shape a deployment writes its policy in and a
-processor reports it in. `deployment-1.tn` imports it: the profile is a `policy.tn` `policy`, and the
+processor reports it in. `deployment.tn` imports it: the profile is a `policy.tn` `policy`, and the
 descriptor's own settings are partial *override* shapes (`identifier_override`, `token_override`,
 `limits_override`), every member optional where `policy.tn`'s are required. Whether the descriptor should
-instead hold a complete `policy` is an open decision. The argument is in `deployment-1.tn`'s own `@doc`; the
+instead hold a complete `policy` is an open decision. The argument is in `deployment.tn`'s own `@doc`; the
 short form:
 
 - **Not a schema.** An artifact declaring its own strictness chooses its own check, and §3.5's immutability
@@ -1060,7 +1058,7 @@ short form:
 **Two rules, enforced by shape rather than by documentation.** `TsonDeployment.read` takes source text — there
 is no search path and there must not be one, because a runtime that loads whatever it finds lets a container
 image change a security policy with no code diff. And no document may name a descriptor: nothing registers one
-with a schema source, and the catalog never serves one. `deployment-1.tn` itself *is* published, because a
+with a schema source, and the catalog never serves one. `deployment.tn` itself *is* published, because a
 client needs it to read the profile.
 
 **An absent policy is not a permissive one.** The two defaults point opposite ways (Highly Restrictive over
@@ -1069,9 +1067,9 @@ leaves a config alone rather than overwriting it with a guess. `limitsPolicy()` 
 `limits` record: absent leaves the library's 64-level nesting bound where it is.
 
 **`limits` is the third setting and it is beside the two, not inside them.** §8.2's policies say what this
-processor will *admit as a name*; §9.1's say what it will *spend reading a document*, and a deployment
-changing one has said nothing about the other. `max_depth` is the only member because it is the only limit
-the library enforces — §9.1 states twelve, and the rest arrive as `deployment-2.tn` rather than as a member
+processor will *admit as a name*; §9.1's say what it will *spend reading a document*, and a deployment changing
+one has said nothing about the other. `max_depth` is the only member because it is the only limit the library
+enforces — §9.1 states twelve, and the rest are added as the library enforces them rather than as a member
 nothing reads.
 
 **The profile is the policy in force, and it is a hint.** `profile(inForce)` takes the `ProcessorPolicy` the
@@ -1195,13 +1193,13 @@ request exercises that.
   blocks. One copy for three adapters, so a change cannot land in one demo and not the others. They name
   their imports **literally**, as a published document must, and each `OrderServerTest.identitiesMatchTheConstants`
   holds those literals to the constants — which is what the old string interpolation gave for free.
-- `tson-http/src/main/resources/deployment-1.tn` — the deployment-descriptor schema and the
+- `tson-http/src/main/resources/deployment.tn` — the deployment-descriptor schema and the
   `acceptance_profile` projection published from it, carrying its own argument in its `@doc`. Revision 37
   adopted the proposal as the bundled `policy.tn`, which this schema imports.
 - `tson-http-jdk/src/demo/resources/` — the validator demo's own schemas (`validate-1.tn`,
   `validate-api-1.tn`) and its page (`validator.html`). **Not** in `demo/schemas/`, which is the three order
   demos' shared resource path; these belong to one demo on one adapter.
-- `tson-http/src/main/resources/meta-http-1.tn` — the meta layer an API description names. Picked out of four
+- `tson-http/src/main/resources/meta-http.tn` — the meta layer an API description names. Picked out of four
   designs explored side by side (three as schemas, one as data); the comparison is in git history, and why this
   one won is in "Describing an API" above.
 - `experiments/` — design explorations kept compiling and passing rather than archived: each in its own directory

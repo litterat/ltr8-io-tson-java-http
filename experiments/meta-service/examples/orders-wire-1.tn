@@ -1,11 +1,11 @@
 !!id:"https://schemas.example.com/2026/37/experiment/meta-service/orders-wire-1.tn"
 !!meta:"https://tson.io/2026/37/m/meta.tn"
 !!import:"https://tson.io/2026/37/m/core.tn"
-!!import:"https://tson.io/2026/37/ltr8/http/rpc-1.tn"
+!!import:"https://tson.io/2026/37/io/ltr8/http/rpc.tn"
 !!import:"https://schemas.example.com/2026/37/experiment/meta-service/orders-types-1.tn"
 !!import:"https://schemas.example.com/2026/37/experiment/meta-service/orders-errors-1.tn"
 @doc:"""
-  The wire schema of the orders interface: rpc-1.tn's templates closed once per method, so a packet is a
+  The wire schema of the orders interface: rpc.tn's templates closed once per method, so a packet is a
   fully typed document -- `!place_order_call { ... }`, `!get_order_return { ... }`. Deterministic in
   orders-1.tn (one `_call` and one `_return` per method, the errors choice per method), so this is what a
   generator produces from the interface; it is written by hand here to show the shape. A method with no

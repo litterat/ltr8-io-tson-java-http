@@ -32,12 +32,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class InterfaceMapProbe {
 
-    static final String PROBE_META_ID = "https://tson.io/2026/37/ltr8/http/meta-probe.tn";
+    static final String PROBE_META_ID = "https://tson.io/2026/37/io/ltr8/http/meta-probe.tn";
     static final String DOC_ID = "https://schemas.example.com/2026/37/app/probe-1.tn";
 
     /** The sketch, plus one probe-only constructor. */
     static final String META = Experiment.metaServiceSource()
-            .replace("https://tson.io/2026/37/ltr8/http/meta-service-1.tn", PROBE_META_ID)
+            .replace("https://tson.io/2026/37/io/ltr8/http/meta-service.tn", PROBE_META_ID)
             .replace("\n  api => data & {",
                     "\n  interface_of_signatures => data & { methods: {type_name => signature} }\n"
                     + "  data_method => data & signature\n"
