@@ -189,7 +189,7 @@ class ExamplesProbe {
         assertEquals(template, closed.source().orElseThrow().name(), entry + " closes the wrong template");
         Map<String, String> fields = new LinkedHashMap<>();
         assertInstanceOf(RecordBody.class, closed.body()).fields()
-                .forEach(field -> fields.put(field.name(), field.type().name()));
+                .forEach((name, field) -> fields.put(name, field.type().name()));
         return fields;
     }
 }

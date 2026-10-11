@@ -110,9 +110,11 @@ type*. None is live any more.
 **Status after Revision 37.** The change log (§5) disposes of all four: #7 adopted; #9's typed parameters adopted and
 its constructor bound **declined** — a type parameter names a local type, so its bound is local ([TSON-SCHEMA]
 §5.10); #6's field half **withdrawn**, a dependent record being the wrong thing to add now; and #2 carried open, then
-taken off the register upstream to be reworked together with the JSON member-name entry against Revision 38. That
-rework is upstream's namespace sketch, which models a naming role as a `name_type` carrying a `target` and a
-`relation`, so a reference is typed by its role rather than by a bounded type slot. **Step 4 below is overtaken** —
+taken off the register upstream to be reworked together with the JSON member-name entry against Revision 38. The
+member-name half has since landed on the Revision 38 proposal, as `record.name_type` and a record's fields as an
+ordered map keyed by name (upstream's `SPEC-FEEDBACK.md`, "A record's field names have a type" and "A record's fields
+are a map keyed by name"); the namespace half is what remains, in upstream's namespace sketch, which types a reference
+by its naming role rather than by a bounded type slot. **Step 4 below is overtaken** —
 both halves it leaned on are decided against — and the rest of this entry stands as consumer evidence for the
 sketch: the candidates table, the member-identity argument, and what the meta-service experiment needs from each
 step.
@@ -127,7 +129,8 @@ reference* reaches a member's type and never the member, and *having members* is
 
 - **Built:** `identifier` is a text family (`identifier_type`, #7 Proposal 1), so whether a key is a name is a
   question about its *type*. Core no longer declares one (#15), so a schema wanting it declares
-  `identifier => !identifier_type { continue_add: "-" }` itself. Also built: `enum_type.type` (#7 Proposal 2);
+  `identifier => !identifier_type { continue_add: "-" }` itself. Also built: `enum_type.type` (#7 Proposal 2), which
+  the Revision 38 proposal renames `name_type` and requires to be an identifier family;
   `template_param.bound`, checked at the application and resolved in the type-name namespace only (#9); `ordered`
   on `map` (#10), which that entry says prepares #2's keyed sets; and **§8.2 at identifier-typed values in data**
   — a field value, an identifier-keyed map's keys and a unique array of identifiers are names, the key and element
@@ -135,6 +138,10 @@ reference* reaches a member's type and never the member, and *having members* is
   as the look-alike rule's own switch — and **in a schema governed by a meta layer** as well, a `data` body's
   payload and an annotation value being read under the same policy. That last is where an interface's methods are
   written, so a namespace's member set already has its hygiene.
+- **Running on the Revision 38 proposal:** the `type` kind — `type => top & {}`, with `atom`, `product` and `sum`
+  composing it and `data` not — so "is a type" is IS-A `type` rather than "is not `data`". Point 3's `namespace`
+  composes `top` alone and is a non-type by that test, not by one more exclusion, and step 4's `type_ref` slot
+  refusing a namespace entry becomes the same check.
 - **Not built:** a projection production; members as declarations. **Decided against:** a bounded type slot at a
   *field* (#6's other half, withdrawn) and a bound naming a constructor rather than a type (declined).
 
@@ -191,7 +198,7 @@ members   => { key_type: type_ref  member?: type_ref }    -- the facet: composes
 namespace => top & members & {
   entries?: {value => type_definition}                    -- resolved form only: each member, under its key
 }
-record    => product & members & { … }                    -- the facet's other user: the record-fields entry, not this one
+record    => product & members & { … }                    -- the facet's other user: its name_type and fields
 ```
 
 `schema` is unchanged. **A schema document is the root namespace**, and the kernel needs no constructor to say so:
@@ -310,7 +317,11 @@ same check a slot type.
      under its qualified name in the `schema` map — makes every name-level index one token and one lookup again, at
      the cost of qualified keys in `schema`; it needs this step's name, so it is decided here or not at all.
    - **Records take the facet in the same step**, or `.` means the member on an interface and the type on a record.
-     The next entry's `key_type` is then the facet's, not a field of `record`'s own.
+     The Revision 38 proposal already gives `record` both halves as its own fields — `name_type`, the family its keys
+     belong to, and `fields`, an ordered map from name to declaration — so the facet lifts what `record` declares
+     rather than inventing a shape beside it, and should take its spelling: `name_type` for `key_type`. A
+     namespace's keys may be data (point 1's api), which `name_type`, an identifier family, cannot state; that is
+     the one place the facet must be wider than the field it lifts.
 
    It answers the two questions the meta-service experiment left open: **a method's identity** is
    `(interface identity, key)` — `…/orders-1.tn` and `place_order` — with no invented `operationId`; and **a plan
@@ -370,8 +381,9 @@ same check a slot type.
 
    Over steps 1–2 it adds `binding.method: <: method` and `implements?: [<: !interface]`. It is also worth taking on its
    own, for two things that need no namespace:
-   - **`enum_type` as structure:** `type: <T: text>  members: set<T>` replaces §7.4's conformance and bound rules,
-     which #7 Proposal 2 currently states in prose and the linker enforces.
+   - **`enum_type` as structure:** `name_type: <T: !identifier_type>  members: set<T>` replaces the conformance
+     and bound rules §7.4 states in prose and the linker enforces — the bound being a constructor, which is this
+     step's `BUILT_BY`.
    - **This project's `meta-http.tn`**, whose `parameter.type` carries a `@doc` saying it "names a scalar and
      nothing here enforces that" — `<: !atom`.
 5. **Hold: general nesting, visibility and named imports.** A namespace as a member beyond step 3's case, a private
@@ -394,110 +406,9 @@ touches, and migrates to an `api` namespace rather than being grandfathered — 
 `InterfaceMapProbe` keeps measuring §4.1's open reading — whether a `data` *constructor* may be a map's value type —
 which the kind makes moot for an interface, its methods becoming members rather than map values.
 
-**Priority:** high if Revision 37 carries any namespace work. Step 1 stands alone; step 2 is the one that gives a
+**Priority:** high if Revision 38 carries any namespace work. Step 1 stands alone; step 2 is the one that gives a
 method an identity anything outside its interface can name, and nothing short of it does; step 4 is worth taking on
 its own, namespace or not.
-
-### To file: a record's fields as a namespace, and field names that are not identifiers — where the rule moves
-
-**Sections:** [TSON-DATA] §1 (layering), §2.5 (record, `field-name`), §4 (base type resolution), §7.7, §8.2;
-[TSON-SCHEMA] §5.2, §5.11 (field groups), §8.1 (`record`, `record_field`, `field_group`), §11.4; [TSON-JSON] §3.2
-(the reserved member namespace), §6.1.1 (closure and NFC matching), §6.1.6 (member order). Builds on #2, #3 *a JSON
-member name that is not an identifier*, #6, #10 and #18 *a field group's option should hold several fields*,
-numbered as above.
-
-**Status after Revision 37.** The numbers are the Revision 37 register's. #6's field half was withdrawn, so point 3
-cannot lean on it; #3 left the register with #2, to be reworked together against Revision 38 in upstream's namespace
-sketch, where `record.fields` is already a namespace keyed by a naming role. Points 1, 2, 4 and 5 bear on that
-rework unchanged; point 3's dependent key type is the question the sketch answers with a role instead.
-
-**Kind:** a proposal responding to a direction under consideration upstream — `record.fields` becoming a namespace
-whose key type need not be `field_name`, so that a JSON member name such as `@context`, `_id` or `2fa_enabled` is a
-declarable field. The direction is sound; what decides whether it is clean is where *a field name is an identifier*
-ends up living.
-
-**1. The lexer already spells it, so the rule is semantic — and its current home breaks layering.**
-[TSON-DATA] §2.5 has `field-name = unquoted-token / single-line-token`, so `{ "@context": x }` lexes today; the
-identifier requirement is §2.5 and §7.7 applied on top. No lexer change is needed and the Class 1 freeze holds. But
-if a schema may declare text keys while that rule stays where it is, a Class 1 processor — which does not act on
-`!!schema` — refuses a document a schema-aware processor admits, against §1's *each part adds capability without
-modifying the parts below it*.
-
-**Recommended:** move the rule into base type resolution (§4), which the series already confines to positions no
-schema types. A schemaless record's key type is `field_name`; a schema-typed record's is what it declares. The
-schemaless behaviour is unchanged, name hygiene included (pinned here by
-`UpstreamGapsTest.everyFieldNameOfASchemalessRecordMeetsAllThreeNameRules`). §4.1 should then say outright what a
-Class 1 processor does with a record in a document carrying `!!schema`, since Revision 36's restatement of
-applicability by position is what this leans on.
-
-**2. `$` must stay unmintable, structurally.** [TSON-JSON] §3.2 calls the reservation "sound by construction"
-*because* declared field names are identifiers. A text key type would let a schema declare `$schema` as a field.
-Rather than refuse bare `text` by a rule, bound every record's key type by IS-A a kernel `member_name` — a text
-refinement excluding `$`-initial names — and restate §3.2 over the bound. Refinement only narrows, so every key type
-inherits the exclusion and no processor has to remember a check.
-
-**3. The key type is a dependent field, so this needs #6's field half.** Three slots reference the record's own
-keys and must be typed by its key type: `discriminators`, and — since #18 made a group's option a set of fields —
-both of `field_group`'s, `members: [[field_name]]` (the options) and `optional?: [field_name]` (the members marked
-`?` within theirs):
-
-```
-field_group => <K: member_name> {
-  members:   [[K]]
-  optional?: [K]
-  state?:    element_state ~ REQUIRED
-}
-
-record => product & {
-  key_type?:       <K: member_name>       -- absent: field_name
-  fields:          {K => record_field}    -- ordered: true
-  groups?:         [field_group<K>]
-  discriminators?: [K]
-  …
-}
-```
-
-#18 widens what rides on getting this right: its census finds "at least one of a set of keys" at 55 SchemaStore
-sites, all of them converted JSON contracts — the population a text key type exists to serve — so a group over
-keys like `@id` and `@type`, `( "@id": I | "@type": T )+`, is a shape the two proposals would admit only together.
-Whether any of the 55 has such keys is not something the census records. #6 also records that §5.2
-cannot default a type slot today; its type-param slot is what admits the default.
-**`fields` is `ordered: true`**, since field order is observable — resolved output, §6.1.6's encoder order, host
-constructor order — which #10 anticipated. **`record_field.name` retires**, changing resolved output for every
-record; in this project that touches two tests reading `RecordBody.fields()` as a list.
-
-**4. Hygiene follows the key type, with the look-alike rule kept on every declared set.**
-
-- **Per-name rules** (character, script): the identifier policy at identifier keys, the token policy at text keys —
-  #7's line, applied to records.
-- **The look-alike set rule runs at schema load on every declared key set, whatever its type.** A record is closed,
-  so data can spell only declared names, and the spoofing surface is the schema's own set; checking it is cheap and
-  catches `user-name` beside `usеr-name` (U+0435) in a converted contract — the case #3 shows a
-  `patternProperties`-style map cannot.
-- **Matching stays NFC for every key type**, as [TSON-JSON] §6.1.1 states it for JSON today. Otherwise two
-  spellings of `café` are two fields, which is the same attack through normalisation.
-
-**5. A host-binding row, as `enum` has one.** `@context` is not a Java record component. §7.4's binding row is the
-pattern: identifier-keyed records guarantee generated host members, text-keyed ones require a host-side name
-mapping. tson-java's `@Profile` `fields` already maps constructor parameters to field names and may be that
-mapping; whether it admits a non-identifier is unverified.
-
-**6. This supersedes #3, and should say so.** #3's `@json_name` projection and this direction answer one gap, and
-leaving both open leaves no stated reason to prefer either. #3 declined to relax §7.7 because it "changes the
-*model* to serve one encoding". The answer is the meta-service experiment's finding: these are names from a
-**borrowed namespace** — JSON-LD's, MongoDB's, a vendor's — and a path template or a header name has the same
-shape. TSON text spells them already, so the need is not JSON's alone. Filing this should retire #3 explicitly.
-
-**What this project does meanwhile:** nothing. A JSON body with such members is typed as a map or is not readable
-as a record; `problem.tn` is unaffected, RFC 9457's members all being identifiers. What it would gain:
-`acceptingJson` reading `_id`/`@context`-shaped APIs as records rather than maps, `meta-http.tn` parameter names
-that are not identifiers (`page[size]`), and the experiment's `Placement` mapping URL segments, query keys and
-header names onto request fields directly rather than by a consumer-side check.
-
-**Priority:** medium. It depends on the previous entry's step 1 (the members facet) and on how the sketch types a
-key position by role, now that #6's field half is withdrawn, and
-its point 1 should be settled before any schema-side text key is admitted, since that is the one part that touches
-Part 1.
 
 ### To file: formats this project needs and the vocabulary cannot state — two types, by strength of evidence
 

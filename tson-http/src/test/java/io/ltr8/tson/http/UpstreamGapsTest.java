@@ -122,14 +122,14 @@ class UpstreamGapsTest {
 
         var entries = tson.schemaRegistry().get("https://s.example.com/2026/38/p-1.tn").orElseThrow()
                 .schema().entries();
-        TypeRef response = ((RecordBody) entries.get("op").body()).fields().getFirst().type();
+        TypeRef response = ((RecordBody) entries.get("op").body()).fields().firstEntry().getValue().type();
         var variants = assertInstanceOf(ChoiceBody.class, entries.get(response.name()).body()).variants();
         assertEquals(2, variants.size(), () -> "both applications lift: " + variants);
 
         // 201 with an order, 400 with a problem -- the substitution the synthetic names encode, checked.
         assertEquals(List.of("201", "order", "400", "problem"), variants.stream()
                 .map(v -> (RecordBody) entries.get(v.name()).body())
-                .flatMap(b -> b.fields().stream())
+                .flatMap(b -> b.fields().values().stream())
                 .map(f -> f.role() == FieldRole.FIXED
                         ? f.value().orElseThrow().text() : f.type().name())
                 .toList());
@@ -185,8 +185,7 @@ class UpstreamGapsTest {
 
         assertEquals("resp", entries.get("created").source().orElseThrow().name());
         RecordBody body = (RecordBody) entries.get("created").body();
-        RecordField status = body.fields().stream().filter(f -> f.name().equals("status"))
-                .findFirst().orElseThrow();
+        RecordField status = body.fields().get("status");
 
         assertEquals("201", status.value().orElseThrow().text());
         assertEquals(FieldRole.FIXED, status.role());
@@ -479,6 +478,28 @@ class UpstreamGapsTest {
         // Each name single-script and admitted on its own, so only the set has anything to say.
         assertEquals(List.of(Diagnostic.Code.CONFUSABLE_NAMES),
                 codesOf(tson, "{ pass: 1  " + cyrillicPass + ": 2 }"));
+    }
+
+    /**
+     * <b>A field name is a value of its record's {@code name_type}, so only the schema a document names may judge
+     * it.</b> A schemaless record's names are identifiers, and one that is not is {@code ATOM_FORM_INVALID} at its
+     * own pointer -- a verdict, so a 400 -- rather than the parse error it was. A document naming a schema this
+     * deployment will not supply is not judged by the schemaless rule in its place: its root is skipped unjudged,
+     * so the problem a client gets carries the unusable reference alone, not name refusals a schema that admits
+     * {@code "first name"} would never have made.
+     */
+    @Test
+    void aFieldNameIsJudgedOnlyByTheSchemaTheDocumentNames() {
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(Map.of()))));
+
+        assertEquals(List.of(Diagnostic.Code.ATOM_FORM_INVALID), codesOf(tson, "{ \"first name\": 1 }"));
+
+        var problems = DiagnosticsReceiver.collecting();
+        tson.treeReader().withDiagnostics(problems)
+                .read("!!schema:\"https://s.example.com/2026/38/p-1.tn\"\n{ \"first name\": 1 }");
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_NOT_PERMITTED),
+                problems.diagnostics().stream().map(Diagnostic::code).distinct().toList());
     }
 
     /**

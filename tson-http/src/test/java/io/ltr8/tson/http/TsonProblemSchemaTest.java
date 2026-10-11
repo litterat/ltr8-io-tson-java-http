@@ -7,7 +7,6 @@ import io.ltr8.tson.base.SchemaFetchException;
 import io.ltr8.tson.compiler.TsonDiagnostics;
 import io.ltr8.tson.schema.meta.EnumBody;
 import io.ltr8.tson.schema.meta.RecordBody;
-import io.ltr8.tson.schema.meta.RecordField;
 import io.ltr8.tson.schema.meta.TypeDefinition;
 import org.junit.jupiter.api.Test;
 
@@ -172,8 +171,8 @@ class TsonProblemSchemaTest {
                         + "fact are free to disagree");
 
         TypeDefinition diagnostic = TsonProblemSchema.compiled().schema().entries().get("diagnostic");
-        List<String> fields = assertInstanceOf(RecordBody.class, diagnostic.body(), "diagnostic is a record")
-                .fields().stream().map(RecordField::name).toList();
+        List<String> fields = List.copyOf(assertInstanceOf(RecordBody.class, diagnostic.body(), "diagnostic is a record")
+                .fields().keySet());
         assertFalse(fields.contains("fetch_reason"),
                 () -> "diagnostic carries a fetch_reason field: every member is a location or the problem "
                         + "itself, and this one would be a payload for five codes out of " + fields);

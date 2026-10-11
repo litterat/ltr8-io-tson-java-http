@@ -480,8 +480,7 @@ class ApiProbe {
         assertTrue(def.supertypes().contains("place_order"), () -> "" + def.supertypes());
         assertTrue(def.supertypes().contains("http"), () -> "" + def.supertypes());
 
-        Map<String, RecordField> fields = new LinkedHashMap<>();
-        ((RecordBody) def.body()).fields().forEach(f -> fields.put(f.name(), f));
+        Map<String, RecordField> fields = ((RecordBody) def.body()).fields();
         assertEquals(FieldRole.FIXED, fields.get("verb").role());
         assertEquals("POST", fields.get("verb").value().orElseThrow().text());
         assertEquals("/orders", fields.get("path").value().orElseThrow().text());

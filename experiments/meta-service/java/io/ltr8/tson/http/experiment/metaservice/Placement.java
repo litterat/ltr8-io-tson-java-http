@@ -50,7 +50,7 @@ record Placement(Map<String, Location> fields) {
                         + " -- a request is the record whose fields an endpoint distributes over the HTTP request,"
                         + " so a method taking one value declares a one-field record for it");
             }
-            record.fields().forEach(field -> declared.put(field.name(), field));
+            declared.putAll(record.fields());
         });
         Map<String, Location> placed = new LinkedHashMap<>();
         Matcher segments = SEGMENT.matcher(path);
@@ -68,7 +68,7 @@ record Placement(Map<String, Location> fields) {
         for (String field : declared.keySet()) {
             Location where = placed.getOrDefault(field, remainderIsQuery ? Location.QUERY : Location.BODY);
             if (where == Location.QUERY && !placed.containsKey(field)) {
-                requireScalar(name, declared.get(field), where, entries);
+                requireScalar(name, field, declared.get(field), where, entries);
             }
             inRecordOrder.put(field, where);
         }
@@ -87,7 +87,7 @@ record Placement(Map<String, Location> fields) {
                     + " and in the " + where);
         }
         if (where != Location.BODY) {
-            requireScalar(entry, declared.get(field), where, entries);
+            requireScalar(entry, field, declared.get(field), where, entries);
         }
     }
 
@@ -97,7 +97,7 @@ record Placement(Map<String, Location> fields) {
      * multi-valued parameter into the body where no GET can carry it. A record, a map, a tuple, or an array of
      * any of those has no spelling in any of the three.
      */
-    private static void requireScalar(String entry, RecordField field, Location where,
+    private static void requireScalar(String entry, String name, RecordField field, Location where,
                                       Function<String, TypeDefinition> entries) {
         TypeDefinition type = entries.apply(field.type().name());
         if (type == null) {
@@ -105,16 +105,16 @@ record Placement(Map<String, Location> fields) {
         }
         if (type.body() instanceof ArrayBody array) {
             if (where == Location.PATH) {
-                refuse(entry, field, where, "an array, and a URL segment carries exactly one scalar");
+                refuse(entry, name, where, "an array, and a URL segment carries exactly one scalar");
             }
             if (isContainer(entries.apply(array.elementType().name()))) {
-                refuse(entry, field, where, "an array of " + array.elementType().name()
+                refuse(entry, name, where, "an array of " + array.elementType().name()
                         + ", and a repeated " + where.name().toLowerCase(Locale.ROOT) + " value carries a scalar");
             }
             return;
         }
         if (isContainer(type)) {
-            refuse(entry, field, where, "a " + field.type().name() + ", which is not a scalar");
+            refuse(entry, name, where, "a " + field.type().name() + ", which is not a scalar");
         }
     }
 
@@ -123,8 +123,8 @@ record Placement(Map<String, Location> fields) {
                 || type.body() instanceof MapBody || type.body() instanceof TupleBody);
     }
 
-    private static void refuse(String entry, RecordField field, Location where, String because) {
-        throw new IllegalArgumentException("'" + entry + "' places '" + field.name() + "' in the " + where
+    private static void refuse(String entry, String field, Location where, String because) {
+        throw new IllegalArgumentException("'" + entry + "' places '" + field + "' in the " + where
                 + ", but it is " + because);
     }
 

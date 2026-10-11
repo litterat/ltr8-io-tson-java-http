@@ -687,6 +687,16 @@ spelling of `pass` beside the Latin one, which is what
 `TsonHttpCodecTest.twoConfusableFieldNamesInASchemalessBodyAreABadRequest` now sends, and both halves are
 pinned by `UpstreamGapsTest.everyFieldNameOfASchemalessRecordMeetsAllThreeNameRules`.
 
+**A field name is a value of its record's `name_type`** (the Revision 38 proposal), an identifier family defaulting
+to the series' identifier, so nothing here changes unless a schema says so. What a server meets: a schemaless
+`{ "first name": 1 }` is `ATOM_FORM_INVALID`, a 400 like the parse error it was; a governed record's undeclared
+name, identifier or not, is `UNRECOGNIZED_FIELD` in both encodings; and a body naming a schema this deployment will
+not supply is skipped unjudged, so its problem carries the unusable reference alone rather than name refusals a
+schema admitting `"first name"` would never make (`UpstreamGapsTest.aFieldNameIsJudgedOnlyByTheSchemaTheDocumentNames`).
+A relaxed name type is a translation's tool — `@id`, `$ref`, or an HTTP-style name under `ASCII_CASEFOLD` — stated on
+a fieldless abstract base its records compose, and bound with `@Field("@id")`; the hygiene rules then run under that
+type's profile. `RecordBody.fields()` is an ordered map from name to `RecordField`, which carries no name of its own.
+
 **All three are 400 and none is a verdict**, both halves pinned rather than left implicit
 (`TsonHttpCodecTest.nameHygieneIsARefusalTheSenderFixes`): §8.1 makes a refusal its fifth outcome, so
 `verdict()` is false for them as for `LIMIT_EXCEEDED`. These are the first codes a server can meet because of its

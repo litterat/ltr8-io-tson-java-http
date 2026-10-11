@@ -112,8 +112,7 @@ class MetaServiceSketchProbe {
 
         // The status an error carries is readable from its type: a FIXED 404.
         var errEntries = tson.schemaRegistry().get(ERR_ID).orElseThrow().schema().entries();
-        var status = ((RecordBody) errEntries.get("sku_not_found").body()).fields().stream()
-                .filter(f -> f.name().equals("status")).findFirst().orElseThrow();
+        var status = ((RecordBody) errEntries.get("sku_not_found").body()).fields().get("status");
         assertEquals(FieldRole.FIXED, status.role());
         assertEquals("404", status.value().orElseThrow().text());
     }
