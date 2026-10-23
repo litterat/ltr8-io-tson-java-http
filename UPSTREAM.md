@@ -65,7 +65,7 @@ names the library.
 ## 3. An import across governing levels is not refused
 
 **Hit:** this project's `meta-http.tn` is a meta layer — governed by the meta-kernel, because declaring a constructor
-(`operation => data & {…}`) is permitted only there. Its constructors want HTTP's vocabulary: `operation.method` an
+(`api => namespace & {…}`) is permitted only there. Its constructors want HTTP's vocabulary: `operation.method` an
 `http_method`, `response.status` a `status_code`, `operation.path` a `uri_template`. Those were first declared in an
 ordinary library, `http.tn` governed by `meta.tn`, and `meta-http.tn` imported it. That resolved, and it should not
 have: the two are different levels — one declares the constructors the other's entries are built with — and an
@@ -97,318 +97,51 @@ each time a revision closes, and its convention is *cite the spec, not the argum
 re-check every `SPEC-FEEDBACK.md #N` in this repo after a revision bump.
 
 
-### To file: namespaces — a `namespace` kind, a members facet records share, and a projection that names a member
+### To file: namespaces after tson-java PR #753 — what this project still needs
 
-**Sections:** [TSON-SCHEMA] §2.2.3 (the flat namespace), §4.1 (the base kinds, `data`), §5.2 (selector pins
-distinct as values), §5.5 (kind determination; construction transfers kind, not IS-A), §5.10 (templates), §8.1 (the
-constructor type slots, `schema`), §8.2 (instantiation identity), §11.4 (the look-alike scopes); [TSON-DATA] §2.6
-(map keys are values), §7.1 (`.` reserved as an identifier separator), §8.2 (name hygiene). Builds on four entries
-of the Revision 37 register, cited below by the numbers they carried there: #2 *a namespace should be a value*, #6 *a
-type slot cannot be bounded*, #7 *`identifier` should be a text family* and #9 *a template parameter should carry its
-type*. None is live any more.
+**Sections:** [TSON-SCHEMA] §4.1 (`namespace`, in place of `data`), §5.8 (composition), §8.1 (the constructor type
+slots); [TSON-DATA] §2.6 (map keys are values). Upstream tracks the design as its `SPEC-FEEDBACK.md` "A namespace is a
+constructor whose instances are maps" and "A reference to a value is the kind's sibling", and the work in
+`design/meta-layer-namespaces.md`; this entry is the consumer evidence for what those leave open.
 
-**Status after Revision 37.** The change log (§5) disposes of all four: #7 adopted; #9's typed parameters adopted and
-its constructor bound **declined** — a type parameter names a local type, so its bound is local ([TSON-SCHEMA]
-§5.10); #6's field half **withdrawn**, a dependent record being the wrong thing to add now; and #2 carried open, then
-taken off the register upstream to be reworked together with the JSON member-name entry against Revision 38. The
-member-name half has since landed on the Revision 38 proposal, as `record.name_type` and a record's fields as an
-ordered map keyed by name (upstream's `SPEC-FEEDBACK.md`, "A record's field names have a type" and "A record's fields
-are a map keyed by name"); the namespace half is what remains, in upstream's namespace sketch, which types a reference
-by its naming role rather than by a bounded type slot. **Step 4 below is overtaken** —
-both halves it leaned on are decided against — and the rest of this entry stands as consumer evidence for the
-sketch: the candidates table, the member-identity argument, and what the meta-service experiment needs from each
-step.
+**Where it stands.** PR #753 landed on the Revision 38 proposal: `namespace` is a constructor under `top`, a namespace
+type composes it, a value of one is a map (`Namespace`), the schema map and a record's fields are two of them, and
+`data` is retired. A `ref<T>` slot reaches a value by a qualified name through namespace keys (`orders.get`), and a
+`kind<C>` slot holds a type's name; both are judged by the slot's declared type, at any depth and under any host. A
+namespace type declares only its facets, so a construct with fields beside its map is a record held under a key.
+`meta-http.tn`'s `api` and the meta-service probes run on all of it.
 
-**Kind:** a recommendation, from the consumer whose experiment #2 came out of. It takes #2's "read against #6 and #7"
-addendum to a build order — the namespace itself, then reaching into it, then bounded references — and tests #2's
-primitive against every candidate the consumer could find. Two results change #2's sketch: filling the empty cell *by
-reference* reaches a member's type and never the member, and *having members* is a facet a record shares, so the
-`namespace` kind is that facet on an entry with no instances.
+**Kind:** consumer evidence. Each item is something the meta-service experiment does in its reader today
+(`Routes`) because the schema cannot say it, with the probe that changes state when it can.
 
-**Where the kernel stands.** Checked against `spec/m/meta-kernel.tn` on Revision 37's `main`:
-
-- **Built:** `identifier` is a text family (`identifier_type`, #7 Proposal 1), so whether a key is a name is a
-  question about its *type*. Core no longer declares one (#15), so a schema wanting it declares
-  `identifier => !identifier_type { continue_add: "-" }` itself. Also built: `enum_type.type` (#7 Proposal 2), which
-  the Revision 38 proposal renames `name_type` and requires to be an identifier family;
-  `template_param.bound`, checked at the application and resolved in the type-name namespace only (#9); `ordered`
-  on `map` (#10), which that entry says prepares #2's keyed sets; and **§8.2 at identifier-typed values in data**
-  — a field value, an identifier-keyed map's keys and a unique array of identifiers are names, the key and element
-  sets look-alike scopes, in both encodings and both read modes, with `IdentifierPolicy.withSkeletonDistinctness`
-  as the look-alike rule's own switch — and **in a schema governed by a meta layer** as well, a `data` body's
-  payload and an annotation value being read under the same policy. That last is where an interface's methods are
-  written, so a namespace's member set already has its hygiene.
-- **Running on the Revision 38 proposal:** the `type` kind — `type => top & {}`, with `atom`, `product` and `sum`
-  composing it and `data` not — so "is a type" is IS-A `type` rather than "is not `data`". Point 3's `namespace`
-  composes `top` alone and is a non-type by that test, not by one more exclusion, and step 4's `type_ref` slot
-  refusing a namespace entry becomes the same check.
-- **Not built:** a projection production; members as declarations. **Decided against:** a bounded type slot at a
-  *field* (#6's other half, withdrawn) and a bound naming a constructor rather than a type (declined).
-
-**1. What a namespace is: a keyed set of declarations, where a map is a keyed set of values.** A declaration
-describes values and has instances of its own; a map's member *is* a value. Neither unique keys (every map has them)
-nor being referenced by key (a foreign key references a row, which is a value) separates the two. The key's type is
-free — names or data — and so is whether the container has instances. Tested against the candidates
-(`experiments/meta-service/README.md`, "What a namespace is", has the full table):
-
-| | key | member | namespace? |
-|---|---|---|---|
-| schema, database | type name, table name | a type, a table | ✓ |
-| interface, agent tool set | method name, tool name | a method, a tool | ✓ |
-| record fields, table columns | field name | a field, a column | ✓ — and the record is a type besides |
-| api | path, then verb — **data** | an endpoint, describing exchanges | ✓ |
-| discriminated family (§5.2) | the selector pin — **data** | a subtype | ✓ — already in the spec |
-| problem types, AsyncAPI channels | a URI, an address — **data** | a problem, a message | ✓ |
-| template parameters | `param_name` | a parameter, with #9's type | ✓ — lexically scoped |
-| table rows, a request's headers, config | a key | one value | ✗ map |
-| enum | a label | one value | ✗ set |
-
-Two patterns. **The declaration side is a namespace and the instance side a map**, every time: header registry and
-message, columns and rows, schema and document, interface and calls. And **a namespace keyed by data is common and
-already specified once**: §5.2's selector pins, "pairwise distinct as values", are a key-uniqueness rule under value
-equality over a set of subtypes. So #2's empty cell is not empty in the spec; it is unnamed.
-
-**2. By reference, an interface cannot say which of its methods a binding binds.** #2's step 2 makes an interface
-a record type and `orders.create` "the declared type of `orders`' field `create`", as TypeScript's
-`Orders["create"]`. A field type is a use-site application, and §8.2 resolves one to the declaration owning it or
-to one minted entry — "two fully-bound applications denote the same entry" — so in
-
-```
-orders  => { place_order: method<order, order>  update_order: method<order, order> }
-binding => { method: <: method>  … }
-```
-
-`orders.place_order` and `orders.update_order` are one type, and `method: orders.place_order` satisfies the bound
-while recording nothing about which method it binds. An api's `implements` claim, held per (interface, method), then
-has nothing to count. #2's own example composes the projection (`orders.create & http`), which is why the loss does
-not show there. The way out by reference is a top-level declaration per method, since §8.2 makes "two declarations
-naming one application … two entries" — which puts `place_order` back in the flat namespace, the collision an
-interface exists to scope. **A projection has to name the member**, and that needs members that are declarations.
-
-**3. Having members is a facet; a `namespace` is the kind whose entries are nothing else.** Record fields are a
-namespace and a record is a product, and §5.5 gives an entry exactly one base kind — so members cannot *be* the kind,
-or a record could never have them. The table's last column draws the line: a container with instances of its own
-(record, table, a family's base) is a product with members; one without (schema, interface, api, database) is a
-`namespace`.
-
-**The meta-kernel change**, step 1 below:
-
-```
-members   => { key_type: type_ref  member?: type_ref }    -- the facet: composes no base kind; no `member`, any entry
-namespace => top & members & {
-  entries?: {value => type_definition}                    -- resolved form only: each member, under its key
-}
-record    => product & members & { … }                    -- the facet's other user: its name_type and fields
-```
-
-`schema` is unchanged. **A schema document is the root namespace**, and the kernel needs no constructor to say so:
-its key type is `type_name`, it admits any entry, the document is its scope and `!!id` its identity, and its resolved
-form is the map `schema => {type_name => type_definition}` already is. A namespace entry's resolved body holds its own
-members in the same shape one level down, in `entries`. `entries` is keyed `value` because its key type is the
-namespace's own `key_type` — a dependent field, which step 4's field half would state; until then the resolver checks
-each key against `key_type`, as it checks a record's field names.
-
-**An extension meta-schema and a schema it governs:**
-
-```
--- meta-service.tn
-interface => namespace & { key_type: = method_name    member: = method }
-api       => namespace & { key_type: = path_template  member: = resource  implements?: [<: !interface] }
-
--- orders-1.tn: a namespace keyed by type_name, declaring two keyed by method_name
-!!id:"https://example.com/2026/38/app/orders-1.tn"
-!!meta:"https://tson.io/2026/38/io/ltr8/http/meta-service.tn"
-{
-  order     => { sku: text  quantity: int32 }
-  order_ref => { id: text }
-  reads     => !interface { get_order => method<order_ref, order> }
-  orders    => reads & { place_order => method<order, order>  update_order => method<order, order> }
-}
-
--- its resolved form
-!schema {
-  order     => !type_definition { body: !record { … } }
-  order_ref => !type_definition { body: !record { … } }
-  reads     => !type_definition {
-    body: !interface { key_type: method_name  member: method  entries: {
-      get_order => !type_definition { source: { name: method  arguments: [ … ] }  body: !record { … } }
-    } }
-  }
-  orders    => !type_definition {
-    supertypes: [reads]
-    body: !interface { key_type: method_name  member: method  entries: {
-      place_order  => !type_definition { source: { name: method  arguments: [ … ] }  body: !record { … } }
-      update_order => !type_definition { source: { name: method  arguments: [ … ] }  body: !record { … } }
-    } }
-  }
-}
-```
-
-`namespace & product` reaches two base kinds and is a resolver error, correctly: something with both instances and
-members is a record.
-
-- **A namespace is what a schema document already is, at entry level.** Pass 1 registering names, pass 2 resolving
-  bodies, the collision rule, forward references, the look-alike scope and the `(identity, name)` reference all exist
-  today, for the document only. The kind lets that machinery run for an entry, so an interface is a small schema
-  inside a schema.
-- **It is not `data`, and should not be spelled `data & members`.** What each gives:
-
-  | | `data` | `namespace` | `product & members` |
-  |---|---|---|---|
-  | naming the entry | refused everywhere | an operand of `&`, `^`, `-`; a `<: !interface` slot; never a type slot | a type |
-  | its payload | values, checked against the vocabulary and opaque past it | declarations the resolver resolves | fields |
-  | members reachable | no | from outside once step 2 builds projection | `order.sku`, likewise |
-  | operators | none | `&` extends, `^` pins across members, `-` subsets; templates (`crud<T>`) | the same, over fields |
-  | example | an OpenAPI `x-` extension, a vendor blob | schema, interface, api, database | record, table |
-
-- **`data` narrows to an embedded payload for a reader that knows it.** §4.1's motivating case — "an HTTP operation
-  binding request and response types by name" — becomes a namespace member, and §4.1's wording ("vocabulary a
-  meta-schema introduces … whose instances ride along in a schema map without being types") then describes a
-  namespace better than what `data` is left for. Both should change together.
-- **Composed, not applied.** `interface => !namespace { … }`, as #2 spells it, would make `interface` an instance, IS-A
-  nothing (§5.5), and unappliable as `!interface`. Composition keeps it a constructor, a meta-schema privilege already.
-- **`extends` is `&`, not a field.** On a namespace `&` merges member sets — `orders => reads & { … }` has `reads`'
-  members and its own, a collision between them refused as it is between two composed records' fields — so the
-  relation is structural and needs no reference slot. The spelling of a composed namespace is the author's to settle;
-  the point is that the operator already means it.
-- **An inherited member is not copied.** `orders` reaches `get_order` through `supertypes`, and its `entries` hold
-  only what it declares, so a method composed into several interfaces stays one declaration with one identity. A
-  record copies inherited fields into its body (§5.8); a namespace cannot, without minting a second identity for one
-  method.
-- **`:` binds the constructor's own fields and `=>` declares a member**, so `implements: [orders]` and
-  `"/orders" => …` share one body without ambiguity.
-- **Not composed with `map`.** `map.value_type` says each value is data *of* a type, `member` that each value is a
-  declaration IS-A one — exactly the difference between the two cells — and composing would also make a namespace a
-  product. What `map` does is *describe* a namespace's resolved form, as it already describes the one the kernel has:
-  `schema` types the resolver's output, not the schema document, and `entries` is the same description one level
-  down.
-- **Out of scope: an interface's instances.** They are its implementations — a server, a capability reference — and
-  that is a later hook, not part of this cell.
-
-**4. The key's type decides how a member is reached.** An identifier key projects with `.`, which [TSON-DATA] §7.1
-reserves for it. A data key cannot — `orders_api./orders.POST` is not a name — and needs the pointer form the
-"formats" entry below stages, `/orders/POST`: projection and the JSON-Pointer profile are two spellings of one walk.
-Hygiene follows the key type as #7 already arranged: the identifier policy per name at identifier keys, the token
-policy at data keys, the look-alike rule on every declared key set.
-
-**Recommendation: the namespace itself first, then reaching into it, then bounded references.** Each step is usable
-without the next. The order is chosen because each builds what the next exposes: the facet's `member` *is* a bound —
-every member IS-A `method` — so step 1 implements an IS-A check over declarations internally, and step 4 makes the
-same check a slot type.
-
-1. **The namespace itself: the `namespace` kind and the members facet, over identifier keys.** Members are declared
-   with `=>` inside an entry, resolved in the namespace's own scope, and checked there; nothing outside names one yet.
-   Four rules to state with it:
-   - **A constructed namespace is IS-A nothing**, as §5.5 has every construction: `orders => !interface { … }` is not
-     IS-A `interface`. An exception for namespaces would make `<: interface` work later and spare step 4 a relation,
-     at the price of the one place construction creates IS-A; the "any scalar" bound needs the relation anyway.
-   - **Member conformance.** A member declared as an application, `place_order => method<order, order>`, IS-A
-     `method` only where `method` is a family base (§8.2's entry shape). Either the member bound requires that, or
-     conformance reads "an application of" from `source`; the first keeps it one IS-A check.
-   - **Composition** merges member sets and copies nothing (point 3), so `extends` is `&`.
-   - **§4.1 narrows `data`** in the same edit, its motivating case moving to a namespace member (point 3).
-2. **Reaching a member: projection, and the name it needs.** `orders.place_order` at type-ref and `!name` positions
-   names the member declaration — its own entry by §8.2's two-entries rule — not its type. Three rules to state with
-   it:
-   - **A qualified name in `type_ref.name`.** `type_ref.name` is a `type_name`, an identifier, which admits no `.`.
-     Widen it to identifier segments joined by `.` — the identifier policy's existing per-segment unit is then the
-     hygiene unit. Step 4's references reuse this shape.
-   - **Nested or flat output.** Step 1's `entries` nests one level, and projection walks it. Flattening — every member
-     under its qualified name in the `schema` map — makes every name-level index one token and one lookup again, at
-     the cost of qualified keys in `schema`; it needs this step's name, so it is decided here or not at all.
-   - **Records take the facet in the same step**, or `.` means the member on an interface and the type on a record.
-     The Revision 38 proposal already gives `record` both halves as its own fields — `name_type`, the family its keys
-     belong to, and `fields`, an ordered map from name to declaration — so the facet lifts what `record` declares
-     rather than inventing a shape beside it, and should take its spelling: `name_type` for `key_type`. A
-     namespace's keys may be data (point 1's api), which `name_type`, an identifier family, cannot state; that is
-     the one place the facet must be wider than the field it lifts.
-
-   It answers the two questions the meta-service experiment left open: **a method's identity** is
-   `(interface identity, key)` — `…/orders-1.tn` and `place_order` — with no invented `operationId`; and **a plan
-   document can bind a method**, `!orders.place_order { request: { … } }` checked against it, where today a data
-   document can bind only the type namespace and writes `method: place_order` as data. What each relation of the
-   experiment gets before step 4:
-
-   | relation | at step 1 | at step 2 |
-   |---|---|---|
-   | member conformance | ✓ the facet's `member` bound | |
-   | `extends` | ✓ as `&` — no field | |
-   | a method's identity | a declaration, named only inside its namespace | ✓ `orders.place_order` |
-   | `binding.method` | a `type_name` token | a `type_ref`: `method: plaec_order` is a resolver error |
-   | `implements` | a `type_name` token | still: a namespace entry is a non-type, which a `type_ref` slot refuses |
-
-3. **Data keys, which the api needs, with two questions this entry does not settle.** An interface proves the kind;
-   an api adds keys that are not names, projection by pointer, and these, none of which changes what steps 1–2
-   built:
-   - **Two levels or one.** An api is keyed by path and then by verb. Nested, `resource` is itself a namespace and a
-     namespace becomes a member — nesting, which step 1 refuses. A compound key `[path, verb]` stays one level, and
-     has no pointer token: this project measured that a compound key is `?` in a TSON path and an index pair in a JSON
-     one (`UpstreamGapsTest.aCompoundKeyHasNoPointerTokenAndTheEncodingsDisagree`). Nested is the one a member can be
-     reached in; it should be admitted for the api's case rather than in general.
-   - **What an endpoint member is.** A binding is the method plus transport facts — placement, status — and #2's
-     method-as-type measurement showed the smell of making those fields: they are injected into every call. Either
-     they ride as annotations on the member's key, where `@safe` and `@summary` already sit, so the member is the
-     method itself under a route; or the member's body is something that is not IS-A the method.
-4. **Bounded references: #6's field half in its unnamed form, and a bound that may name a constructor** —
-   *overtaken by Revision 37, which withdrew the first and declined the second; kept for the two consumers it names
-   last, which the sketch's typed name roles would have to serve instead.* A map value
-   cannot bind a parameter name — each entry names a different type — so the bounded reference has to exist as its
-   own type, `<: method>`, with `<T: method>` the sugar that also binds `T`. Three parts:
-   - **The resolved form #6 left open.** `<: X` lifts (§5.3) to a synthetic entry of one kernel constructor whose
-     values have `type_ref`'s shape, arguments included — `extends`-style slots may name `crud<order>`:
-
-     ```
-     ref_type     => <kind> & { bound?: type_ref  relation?: ref_relation ~ IS_A }
-     ref_relation => !enum [IS_A BUILT_BY]
-
-     implements?: [<: !interface]     -- record_field.type names array_7d1
-     @synthetic array_7d1 => !array    { element_type: ref_3c9 }
-     @synthetic ref_3c9   => !ref_type { bound: interface  relation: BUILT_BY }
-     ```
-
-     Its kind is open: its values are `type_ref`-shaped records, which says `product`.
-   - **`type_ref` becomes the unbounded case, `type_ref => !ref_type {}`.** §9's rule that a `type_ref` slot
-     participates in reference walking and structural identity then belongs to the constructor rather than to one
-     record by name, so every bounded slot has it, and every existing `type_ref` field resolves unchanged —
-     `record_field.type: type_ref` being `<: top>` by another spelling. `ref_type.bound` is itself a `type_ref`, a
-     cycle the kernel closes as it closes its other local self-references.
-   - **A bound may name a constructor, and a reference may name an entry that is not a type — decide #6's open
-     question as yes.** "Any scalar", which a URL segment needs, is not a type bound: `text` and `int32` share no
-     supertype that says *scalar*, and #6 rules out following form or discrimination class. `BUILT_BY` is that bound,
-     `<: !atom` or `<T: !text_type>` as #9 sketches it, and it is what `implements` needs, `orders` being built by
-     `interface` and IS-A nothing. `type_ref.name` then names an entry, as `type_argument`'s own doc already allows
-     ("a type, an entry, or … a parameter").
-
-   Over steps 1–2 it adds `binding.method: <: method` and `implements?: [<: !interface]`. It is also worth taking on its
-   own, for two things that need no namespace:
-   - **`enum_type` as structure:** `name_type: <T: !identifier_type>  members: set<T>` replaces the conformance
-     and bound rules §7.4 states in prose and the linker enforces — the bound being a constructor, which is this
-     step's `BUILT_BY`.
-   - **This project's `meta-http.tn`**, whose `parameter.type` carries a `@doc` saying it "names a scalar and
-     nothing here enforces that" — `<: !atom`.
-5. **Hold: general nesting, visibility and named imports.** A namespace as a member beyond step 3's case, a private
-   member an importer does not see, and `!!import` binding a name are each a decision about §2.2.3's flat namespace
-   rather than about this cell. Privacy has a precondition here: an unreserved private name breaks "one name denotes
-   one type throughout a resolution", which tson-java's `DataNameBinder.resolve(String)` relies on.
+1. **`&` over namespace types, so `extends` and `implements` are structural.** A namespace value has no fields, so
+   the experiment's `interface` and `api` are records under keys of `interfaces` and `apis`, carrying `extends?:
+   [type_name]` and `implements?: [type_name]` as identifiers that `Routes` resolves and checks at startup. With `&`
+   merging member sets, `orders => reads & { … }` would have `reads`' methods and its own, a collision refused as
+   between two composed records' fields, and the extra level would go. An inherited member should not be copied:
+   a method composed into several interfaces stays one value with one identity.
+2. **A reference through a record value's field** (upstream's `BACKLOG.md`, "A value reached through a record value's
+   field"). An interface held under a key keeps its methods in a field, `methods: {method_name => method}`, a plain
+   map no qualified name enters. Made a namespace type, `orders.orders.methods.place_order` would pass a record
+   field, which upstream's walk judges by type and reports as a gap rather than delivering. So `binding.method` stays
+   an identifier `Routes` checks, and coverage per (interface, method) is the reader's. Item 1 would also remove the
+   need, by putting the methods directly under the interface's key.
+3. **Data keys.** An api is keyed by path, then verb, and a namespace's `key_type` is an identifier family, so a
+   text-keyed namespace is refused (`NameRoleProbe.aNamespaceCannotBeKeyedByText`) and the experiment's `resources`
+   is a plain map that no qualified name enters. A key that is not a name also needs a reach other than `.`: the
+   pointer form the "formats" entry below stages, `/orders/POST`, where a compound `[path, verb]` key has no pointer
+   token today (`UpstreamGapsTest.aCompoundKeyHasNoPointerTokenAndTheEncodingsDisagree`).
+4. **A reference in a data document.** A value's name at a `ref<T>` slot in a data document is declared and reported
+   `NOT_IMPLEMENTED` (`OneLevelProbe`). It is what lets a plan document bind a method (`agent.tn`), or a delegation
+   name the methods it grants (`experiments/one-level/IDENTITY.md`), against the interface's namespace rather than
+   as text. Which namespace such a name resolves in is the open question: a data document's own schema, or the
+   interface's, by a §7.8 scope push.
 
 **Out of scope, deliberately:** the `(schema identity, root type name)` pair this project reassembles at every call
-site (`describing`, `readObjectAs`, the `TSON-Schema` header plus a route-supplied type). It exists because a *data*
-document cannot hold a reference to a type, and nothing above changes that. Folding it in would blur both
-questions.
+site (`describing`, `readObjectAs`, the `TSON-Schema` header plus a route-supplied type). It exists because a data
+document cannot hold a reference to a type, and nothing above changes that.
 
-**What this project does meanwhile:** nothing that presumes the answer, and offers itself as the measuring stick. The
-meta-service probes join `tson-http`'s test build, so each step shows up as a probe changing state: at step 1
-`interface` moves from `data &` to `namespace &` and `extends` becomes `&`; at step 2 `binding.method` becomes a
-`type_ref` and `Routes` keeps only the IS-A half of that check and its `implements` check; `api` and `resource`
-follow at step 3; at step 4 both of those become resolver checks and `meta-http.tn`'s `parameter.type` takes
-`<: !atom`. `meta-http.tn` (`operation => data & { … }`) is the one published-shape consumer §4.1's narrowing
-touches, and migrates to an `api` namespace rather than being grandfathered — the evidence #2's point 4 asked for.
-`InterfaceMapProbe` keeps measuring §4.1's open reading — whether a `data` *constructor* may be a map's value type —
-which the kind makes moot for an interface, its methods becoming members rather than map values.
-
-**Priority:** high if Revision 38 carries any namespace work. Step 1 stands alone; step 2 is the one that gives a
-method an identity anything outside its interface can name, and nothing short of it does; step 4 is worth taking on
-its own, namespace or not.
+**Priority:** item 1 first. It is the one the experiment's shape is waiting on, and it removes most of item 2.
 
 ### To file: formats this project needs and the vocabulary cannot state — two types, by strength of evidence
 
@@ -514,9 +247,9 @@ constructor in `meta` beside `uri_type`, which reserves no name, with no instanc
 **Already filed.** Five entries staged here have gone to `SPEC-FEEDBACK.md` and left this file: §8.2's policy has no
 artifact, which Revision 37 closed with the bundled `policy.tn`; naming a schema for a document that cannot carry
 `!!schema`; no shorthand for a template application at a `type_ref` slot in data; a namespace should be a value (all
-four on 2026-09-01), now being reworked upstream against Revision 38; and `identifier` as a text family with `enum`
-stating its type, adopted in Revision 37. From this project's review, tson-java also filed and built on
-`r2026-38-proposal`: `hostname` and `host`, a non-ASCII identity's host as one identity in either label form
-(SPEC-FEEDBACK #4), and `media_type` in `net.tn` (#8). Prose in
+four on 2026-09-01), the last since landed on the Revision 38 proposal as the `namespace` constructor; and
+`identifier` as a text family with `enum` stating its type, adopted in Revision 37. From this project's review,
+tson-java also filed and built on `r2026-38-proposal`: `hostname` and `host`, a non-ASCII identity's host as one
+identity in either label form (SPEC-FEEDBACK #4), and `media_type` in `net.tn` (#8). Prose in
 this repo names each by its subject, not its number. A new finding goes here in the same shape: a `### To file:`
 heading naming the spec sections, the gap, what this project does meanwhile, and a priority.

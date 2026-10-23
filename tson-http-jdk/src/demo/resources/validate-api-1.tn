@@ -5,73 +5,75 @@
 !!import:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
 !!import:"https://tson.io/2026/38/m/core.tn"
 {
-  @doc:"""
-    Check a document against a schema and report every problem in one pass.
+  validator => !api {
+    @doc:"""
+      Check a document against a schema and report every problem in one pass.
 
-    The status is 200 for a document that does not conform, which reads wrong for about a second and
-    is right: the request was well-formed and the service answered it. The diagnostics ARE the
-    answer. A 400 here is always about the envelope -- a body that is not a valid validation_request
-    -- and never about the document under test, which would otherwise make a client unable to tell
-    "you asked badly" from "the thing you asked about is bad".
-    """
-  validate => !operation {
-    method:      POST
-    path:        "/validate"
-    summary:     "Validate a document against a schema"
-    request:     validation_request
-    responses:   [
-      !response { status: 200  body: validation_result
-                  description: "The outcome: accepted, rejected or undetermined" }
-      !response { status: 400  body: problem
-                  description: "The request body is not a valid validation_request" }
-    ]
-  }
+      The status is 200 for a document that does not conform, which reads wrong for about a second and
+      is right: the request was well-formed and the service answered it. The diagnostics ARE the
+      answer. A 400 here is always about the envelope -- a body that is not a valid validation_request
+      -- and never about the document under test, which would otherwise make a client unable to tell
+      "you asked badly" from "the thing you asked about is bad".
+      """
+    validate => {
+      method:      POST
+      path:        "/validate"
+      summary:     "Validate a document against a schema"
+      request:     validation_request
+      responses:   [
+        !response { status: 200  body: validation_result
+                    description: "The outcome: accepted, rejected or undetermined" }
+        !response { status: 400  body: problem
+                    description: "The request body is not a valid validation_request" }
+      ]
+    }
 
-  @doc:"The page itself: two editors, the scenarios, and the diagnostics."
-  get_page => !operation {
-    method:      GET
-    path:        "/"
-    summary:     "The validator page"
-    responses:   [
-      !response { status: 200  description: "The page, served as bytes" }
-    ]
-  }
+    @doc:"The page itself: two editors, the scenarios, and the diagnostics."
+    get_page => {
+      method:      GET
+      path:        "/"
+      summary:     "The validator page"
+      responses:   [
+        !response { status: 200  description: "The page, served as bytes" }
+      ]
+    }
 
-  @doc:"""
-    What this deployment will accept, as a projection of its descriptor.
+    @doc:"""
+      What this deployment will accept, as a projection of its descriptor.
 
-    A well-known path rather than an identity's, and the reason is the reason the descriptor exists: in this
-    series everything with an identity is served at its identity's path (§2.2.1), and a deployment descriptor
-    is precisely the artifact that must NOT have an identity -- so a well-known path is right for it for the
-    same reason it would be wrong for a schema.
+      A well-known path rather than an identity's, and the reason is the reason the descriptor exists: in this
+      series everything with an identity is served at its identity's path (§2.2.1), and a deployment descriptor
+      is precisely the artifact that must NOT have an identity -- so a well-known path is right for it for the
+      same reason it would be wrong for a schema.
 
-    What is served is DERIVED from the descriptor, never the descriptor: the fetch allow-list is internal
-    topology. And it is a hint -- it can be cached, and only the refusal a request actually receives says
-    what applied to that request.
-    """
-  get_acceptance_profile => !operation {
-    method:      GET
-    path:        "/.well-known/tson-deployment"
-    summary:     "What this deployment will accept"
-    responses:   [
-      !response { status: 200  body: acceptance_profile
-                  description: "The policies a submitted document is judged under" }
-    ]
-  }
+      What is served is DERIVED from the descriptor, never the descriptor: the fetch allow-list is internal
+      topology. And it is a hint -- it can be cached, and only the refusal a request actually receives says
+      what applied to that request.
+      """
+    get_acceptance_profile => {
+      method:      GET
+      path:        "/.well-known/tson-deployment"
+      summary:     "What this deployment will accept"
+      responses:   [
+        !response { status: 200  body: acceptance_profile
+                    description: "The policies a submitted document is judged under" }
+      ]
+    }
 
-  @doc:"Every schema this service names is served at its own identity's path."
-  get_schema => !operation {
-    method:      GET
-    path:        "/{+schemaPath}"
-    summary:     "Fetch a published schema"
-    parameters:  [
-      !parameter { name: "schemaPath"  in: PATH  type: text  required: true
-                   description: "The path component of the schema's own !!id" }
-    ]
-    responses:   [
-      !response { status: 200  description: "The schema document, served as bytes" }
-      !response { status: 404  body: problem
-                  description: "No schema is published there" }
-    ]
+    @doc:"Every schema this service names is served at its own identity's path."
+    get_schema => {
+      method:      GET
+      path:        "/{+schemaPath}"
+      summary:     "Fetch a published schema"
+      parameters:  [
+        !parameter { name: "schemaPath"  in: PATH  type: text  required: true
+                     description: "The path component of the schema's own !!id" }
+      ]
+      responses:   [
+        !response { status: 200  description: "The schema document, served as bytes" }
+        !response { status: 404  body: problem
+                    description: "No schema is published there" }
+      ]
+    }
   }
 }

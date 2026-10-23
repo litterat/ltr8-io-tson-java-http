@@ -20,6 +20,7 @@ dependencies {
 // and each experiment's probe tests join this module's test source set from there, on the demo/schemas
 // pattern. An experiment is not a commitment: see experiments/README.md.
 sourceSets["test"].java.srcDir(rootProject.file("experiments/meta-service/java"))
+sourceSets["test"].java.srcDir(rootProject.file("experiments/one-level/java"))
 tasks.test {
     systemProperty("experiments.dir", rootProject.file("experiments").path)
 }

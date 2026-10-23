@@ -20,9 +20,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>Measured: a role declared in the meta layer ({@code method_name => identifier}) enforces the identifier
  * grammar at a map key and <em>names itself</em> in the refusal ("'method_name': 'place order': U+0020 …"), where
- * a {@code text} key accepts anything. [TSON-DATA] §8.2's name hygiene reaches an identifier-keyed map in a data
- * document and in a schema governed by a meta layer alike, under any role, {@code type_name} included -- the second
- * being where an interface's methods are written.
+ * a namespace cannot be keyed by {@code text} at all, since its keys are names. [TSON-DATA] §8.2's name hygiene
+ * reaches an identifier-keyed map in a data document and a namespace in a schema governed by a meta layer alike,
+ * under any role, {@code type_name} included -- the second being where an interface's methods are written.
  */
 class NameRoleProbe {
 
@@ -34,12 +34,11 @@ class NameRoleProbe {
         !!meta:"https://tson.io/2026/38/m/meta-kernel.tn"
         !!import:"https://tson.io/2026/38/m/meta.tn"
         {
-          signature   => { request?: type_ref  response?: type_ref  errors?: [type_ref] }
-          method      => data & signature
+          signature   => { request?: type_kind  response?: type_kind  errors?: [type_kind] }
+          method      => signature & {}
           method_name => identifier
-          by_type_name   => data & { methods: {type_name => method} }
-          by_method_name => data & { methods: {method_name => method} }
-          by_text        => data & { methods: {text => method} }
+          by_type_name   => namespace & { key_type: = type_name  value_type: = method }
+          by_method_name => namespace & { key_type: = method_name  value_type: = method }
         }""".formatted(META_ID);
 
     static List<Diagnostic> problems(String entries) {
@@ -84,11 +83,20 @@ class NameRoleProbe {
         assertTrue(refused.contains("'type_name': 'place order'"), refused);
     }
 
-    /** A {@code text} key is not a name: anything goes. */
+    /**
+     * A namespace's keys are names, so a {@code text} key family is refused where the layer declares it: {@code
+     * key_type} is an {@code identifier_kind}. A map keyed by {@code text} is still a map, and accepts anything --
+     * it is just no namespace, so a qualified name does not enter it.
+     */
     @Test
-    void aTextKeyAcceptsAnything() {
-        assertEquals(List.of(), problems(
-                "  x => !by_text { \"place order\" => { request: order }  \"1st\" => { request: order } }"));
+    void aNamespaceCannotBeKeyedByText() {
+        String meta = META.replace("  by_method_name => namespace",
+                "  by_text => namespace & { key_type: = text  value_type: = method }\n"
+                + "          by_method_name => namespace");
+        Tson tson = Tson.of(Experiment.bindVocabulary(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(Map.of())))));
+        String refused = only(tson.validateSchema(meta));
+        assertTrue(refused.contains("by_text") && refused.contains("text"), refused);
     }
 
     /**

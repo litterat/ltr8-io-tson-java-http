@@ -10,7 +10,7 @@
   """
 {
   @doc:"The orders interface."
-  orders => !interface {
+  orders => !interfaces { orders => {
     @summary:"Place an order."
     @doc:"Accept an order and confirm it with the quantity doubled."
     place_order  => { request: new_order    response: order       errors: [sku_not_found] }
@@ -23,14 +23,14 @@
     @idempotent
     @doc:"Cancel an order. Cancelling twice is the same as cancelling once."
     cancel_order => { request: order_ref    errors: [order_not_found] }
-  }
+  } }
 
   @doc:"Everything orders has, and a refund."
-  orders_v2 => !interface {
+  orders_v2 => !interfaces { orders_v2 => {
     extends: [orders]
     methods: {
       @idempotent
       refund => { request: order_ref }
     }
-  }
+  } }
 }

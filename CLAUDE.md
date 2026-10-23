@@ -249,9 +249,11 @@ An OpenAPI-shaped description of an HTTP API whose payloads are TSON — minus t
 OpenAPI embeds a schema language because JSON has none; TSON already has published, identity-addressed
 schemas, so an operation **references** one.
 
-**The description is a schema, not a document governed by one.** `meta-http.tn` is a meta layer declaring
-`operation => data & { … }`, and a service's description is a schema governed by it whose entries are
-operations. That is what makes `request: order` a *reference the compiler resolves* rather than a string —
+**The description is a schema, not a document governed by one.** `meta-http.tn` is a meta layer declaring an
+`operation` record and the namespace type holding it, `api => namespace & { key_type: = identifier  value_type: =
+operation }`, and a service's description is a schema governed by it with an entry `orders => !api { create_order =>
+{ … } }`: one map from each operationId to its operation. That is what makes `request: order` a *reference the
+compiler resolves* rather than a string —
 the property no data-shaped design can have, because a data document can name a schema but cannot hold a
 reference to a type.
 
@@ -264,15 +266,15 @@ layer owns the vocabulary its constructors use** — `http_method`, `status_code
 in `meta-http.tn` itself, not imported, since an import should not cross governing levels (`UPSTREAM.md` #3) —
 and an ordinary schema wanting the same terms declares its own: `problem.tn`'s `status` is an `int32`.
 
-**The spec makes both halves of that shape normative, and names this as the case they exist for.**
-[TSON-SCHEMA] §4.1 declares `data` as the fourth base kind — "an HTTP operation binding request and response
-types by name is the motivating case" — with `operation => data & { … }` as its own worked example, and makes
-naming a `kind: DATA` entry where a type is expected a resolver error. §9's guidance for extension meta-schemas
-then requires the other half: a constructor field holding a type reference **MUST** be typed `type_ref`, not
-`type_name`, because `type_ref` is what makes the slot participate in reference walking and structural
-identity — and it names `request`/`response` as the example. (Revision 35 dropped use-site flattening and
-`@alias` with it: a reference is a hop the resolved output keeps, and a processor collapses the chain when it
-compiles readers. Nothing here depended on the rewrite, only on the slot being a reference at all.)
+**An entry applying a namespace type is a value, never a type.** The Revision 38 proposal retired §4.1's `data`
+kind (tson-java PR #753): a meta layer's own vocabulary is a record held by a namespace type, the kernel's
+`namespace` being the constructor whose instances are maps. Naming such an entry where a type is expected is a
+resolver error ("a value and not a type"), and `request`/`response` are typed `type_kind`, so the read records each
+name and the linker judges it a member of the kind — a name nothing declares, or one that is no type, is an author
+error at schema load, with nothing declared by the bound class. **A namespace value is the map alone**: it has no
+fields beside its keys, so a construct carrying both (an interface's `extends` beside its methods) is a record held
+under a key, one level down, and a namespace type declaring such a field is refused
+(`UpstreamGapsTest.aNamespaceTypeDeclaresOnlyItsFacets`).
 
 **The wiring is three things**: this schema reachable from the `schemaSource` (`TsonApiSchema.publishedById()`),
 the bound classes in
@@ -325,13 +327,14 @@ form matches across, and Helidon uses `any()`. Comparing paths would need a tran
 and a wrong entry there is a route that silently never matches: a worse failure than the one being prevented.
 Claiming by name sidesteps it entirely.
 
-**A templated operation is applied by name.** `fetch => <T> !operation { … }` declares, and `getOrder =>
-fetch<order>` resolves: [TSON-SCHEMA] §8.2 makes a declaration naming an application *that application's
-entry*, so `getOrder` is itself the `kind: DATA` entry with the `Operation` body in place and its `source`
-recording `fetch<order>` — no alias, no hop onto a minted name. `TsonApiDescription` therefore finds it as it
-finds a written-out one, by what its body is, and needs nothing new. The demo description still writes its two
-operations out, because they share no shape; the CRUD-family payoff is there for a service whose endpoints do.
-Pinned by `UpstreamGapsTest.aTemplatedDataConstructorsApplicationIsAnOperation`.
+**A templated api is applied by name.** An operation is a value under a key, so it is no entry and is not applied
+on its own; a template holds the whole `api`. `fetching => <T> !api { getOrder => { … body: T … } }` declares, and
+`orders => fetching<order>` resolves: [TSON-SCHEMA] §8.2 makes a declaration naming an application *that
+application's entry*, so `orders` is itself the namespace value with the argument substituted into its operations —
+no alias, no hop onto a minted name. `TsonApiDescription` finds it as it finds a written-out one, by what the entry
+is, and reads every `api` entry in a description, refusing an operationId two of them share. The demo descriptions
+write theirs out, because their operations share no shape; the CRUD-family payoff is there for a service whose
+endpoints do. Pinned by `UpstreamGapsTest.aTemplatedApiIsAppliedByName`.
 
 **A choice of applications does resolve**, though, and used to be the other half of this — `(resp<order, 201>
 | resp<problem, 400>)` lifts each application to its own synthetic entry, carries each value argument as a
@@ -345,16 +348,16 @@ which is where that per-adapter path seam would finally have to exist.
 
 **Interfaces beside operations — explored, not adopted.** `experiments/meta-service/` sketches one meta layer for
 methods (transport-neutral) and operations (HTTP-bound), and finds the real obstacle: an operation binding a
-method declared *elsewhere* must refer to it, and a `kind: DATA` entry cannot be referred to. The two shapes
-that work today and the spec change that would settle it are measured and written up there.
+method declared *elsewhere* must refer to it. A `ref<method>` slot can now reach a method by a qualified name,
+through namespace keys only; the shapes measured, and what is left, are written up there.
 
 **Its scope is the descriptor — RPC- and API-style endpoints — and the agent sketches in it are future work.**
 `agent.tn` and `agent-vm.tn` are there to press on the interface layer from a direction that is not HTTP, so
 that the meta layer is shaped by more than one consumer; they are kept resolved and probed for that and nothing
 else. Do not build toward them, and do not let a decision that is the agent's alone move the descriptor.
 
-**An operation's long description is its `@doc`**, read back with `TsonApiDescription.doc(name)`; `summary` is
-the short form. A response and a parameter carry a `description` *field* instead, for a permanent reason —
+**An operation's long description is its `@doc`**, written before its key in the `api` and read back with
+`TsonApiDescription.doc(name)`; `summary` is the short form. A response and a parameter carry a `description` *field* instead, for a permanent reason —
 they are values inside a payload, with nothing for an annotation to attach to.
 
 **A schema entry has two annotation positions and they land in different places.** `@doc:"…" op => …`

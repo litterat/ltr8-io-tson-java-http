@@ -1,7 +1,7 @@
 package io.ltr8.tson.http.experiment.metaservice;
 
 import io.ltr8.annotation.Annotations;
-import io.ltr8.tson.schema.meta.TypeDefinition;
+import io.ltr8.tson.schema.meta.Top;
 import io.ltr8.tson.schema.meta.TypeRef;
 
 import java.util.ArrayList;
@@ -47,10 +47,10 @@ record Routes(String apiName, List<Route> routes, Set<Bound> claimed, Map<String
                  Optional<TypeRef> response, List<TypeRef> errors, int status, Placement placement) {
     }
 
-    static Routes of(String apiName, Api api, Function<String, TypeDefinition> entries) {
+    static Routes of(String apiName, Api api, Map<String, Interface> declared, Function<String, Top> entries) {
         Map<String, Interface> interfaces = new LinkedHashMap<>();
         for (String name : api.implemented()) {
-            collect(apiName, name, entries, interfaces, new LinkedHashSet<>());
+            collect(apiName, name, declared, interfaces, new LinkedHashSet<>());
         }
         List<Route> routes = new ArrayList<>();
         api.resources().forEach((path, resource) -> resource.endpoints().forEach((verbKey, endpoint) -> {
@@ -170,7 +170,7 @@ record Routes(String apiName, List<Route> routes, Set<Bound> claimed, Map<String
 
     private static final Set<Integer> EMPTY_STATUSES = Set.of(204, 205, 304);
 
-    private static void collect(String apiName, String name, Function<String, TypeDefinition> entries,
+    private static void collect(String apiName, String name, Map<String, Interface> declared,
                                 Map<String, Interface> into, Set<String> walking) {
         if (into.containsKey(name)) {
             return;
@@ -179,13 +179,13 @@ record Routes(String apiName, List<Route> routes, Set<Bound> claimed, Map<String
             throw new IllegalArgumentException("'" + apiName + "': interface '" + name + "' extends itself through "
                     + walking);
         }
-        TypeDefinition definition = entries.apply(name);
-        if (definition == null || !(definition.body() instanceof Interface iface)) {
+        Interface iface = declared.get(name);
+        if (iface == null) {
             throw new IllegalArgumentException("'" + apiName + "' names '" + name
                     + "', which is not an interface in this namespace");
         }
         for (String parent : iface.extended()) {
-            collect(apiName, parent, entries, into, walking);
+            collect(apiName, parent, declared, into, walking);
         }
         into.put(name, iface);
     }

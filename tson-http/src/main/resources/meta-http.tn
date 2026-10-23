@@ -11,23 +11,21 @@
   needs its own resolver -- forty lines that reimplemented an upstream namespace bug twice before
   they were right.
 
-  `data &` is the base kind for an entry that is not a type: an operation describes an endpoint,
-  and no data value ever has one as its type. §4.1 declares that kind and gives this exact
-  composition as its worked example -- an HTTP operation binding request and response types by name
-  is what it calls the motivating case -- and makes naming a DATA-kinded entry where a type is
-  expected a resolver error, so the misuse is caught at schema load rather than at read.
+  An API is an entry of the schema it describes, and its operations are the values it holds:
+  `orders => !api { create_order => { ... } }`. `api` is a namespace type (§4.1), so the entry is a map from
+  each operationId to an `operation` record, read as a map and never as a record of facets, and a qualified
+  name -- `orders.create_order` -- walks it. The entry is a VALUE, never a type: naming it where a type is
+  expected is a resolver error, so the misuse is caught at schema load rather than at read.
 
-  Composing with `data` is itself the permission for a SCHEMA to write `!operation { ... }`
-  (§3.3.1/§5.6), and it is not a claim that the thing is a type. What makes an entry a constructor
-  is that it IS-A `top` (§4.1) -- it composes, transitively, with a base kind -- which the supertype
-  chain records, so no separate marker asserts it. Declaring one is permitted only in a
-  meta-kernel-governed schema, which is why this document's own !!meta is the kernel.
+  Composing with `namespace` is what lets a SCHEMA write `!api { ... }` (§3.3.1), since it makes `api` IS-A
+  `top`. Declaring one is permitted only in a meta-kernel-governed schema, which is why this document's own
+  !!meta is the kernel. `operation` itself is an ordinary record: an item of the vocabulary, not a
+  constructor, so it is never applied at an entry.
 
-  request/response are `type_ref`, not `type_name` or text, and §9 makes that a MUST for an extension
-  meta-schema: `type_ref` is the slot that participates in reference walking and structural identity,
-  where a `type_name` slot carries a bare token the resolver treats as data, invisible to
-  every reference mechanism. Concretely here, a Data body hands its references to the linker, so a
-  name that resolves to nothing is an author error at schema load.
+  request/response are `type_kind`, not `type_name` or text: a slot naming the type of a value is typed by a
+  kind, and that is what makes the name a reference. The read records every name it produces at a kind-typed
+  slot and the linker judges it a member of the kind, so a name that resolves to nothing, or to an entry that
+  is no type, is an author error at schema load -- with nothing declared by the body's Java class.
 
   Governed directly by the meta-kernel, which is not a style choice: declaring a constructor is
   permitted only in a schema whose own !!meta is the kernel. So this is a SIBLING of meta.tn, and
@@ -84,7 +82,7 @@
   parameter => {
     name:        text
     in:          parameter_location
-    type:        type_ref
+    type:        type_kind
     required:    boolean
     description?: text
   }
@@ -92,7 +90,7 @@
   @doc:"One response. `body` is absent for a 204, or a document served as bytes."
   response => {
     status:      status_code
-    body?:       type_ref
+    body?:       type_kind
     description?: text
   }
 
@@ -101,22 +99,21 @@
     grow members beyond its body, and a map-typed slot cannot hold a template parameter, which would
     foreclose templated operations before they are tried.
 
-    There is no `description` field: an operation IS a schema entry, so @doc carries its long form and
-    a reader gets it back from the entry's annotations. `summary` is the short form OpenAPI keeps
+    There is no `description` field: an operation is held under its name in an `api`, so @doc on that key
+    carries its long form and a reader gets it back from the key's annotations. `summary` is the short form OpenAPI keeps
     beside the long one.
 
-    Worth knowing, because getting it wrong looks exactly like a library bug: a schema entry has TWO
-    annotation positions and they land in different places. `@doc:"..." op => ...` annotates the ENTRY and is read
-    from the entries map's own annotations; `op => @doc:"..." { ... }` annotates the DEFINITION and is
-    read from the TypeDefinition. Both are retained. Looking only at the second and concluding @doc was
-    dropped is the mistake.
+    Worth knowing, because getting it wrong looks exactly like a library bug: a key has TWO annotation
+    positions and they land in different places. `@doc:"..." op => ...` annotates the KEY and is read from
+    the namespace's own annotations; `op => @doc:"..." { ... }` annotates the VALUE. Looking only at the
+    second and concluding @doc was dropped is the mistake.
 
     `path` is a URI template (RFC 6570 levels 1 and 2, above), and its variables are exactly the
     operation's PATH parameters -- checked when the description is read, since no pattern relates two fields.
     A value with slashes in it is `{+name}`, reserved expansion; `{name}` would percent-encode them.
 
-    The entry's NAME is the operationId, and unlike OpenAPI's it lives in a namespace with a collision
-    rule, so two operations cannot quietly share one.
+    The KEY is the operationId, and unlike OpenAPI's it lives in a namespace, so two operations cannot
+    quietly share one: a key written twice is a duplicate key.
 
     `encodings` is what a client may send and ask back: absent means TSON alone, and an operation that also
     speaks JSON says so, since a client reading the description has no other way to know. It covers both
@@ -128,14 +125,21 @@
     links, callbacks, examples, tags, servers, and media types beyond the encoding. Adding one is an
     edit in place until this is published, and under §3.5 a new identity after it, never an edit.
     """
-  operation => data & {
+  operation => {
     method:      http_method
     path:        uri_template
     summary?:    text
     deprecated?: boolean
     parameters?: [parameter]
-    request?:    type_ref
+    request?:    type_kind
     responses:   [response]
     encodings?:  [encoding]
   }
+
+  @doc:"""
+    An HTTP API: each operation under its operationId. A schema governed by this layer holds one or more,
+    `orders => !api { ... }`; TsonApiDescription reads every one, and an operationId two of them share
+    refuses the description.
+    """
+  api => namespace & { key_type: = identifier  value_type: = operation }
 }

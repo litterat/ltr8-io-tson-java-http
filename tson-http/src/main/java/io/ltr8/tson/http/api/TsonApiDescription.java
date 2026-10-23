@@ -1,6 +1,7 @@
 package io.ltr8.tson.http.api;
 
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.schema.meta.Namespace;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -18,26 +19,27 @@ import java.util.Set;
  * payload's type name against the description's own import list, because a data document holds bare names
  * that nothing resolves. This project had those lines and deleted them with the design; they reimplemented an
  * upstream namespace bug twice before they were right — once by counting how many imports surface a name, and
- * once by comparing whole {@code TypeDefinition}s, which differ per route because linking credits each
- * route's own subtypes.
+ * once by comparing whole resolved entries, which differ per route because linking credits each route's own
+ * subtypes.
  *
  * <p>Here the compiler has already done it. A description whose {@code body} names a type nothing declares
  * does not resolve, so an instance of this class cannot exist for an unsound description. What is left is a
  * read model.
  *
- * <h2>An entry has two annotation positions, and they land in different places</h2>
+ * <h2>A key has two annotation positions, and they land in different places</h2>
  *
- * <p>{@code @doc:"…" create_order => !operation { … }} annotates the <b>entry</b> and is read from the
- * entries map's own annotations; {@code create_order => @doc:"…" !operation { … }} annotates the
- * <b>definition</b> and is read from the {@code TypeDefinition}. Both are retained. Reading only the second
- * and concluding {@code @doc} was dropped is a mistake that cost a wrongly-filed upstream item and a
- * redundant {@code description} field on {@code operation}, since removed.
+ * <p>{@code @doc:"…" create_order => { … }} annotates the <b>key</b> and is read from the {@code api}'s own
+ * annotations; {@code create_order => @doc:"…" { … }} annotates the <b>value</b>. Reading only the second and
+ * concluding {@code @doc} was dropped is a mistake that cost a wrongly-filed upstream item and a redundant
+ * {@code description} field on {@code operation}, since removed.
  *
- * <h2>The entry name is the operationId</h2>
+ * <h2>The key is the operationId</h2>
  *
- * <p>And unlike OpenAPI's, it lives in a namespace with a collision rule — two operations cannot quietly
- * share one, and a typo is an unresolved reference rather than a second operation nobody notices.
- */
+ * <p>And unlike OpenAPI's, it lives in a namespace: an {@code api} entry is a value of a namespace type, so a key
+ * written twice is a duplicate key, and a typo is an unresolved reference rather than a second operation nobody
+ * notices. A description may hold several {@code api} entries, and an operationId two of them share refuses the
+ * model, since a server claims an operation by its operationId alone.
+  */
 public final class TsonApiDescription {
 
     /**
@@ -45,6 +47,9 @@ public final class TsonApiDescription {
      * and a client resolving this description already has them.
      */
     private static final String BUNDLED = "https://tson.io/2026/38/m/";
+
+    /** The namespace type {@code meta-http.tn} declares, whose values hold operations. */
+    private static final String API = "api";
 
     private final Tson tson;
     private final String schemaId;
@@ -70,15 +75,20 @@ public final class TsonApiDescription {
                 "'" + schemaId + "' is not resolved -- resolve the description before reading it"));
         Map<String, Operation> found = new LinkedHashMap<>();
         Map<String, String> docs = new LinkedHashMap<>();
-        var entries = compiled.schema().entries();
-        entries.forEach((name, definition) -> {
-            // An operation is found by what its body IS, not by a naming convention -- the `data` base kind
-            // is what lets an entry say it is not a type, and this is the payoff.
-            if (definition.body() instanceof Operation operation) {
-                requirePathMatchesItsParameters(name, operation);
-                found.put(name, operation);
-                entries.getAnnotations(name).value("doc", String.class)
-                        .ifPresent(text -> docs.put(name, text));
+        compiled.schema().entries().forEach((entry, value) -> {
+            // An API is found by what the entry IS -- a value of meta-http.tn's namespace type -- not by a naming
+            // convention, and its operations are the values it holds.
+            if (value instanceof Namespace<?> api && api.type().equals(API)) {
+                api.forEach((name, held) -> {
+                    Operation operation = (Operation) held;
+                    requirePathMatchesItsParameters(name, operation);
+                    Operation earlier = found.putIfAbsent(name, operation);
+                    if (earlier != null) {
+                        throw new IllegalArgumentException("operation '" + name + "' is declared by two api entries,"
+                                + " and a server claims an operation by its operationId alone");
+                    }
+                    api.getAnnotations(name).value("doc", String.class).ifPresent(text -> docs.put(name, text));
+                });
             }
         });
         return new TsonApiDescription(tson, schemaId, found, docs);
@@ -122,7 +132,7 @@ public final class TsonApiDescription {
     }
 
     /**
-     * Every operation, keyed by its entry name -- which is its operationId.
+     * Every operation, keyed by its operationId.
      *
      * <p><b>Not in declaration order.</b> A schema's {@code entries()} is ordered by resolution, not by how
      * the author wrote it, so a renderer that wants a stable presentation order sorts by something it
@@ -176,7 +186,7 @@ public final class TsonApiDescription {
     public Set<String> payloadTypes() {
         Set<String> types = new LinkedHashSet<>();
         operations.values().forEach(operation ->
-                operation.references().forEach(reference -> types.add(reference.name())));
+                operation.payloadTypes().forEach(reference -> types.add(reference.name())));
         return types;
     }
 

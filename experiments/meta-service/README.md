@@ -3,6 +3,13 @@
 **Status: experiment.** Nothing here is served, published or depended on. `meta-http.tn` remains the meta layer
 the demos use.
 
+**Ported to tson-java PR #753 (merged), which retires `data`.** `interface` and `api` are now records held by two namespace
+types, `interfaces` and `apis`, because each carries fields beside its map (`extends`, `implements`) and a namespace
+value is the map alone; the probes write one namespace entry per interface or api, named as its one key
+(`orders => !interfaces { orders => { … } }`). The prose below still describes them as `data &` constructors. Every
+`!operation` now sits behind a record field (an api's `resources`), and its kind-typed `request` is judged there
+(`UpstreamGapsTest.aKindSlotOnASubtypeBehindARecordFieldIsJudged`).
+
 **Scope: the descriptor, for RPC- and API-style endpoints.** `meta-service.tn` describing an interface, a web
 service over it, and the endpoints of both is the work in hand; `rpc.tn` is its wire form and belongs to that
 scope. **The agent is future work and is here only to shape the descriptor** -- a third consumer of an interface
@@ -502,6 +509,15 @@ record or two declarations of a schema. `NameRoleProbe` pins both, `aDataDocumen
 ## Files
 
 - `meta-service.tn` -- the sketch, its reasoning in its own `@doc`s.
+- `REFERENCES.md` -- a proposal, not resolvable today: `ref<T>`, qualified names and a `namespace` kind, so a
+  binding names its method as `orders.place_order` and the resolver checks it as it checks a request record.
+- `RECORD-TEMPLATES.md` -- a proposal for a follow-on to tson-java PR #725: a record template is a type hiding
+  inside `template`, so it collapses into `record` with optional parameters and no template text.
+- `PR-724-REVIEW.md` -- a review of tson-java PR #724 (qualified names at record-typed positions), drafted and not
+  posted, one round per head, newest first: the consumer trial against each, and the findings each round left for
+  the next.
+- `PR-725-REVIEW.md` -- a review of tson-java PR #725 (a schema map's entry is its value), drafted and not posted:
+  one round per head, newest first: the consumer trial against each, and the findings each round left for the next.
 - `rpc.tn` -- the wire form: `call` and `return` as templates; the direction above, in its own `@doc`s.
 - `examples/orders-wire-1.tn` -- the templates closed per method of the orders interface: what a generator emits.
 - `agent.tn`, `agent-vm.tn` -- the plan (AST) and the agent (bytecode) it compiles to; the section above.

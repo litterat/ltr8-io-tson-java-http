@@ -20,7 +20,6 @@ public record Operation(Optional<TypeRef> request, Optional<TypeRef> response, L
         headers = headers == null ? Map.of() : Map.copyOf(headers);
     }
 
-    @Override
     public List<TypeRef> references() {
         List<TypeRef> all = new ArrayList<>(errors);
         request.ifPresent(all::add);

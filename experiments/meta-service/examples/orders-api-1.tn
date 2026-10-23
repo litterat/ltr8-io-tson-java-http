@@ -16,7 +16,7 @@
   here, or an entry in `not_bound` giving the reason it does not.
   """
 {
-  orders_api => !api {
+  orders_api => !apis { orders_api => {
     implements: [orders]
     resources: {
       "/orders" => !resource {
@@ -35,5 +35,5 @@
         DELETE => !binding { method: cancel_order  status: 204 }
       }
     }
-  }
+  } }
 }

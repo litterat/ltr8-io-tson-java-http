@@ -18,7 +18,7 @@ import io.ltr8.tson.schema.meta.ChoiceBody;
 import io.ltr8.tson.schema.meta.FieldRole;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.RecordField;
-import io.ltr8.tson.schema.meta.TypeDefinition;
+import io.ltr8.tson.schema.meta.Top;
 import io.ltr8.tson.schema.meta.TypeRef;
 import org.junit.jupiter.api.Test;
 
@@ -56,7 +56,7 @@ class UpstreamGapsTest {
     private static final String META_ID = "https://tson.io/2026/38/io/ltr8/http/meta-probe.tn";
     private static final String API_ID = "https://schemas.example.com/2026/38/app/probe-1.tn";
 
-    /** A meta layer with a `data &` constructor, standing in for meta-http without depending on its shape. */
+    /** A meta layer declaring namespace types of its own, standing in for meta-http without depending on its shape. */
     private static String meta(String declarations) {
         return """
                 !!id:"%s"
@@ -122,13 +122,13 @@ class UpstreamGapsTest {
 
         var entries = tson.schemaRegistry().get("https://s.example.com/2026/38/p-1.tn").orElseThrow()
                 .schema().entries();
-        TypeRef response = ((RecordBody) entries.get("op").body()).fields().firstEntry().getValue().type();
-        var variants = assertInstanceOf(ChoiceBody.class, entries.get(response.name()).body()).variants();
+        TypeRef response = ((RecordBody) entries.get("op")).fields().values().iterator().next().type();
+        var variants = assertInstanceOf(ChoiceBody.class, entries.get(response.name())).variants();
         assertEquals(2, variants.size(), () -> "both applications lift: " + variants);
 
         // 201 with an order, 400 with a problem -- the substitution the synthetic names encode, checked.
         assertEquals(List.of("201", "order", "400", "problem"), variants.stream()
-                .map(v -> (RecordBody) entries.get(v.name()).body())
+                .map(v -> (RecordBody) entries.get(v.name()))
                 .flatMap(b -> b.fields().values().stream())
                 .map(f -> f.role() == FieldRole.FIXED
                         ? f.value().orElseThrow().text() : f.type().name())
@@ -180,11 +180,11 @@ class UpstreamGapsTest {
                 }""";
         Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> schema)));
         tson.resolve(schema);
-        var entries = tson.schemaRegistry().get("https://s.example.com/2026/38/p-1.tn").orElseThrow()
-                .schema().entries();
+        var resolved = tson.schemaRegistry().get("https://s.example.com/2026/38/p-1.tn").orElseThrow().schema();
+        var entries = resolved.entries();
 
-        assertEquals("resp", entries.get("created").source().orElseThrow().name());
-        RecordBody body = (RecordBody) entries.get("created").body();
+        assertEquals("resp", resolved.applicationOf("created").orElseThrow().name());
+        RecordBody body = (RecordBody) entries.get("created");
         RecordField status = body.fields().get("status");
 
         assertEquals("201", status.value().orElseThrow().text());
@@ -213,7 +213,8 @@ class UpstreamGapsTest {
                   scalar => !integer ^ { min: 100  max: 599 }
                   plain  => { a: text }
                   tmpl   => <T> { v: T }
-                  ctor   => data & { a: text }""");
+                  item   => { a: text }
+                  ctor   => namespace & { key_type: = identifier  value_type: = item }""");
 
         record Case(String label, String declaration, String name) {
         }
@@ -237,7 +238,9 @@ class UpstreamGapsTest {
     /** And the control: the same template declared locally applies fine. */
     @Test
     void aLocallyDeclaredTemplateApplies() {
-        String metaSource = meta("  ctor => data & { a: text }");
+        String metaSource = meta("""
+                  item => { a: text }
+                  ctor => namespace & { key_type: = identifier  value_type: = item }""");
         String doc = governed("  local => <T> { v: T }\n  x => local<text>");
 
         tson(metaSource, doc).resolve(doc);
@@ -246,16 +249,17 @@ class UpstreamGapsTest {
     // ── fixed upstream: a Java component the meta layer does not declare ─────────────────────────
 
     /**
-     * A Java component the meta declaration does not declare used to arrive {@code null} and be dereferenced
-     * inside {@code Data.references()}, surfacing as an NPE out of {@code Tson.resolve} — a consumer's wiring
-     * mistake reading as a library fault. Strict binding names both sides instead.
+     * A Java component the meta declaration does not declare is a consumer's wiring mistake, and strict binding
+     * names both sides rather than letting it surface as a library fault.
      */
     @Test
     void aJavaComponentTheMetaDoesNotDeclareIsReported() {
-        String metaSource = meta("  operation => data & { method: text  path: text  responses: [type_ref] }");
+        String metaSource = meta("""
+                  operation => { method: text  path: text  responses: [type_ref] }
+                  ops       => namespace & { key_type: = identifier  value_type: = operation }""");
         String doc = governed("""
-                  y  => { a: text }
-                  op => !operation { method: "GET"  path: "/x"  responses: [ y ] }""");
+                  y   => { a: text }
+                  api => !ops { op => { method: "GET"  path: "/x"  responses: [ y ] } }""");
 
         // io.ltr8.tson.http.api.Operation has `summary`, `parameters` and more; this meta declares none.
         BindMismatchException thrown = assertThrows(BindMismatchException.class,
@@ -265,41 +269,44 @@ class UpstreamGapsTest {
                 thrown.getMessage());
     }
 
-    // ── fixed upstream: a templated `data &` constructor declares, and its application is named ─────
+    // ── a templated api: a namespace value under a template, applied by name ─────────────────────
 
     /**
-     * <b>The CRUD-family payoff a templated operation gives is available.</b> {@code fetch => <T> !operation
-     * { … }}, one declaration standing for every fetch-by-id endpoint, declares, and {@code getOrder =>
-     * fetch<order>} names its application. [TSON-SCHEMA] §8.2 makes a declaration naming an application that
-     * application's entry, so {@code getOrder} <em>is</em> the materialised {@code kind: DATA} entry, under
-     * the author's name and with the {@link io.ltr8.tson.http.api.Operation} body in place -- not an alias
-     * onto a minted one, which is what used to be refused for naming something other than a type.
+     * <b>The CRUD-family payoff, restated for a namespace.</b> An operation is a value held under a key of an
+     * {@code api}, so it is no entry and cannot be applied on its own; what a template can hold is the whole
+     * {@code api}. {@code fetching => <T> !api { … }} stands for every fetch-by-id family, and {@code orders =>
+     * fetching<order>} names its application. [TSON-SCHEMA] §8.2 makes a declaration naming an application
+     * that application's entry, so {@code orders} <em>is</em> the materialised namespace value, under the
+     * author's name, with the argument substituted into its operations.
      *
      * <p>So {@link io.ltr8.tson.http.api.TsonApiDescription} finds it the way it finds a written-out one, by
-     * what its body is, and follows no hop. Asserted through the description rather than the entries map,
-     * because that is the consumer the payoff is for; the written-out form beside it keeps the comparison
-     * honest.
+     * what the entry is. Asserted through the description rather than the entries map, because that is the
+     * consumer the payoff is for; the written-out {@code api} beside it keeps the comparison honest.
      */
     @Test
-    void aTemplatedDataConstructorsApplicationIsAnOperation() {
+    void aTemplatedApiIsAppliedByName() {
         String template = """
-                  order => { sku: text }
-                  fetch => <T> !operation {
-                    method: GET  path: "/orders/{id}"
-                    parameters: [ { name: "id"  in: PATH  type: text  required: true } ]
-                    responses: [ { status: 200  body: T  description: "found" } ]
+                  order    => { sku: text }
+                  fetching => <T> !api {
+                    getOrder => {
+                      method: GET  path: "/orders/{id}"
+                      parameters: [ { name: "id"  in: PATH  type: text  required: true } ]
+                      responses: [ { status: 200  body: T  description: "found" } ]
+                    }
                   }
-                  getOrder => fetch<order>
-                  putOrder => !operation {
-                    method: PUT  path: "/orders/{id}"
-                    parameters: [ { name: "id"  in: PATH  type: text  required: true } ]
-                    request: order
-                    responses: [ { status: 200  body: order  description: "replaced" } ]
+                  orders   => fetching<order>
+                  writes   => !api {
+                    putOrder => {
+                      method: PUT  path: "/orders/{id}"
+                      parameters: [ { name: "id"  in: PATH  type: text  required: true } ]
+                      request: order
+                      responses: [ { status: 200  body: order  description: "replaced" } ]
+                    }
                   }""";
 
         var operations = TsonApiSchema.describedBy(resolveAgainstApiMeta(template), API_ID).operations();
 
-        assertEquals(Set.of("getOrder", "putOrder"), operations.keySet(), "the template itself is no operation");
+        assertEquals(Set.of("getOrder", "putOrder"), operations.keySet(), "the template itself holds no operation");
         var getOrder = operations.get("getOrder");
         assertEquals("/orders/{id}", getOrder.path());
         assertEquals("order", getOrder.responseFor(200).orElseThrow().body().orElseThrow().name(),
@@ -311,19 +318,21 @@ class UpstreamGapsTest {
      * and would be the first to regress. A templated operation with {@code path: "/x"} once minted
      * {@code operation_/x_GET_…}, which §8.2 makes a MUST violation ("an internal name is a valid identifier")
      * and which surfaced as a name-hygiene refusal on {@code U+002F} -- a refusal on a name nobody wrote and
-     * nobody could edit. A declaration naming the application now mints no name at all, and §8.2's hygiene
-     * walks authored names only, so every path resolves -- including one in Cyrillic, which the default
-     * identifier policy would refuse for its script were it judged as a name.
+     * nobody could edit. A declaration naming the application mints no name at all, and §8.2's hygiene walks
+     * names only, so every path resolves -- including one in Cyrillic, which the default identifier policy
+     * would refuse for its script were it judged as a name.
      */
     @Test
     void anOperationsPathIsNotJudgedByNameHygiene() {
         String body = """
                   order    => { sku: text }
-                  fetch    => <T> !operation {
-                    method: GET  path: "%s"
-                    responses: [ { status: 200  body: T  description: "found" } ]
+                  fetching => <T> !api {
+                    getOrder => {
+                      method: GET  path: "%s"
+                      responses: [ { status: 200  body: T  description: "found" } ]
+                    }
                   }
-                  getOrder => fetch<order>""";
+                  orders   => fetching<order>""";
 
         for (String path : List.of("/", "/x", "/orders/42", "/путь")) {
             var operations = assertDoesNotThrow(() -> TsonApiSchema.describedBy(
@@ -359,7 +368,7 @@ class UpstreamGapsTest {
     /**
      * <b>Not a gap, and pinned because it reads like one.</b> A schema entry has two annotation positions and
      * they land in different places: before the name annotates the <em>entry</em> and is read from the entries
-     * map, after the arrow annotates the <em>definition</em> and is read from the {@code TypeDefinition}.
+     * map, after the arrow annotates the <em>definition</em> and is read from the schema's {@code factsOf}.
      * Checking only the second for an annotation written in the first position looks exactly like the
      * annotation being dropped — which is what makes both retention rules worth asserting.
      */
@@ -376,16 +385,16 @@ class UpstreamGapsTest {
                 }""";
         Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> schema)));
         tson.resolve(schema);
-        var entries = tson.schemaRegistry().get("https://s.example.com/2026/38/p-1.tn")
-                .orElseThrow().schema().entries();
+        var resolved = tson.schemaRegistry().get("https://s.example.com/2026/38/p-1.tn").orElseThrow().schema();
+        var entries = resolved.entries();
 
         assertEquals(java.util.Optional.of("on the entry"),
                 entries.getAnnotations("before").value("doc", String.class));
-        assertEquals(List.of(), entries.get("before").annotations().values(),
+        assertEquals(List.of(), resolved.factsOf("before").annotations().values(),
                 "not here -- looking only here is the mistake");
 
         assertEquals(java.util.Optional.of("on the definition"),
-                entries.get("after").annotations().value("doc", String.class));
+                resolved.factsOf("after").annotations().value("doc", String.class));
     }
 
     /** And an annotation naming no type is refused, wherever it is written. */
@@ -405,22 +414,81 @@ class UpstreamGapsTest {
                 .getMessage().contains("does not name a type"));
     }
 
-    // ── the `data` kind's own guarantee, which nothing else asserts here ─────────────────────────
+    // ── a namespace entry's own guarantee, which nothing else asserts here ───────────────────────
 
-    /** An operation is not a type, so every position a type-ref can occupy refuses it at link time. */
+    /** An entry holding a namespace value is not a type, so a position a type-ref occupies refuses it at link. */
     @Test
-    void aDataEntryCannotBeUsedWhereATypeBelongs() {
-        String metaSource = meta("  operation => data & { method: text  path: text  responses: [type_ref] }");
+    void aNamespaceEntryCannotBeUsedWhereATypeBelongs() {
+        String metaSource = meta("""
+                  operation => { method: text  path: text  responses: [type_ref] }
+                  ops       => namespace & { key_type: = identifier  value_type: = operation }""");
         String doc = governed("""
                   y      => { a: text }
-                  op     => !operation { method: "GET"  path: "/x"  responses: [ y ] }
-                  holder => { o: op }""");
+                  api    => !ops { op => { method: "GET"  path: "/x"  responses: [ y ] } }
+                  holder => { o: api }""");
 
         String message = assertThrows(RuntimeException.class,
                 () -> tson(metaSource, doc, "io.ltr8.tson.http.probe").resolve(doc)).getMessage();
 
-        assertTrue(message.contains("describes something other than a data value"), message);
-        assertInstanceOf(TypeRef.class, TypeRef.of("op"));
+        assertTrue(message.contains("a value and not a type"), message);
+    }
+
+    /**
+     * A namespace type declares its facets and nothing else: a value of it is the map alone, so a field beside {@code
+     * key_type} and {@code value_type} has nowhere to be written and the meta layer is refused. That is why the
+     * experiment's {@code interface} and {@code api}, which carry fields beside their maps, are records held under a key.
+     */
+    @Test
+    void aNamespaceTypeDeclaresOnlyItsFacets() {
+        String metaSource = meta("""
+                  operation => { method: text }
+                  ops       => namespace & { key_type: = identifier  value_type: = operation  extends?: [type_name] }""");
+
+        List<Diagnostic> problems = tson(metaSource, governed("  y => { a: text }")).validateSchema(metaSource);
+
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), problems.stream().map(Diagnostic::code).toList(),
+                () -> "" + problems);
+        assertTrue(problems.getFirst().message().contains("the field 'extends' beside them, which no value can carry"),
+                problems.getFirst().message());
+    }
+
+    // ── fixed upstream: a kind-typed slot on a tagged subtype is judged at any depth ─────────────────
+
+    /**
+     * <b>A name's slot type comes with the name from the read, so where the value sits does not matter.</b> {@code op}
+     * declares the kind-typed {@code request} its base {@code endpoint} lacks. Held under a key of a namespace, or in a
+     * record's map field one level further down ({@code resource.endpoints}), {@code !op { request: order }} resolves
+     * and {@code !op { request: no_such }} is refused naming the full path. The reader built from the slot's
+     * declaration records its type beside the name, so the linker never walks declared types back to it.
+     *
+     * <p>This is the shape retiring {@code data} forces on anything with fields beside its map -- the experiment's
+     * {@code api}, with {@code implements} and {@code resources}, is a record under a key of {@code apis} -- so every
+     * {@code !operation} in it sits behind a field. Pinned because a gap here stops a sound schema resolving.
+     */
+    @Test
+    void aKindSlotOnASubtypeBehindARecordFieldIsJudged() {
+        String metaSource = meta("""
+                  endpoint  => abstract {}
+                  op        => endpoint & { request?: type_kind }
+                  ops       => namespace & { key_type: = identifier  value_type: = endpoint }
+                  resource  => { endpoints: {identifier => endpoint} }
+                  resources => namespace & { key_type: = identifier  value_type: = resource }""");
+
+        String inHand = governed("  order => { sku: text }\n  r => !ops { get => !op { request: order } }");
+        assertEquals(List.of(), tson(metaSource, inHand, "io.ltr8.tson.http.probe.subtype").validateSchema(inHand));
+
+        String behindAField = governed(
+                "  order => { sku: text }\n  r => !resources { o => { endpoints: { get => !op { request: order } } } }");
+        assertEquals(List.of(), tson(metaSource, behindAField, "io.ltr8.tson.http.probe.subtype")
+                .validateSchema(behindAField));
+
+        String unsound = governed(
+                "  order => { sku: text }\n  r => !resources { o => { endpoints: { get => !op { request: no_such } } } }");
+        List<Diagnostic> problems = tson(metaSource, unsound, "io.ltr8.tson.http.probe.subtype").validateSchema(unsound);
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), problems.stream().map(Diagnostic::code).toList(),
+                () -> "" + problems);
+        assertTrue(problems.getFirst().message().contains("'r' at /o/endpoints/get/request"),
+                problems.getFirst().message());
     }
 
     // ── filed spec feedback: no template-application sugar at a `type_ref` slot in data ──────────
@@ -430,18 +498,20 @@ class UpstreamGapsTest {
      * {@code SPEC-FEEDBACK.md}, the entry on a template application at a {@code type_ref} slot in data).</b> [TSON-SCHEMA] §8.1 gives {@code type_ref} a positional form at every {@code type_ref}-typed
      * position: a bare token fills {@code name}, and the braced record is the explicit form, canonical only
      * where {@code arguments} is present. A <em>schema</em> may therefore write {@code page<order>}; a
-     * <em>data</em> payload at such a slot — an {@code !operation { … }} governed by a consumer's meta layer
+     * <em>value</em> at such a slot — an operation held by an {@code !api { … }} a consumer's meta layer declares
      * — cannot, because {@code <} is not data syntax. So an API description applying one template at four
      * endpoints writes the braced record four times, or names four aliases. Both spellings are asserted
      * here: the braced one resolves, the sugar is a parse error.
      */
     @Test
     void aTemplateApplicationAtATypeRefSlotInDataNeedsTheBracedForm() {
-        String metaSource = meta("  operation => data & { method: text  path: text  responses: [type_ref] }");
+        String metaSource = meta("""
+                  operation => { method: text  path: text  responses: [type_ref] }
+                  ops       => namespace & { key_type: = identifier  value_type: = operation }""");
         String body = """
                   order => { sku: text }
                   page  => <T> { items: [T] }
-                  op    => !operation { method: "GET"  path: "/x"  responses: [ %s ] }""";
+                  api   => !ops { op => { method: "GET"  path: "/x"  responses: [ %s ] } }""";
 
         String braced = governed(body.formatted("{ name: page  arguments: [ { name: order } ] }"));
         tson(metaSource, braced, "io.ltr8.tson.http.probe").resolve(braced);
@@ -674,11 +744,12 @@ class UpstreamGapsTest {
     }
 
     /**
-     * <b>Open: a compound key has no reference token, and the two encodings disagree about it.</b> TSON reports
-     * {@code ?} -- {@code MapAbstractReader.keySegmentFor}'s fallback for a key with no single token, which is not a
-     * location -- while JSON, which carries a compound-keyed map as an array of pairs, reports a real one into that
-     * array. The same entry, the same failure, two pointers. Escaping is not the issue: {@code a/b~c} is {@code
-     * a~1b~0c} in both, as RFC 6901 requires.
+     * <b>Open: a compound key has no reference token, and the two encodings disagree about it.</b> TSON writes the
+     * decoded key's Java {@code toString} -- {@code MapAbstractReader} replaces the placeholder with {@code
+     * String.valueOf(key)} for any key that is not a single token -- which is not a location, and in bind mode names
+     * the bound class ({@code /grid/Point[x=1, y=2]}) in a path a 400 hands the client. JSON, which carries a
+     * compound-keyed map as an array of pairs, reports a real one into that array. The same entry, the same failure,
+     * two pointers. Escaping is not the issue: {@code a/b~c} is {@code a~1b~0c} in both, as RFC 6901 requires.
      */
     @Test
     void aCompoundKeyHasNoPointerTokenAndTheEncodingsDisagree() {
@@ -686,7 +757,8 @@ class UpstreamGapsTest {
         String head = "!!schema:\"" + KEYS_ID + "\"\n";
         Json json = Json.standard().withSchemas(tson.schemaRegistry());
 
-        assertEquals(List.of("/grid/?"), pathsOf(tson.validate(head + "!tally { grid: { {x: 1 y: 2} => oops } }")));
+        assertEquals(List.of("/grid/TsonRecord[fields={x=1, y=2}, typeRef=Optional[point], annotations=[]]"),
+                pathsOf(tson.validate(head + "!tally { grid: { {x: 1 y: 2} => oops } }")));
         assertEquals(List.of("/grid/0/1"),
                 pathsOf(json.validate("{\"grid\": [[{\"x\": 1, \"y\": 2}, \"oops\"]]}", KEYS_ID, "tally")));
 
@@ -805,7 +877,10 @@ class UpstreamGapsTest {
                 !!meta:"https://tson.io/2026/38/m/meta-kernel.tn"
                 !!import:"https://tson.io/2026/38/m/meta.tn"
                 !!import:"https://example.com/2026/38/app/levels-lib.tn"
-                { item => data & { code: stock_code } }""";
+                {
+                  item  => { code: stock_code }
+                  items => namespace & { key_type: = identifier  value_type: = item }
+                }""";
         Tson kernelOverMeta = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(
                 Map.of("https://example.com/2026/38/app/levels-lib.tn", library)))));
         assertEquals(List.of(), kernelOverMeta.validateSchema(layer),

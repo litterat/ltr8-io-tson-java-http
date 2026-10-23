@@ -2,7 +2,6 @@ package io.ltr8.tson.http.api;
 
 import io.ltr8.annotation.Typename;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.schema.meta.Data;
 import io.ltr8.tson.schema.meta.TypeRef;
 
 import java.util.ArrayList;
@@ -13,34 +12,30 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * One HTTP operation, written by a schema governed by {@code meta-http.tn} and read back from that
- * schema's resolved entries.
+ * One HTTP operation: a value held under its operationId in an {@code api}, the namespace type {@code meta-http.tn}
+ * declares, and read back from the schema that holds it.
  *
- * <p><b>{@link #references()} is what makes the payload types real.</b> The linker follows what it returns,
- * so naming a type nothing declares is an author error at schema load — the one thing a description written
- * as data cannot have, since a data document can name a schema but cannot hold a reference to a type.
+ * <p><b>The payload types are real because {@code meta-http.tn} types their slots {@code type_kind}.</b> The read
+ * records each name it produces there and the linker judges it, so naming a type nothing declares is an author
+ * error at schema load -- the one thing a description written as data cannot have, since a data document can
+ * name a schema but cannot hold a reference to a type. This class declares none of it.
  *
- * <p>There is no {@code description} component: an operation is a schema <em>entry</em>, so {@code @doc}
- * carries its long form and {@link TsonApiDescription#doc} reads it back from the entry's annotations.
+ * <p>There is no {@code description} component: an operation is held under a <em>key</em>, so {@code @doc} on the
+ * key carries its long form and {@link TsonApiDescription#doc} reads it back from the key's annotations.
  */
 @Typename(name = "operation")
 public record Operation(HttpMethod method, String path, Optional<String> summary,
                         Optional<Boolean> deprecated, List<Parameter> parameters,
                         Optional<TypeRef> request, List<Response> responses,
-                        List<Encoding> encodings) implements Data {
+                        List<Encoding> encodings) {
 
     /**
      * Normalises an omitted {@code parameters} to empty, and an omitted {@code encodings} to TSON alone.
      *
-     * <p><b>A bound class guards its own optional lists</b> — the convention this library follows for
-     * {@code RecordBody}'s {@code groups}/{@code supertypes}, and for {@code TypeDefinition} and
-     * {@code TypeRef}. An optional field the document omits reaches the constructor as {@code null}, and
-     * absent and {@code []} are the same value, so the guard belongs here rather than being a rule the
-     * binder guesses at.
-     *
-     * <p>Worth doing rather than leaving: {@link #references()} walks {@code parameters}, and it runs inside
-     * schema resolution — so an unguarded null is an NPE out of {@code Tson.resolve}, which reads as a
-     * library fault when it is a document legitimately omitting an optional field.
+     * <p><b>A bound class guards its own optional lists</b> — the convention this library follows for {@code RecordBody}'s
+     * {@code groups} and for {@code TypeRef}. An optional field the document omits reaches the constructor as {@code null},
+     * and absent and {@code []} are the same value, so the guard belongs here rather than being a rule the binder guesses
+     * at.
      *
      * <p>{@code responses} is REQUIRED and deliberately not guarded: a required field never reaches a
      * constructor, because the reader reports {@code FIELD_REQUIRED} and abandons the construction first.
@@ -73,8 +68,8 @@ public record Operation(HttpMethod method, String path, Optional<String> summary
 
     private static final Pattern PATH_VARIABLE = Pattern.compile("\\{[+#]?([^}]+)}");
 
-    @Override
-    public List<TypeRef> references() {
+    /** Every payload type this operation names: its request body, its parameters' types, then its response bodies. */
+    public List<TypeRef> payloadTypes() {
         List<TypeRef> all = new ArrayList<>();
         request.ifPresent(all::add);
         parameters.forEach(parameter -> all.add(parameter.type()));

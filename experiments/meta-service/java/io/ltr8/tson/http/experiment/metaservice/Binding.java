@@ -19,7 +19,6 @@ public record Binding(List<String> query, Map<String, String> headers, Optional<
     }
 
     /** Nothing here is a type reference: {@code method} and {@code interface} are identifiers the reader checks. */
-    @Override
     public List<TypeRef> references() {
         return List.of();
     }

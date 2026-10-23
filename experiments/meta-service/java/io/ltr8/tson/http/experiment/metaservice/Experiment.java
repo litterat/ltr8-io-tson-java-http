@@ -2,11 +2,14 @@ package io.ltr8.tson.http.experiment.metaservice;
 
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.schema.meta.Namespace;
+import io.ltr8.tson.schema.meta.Top;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -29,7 +32,22 @@ final class Experiment {
         }
     }
 
-    /** The bound classes for the sketch's {@code data} constructors, as {@code TsonApiSchema.metaNameBinder()} does. */
+    /**
+     * Every value held under a key of an entry applying the namespace type {@code constructor}, by its key --
+     * {@code interfaces} or {@code apis}. An interface or an api is a record under a key, not an entry, so this is
+     * how a reader finds one by name.
+     */
+    static <T> Map<String, T> held(Namespace<Top> entries, String constructor, Class<T> type) {
+        Map<String, T> found = new LinkedHashMap<>();
+        entries.values().forEach(value -> {
+            if (value instanceof Namespace<?> namespace && namespace.type().equals(constructor)) {
+                namespace.forEach((key, held) -> found.put(key, type.cast(held)));
+            }
+        });
+        return found;
+    }
+
+    /** The bound classes for the sketch's records, as {@code TsonApiSchema.metaNameBinder()} does. */
     static ProcessorConfig bindVocabulary(ProcessorConfig config) {
         return config.withMetaNameBinder(new DataNameBinder.DefaultDataNameBinder(
                 Set.of("io.ltr8.tson.http.experiment.metaservice"), Map.of()));

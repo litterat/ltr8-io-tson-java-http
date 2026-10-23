@@ -5,6 +5,8 @@ import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
+import io.ltr8.tson.schema.meta.Namespace;
+import io.ltr8.tson.schema.meta.Top;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -17,32 +19,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * An interface as a map of methods: the values are built; a value under the typed slot needs no {@code !method}
- * tag; an unresolved reference inside a value is caught at load, provided the owner's {@code references()} hands
- * it on; and a {@code @doc} written before a map key survives into {@code AnnotatedMap.getAnnotations}.
+ * tag; an unresolved reference inside a value is caught at load, because the slot is typed by a kind; and a {@code @doc}
+ * written before a map key survives into {@code AnnotatedMap.getAnnotations}.
  *
- * <p>Measured on the sketch's own {@code interface}, whose {@code method} is a plain record, and on two probe-only
- * variants: the value type as the bare {@code signature} record, and the value type as a {@code data}
- * <em>constructor</em>. The last is the finding the map design once rested on and no longer needs -- only
- * {@code interface} and {@code api} are constructors now, and nothing names a DATA entry at a type slot -- but it
- * stays pinned because it is a live question for the spec: [TSON-SCHEMA] §4.1 refuses "naming a {@code kind:
- * DATA} entry" as an element type, and a map's value type is one; the implementation admits a DATA constructor
- * there and refuses only an instance ({@code MetaServiceSketchProbe.anInterfaceIsNotAType}). The kernel's own
- * {@code top}-typed slots hold DATA instances, so the implementation is consistent with the kernel; whether §4.1
- * means "entry" to include a constructor is what to ask.
+ * <p>Measured on the sketch's own {@code interface}, a record held under a key of an {@code interfaces} entry, and on
+ * a probe-only variant that is the namespace itself: {@code interface_of_signatures => namespace & { … }}, whose
+ * entry is the map of methods with nothing beside it. The variant is the shape tson-java's own corpus fixture uses;
+ * the sketch keeps the record because an interface carries {@code extends} beside its methods, and a value of a
+ * namespace type is the map alone.
  */
 class InterfaceMapProbe {
 
     static final String PROBE_META_ID = "https://tson.io/2026/38/io/ltr8/http/meta-probe.tn";
     static final String DOC_ID = "https://schemas.example.com/2026/38/app/probe-1.tn";
 
-    /** The sketch, plus one probe-only constructor. */
+    /** The sketch, plus one probe-only namespace type. */
     static final String META = Experiment.metaServiceSource()
             .replace("https://tson.io/2026/38/io/ltr8/http/meta-service.tn", PROBE_META_ID)
-            .replace("\n  api => data & {",
-                    "\n  interface_of_signatures => data & { methods: {type_name => signature} }\n"
-                    + "  data_method => data & signature\n"
-                    + "  interface_of_data_methods => data & { methods: {type_name => data_method} }\n\n"
-                    + "  api => data & {");
+            .replace("\n  api => {",
+                    "\n  interface_of_signatures => namespace & { key_type: = method_name  value_type: = signature }\n"
+                    + "\n  api => {");
 
     static String doc(String entries) {
         return """
@@ -64,72 +60,65 @@ class InterfaceMapProbe {
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))));
     }
 
-    static Object resolvedBody(String entries) {
+    static Top resolvedEntry(String entries) {
         String doc = doc(entries);
         Tson tson = tson(doc);
         List<Diagnostic> problems = tson.validateSchema(doc);
         assertEquals(List.of(), problems, () -> "" + problems);
-        return tson.schemaRegistry().get(DOC_ID).orElseThrow().schema().entries().get("orders").body();
+        return tson.schemaRegistry().get(DOC_ID).orElseThrow().schema().entries().get("orders");
+    }
+
+    /** The interface the {@code interfaces} entry {@code orders} holds under its key {@code orders}. */
+    static Interface resolvedInterface(String entries) {
+        return assertInstanceOf(Interface.class, assertInstanceOf(Namespace.class, resolvedEntry(entries)).get("orders"));
     }
 
     /** The sketch's own interface: a map of {@code method} records, tagged or not. */
     @Test
     void aMapOfMethodRecordsResolves() {
-        var orders = assertInstanceOf(Interface.class, resolvedBody(
-                "  orders => !interface { place_order => !method { request: order  response: order } }"));
+        var orders = resolvedInterface(
+                "  orders => !interfaces { orders => { place_order => !method { request: order  response: order } } }");
 
         Method place = orders.methods().get("place_order");
         assertEquals("order", place.request().orElseThrow().name());
     }
 
-    /**
-     * A map whose value type is a {@code data} CONSTRUCTOR also resolves, and its values are built -- the
-     * measurement the design once rested on, kept for the spec question in the class doc.
-     */
-    @Test
-    void aMapOfDataConstructorInstancesResolvesInTheImplementation() {
-        var orders = assertInstanceOf(InterfaceOfDataMethods.class, resolvedBody(
-                "  orders => !interface_of_data_methods { place_order => !data_method { request: order } }"));
-
-        assertEquals("order", orders.methods().get("place_order").request().orElseThrow().name());
-    }
-
-    /** The slot's type supplies the constructor, so the tag is optional -- as at any typed position. */
+    /** The slot's type supplies the record, so the tag is optional -- as at any typed position. */
     @Test
     void aValueUnderAMethodTypedSlotNeedsNoTag() {
-        var orders = assertInstanceOf(Interface.class, resolvedBody(
-                "  orders => !interface { place_order => { request: order } }"));
+        var orders = resolvedInterface("  orders => !interfaces { orders => { place_order => { request: order } } }");
 
         assertInstanceOf(Method.class, orders.methods().get("place_order"));
     }
 
-    /** A reference inside a map value reaches the linker through the owner's {@code references()}. */
+    /** A name inside a map value is judged at load: the slot is typed by a kind, so the read records it. */
     @Test
     void anUnresolvedReferenceInsideAMapValueIsCaughtAtLoad() {
-        String doc = doc("  orders => !interface { place_order => !method { request: no_such } }");
+        String doc = doc("  orders => !interfaces { orders => { place_order => !method { request: no_such } } }");
         List<Diagnostic> problems = tson(doc).validateSchema(doc);
 
         assertEquals(1, problems.size(), () -> "" + problems);
-        assertTrue(problems.getFirst().message().contains("unresolved reference 'no_such'"),
+        assertTrue(problems.getFirst().message().contains("'no_such' is no type declared in this schema or its imports"),
                 problems.getFirst().message());
     }
 
-    /** The plain-record variant: the same shape with no {@code data} in the value type at all. */
+    /** The namespace variant: the entry IS the map of methods, read as a {@code Namespace} of signatures. */
     @Test
-    void aMapOfSignatureRecordsResolvesPositionally() {
-        var orders = assertInstanceOf(InterfaceOfSignatures.class, resolvedBody("""
+    void aNamespaceOfSignaturesIsTheMapItself() {
+        var orders = assertInstanceOf(Namespace.class, resolvedEntry("""
                   orders => !interface_of_signatures { place_order  => { request: order  response: order }
                                                        cancel_order => { request: order_ref } }"""));
 
-        assertEquals(List.of("place_order", "cancel_order"), List.copyOf(orders.methods().keySet()));
-        assertTrue(orders.methods().get("cancel_order").request().isPresent());
+        assertEquals("interface_of_signatures", orders.type());
+        assertEquals(List.of("place_order", "cancel_order"), List.copyOf(orders.keySet()));
+        assertTrue(assertInstanceOf(Signature.class, orders.get("cancel_order")).request().isPresent());
     }
 
     /** A method can be documented where it is declared: a {@code @doc} before the key survives the read. */
     @Test
     void aDocOnAMapKeySurvivesIntoTheBoundValue() {
-        var orders = assertInstanceOf(Interface.class, resolvedBody(
-                "  orders => !interface { methods: { @doc:\"Place it.\" place_order => { request: order } } }"));
+        var orders = resolvedInterface("  orders => !interfaces { orders => {"
+                + " methods: { @doc:\"Place it.\" place_order => { request: order } } } }");
 
         assertEquals("Place it.",
                 orders.methods().getAnnotations("place_order").value("doc", String.class).orElseThrow());

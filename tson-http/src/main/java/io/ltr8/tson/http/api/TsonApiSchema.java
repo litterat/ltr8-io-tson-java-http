@@ -18,15 +18,17 @@ import java.util.Set;
  *
  * <h2>What this is for</h2>
  *
- * <p>A schema governed by this one declares its operations as entries:
+ * <p>A schema governed by this one holds its operations in an {@code api}, each under its operationId:
  *
  * <pre>{@code
  * !!meta:"https://tson.io/2026/38/io/ltr8/http/meta-http.tn"
  * !!import:"https://schemas.example.com/2026/38/app/order-1.tn"
  * {
- *   create_order => !operation {
- *     method: POST  path: "/orders"  parameters: []  request: order
- *     responses: [ !response { status: 201  body: order } ]
+ *   orders => !api {
+ *     create_order => {
+ *       method: POST  path: "/orders"  request: order
+ *       responses: [ { status: 201  body: order } ]
+ *     }
  *   }
  * }
  * }</pre>
@@ -86,7 +88,8 @@ public final class TsonApiSchema {
 
     /**
      * The binder for this meta layer's own vocabulary — {@code operation} and the records it carries, mapped
-     * to the classes in this package.
+     * to the classes in this package. {@code api} needs no class: a value of a namespace type is a
+     * {@code Namespace}.
      *
      * <p>Pass it to {@code ProcessorConfig.metaNameBinder}, which composes it over the kernel's own vocabulary
      * rather than replacing it. A schema governed by this meta layer will not resolve without it: the

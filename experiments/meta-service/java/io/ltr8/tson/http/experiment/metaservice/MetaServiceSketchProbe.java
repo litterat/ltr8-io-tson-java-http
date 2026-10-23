@@ -68,15 +68,15 @@ class MetaServiceSketchProbe {
 
     /** The "both" shape: an interface, and an api implementing it with bindings, plus one inline operation. */
     static final String BOTH = """
-              orders => !interface {
+              orders => !interfaces { orders => {
                 @doc:"Accept an order and confirm it with the quantity doubled."
                 place_order  => { request: order  response: order  errors: [sku_not_found] }
                 @idempotent
                 @doc:"Cancel an order."
                 cancel_order => { request: order_ref  errors: [order_not_found] }
-              }
+              } }
 
-              orders_api => !api {
+              orders_api => !apis { orders_api => {
                 implements: [orders]
                 resources: {
                   "/orders"        => !resource { POST   => !binding { method: place_order  status: 201 } }
@@ -84,7 +84,7 @@ class MetaServiceSketchProbe {
                   "/{schemaPath}"  => !resource {
                     @safe GET => !operation { request: schema_ref  response: order } }
                 }
-              }
+              } }
             """;
 
     @Test
@@ -97,13 +97,13 @@ class MetaServiceSketchProbe {
         assertEquals(List.of(), problems, () -> "expected a clean resolution, got " + problems);
         var entries = tson.schemaRegistry().get(DOC_ID).orElseThrow().schema().entries();
 
-        Interface orders = assertInstanceOf(Interface.class, entries.get("orders").body());
+        Interface orders = Experiment.held(entries, "interfaces", Interface.class).get("orders");
         Method place = orders.methods().get("place_order");
         assertEquals("sku_not_found", place.errors().getFirst().name());
         assertEquals("Cancel an order.",
                 orders.methods().getAnnotations("cancel_order").value("doc", String.class).orElseThrow());
 
-        Api api = assertInstanceOf(Api.class, entries.get("orders_api").body());
+        Api api = Experiment.held(entries, "apis", Api.class).get("orders_api");
         assertEquals(List.of("orders"), api.implemented());
         Binding post = assertInstanceOf(Binding.class, api.resources().get("/orders").endpoints().get("POST"));
         assertEquals(201, post.status());
@@ -112,23 +112,23 @@ class MetaServiceSketchProbe {
 
         // The status an error carries is readable from its type: a FIXED 404.
         var errEntries = tson.schemaRegistry().get(ERR_ID).orElseThrow().schema().entries();
-        var status = ((RecordBody) errEntries.get("sku_not_found").body()).fields().get("status");
+        var status = ((RecordBody) errEntries.get("sku_not_found")).fields().get("status");
         assertEquals(FieldRole.FIXED, status.role());
         assertEquals("404", status.value().orElseThrow().text());
     }
 
     /**
-     * §4.1: a {@code kind: DATA} instance is declared and applied, never named where a type is expected. The
-     * two instances this design has are an interface and an api; naming either as a field type is refused.
+     * An entry holding a namespace value is a value, never a type: naming an {@code interfaces} or {@code apis} entry
+     * as a field type is refused.
      */
     @Test
     void anInterfaceIsNotAType() {
-        String doc = doc("  m => !interface { place_order => { request: order } }\n  x => { s: m }");
+        String doc = doc("  m => !interfaces { m => { place_order => { request: order } } }\n  x => { s: m }");
         List<Diagnostic> problems = tson(doc).validateSchema(doc);
 
         assertEquals(1, problems.size(), () -> "" + problems);
-        assertTrue(problems.getFirst().message().contains("is built with 'interface' and describes something other "
-                + "than a data value"), problems.getFirst().message());
+        assertTrue(problems.getFirst().message().contains("a value of the namespace type 'interfaces'"),
+                problems.getFirst().message());
     }
 
     /**

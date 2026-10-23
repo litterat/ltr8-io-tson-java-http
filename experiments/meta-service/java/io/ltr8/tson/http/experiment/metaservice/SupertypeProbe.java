@@ -39,7 +39,7 @@ class SupertypeProbe {
 
     static final String DOC_ID = "https://schemas.example.com/2026/38/app/probe-s-1.tn";
 
-    /** Resolves {@code r => !api { "/o" => <resource> }} and hands back the resource, or the problems. */
+    /** Resolves {@code r => !apis { r => { "/o" => <resource> } }} and hands back the resource, or the problems. */
     static List<Diagnostic> problems(String resource, Object[] resourceOut) {
         String doc = """
             !!id:"%s"
@@ -47,7 +47,7 @@ class SupertypeProbe {
             !!import:"https://tson.io/2026/38/m/core.tn"
             {
               order => { sku: text }
-              r => !api { "/o" => %s }
+              r => !apis { r => { "/o" => %s } }
             }""".formatted(DOC_ID, Experiment.META_ID, resource);
         Map<String, String> lib = new LinkedHashMap<>();
         lib.put(Experiment.META_ID, Experiment.metaServiceSource());
@@ -56,7 +56,8 @@ class SupertypeProbe {
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))));
         List<Diagnostic> problems = tson.validateSchema(doc);
         if (problems.isEmpty()) {
-            Api api = (Api) tson.schemaRegistry().get(DOC_ID).orElseThrow().schema().entries().get("r").body();
+            Api api = Experiment.held(tson.schemaRegistry().get(DOC_ID).orElseThrow().schema().entries(), "apis",
+                    Api.class).get("r");
             resourceOut[0] = api.resources().get("/o");
         }
         return problems;

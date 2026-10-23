@@ -18,3 +18,4 @@ feedback, its directory says where it went and the parts that no longer earn a b
 | Experiment | Question | Where it went |
 |---|---|---|
 | [`meta-service/`](meta-service/) | Can one meta layer describe an interface (methods), a web service (operations), and a service that is both -- and how does an operation refer to a method declared elsewhere? | A sketch that resolves; the reference problem became tson-java's `SPEC-FEEDBACK.md` entry *"a namespace should be a value"*. |
+| [`one-level/`](one-level/) | What goes if schemas lose the meta ladder -- constructors and their instances in one document, resolved in passes -- and does the data/schema line blur with it? Measured against an API description and the agent sketches. | A design direction, adopted under "correctness over churn": the shape/value dependency model first, then the ladder and `data` removed. Probes pin the ladder as it stands and namespace types as tson-java PR #753 landed them. |

@@ -16,7 +16,7 @@
   `signature.response` names a type. It was replaced rather than fudged; see the README's absent list.
   """
 {
-  orders_api => !api {
+  orders_api => !apis { orders_api => {
     "/orders" => !resource {
       @doc:"Place an order. The whole body is the order."
       POST => !operation { request: order  response: order  errors: [sku_not_found]  status: 201 }
@@ -35,5 +35,5 @@
         """
       GET => !operation { request: order_ref  response: order_page }
     }
-  }
+  } }
 }

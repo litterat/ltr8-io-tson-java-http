@@ -8,8 +8,9 @@ import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonDocumentHeader;
 import io.ltr8.tson.compiler.TsonDocumentPeek;
 import io.ltr8.tson.http.TsonProblemSchema;
+import io.ltr8.tson.schema.TsonSchema;
 import io.ltr8.tson.schema.meta.RecordBody;
-import io.ltr8.tson.schema.meta.TypeDefinition;
+import io.ltr8.tson.schema.meta.Top;
 import io.ltr8.tson.schema.meta.TypeRef;
 import org.junit.jupiter.api.Test;
 
@@ -74,8 +75,13 @@ class ExamplesProbe {
 
     /** Resolves one example by identity and hands back its entries; the resolver's verdict must be clean. */
     static Routes routesOf(Tson tson, String file, String apiName) {
-        return Routes.of(apiName, apiOf(tson, file, apiName), tson.schemaRegistry().get(EXAMPLES + file)
-                .orElseThrow().schema().entries()::get);
+        Api api = apiOf(tson, file, apiName);
+        var entries = tson.schemaRegistry().get(EXAMPLES + file).orElseThrow().schema().entries();
+        Map<String, Interface> interfaces = new LinkedHashMap<>();
+        tson.schemaRegistry().get(EXAMPLES + "orders-1.tn").ifPresent(iface ->
+                interfaces.putAll(Experiment.held(iface.schema().entries(), "interfaces", Interface.class)));
+        interfaces.putAll(Experiment.held(entries, "interfaces", Interface.class));
+        return Routes.of(apiName, api, interfaces, entries::get);
     }
 
     static Api apiOf(Tson tson, String file, String apiName) {
@@ -84,7 +90,7 @@ class ExamplesProbe {
                 "../experiments")).resolve("meta-service/examples").resolve(file)));
         assertEquals(List.of(), problems, () -> file + ": " + problems);
         var entries = tson.schemaRegistry().get(id).orElseThrow().schema().entries();
-        return assertInstanceOf(Api.class, entries.get(apiName).body());
+        return assertInstanceOf(Api.class, Experiment.held(entries, "apis", Api.class).get(apiName));
     }
 
     /** Documentation is annotation on the key: {@code @summary} the short form, {@code @doc} the long. */
@@ -105,12 +111,13 @@ class ExamplesProbe {
         assertEquals(List.of(), problems, () -> "" + problems);
 
         var entries = tson.schemaRegistry().get(EXAMPLES + "orders-1.tn").orElseThrow().schema().entries();
-        Interface orders = assertInstanceOf(Interface.class, entries.get("orders").body());
+        var interfaces = Experiment.held(entries, "interfaces", Interface.class);
+        Interface orders = interfaces.get("orders");
         assertEquals(List.of("place_order", "get_order", "list_orders", "cancel_order"),
                 List.copyOf(orders.methods().keySet()));
         assertEquals("Cancel an order. Cancelling twice is the same as cancelling once.",
                 orders.methods().getAnnotations("cancel_order").value("doc", String.class).orElseThrow());
-        assertEquals(List.of("orders"), assertInstanceOf(Interface.class, entries.get("orders_v2").body()).extended());
+        assertEquals(List.of("orders"), interfaces.get("orders_v2").extended());
         // Facts about a method are bare annotations on its key, not fields of its signature.
         assertTrue(orders.methods().getAnnotations("get_order").has("safe"));
         assertTrue(orders.methods().getAnnotations("cancel_order").has("idempotent"));
@@ -158,9 +165,9 @@ class ExamplesProbe {
         // The wire schema does not import the interface -- it is derived from it -- so both are resolved here.
         assertEquals(List.of(), tson.validateSchema(read(examples().resolve("orders-1.tn"))));
         assertEquals(List.of(), tson.validateSchema(read(examples().resolve("orders-wire-1.tn"))));
-        var iface = assertInstanceOf(Interface.class, tson.schemaRegistry().get(EXAMPLES + "orders-1.tn")
-                .orElseThrow().schema().entries().get("orders").body());
-        var wire = tson.schemaRegistry().get(EXAMPLES + "orders-wire-1.tn").orElseThrow().schema().entries();
+        var iface = Experiment.held(tson.schemaRegistry().get(EXAMPLES + "orders-1.tn").orElseThrow().schema()
+                .entries(), "interfaces", Interface.class).get("orders");
+        var wire = tson.schemaRegistry().get(EXAMPLES + "orders-wire-1.tn").orElseThrow().schema();
 
         iface.methods().forEach((name, method) -> {
             Map<String, String> call = closedOver(wire, name + "_call", "call");
@@ -180,15 +187,15 @@ class ExamplesProbe {
 
     /**
      * One closed template application, as its fields: a declaration naming an application is that application's
-     * entry ([TSON-SCHEMA] §8.2), so the entry's own source is the template it closes, and both halves -- which
+     * entry ([TSON-SCHEMA] §8.2), so the application its key carries names the template it closes, and both halves -- which
      * template, over what -- are readable from the resolved schema without parsing a generated name.
      */
-    static Map<String, String> closedOver(Map<String, TypeDefinition> wire, String entry, String template) {
-        TypeDefinition closed = wire.get(entry);
+    static Map<String, String> closedOver(TsonSchema wire, String entry, String template) {
+        Top closed = wire.entries().get(entry);
         assertNotNull(closed, "the wire schema declares no '" + entry + "'");
-        assertEquals(template, closed.source().orElseThrow().name(), entry + " closes the wrong template");
+        assertEquals(template, wire.applicationOf(entry).orElseThrow().name(), entry + " closes the wrong template");
         Map<String, String> fields = new LinkedHashMap<>();
-        assertInstanceOf(RecordBody.class, closed.body()).fields()
+        assertInstanceOf(RecordBody.class, closed).fields()
                 .forEach((name, field) -> fields.put(name, field.type().name()));
         return fields;
     }

@@ -42,27 +42,29 @@ class TsonApiSchemaTest {
             !!import:"https://tson.io/2026/38/io/ltr8/http/problem.tn"
             !!import:"https://tson.io/2026/38/m/core.tn"
             {
-              @doc:"Accept an order and confirm it, with the quantity doubled."
-              create_order => !operation {
-                method:     POST
-                path:       "/orders"
-                summary:    "Place an order"
-                request:    order
-                responses:  [
-                  !response { status: 201  body: order    description: "The confirmed order" }
-                  !response { status: 400  body: problem  description: "Not a valid order" }
-                ]
-              }
+              orders => !api {
+                @doc:"Accept an order and confirm it, with the quantity doubled."
+                create_order => {
+                  method:     POST
+                  path:       "/orders"
+                  summary:    "Place an order"
+                  request:    order
+                  responses:  [
+                    !response { status: 201  body: order    description: "The confirmed order" }
+                    !response { status: 400  body: problem  description: "Not a valid order" }
+                  ]
+                }
 
-              get_schema => !operation {
-                method:     GET
-                path:       "/{+schemaPath}"
-                deprecated:  true
-                parameters: [
-                  !parameter { name: "schemaPath"  in: PATH  type: text  required: true
-                               description: "The path component of the schema's own !!id" }
-                ]
-                responses:  [ !response { status: 200  description: "The schema, as bytes" } ]
+                get_schema => {
+                  method:     GET
+                  path:       "/{+schemaPath}"
+                  deprecated:  true
+                  parameters: [
+                    !parameter { name: "schemaPath"  in: PATH  type: text  required: true
+                                 description: "The path component of the schema's own !!id" }
+                  ]
+                  responses:  [ !response { status: 200  description: "The schema, as bytes" } ]
+                }
               }
             }""";
 
@@ -84,7 +86,7 @@ class TsonApiSchemaTest {
         TsonApiDescription api = TsonApiSchema.describedBy(resolved(API), API_ID);
 
         assertEquals(java.util.Set.of("create_order", "get_schema"), api.operations().keySet(),
-                "the entry name is the operationId");
+                "the key is the operationId");
 
         Operation create = api.operations().get("create_order");
         assertEquals(HttpMethod.POST, create.method());
@@ -92,7 +94,7 @@ class TsonApiSchemaTest {
         assertEquals(Optional.of("Place an order"), create.summary());
         assertEquals(Optional.of("Accept an order and confirm it, with the quantity doubled."),
                 api.doc("create_order"),
-                "@doc on the entry is the long form; summary is the short one");
+                "@doc on the key is the long form; summary is the short one");
         assertEquals("order", create.request().orElseThrow().name());
         assertEquals(Optional.of("The confirmed order"), create.responseFor(201).orElseThrow().description());
         assertEquals("problem", create.responseFor(400).orElseThrow().body().orElseThrow().name());
@@ -172,14 +174,13 @@ class TsonApiSchemaTest {
         assertTrue(thrown.getMessage().contains("problm"), thrown.getMessage());
     }
 
-    /** And an operation is not a type, so it cannot be used where one belongs. */
+    /** And an api is no type, so it cannot be used where one belongs; an operation is no entry at all. */
     @Test
-    void anOperationCannotBeUsedWhereATypeBelongs() {
+    void anApiCannotBeUsedWhereATypeBelongs() {
         RuntimeException thrown = assertThrows(RuntimeException.class,
-                () -> resolved(API.replace("\n}", "\n  holder => { op: create_order }\n}")));
+                () -> resolved(API.replace("\n}", "\n  holder => { api: orders }\n}")));
 
-        assertTrue(thrown.getMessage().contains("describes something other than a data value"),
-                thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("a value and not a type"), thrown.getMessage());
     }
 
     /** The meta layer is a document a server publishes, so its own identity has to be what it says. */
@@ -228,11 +229,13 @@ class TsonApiSchemaTest {
               page       => <T> { items: [T]  next?: uri  total: int32 }
               order_page => page<order>
 
-              list_orders => !operation {
-                method:     GET
-                path:       "/orders"
-                parameters: []
-                responses:  [ !response { status: 200  body: %s } ]
+              orders => !api {
+                list_orders => {
+                  method:     GET
+                  path:       "/orders"
+                  parameters: []
+                  responses:  [ !response { status: 200  body: %s } ]
+                }
               }
             }""";
 
@@ -251,43 +254,35 @@ class TsonApiSchemaTest {
         assertEquals("order_page", list.responseFor(200).orElseThrow().body().orElseThrow().name());
 
         // A declaration naming an application is that application's entry (§8.2): no hop onto a minted name.
-        var entries = tson.schemaRegistry().get(API_ID).orElseThrow().schema().entries();
-        assertEquals("page", entries.get("order_page").source().orElseThrow().name(),
+        var resolved = tson.schemaRegistry().get(API_ID).orElseThrow().schema();
+        assertEquals("page", resolved.applicationOf("order_page").orElseThrow().name(),
                 "§8.2 records the application that built it");
     }
 
     /**
-     * <b>Applying one inline needs the braced form, and that is by design.</b> {@code page<order>} is
-     * <em>schema</em> syntax and an {@code !operation} payload is <em>data</em>, where a {@code type_ref}
-     * slot takes §5.6's positional form: a bare token without arguments, a braced record with. The kernel
-     * says so — <em>"a braced record is the explicit form, canonical only when `arguments` is present"</em>.
+     * <b>An application is named through an alias, never written inline.</b> {@code response.body} is typed by a
+     * kind, so it holds the name of a type: one bare token. An operation payload is a value body, where nothing
+     * lifts or mints, so an application written there would be the name of no entry. §5.6's braced form is
+     * therefore refused, and the message names the alias spelling that gives the application its entry. The
+     * schema sugar {@code page<order>} in the same position is a parse error, before resolution is reached.
      */
     @Test
-    void aTemplateAppliedInlineNeedsTheBracedForm() {
-        Tson tson = resolved(PAGED.formatted("{ name: page  arguments: [ { name: order } ] }"));
-        Operation list = TsonApiSchema.describedBy(tson, API_ID).operations().get("list_orders");
+    void anApplicationIsNamedThroughAnAliasNotInline() {
+        String message = assertThrows(RuntimeException.class,
+                () -> resolved(PAGED.formatted("{ name: page  arguments: [ { name: order } ] }"))).getMessage();
+        assertTrue(message.contains("list_orders"), "the refusal names the operation: " + message);
+        assertTrue(message.contains("declare an alias"), "the refusal names the alias spelling: " + message);
 
-        var body = list.responseFor(200).orElseThrow().body().orElseThrow();
-        assertEquals("page", body.name());
-        assertEquals(1, body.arguments().size(), "the argument survives into the bound record");
-
-        // The sugar in the same position is a PARSE error, before resolution is reached.
         assertTrue(assertThrows(RuntimeException.class, () -> resolved(PAGED.formatted("page<order>")))
                 .getMessage().contains("adjacent values must be separated"));
     }
 
-    /** A bad argument is caught either way, and the inline spelling names the operation. */
+    /** A bad argument is caught where the application is spelled, which is the alias. */
     @Test
-    void aBadTemplateArgumentIsCaughtInBothSpellings() {
+    void aBadTemplateArgumentIsCaughtAtTheAlias() {
         assertTrue(assertThrows(RuntimeException.class,
                 () -> resolved(PAGED.formatted("order_page").replace("page<order>", "page<no_such>")))
                 .getMessage().contains("unresolved reference 'no_such'"));
-
-        String message = assertThrows(RuntimeException.class,
-                () -> resolved(PAGED.formatted("{ name: page  arguments: [ { name: no_such } ] }")))
-                .getMessage();
-        assertTrue(message.contains("unresolved reference 'no_such'"), message);
-        assertTrue(message.contains("list_orders"), "the inline form names the operation: " + message);
     }
 
     /** And the payload's own shape is checked against the constructor's declaration, field by field. */
@@ -444,9 +439,7 @@ class TsonApiSchemaTest {
 
     /**
      * <b>An operation with no parameters omits the list.</b> {@code parameters} is optional and a bound class
-     * guards its own optional lists, so absent arrives as empty rather than {@code null} — which matters more
-     * than tidiness here, because {@link Operation#references()} walks it inside schema resolution, where a
-     * null would surface as an NPE out of {@code resolve} and read as a library fault.
+     * guards its own optional lists, so absent arrives as empty rather than {@code null}.
      */
     @Test
     void anOperationWithNoParametersOmitsTheList() {

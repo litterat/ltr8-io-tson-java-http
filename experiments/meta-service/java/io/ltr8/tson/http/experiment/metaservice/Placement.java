@@ -5,7 +5,7 @@ import io.ltr8.tson.schema.meta.MapBody;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.RecordField;
 import io.ltr8.tson.schema.meta.TupleBody;
-import io.ltr8.tson.schema.meta.TypeDefinition;
+import io.ltr8.tson.schema.meta.Top;
 import io.ltr8.tson.schema.meta.TypeRef;
 
 import java.util.Collections;
@@ -41,16 +41,16 @@ record Placement(Map<String, Location> fields) {
 
     static Placement of(String name, HttpVerb verb, String path, List<String> query, Map<String, String> headers,
                         Optional<String> body, Optional<TypeRef> request,
-                        Function<String, TypeDefinition> entries) {
+                        Function<String, Top> entries) {
         Map<String, RecordField> declared = new LinkedHashMap<>();
         request.ifPresent(ref -> {
-            TypeDefinition type = entries.apply(ref.name());
-            if (type == null || !(type.body() instanceof RecordBody record)) {
+            Top type = entries.apply(ref.name());
+            if (type == null || !(type instanceof RecordBody record)) {
                 throw new IllegalArgumentException("'" + name + "' takes '" + ref.name() + "', which is not a record"
                         + " -- a request is the record whose fields an endpoint distributes over the HTTP request,"
                         + " so a method taking one value declares a one-field record for it");
             }
-            declared.putAll(record.fields());
+            declared.putAll(record.fields().entries());
         });
         Map<String, Location> placed = new LinkedHashMap<>();
         Matcher segments = SEGMENT.matcher(path);
@@ -76,7 +76,7 @@ record Placement(Map<String, Location> fields) {
     }
 
     private static void place(String entry, Map<String, Location> placed, Map<String, RecordField> declared,
-                              String field, Location where, Function<String, TypeDefinition> entries) {
+                              String field, Location where, Function<String, Top> entries) {
         if (!declared.containsKey(field)) {
             throw new IllegalArgumentException("'" + entry + "' places '" + field + "' in the " + where
                     + ", but the request declares no such field -- it declares " + declared.keySet());
@@ -98,12 +98,12 @@ record Placement(Map<String, Location> fields) {
      * any of those has no spelling in any of the three.
      */
     private static void requireScalar(String entry, String name, RecordField field, Location where,
-                                      Function<String, TypeDefinition> entries) {
-        TypeDefinition type = entries.apply(field.type().name());
+                                      Function<String, Top> entries) {
+        Top type = entries.apply(field.type().name());
         if (type == null) {
             return;                                     // a built-in: text, int32, a date -- scalar by construction
         }
-        if (type.body() instanceof ArrayBody array) {
+        if (type instanceof ArrayBody array) {
             if (where == Location.PATH) {
                 refuse(entry, name, where, "an array, and a URL segment carries exactly one scalar");
             }
@@ -118,9 +118,9 @@ record Placement(Map<String, Location> fields) {
         }
     }
 
-    private static boolean isContainer(TypeDefinition type) {
-        return type != null && (type.body() instanceof RecordBody || type.body() instanceof ArrayBody
-                || type.body() instanceof MapBody || type.body() instanceof TupleBody);
+    private static boolean isContainer(Top type) {
+        return type != null && (type instanceof RecordBody || type instanceof ArrayBody
+                || type instanceof MapBody || type instanceof TupleBody);
     }
 
     private static void refuse(String entry, String field, Location where, String because) {

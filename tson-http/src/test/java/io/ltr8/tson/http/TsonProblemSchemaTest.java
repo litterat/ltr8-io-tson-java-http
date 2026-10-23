@@ -7,7 +7,7 @@ import io.ltr8.tson.base.SchemaFetchException;
 import io.ltr8.tson.compiler.TsonDiagnostics;
 import io.ltr8.tson.schema.meta.EnumBody;
 import io.ltr8.tson.schema.meta.RecordBody;
-import io.ltr8.tson.schema.meta.TypeDefinition;
+import io.ltr8.tson.schema.meta.Top;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -133,8 +133,8 @@ class TsonProblemSchemaTest {
     }
 
     private static List<String> membersOf(String entryName) {
-        TypeDefinition entry = TsonProblemSchema.compiled().schema().entries().get(entryName);
-        return assertInstanceOf(EnumBody.class, entry.body(), entryName + " is an enum").members();
+        Top entry = TsonProblemSchema.compiled().schema().entries().get(entryName);
+        return assertInstanceOf(EnumBody.class, entry, entryName + " is an enum").members();
     }
 
     /**
@@ -170,8 +170,8 @@ class TsonProblemSchemaTest {
                 "problem.tn declares a fetch_reason enum: the reason is the code, and two carriers for one "
                         + "fact are free to disagree");
 
-        TypeDefinition diagnostic = TsonProblemSchema.compiled().schema().entries().get("diagnostic");
-        List<String> fields = List.copyOf(assertInstanceOf(RecordBody.class, diagnostic.body(), "diagnostic is a record")
+        Top diagnostic = TsonProblemSchema.compiled().schema().entries().get("diagnostic");
+        List<String> fields = List.copyOf(assertInstanceOf(RecordBody.class, diagnostic, "diagnostic is a record")
                 .fields().keySet());
         assertFalse(fields.contains("fetch_reason"),
                 () -> "diagnostic carries a fetch_reason field: every member is a location or the problem "
