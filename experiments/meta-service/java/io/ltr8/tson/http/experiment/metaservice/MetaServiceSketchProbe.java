@@ -8,6 +8,7 @@ import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.schema.meta.FieldRole;
 import io.ltr8.tson.schema.meta.RecordBody;
+import io.ltr8.tson.schema.meta.TypeRef;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -77,10 +78,12 @@ class MetaServiceSketchProbe {
               } }
 
               orders_api => !apis { orders_api => {
-                implements: [orders]
+                implements: [orders.orders]
                 resources: {
-                  "/orders"        => !resource { POST   => !binding { method: place_order  status: 201 } }
-                  "/orders/{id}"   => !resource { DELETE => !binding { method: cancel_order  status: 204 } }
+                  "/orders"        => !resource { POST   => !binding { method: orders.orders.methods.place_order
+                                                                         status: 201 } }
+                  "/orders/{id}"   => !resource { DELETE => !binding { method: orders.orders.methods.cancel_order
+                                                                         status: 204 } }
                   "/{schemaPath}"  => !resource {
                     @safe GET => !operation { request: schema_ref  response: order } }
                 }
@@ -104,10 +107,10 @@ class MetaServiceSketchProbe {
                 orders.methods().getAnnotations("cancel_order").value("doc", String.class).orElseThrow());
 
         Api api = Experiment.held(entries, "apis", Api.class).get("orders_api");
-        assertEquals(List.of("orders"), api.implemented());
+        assertEquals(List.of("orders.orders"), api.implemented().stream().map(TypeRef::name).toList());
         Binding post = assertInstanceOf(Binding.class, api.resources().get("/orders").endpoints().get("POST"));
         assertEquals(201, post.status());
-        assertEquals("place_order", post.method());
+        assertEquals("orders.orders.methods.place_order", post.method().name());
         Operation get = assertInstanceOf(Operation.class, api.resources().get("/{schemaPath}").endpoints().get("GET"));
 
         // The status an error carries is readable from its type: a FIXED 404.

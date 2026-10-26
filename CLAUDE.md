@@ -350,10 +350,11 @@ which is where that per-adapter path seam would finally have to exist.
 
 **Interfaces beside operations — explored, not adopted.** `experiments/meta-service/` sketches one meta layer for
 methods (transport-neutral) and operations (HTTP-bound), and finds the real obstacle: an operation binding a
-method declared *elsewhere* must refer to it. A `ref<method>` slot, declared in a meta layer, can now reach a method
-by a qualified name through namespace keys and record values' fields
-(`UpstreamGapsTest.aReferenceThroughARecordValuesFieldIsJudged`); the shapes measured, and what is left, are written up
-there.
+method declared *elsewhere* must refer to it. A `ref<method>` slot, declared in a meta layer, now reaches a method by
+a qualified name through namespace keys and record values' fields
+(`UpstreamGapsTest.aReferenceThroughARecordValuesFieldIsJudged`), and the sketch's bindings, exemptions, `extends` and
+`implements` are references the resolver judges, leaving its reader only what relates two things; the shapes
+measured, and what is left, are written up there.
 
 **Its scope is the descriptor — RPC- and API-style endpoints — and the agent sketches in it are future work.**
 `agent.tn` and `agent-vm.tn` are there to press on the interface layer from a direction that is not HTTP, so

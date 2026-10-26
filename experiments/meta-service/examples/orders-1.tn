@@ -6,7 +6,8 @@
   Interface only: nothing HTTP in the document. An interface is a map of methods keyed by name -- a
   method's name is the key it sits under, scoped to its interface, and a `@doc` before the key documents
   it. The `!method` tag is optional under the typed slot. `extends` names other interfaces whose methods
-  this one also has; the reader walks it, not `!!import`.
+  this one also has, by references the resolver judges (`orders.orders`: the entry, then its key); the reader
+  walks them, not `!!import`. A method stays the interface's that declares it, and a binding names it there.
   """
 {
   @doc:"The orders interface."
@@ -27,7 +28,7 @@
 
   @doc:"Everything orders has, and a refund."
   orders_v2 => !interfaces { orders_v2 => {
-    extends: [orders]
+    extends: [orders.orders]
     methods: {
       @idempotent
       refund => { request: order_ref }

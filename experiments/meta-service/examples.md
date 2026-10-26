@@ -3,7 +3,7 @@
 Real documents under [`examples/`](examples/), resolved by `ExamplesProbe` against the sketch on every build, so
 they cannot drift from it. Two entries a governed schema writes, both maps: an `!interface` of methods keyed by
 name, and an `!api` of resources keyed by path, each a map of endpoints keyed by verb -- an `!operation` carrying
-its signature inline, or a `!binding` naming a method's.
+its signature inline, or a `!binding` naming a method's by reference.
 
 | file | which use | what it shows |
 |---|---|---|
@@ -35,8 +35,9 @@ fields; `headers` maps a field to its header; `body` names one field carried as 
 the body -- unless the verb is GET or HEAD, or `body` already named a field, in which case it is the query.
 Every field lands exactly once, and a field in the path, query or a header must be a scalar.
 
-`implements: [orders]` is a claim the reader holds the api to: every method of `orders` (and of anything it
-extends) has a binding naming it, or an entry in `not_bound: { get_order => "served by the read replica" }`
-giving the reason. The resolver checks none of the names -- a method name, an `implements`, a `{segment}` are
-identifiers at these positions -- which is the cost of relating data entries by name; `Routes` does it at
-startup, and `ExamplesProbe` runs both apis through it.
+`implements: [orders.orders]` is a claim the reader holds the api to: every method of `orders` (and of anything
+it extends) has a binding naming it, or an entry in `not_bound: [ { method: orders.orders.methods.get_order  reason:
+"served by the read replica" } ]` giving the reason. The names are references the resolver judges -- a binding's
+`method` is `orders.orders.methods.place_order`, through the interface's entry, its key and its methods -- so a
+misspelt method fails at load. What relates two things, the placement of a request over a path among them, is
+`Routes`', at startup, and `ExamplesProbe` runs both apis through it.

@@ -47,6 +47,21 @@ final class Experiment {
         return found;
     }
 
+    /**
+     * {@link #held}, keyed by the qualified name a reference spells -- the entry, then the key ({@code
+     * orders.orders}) -- which is how {@link Routes} matches a {@code ref<interface>} or a {@code ref<method>} to
+     * the interface it names.
+     */
+    static <T> Map<String, T> heldByName(Namespace<Top> entries, String constructor, Class<T> type) {
+        Map<String, T> found = new LinkedHashMap<>();
+        entries.forEach((entry, value) -> {
+            if (value instanceof Namespace<?> namespace && namespace.type().equals(constructor)) {
+                namespace.forEach((key, held) -> found.put(entry + "." + key, type.cast(held)));
+            }
+        });
+        return found;
+    }
+
     /** The bound classes for the sketch's records, as {@code TsonApiSchema.metaNameBinder()} does. */
     static ProcessorConfig bindVocabulary(ProcessorConfig config) {
         return config.withMetaNameBinder(new DataNameBinder.DefaultDataNameBinder(

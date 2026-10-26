@@ -7,17 +7,19 @@ import io.ltr8.tson.schema.meta.TypeRef;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
-/** The sketch's {@code api}: resources keyed by path template, and the interfaces it claims to implement. */
+/**
+ * The sketch's {@code api}: resources keyed by path template, the interfaces it claims to implement (references,
+ * held as the qualified names written), and the methods it exempts from that claim.
+ */
 @Typename(name = "api")
-public record Api(@Field("implements") List<String> implemented,
-                  @Field("not_bound") Map<String, Exemption> notBound,
+public record Api(@Field("implements") List<TypeRef> implemented,
+                  @Field("not_bound") List<Exemption> notBound,
                   AnnotatedMap<String, Resource> resources) {
 
     public Api {
         implemented = implemented == null ? List.of() : List.copyOf(implemented);
-        notBound = notBound == null ? Map.of() : Map.copyOf(notBound);
+        notBound = notBound == null ? List.of() : List.copyOf(notBound);
         resources = resources == null ? new AnnotatedMap<>() : resources;
     }
 

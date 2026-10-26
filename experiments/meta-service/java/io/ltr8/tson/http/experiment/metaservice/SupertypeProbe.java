@@ -47,6 +47,7 @@ class SupertypeProbe {
             !!import:"https://tson.io/2026/38/m/core.tn"
             {
               order => { sku: text }
+              i => !interfaces { i => { place_order => { request: order } } }
               r => !apis { r => { "/o" => %s } }
             }""".formatted(DOC_ID, Experiment.META_ID, resource);
         Map<String, String> lib = new LinkedHashMap<>();
@@ -72,10 +73,11 @@ class SupertypeProbe {
     @Test
     void aSubtypesValueIsAdmittedAtItsBaseTypedSlot() {
         Object[] out = new Object[1];
-        assertEquals(List.of(), problems("!resource { POST => !binding { method: place_order }"
+        assertEquals(List.of(), problems("!resource { POST => !binding { method: i.i.methods.place_order }"
                 + "  GET => !operation { request: order } }", out));
         Resource resource = assertInstanceOf(Resource.class, out[0]);
-        assertEquals("place_order", assertInstanceOf(Binding.class, resource.endpoints().get("POST")).method());
+        assertEquals("i.i.methods.place_order",
+                assertInstanceOf(Binding.class, resource.endpoints().get("POST")).method().name());
         assertEquals("order", assertInstanceOf(Operation.class, resource.endpoints().get("GET"))
                 .request().orElseThrow().name());
     }
@@ -84,7 +86,7 @@ class SupertypeProbe {
     @Test
     void aResourceNeedsNoTagUnderItsPathKey() {
         Object[] out = new Object[1];
-        assertEquals(List.of(), problems("{ POST => !binding { method: place_order } }", out));
+        assertEquals(List.of(), problems("{ POST => !binding { method: i.i.methods.place_order } }", out));
         assertInstanceOf(Binding.class, assertInstanceOf(Resource.class, out[0]).endpoints().get("POST"));
     }
 
@@ -108,7 +110,7 @@ class SupertypeProbe {
     /** The base's vocabulary is inherited and enforced on the subtypes. */
     @Test
     void theBasesConstraintsReachTheSubtypes() {
-        String refused = only("!resource { POST => !binding { method: place_order  status: 999 } }");
+        String refused = only("!resource { POST => !binding { method: i.i.methods.place_order  status: 999 } }");
         assertTrue(refused.contains("'999' is greater than the maximum 599"), refused);
     }
 }

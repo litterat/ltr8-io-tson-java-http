@@ -10,6 +10,17 @@ value is the map alone; the probes write one namespace entry per interface or ap
 `!operation` now sits behind a record field (an api's `resources`), and its kind-typed `request` is judged there
 (`UpstreamGapsTest.aKindSlotOnASubtypeBehindARecordFieldIsJudged`).
 
+**Ported to references (tson-java PRs #758 and #760).** What names something is now a reference the resolver judges:
+`extends` and `implements` are `[ref<interface>]`, and a binding's and an exemption's `method` is `ref<method>`, a
+qualified name through the interface's entry, its key, its `methods` field (now the namespace type `methods`) and the
+method's key -- `orders.orders.methods.place_order`. A misspelt method, a reference to the wrong kind of thing, and an
+ambiguous name are refused at load, so `binding.interface` is gone and `not_bound` is a list of `{ method  reason }`
+records, a map key being no reference. `Routes` keeps what relates two things: a bound method belonging to an
+interface the api implements, the `implements` claim, an `extends` cycle, placement, and a verb or status against the
+method. `extends` is a reference and not a composition, so an inherited method is named where it is declared; the
+doubled `orders.orders` and the `methods` segment are what `&` over namespace types (`UPSTREAM.md`) would remove. The
+prose below predates the port wherever it calls these identifiers.
+
 **Scope: the descriptor, for RPC- and API-style endpoints.** `meta-service.tn` describing an interface, a web
 service over it, and the endpoints of both is the work in hand; `rpc.tn` is its wire form and belongs to that
 scope. **The agent is future work and is here only to shape the descriptor** -- a third consumer of an interface
@@ -74,10 +85,10 @@ schema writes, and both are **maps**:
 - An error type pins the status it inherits from `problem` (`sku_not_found => problem & { status: = 404 … }`),
   which is how an operation's `errors` get one without a `responses` list.
 
-Everything that relates the two maps -- a method name, an `implements`, an `extends`, a `{segment}` -- is an
-identifier the resolver does not check, because a `kind: DATA` entry cannot be referenced and a map key is data.
-`Routes` in the Java is the reader that checks all of it at startup: it resolves each operation's signature,
-computes its `Placement`, and holds the `implements` claim. The probes:
+What names something across the two maps -- a method, an `implements`, an `extends` -- is a reference the resolver
+judges (above). What relates two things -- a `{segment}` to a request field, a method to an interface the api
+implements, the claim itself -- is `Routes`, the reader that checks it at startup: it resolves each endpoint's
+signature, computes its `Placement`, and holds the `implements` claim. The probes:
 
 - `MetaServiceSketchProbe` -- the sketch resolves and its constructs behave as assumed: a `data` constructor
   with a record mixin and no body; an error type's fixed status readable from the resolved schema; and the
@@ -86,10 +97,12 @@ computes its `Placement`, and holds the `implements` claim. The probes:
 - `InterfaceMapProbe` -- the finding the map design rests on, below.
 - `ExamplesProbe` -- the documents under `examples/` resolve against the sketch and both apis read into route tables.
 - `ApiProbe` -- an interface and the web service that maps it, through `Routes`: the placement of each request
-  record; an inline-only api; the `implements` claim failing and then exempted; `extends` walked; the tag rule
-  the resolver enforces; a typo the resolver passes and the reader catches; an ambiguous name needing
-  `interface:`; a container in a path; a request that is not a record at all; the three borrowed grammars at
-  their keys; and the method-as-type alternative kept for comparison.
+  record; an inline-only api; the `implements` claim failing and then exempted; `extends` walked, and an inherited
+  method named where it is declared; an `extends` cycle; the tag rule the resolver enforces; a misspelt method and a
+  reference to the wrong kind of thing refused by the resolver; a method of an interface the api does not implement
+  refused by the reader; a qualified name saying which of two interfaces is meant; a container in a path; a request
+  that is not a record at all; the three borrowed grammars at their keys; and the method-as-type alternative kept
+  for comparison.
 - `SupertypeProbe` -- the mechanism `!binding` rides on: a derived constructor's instance admitted at its
   base-typed slot, the base abstract for free, its constraints inherited.
 - `NameRoleProbe` -- what a naming role buys at a map key, and the hygiene gap below.
@@ -121,6 +134,7 @@ place_order … }` inside an api that `implements: [orders]`. Resolves, reads ba
 plaec_order`) loads clean -- the resolver treats a `type_name` slot as data. The check is a lookup in the
 implemented interfaces at startup, the same tier as `TsonApiCoverage`, and `Routes` is that check. Keeps "an
 operation is not a type"; becomes a compiler check the day the kernel has a reference form for data entries.
+That day came: `ref<method>` is the reference form, and the sketch now uses it (the port note at the top).
 The map shape softens the cost: the names being related are keys inside two entries the resolver did build, so
 "is `place_order` a method of `orders`" is one map lookup, not a namespace search.
 
@@ -423,11 +437,10 @@ the order, and this is what it dispatches on.
 Each was a decision with one answer, so it was taken rather than listed.
 
 - **Coverage is per (interface, method).** `Routes.Bound` is the unit throughout: two implemented interfaces may
-  both declare `list_orders`, and binding one says nothing about the other. `not_bound` takes an `exemption`
-  rather than bare text -- `reason` required, `interface` optional -- so an exemption disambiguates the way a
-  binding already could. `reason` being the sole required field keeps §5.6's short spelling,
-  `get_order => "served by the read replica"`. An exemption naming a method nothing declares is a typo the
-  reader catches, and an ambiguous one must say which.
+  both declare `list_orders`, and binding one says nothing about the other. `not_bound` is a list of `exemption`
+  records, each a `ref<method>` and a required `reason`, so an exemption names exactly the method it covers: a
+  misspelt one is refused at load, and one naming a method of an interface the api does not implement is refused
+  by the reader.
 - **A query parameter or a header may repeat**, so either admits an array of scalars; a path segment carries
   exactly one. An array of records still has no spelling anywhere.
 - **A verb is checked against what its method claims** -- GET, HEAD and OPTIONS safe; PUT and DELETE
@@ -509,8 +522,9 @@ record or two declarations of a schema. `NameRoleProbe` pins both, `aDataDocumen
 ## Files
 
 - `meta-service.tn` -- the sketch, its reasoning in its own `@doc`s.
-- `REFERENCES.md` -- a proposal, not resolvable today: `ref<T>`, qualified names and a `namespace` kind, so a
-  binding names its method as `orders.place_order` and the resolver checks it as it checks a request record.
+- `REFERENCES.md` -- the proposal for `ref<T>`, qualified names and a `namespace` kind, so a binding names its
+  method and the resolver checks it as it checks a request record. Landed on the Revision 38 proposal in a
+  different shape, which the sketch now runs on (the port note at the top).
 - `RECORD-TEMPLATES.md` -- a proposal for a follow-on to tson-java PR #725: a record template is a type hiding
   inside `template`, so it collapses into `record` with optional parameters and no template text.
 - `PR-724-REVIEW.md` -- a review of tson-java PR #724 (qualified names at record-typed positions), drafted and not

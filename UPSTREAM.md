@@ -90,10 +90,12 @@ it.
 
 1. **`&` over namespace types, so `extends` and `implements` are structural.** A namespace value has no fields, so
    the experiment's `interface` and `api` are records under keys of `interfaces` and `apis`, carrying `extends?:
-   [type_name]` and `implements?: [type_name]` as identifiers that `Routes` resolves and checks at startup. With `&`
-   merging member sets, `orders => reads & { … }` would have `reads`' methods and its own, a collision refused as
-   between two composed records' fields, and the extra level would go. An inherited member should not be copied:
-   a method composed into several interfaces stays one value with one identity.
+   [ref<interface>]` and `implements?: [ref<interface>]`: references the resolver judges, but not compositions, so an
+   inherited method is named where it is declared, `Routes` walks `extends` and refuses a cycle, and a binding spells
+   `orders.orders.methods.place_order`. With `&` merging member sets, `orders => reads & { … }` would have `reads`'
+   methods and its own, a collision refused as between two composed records' fields, and the extra level and the
+   `methods` segment would go (`orders.place_order`). An inherited member should not be copied: a method composed
+   into several interfaces stays one value with one identity.
 2. **Data keys.** An api is keyed by path, then verb, and a namespace's `key_type` is an identifier family, so a
    text-keyed namespace is refused (`NameRoleProbe.aNamespaceCannotBeKeyedByText`) and the experiment's `resources`
    is a plain map that no qualified name enters. A key that is not a name also needs a reach other than `.`: the

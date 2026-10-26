@@ -26,12 +26,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * An interface declared on its own, and a web service in a second document that maps it -- the case the whole
  * experiment exists for -- read through {@link Routes}.
  *
- * <p>The interface is a map of methods; the api is a map of paths, each a map of verbs. Every relation between
- * them is an identifier the resolver does not check (a method name, an {@code implements}, a {@code {segment}}),
- * so each probe here is one of the reader's checks: the placement of each method's request record, a method no
- * implemented interface declares, an ambiguous name across two interfaces, a container in a path, and the
- * {@code implements} claim held to -- every method bound or exempted with a reason. The one rule the reader no
- * longer needs -- an endpoint is an {@code !operation} or a {@code !binding} -- is the resolver's, and pinned here.
+ * <p>The interface is a map of methods; the api is a map of paths, each a map of verbs. What names something is a
+ * reference the resolver judges -- {@code implements}, a binding's and an exemption's {@code method} -- so a
+ * misspelt method, a reference to the wrong kind of thing, and an ambiguous name are refused at load, pinned here
+ * beside the rule that an endpoint is an {@code !operation} or a {@code !binding}. What relates two things is the
+ * reader's: the placement of each method's request record, a method of an interface the api does not implement,
+ * a container in a path, a verb or a status against the method, and the {@code implements} claim held to -- every
+ * method bound or exempted with a reason.
  *
  * <p>The last probe is the alternative model kept for comparison: a method as a <em>type</em> under plain
  * {@code meta.tn}, composing into an operation with fixed binding fields, and the cost that shows in its values.
@@ -63,10 +64,10 @@ class ApiProbe {
           } }
 
           @doc:"Everything orders has, and a refund."
-          orders_v2 => !interfaces { orders_v2 => { extends: [orders]
+          orders_v2 => !interfaces { orders_v2 => { extends: [orders.orders]
                                                     methods: { @idempotent refund => { request: order_ref } } } }
 
-          @doc:"Declares a name orders also declares, to force `interface:` on a binding of it."
+          @doc:"Declares a name orders also declares; a qualified name says which is meant."
           billing => !interfaces { billing => { @safe get_order => { request: order_ref  response: order } } }
 
           bulk => !interfaces { bulk => { @safe page_orders => { request: order_page  response: order_page } } }
@@ -86,17 +87,17 @@ class ApiProbe {
      */
     static final String API = api("""
           orders_api => !apis { orders_api => {
-            implements: [orders]
+            implements: [orders.orders]
             resources: {
               "/orders" => !resource {
                 @doc:"Place an order."
-                POST => !binding { method: place_order  status: 201
+                POST => !binding { method: orders.orders.methods.place_order  status: 201
                                      body: order  headers: { idempotency_key => "Idempotency-Key" } }
-                GET  => !binding { method: list_orders }
+                GET  => !binding { method: orders.orders.methods.list_orders }
               }
               "/orders/{id}" => !resource {
-                GET    => !binding { method: get_order }
-                DELETE => !binding { method: cancel_order  status: 204 }
+                GET    => !binding { method: orders.orders.methods.get_order }
+                DELETE => !binding { method: orders.orders.methods.cancel_order  status: 204 }
               }
             }
           } }
@@ -135,11 +136,14 @@ class ApiProbe {
         return Routes.of(name, apis.get(name), interfaces(tson, entries), entries::get);
     }
 
-    /** The interfaces an api may implement: the interface document's, and any the api document declares itself. */
+    /**
+     * The interfaces an api may implement, by qualified name: the interface document's, and any the api document
+     * declares itself.
+     */
     static Map<String, Interface> interfaces(Tson tson, Namespace<Top> entries) {
-        Map<String, Interface> all = new LinkedHashMap<>(Experiment.held(
+        Map<String, Interface> all = new LinkedHashMap<>(Experiment.heldByName(
                 tson.schemaRegistry().get(IFACE_ID).orElseThrow().schema().entries(), "interfaces", Interface.class));
-        all.putAll(Experiment.held(entries, "interfaces", Interface.class));
+        all.putAll(Experiment.heldByName(entries, "interfaces", Interface.class));
         return all;
     }
 
@@ -154,7 +158,7 @@ class ApiProbe {
         assertEquals(4, routes.routes().size());
 
         Routes.Route create = routes.route(HttpVerb.POST, "/orders").orElseThrow();
-        assertEquals(Optional.of(new Routes.Bound("orders", "place_order")), create.method());
+        assertEquals(Optional.of(new Routes.Bound("orders.orders", "place_order")), create.method());
         assertEquals("new_order", create.request().orElseThrow().name());   // borrowed from the method
         assertEquals(201, create.status());
         assertEquals(List.of("order"), create.placement().at(Placement.Location.BODY));
@@ -188,33 +192,53 @@ class ApiProbe {
     @Test
     void theImplementsClaimIsHeldTo() {
         String partial = api("""
-              orders_api => !apis { orders_api => { implements: [orders]
-                                   resources: { "/orders" => !resource { POST => !binding { method: place_order } } } } }
+              orders_api => !apis { orders_api => { implements: [orders.orders]
+                resources: { "/orders" => !resource { POST => !binding { method: orders.orders.methods.place_order } } }
+              } }
             """);
         String refused = assertThrows(IllegalStateException.class, () -> routes(partial).requireComplete())
                 .getMessage();
-        assertTrue(refused.contains("[orders.get_order, orders.list_orders, orders.cancel_order]")
-                        && refused.contains("not_bound"),
+        assertTrue(refused.contains("[orders.orders.methods.get_order, orders.orders.methods.list_orders, "
+                        + "orders.orders.methods.cancel_order]") && refused.contains("not_bound"),
                 refused);
 
         routes(api("""
-              orders_api => !apis { orders_api => { implements: [orders]
-                                   not_bound: { get_order => "served by the read replica"  list_orders => "not built yet"
-                                                cancel_order => "not built yet" }
-                                   resources: { "/orders" => !resource { POST => !binding { method: place_order } } } } }
+              orders_api => !apis { orders_api => { implements: [orders.orders]
+                not_bound: [ { method: orders.orders.methods.get_order     reason: "served by the read replica" }
+                             { method: orders.orders.methods.list_orders   reason: "not built yet" }
+                             { method: orders.orders.methods.cancel_order  reason: "not built yet" } ]
+                resources: { "/orders" => !resource { POST => !binding { method: orders.orders.methods.place_order } } }
+              } }
             """)).requireComplete();
     }
 
-    /** {@code extends} is walked: implementing {@code orders_v2} claims {@code orders}' methods too. */
+    /**
+     * {@code extends} is walked: implementing {@code orders_v2} claims {@code orders}' methods too, each still the
+     * declaring interface's, so the claim names them there.
+     */
     @Test
     void extendsIsWalkedForTheClaim() {
         String refused = assertThrows(IllegalStateException.class, () -> routes(api("""
-              v2 => !apis { v2 => { implements: [orders_v2]
+              v2 => !apis { v2 => { implements: [orders_v2.orders_v2]
                            resources: { "/refunds/{id}" => !resource {
-                             PUT => !binding { method: refund  status: 204 } } } } }
+                             PUT => !binding { method: orders_v2.orders_v2.methods.refund  status: 204 } } } } }
             """)).requireComplete()).getMessage();
 
-        assertTrue(refused.contains("orders.place_order") && refused.contains("refund") == false, refused);
+        assertTrue(refused.contains("orders.orders.methods.place_order") && !refused.contains("refund"), refused);
+    }
+
+    /**
+     * An inherited method is named at the interface that declares it: {@code extends} is a reference, not a
+     * composition, so {@code orders_v2}'s own methods hold {@code refund} alone, and the resolver says so.
+     */
+    @Test
+    void anInheritedMethodIsNamedWhereItIsDeclared() {
+        String refused = only(api("""
+              v2 => !apis { v2 => { implements: [orders_v2.orders_v2]
+                           resources: { "/orders" => !resource {
+                             POST => !binding { method: orders_v2.orders_v2.methods.place_order } } } } }
+            """));
+        assertTrue(refused.contains("has no key 'place_order' -- it holds refund"), refused);
     }
 
     /**
@@ -241,41 +265,89 @@ class ApiProbe {
         assertTrue(bareBase.contains("has no data of its own to bind"), bareBase);
     }
 
-    /** The cost of relating by identifier, measured: a typo resolves clean and only the reader catches it. */
+    /**
+     * An {@code extends} cycle is the one thing a reference cannot rule out: each names an interface that exists,
+     * so the reader walks them and refuses the loop.
+     */
     @Test
-    void aMethodNoImplementedInterfaceDeclaresIsRefusedByTheReader() {
-        String typo = api("""
-              orders_api => !apis { orders_api => { implements: [orders]
-                                   resources: { "/orders" => !resource { POST => !binding { method: plaec_order } } } } }
-            """);
-        String refused = assertThrows(IllegalArgumentException.class, () -> routes(typo)).getMessage();
-        assertTrue(refused.contains("'plaec_order'") && refused.contains("[orders]"), refused);
+    void anExtendsCycleIsRefusedByTheReader() {
+        String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
+              p => !interfaces { p => { extends: [q.q]  methods: { @safe m => { request: order_ref } } } }
+              q => !interfaces { q => { extends: [p.p]  methods: { @safe n => { request: order_ref } } } }
+              a => !apis { a => { implements: [p.p]
+                          resources: { "/o" => !resource { @safe GET => !operation { request: order_ref } } } } }
+            """))).getMessage();
+        assertTrue(refused.contains("extends itself") && refused.contains("p.p"), refused);
     }
 
-    /** Two implemented interfaces declaring one name: ambiguous until {@code interface:} says which. */
+    /**
+     * A misspelt method is the resolver's to refuse, naming the keys the interface does hold -- where, named by
+     * identifier, it resolved clean and only the reader caught it.
+     */
     @Test
-    void anAmbiguousMethodNameNeedsItsInterface() {
-        String ambiguous = api("""
-              a => !apis { a => { implements: [orders billing]
-                          resources: { "/orders/{id}" => !resource { GET => !binding { method: get_order } } } } }
-            """);
-        assertTrue(assertThrows(IllegalArgumentException.class, () -> routes(ambiguous)).getMessage()
-                .contains("say which with `interface:`"));
-
-        Routes routes = routes(api("""
-              a => !apis { a => { implements: [orders billing]
-                          resources: { "/orders/{id}" => !resource {
-                            GET => !binding { method: get_order  interface: billing } } } } }
+    void aMisspeltMethodIsRefusedByTheResolver() {
+        String refused = only(api("""
+              orders_api => !apis { orders_api => { implements: [orders.orders]
+                resources: { "/orders" => !resource { POST => !binding { method: orders.orders.methods.plaec_order } } }
+              } }
             """));
-        assertEquals("order_ref", routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow().request().orElseThrow().name());
+        assertTrue(refused.contains("has no key 'plaec_order' -- it holds place_order, get_order"), refused);
+    }
+
+    /**
+     * A reference names the kind of thing its slot wants: an interface where a method is wanted, or a method where
+     * an interface is, is refused at load.
+     */
+    @Test
+    void aReferenceToTheWrongKindOfThingIsRefusedByTheResolver() {
+        String notAMethod = only(api("""
+              a => !apis { a => { "/orders" => !resource { POST => !binding { method: orders.orders } } } }
+            """));
+        assertTrue(notAMethod.contains("wants a 'method'") && notAMethod.contains("is an 'interface'"), notAMethod);
+
+        String notAnInterface = only(api("""
+              a => !apis { a => { implements: [orders.orders.methods.get_order]
+                          resources: { "/o" => !resource { @safe GET => !operation { request: order_ref } } } } }
+            """));
+        assertTrue(notAnInterface.contains("wants an 'interface'") && notAnInterface.contains("is a 'method'"),
+                notAnInterface);
+    }
+
+    /** A sound reference to a method of an interface the api does not implement is the reader's to refuse. */
+    @Test
+    void aMethodOfAnInterfaceNotImplementedIsRefusedByTheReader() {
+        String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
+              a => !apis { a => { implements: [orders.orders]
+                          resources: { "/orders/{id}" => !resource {
+                            GET => !binding { method: billing.billing.methods.get_order } } } } }
+            """))).getMessage();
+        assertTrue(refused.contains("'billing.billing.methods.get_order'") && refused.contains("does not implement")
+                && refused.contains("[orders.orders]"), refused);
+    }
+
+    /**
+     * Two implemented interfaces declaring one name are not ambiguous: the qualified name says which interface
+     * declares the method a binding borrows.
+     */
+    @Test
+    void aQualifiedNameSaysWhichInterface() {
+        Routes routes = routes(api("""
+              a => !apis { a => { implements: [orders.orders billing.billing]
+                          resources: { "/orders/{id}" => !resource {
+                            GET => !binding { method: billing.billing.methods.get_order } } } } }
+            """));
+        Routes.Route fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
+        assertEquals(Optional.of(new Routes.Bound("billing.billing", "get_order")), fetch.method());
+        assertEquals("order_ref", fetch.request().orElseThrow().name());
     }
 
     /** A URL segment cannot carry a record: the limit `meta-http.tn` could only state, checked. */
     @Test
     void aContainerFieldCannotRideInThePath() {
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
-              a => !apis { a => { implements: [bulk]
-                          resources: { "/orders/{items}" => !resource { GET => !binding { method: page_orders } } } } }
+              a => !apis { a => { implements: [bulk.bulk]
+                          resources: { "/orders/{items}" => !resource {
+                            GET => !binding { method: bulk.bulk.methods.page_orders } } } } }
             """))).getMessage();
 
         assertTrue(refused.contains("'items'") && refused.contains("carries exactly one scalar"), refused);
@@ -288,8 +360,9 @@ class ApiProbe {
     @Test
     void aRequestThatIsNotARecordIsRefused() {
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
-              a => !apis { a => { implements: [scalars]
-                          resources: { "/things" => !resource { POST => !binding { method: by_text } } } } }
+              a => !apis { a => { implements: [scalars.scalars]
+                          resources: { "/things" => !resource {
+                            POST => !binding { method: scalars.scalars.methods.by_text } } } } }
             """))).getMessage();
 
         assertTrue(refused.contains("'text'") && refused.contains("not a record"), refused);
@@ -303,16 +376,18 @@ class ApiProbe {
     @Test
     void aRepeatedQueryValueIsAnArrayOfScalars() {
         Routes routes = routes(api("""
-              a => !apis { a => { implements: [search]
-                          not_bound: { list_orders => "elsewhere" }
-                          resources: { "/search" => !resource { GET => !binding { method: search_orders } } } } }
+              a => !apis { a => { implements: [search.search]
+                          not_bound: [ { method: search.search.methods.list_orders  reason: "elsewhere" } ]
+                          resources: { "/search" => !resource {
+                            GET => !binding { method: search.search.methods.search_orders } } } } }
             """)).requireComplete();
         assertEquals(List.of("tags", "status"),
                 routes.route(HttpVerb.GET, "/search").orElseThrow().placement().at(Placement.Location.QUERY));
 
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
-              a => !apis { a => { implements: [bulk]
-                          resources: { "/pages" => !resource { GET => !binding { method: page_orders } } } } }
+              a => !apis { a => { implements: [bulk.bulk]
+                          resources: { "/pages" => !resource {
+                            GET => !binding { method: bulk.bulk.methods.page_orders } } } } }
             """))).getMessage();
         assertTrue(refused.contains("'items'") && refused.contains("array of order"), refused);
     }
@@ -325,16 +400,17 @@ class ApiProbe {
     @Test
     void aVerbMustAgreeWithWhatTheMethodClaims() {
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
-              a => !apis { a => { implements: [orders]
-                          resources: { "/orders/{id}" => !resource { GET => !binding { method: cancel_order } } } } }
+              a => !apis { a => { implements: [orders.orders]
+                          resources: { "/orders/{id}" => !resource {
+                            GET => !binding { method: orders.orders.methods.cancel_order } } } } }
             """))).getMessage();
         assertTrue(refused.contains("GET is safe") && refused.contains("@safe"), refused);
 
         // A safe method is idempotent too, so DELETE takes one without saying so twice.
         routes(api("""
-              a => !apis { a => { implements: [orders]
+              a => !apis { a => { implements: [orders.orders]
                           resources: { "/orders/{id}" => !resource {
-                            DELETE => !binding { method: get_order  status: 204 } } } } }
+                            DELETE => !binding { method: orders.orders.methods.get_order  status: 204 } } } } }
             """));
     }
 
@@ -342,48 +418,51 @@ class ApiProbe {
     @Test
     void aResponselessEndpointCannotAnswer200() {
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
-              a => !apis { a => { implements: [orders]
+              a => !apis { a => { implements: [orders.orders]
                           resources: { "/orders/{id}" => !resource {
-                            DELETE => !binding { method: cancel_order } } } } }
+                            DELETE => !binding { method: orders.orders.methods.cancel_order } } } } }
             """))).getMessage();
         assertTrue(refused.contains("declares no response") && refused.contains("204"), refused);
     }
 
     /**
      * Coverage is per (interface, method): two implemented interfaces may both declare {@code list_orders}, and
-     * binding one says nothing about the other. An exemption is checked as hard as a binding -- one naming a
-     * method nothing declares is a typo, and an ambiguous one must say which interface it exempts.
+     * binding one says nothing about the other. An exemption is held as hard as a binding -- a misspelt one is the
+     * resolver's to refuse, and one naming a method of an interface the api does not implement is the reader's.
      */
     @Test
     void theClaimIsHeldPerInterfaceNotPerName() {
         String bothClaimed = api("""
-              a => !apis { a => { implements: [orders search]
-                          not_bound: { place_order => "elsewhere"  get_order => "elsewhere"
-                                       cancel_order => "elsewhere"  search_orders => "elsewhere"
-                                       list_orders => { reason: "elsewhere"  interface: search } }
-                          resources: { "/orders" => !resource { GET => !binding { method: list_orders
-                                                                                  interface: orders } } } } }
+              a => !apis { a => { implements: [orders.orders search.search]
+                not_bound: [ { method: orders.orders.methods.place_order    reason: "elsewhere" }
+                             { method: orders.orders.methods.get_order      reason: "elsewhere" }
+                             { method: orders.orders.methods.cancel_order   reason: "elsewhere" }
+                             { method: search.search.methods.search_orders  reason: "elsewhere" }
+                             { method: search.search.methods.list_orders    reason: "elsewhere" } ]
+                resources: { "/orders" => !resource { GET => !binding { method: orders.orders.methods.list_orders } } }
+              } }
             """);
-        // orders.list_orders is bound and search.list_orders exempted; neither stands in for the other.
+        // orders' list_orders is bound and search's exempted; neither stands in for the other.
         routes(bothClaimed).requireComplete();
 
-        String ambiguous = api("""
-              a => !apis { a => { implements: [orders search]
-                          not_bound: { list_orders => "elsewhere" }
-                          resources: { "/orders" => !resource { POST => !binding { method: place_order } } } } }
+        String elsewhere = api("""
+              a => !apis { a => { implements: [orders.orders]
+                not_bound: [ { method: billing.billing.methods.get_order  reason: "elsewhere" } ]
+                resources: { "/orders" => !resource { POST => !binding { method: orders.orders.methods.place_order } } }
+              } }
             """);
-        String saidWhich = assertThrows(IllegalStateException.class, () -> routes(ambiguous).requireComplete())
+        String notClaimed = assertThrows(IllegalStateException.class, () -> routes(elsewhere).requireComplete())
                 .getMessage();
-        assertTrue(saidWhich.contains("[orders.list_orders, search.list_orders]")
-                && saidWhich.contains("`interface:`"), saidWhich);
+        assertTrue(notClaimed.contains("exempts 'billing.billing.methods.get_order'")
+                && notClaimed.contains("not a method of an interface it implements"), notClaimed);
 
-        String typo = api("""
-              a => !apis { a => { implements: [orders]
-                          not_bound: { plaec_order => "elsewhere" }
-                          resources: { "/orders" => !resource { POST => !binding { method: place_order } } } } }
-            """);
-        String noSuch = assertThrows(IllegalStateException.class, () -> routes(typo).requireComplete()).getMessage();
-        assertTrue(noSuch.contains("exempts 'plaec_order'") && noSuch.contains("no implemented"), noSuch);
+        String typo = only(api("""
+              a => !apis { a => { implements: [orders.orders]
+                not_bound: [ { method: orders.orders.methods.plaec_order  reason: "elsewhere" } ]
+                resources: { "/orders" => !resource { POST => !binding { method: orders.orders.methods.place_order } } }
+              } }
+            """));
+        assertTrue(typo.contains("has no key 'plaec_order'"), typo);
     }
 
     /**
@@ -415,8 +494,7 @@ class ApiProbe {
         assertTrue(notAToken.contains("'header_name'"), notAToken);
 
         String notAMethodName = only(api("""
-              a => !apis { a => { implements: [orders]
-                          resources: { "/orders" => !resource { POST => !binding { method: "place order" } } } } }
+              x => !interfaces { x => { "place order" => { request: new_order } } }
             """));
         assertTrue(notAMethodName.contains("'method_name': 'place order'"), notAMethodName);
     }

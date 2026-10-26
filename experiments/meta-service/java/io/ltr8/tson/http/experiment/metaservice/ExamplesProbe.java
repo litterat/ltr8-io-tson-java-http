@@ -79,8 +79,8 @@ class ExamplesProbe {
         var entries = tson.schemaRegistry().get(EXAMPLES + file).orElseThrow().schema().entries();
         Map<String, Interface> interfaces = new LinkedHashMap<>();
         tson.schemaRegistry().get(EXAMPLES + "orders-1.tn").ifPresent(iface ->
-                interfaces.putAll(Experiment.held(iface.schema().entries(), "interfaces", Interface.class)));
-        interfaces.putAll(Experiment.held(entries, "interfaces", Interface.class));
+                interfaces.putAll(Experiment.heldByName(iface.schema().entries(), "interfaces", Interface.class)));
+        interfaces.putAll(Experiment.heldByName(entries, "interfaces", Interface.class));
         return Routes.of(apiName, api, interfaces, entries::get);
     }
 
@@ -117,7 +117,8 @@ class ExamplesProbe {
                 List.copyOf(orders.methods().keySet()));
         assertEquals("Cancel an order. Cancelling twice is the same as cancelling once.",
                 orders.methods().getAnnotations("cancel_order").value("doc", String.class).orElseThrow());
-        assertEquals(List.of("orders"), interfaces.get("orders_v2").extended());
+        assertEquals(List.of("orders.orders"), interfaces.get("orders_v2").extended().stream().map(TypeRef::name)
+                .toList());
         // Facts about a method are bare annotations on its key, not fields of its signature.
         assertTrue(orders.methods().getAnnotations("get_order").has("safe"));
         assertTrue(orders.methods().getAnnotations("cancel_order").has("idempotent"));

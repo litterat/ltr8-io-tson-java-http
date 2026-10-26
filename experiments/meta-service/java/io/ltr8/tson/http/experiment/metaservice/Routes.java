@@ -14,31 +14,47 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * An {@code api} read into its route table -- the reader-side half of the map design, and every check the
- * resolver cannot make because the api relates things by identifier.
+ * An {@code api} read into its route table -- the reader-side half of the map design, and every check that relates
+ * two things rather than naming one.
  *
- * <p>For each path and verb: the endpoint's signature is resolved -- an {@link Operation}'s is inline, a
- * {@link Binding}'s is the method it names on an implemented interface (walking {@code extends};
- * {@code interface} disambiguates when two declare the name) -- its {@link Placement} is computed against that
- * signature's request record, and its verb is checked against what the method says about itself. A method name
- * no implemented interface declares is refused.
+ * <p>Naming is the resolver's: {@code implements} and {@code extends} are {@code ref<interface>}, and a binding's
+ * or an exemption's {@code method} is {@code ref<method>}, so by the time a description reaches here each names
+ * an interface or a method that exists, and a qualified name ({@code orders.orders.methods.get_order}) says which
+ * interface declares it. What is left is relational: a bound method belongs to an interface the api implements
+ * (walking {@code extends}); each endpoint's {@link Placement} is computed against its signature's request
+ * record; its verb is checked against what the method says about itself, and its status against the response.
  *
  * <p><b>Coverage is per (interface, method), never per name.</b> Two implemented interfaces may both declare
  * {@code get_order}, and binding one of them says nothing about the other -- so {@link Bound} is the unit
- * throughout, and an {@code exemption} that does not name its interface is refused where the name is
- * ambiguous rather than quietly covering both. The flat-name version of this check is the cost the map design
- * exists to remove, reappearing in the reader.
+ * throughout, and it is what a reference spells.
  *
  * <p>{@link #requireComplete()} holds the api to its {@code implements} claim: every method of every
  * implemented interface is bound by some binding, or exempted in {@code not_bound} with a reason.
  */
-record Routes(String apiName, List<Route> routes, Set<Bound> claimed, Map<String, Exemption> notBound) {
+record Routes(String apiName, List<Route> routes, Set<Bound> claimed, List<Exemption> notBound) {
 
-    /** One method of one interface: the unit the {@code implements} claim is held in. */
+    /**
+     * One method of one interface: the unit the {@code implements} claim is held in. {@code owner} is the
+     * interface's qualified name, and the string form is the reference that names the method.
+     */
     record Bound(String owner, String name) {
+
+        private static final String METHODS = ".methods.";
+
+        /** The method a {@code ref<method>} names: the interface it walks through, and the key it ends at. */
+        static Bound of(TypeRef reference) {
+            String written = reference.name();
+            int at = written.lastIndexOf(METHODS);
+            if (at < 0) {
+                throw new IllegalStateException("'" + written + "' reaches a method other than through an "
+                        + "interface's methods, which this layer declares no way to do");
+            }
+            return new Bound(written.substring(0, at), written.substring(at + METHODS.length()));
+        }
+
         @Override
         public String toString() {
-            return owner + "." + name;
+            return owner + METHODS + name;
         }
     }
 
@@ -47,10 +63,14 @@ record Routes(String apiName, List<Route> routes, Set<Bound> claimed, Map<String
                  Optional<TypeRef> response, List<TypeRef> errors, int status, Placement placement) {
     }
 
+    /**
+     * {@code declared} holds every interface the api may reach, keyed by qualified name
+     * ({@link Experiment#heldByName}).
+     */
     static Routes of(String apiName, Api api, Map<String, Interface> declared, Function<String, Top> entries) {
         Map<String, Interface> interfaces = new LinkedHashMap<>();
-        for (String name : api.implemented()) {
-            collect(apiName, name, declared, interfaces, new LinkedHashSet<>());
+        for (TypeRef implemented : api.implemented()) {
+            collect(apiName, implemented.name(), declared, interfaces, new LinkedHashSet<>());
         }
         List<Route> routes = new ArrayList<>();
         api.resources().forEach((path, resource) -> resource.endpoints().forEach((verbKey, endpoint) -> {
@@ -77,7 +97,7 @@ record Routes(String apiName, List<Route> routes, Set<Bound> claimed, Map<String
                     facts = resource.endpoints().getAnnotations(verbKey);
                 }
                 case Binding b -> {
-                    Bound bound = methodNamed(label, b, interfaces);
+                    Bound bound = implementedMethod(label, b, interfaces);
                     Method m = interfaces.get(bound.owner()).methods().get(bound.name());
                     method = Optional.of(bound);
                     request = m.request();
@@ -100,38 +120,30 @@ record Routes(String apiName, List<Route> routes, Set<Bound> claimed, Map<String
     /**
      * Every claimed method is bound or exempted -- the api's {@code implements} held to.
      *
-     * <p>An exemption is checked as hard as a binding: one naming a method no implemented interface declares is
-     * a typo the reader catches, and one whose name two of them declare must say which with {@code interface:}.
-     * Both would otherwise pass as an exemption that covers nothing, or one that covers more than was meant.
+     * <p>An exemption is held as hard as a binding: the resolver judged that it names a method, and one naming a
+     * method of an interface the api does not implement exempts nothing it claims, so it is refused rather than
+     * passing as an exemption that covers nothing.
      */
     Routes requireComplete() {
         Set<Bound> bound = new LinkedHashSet<>();
         routes.forEach(r -> r.method().ifPresent(bound::add));
 
-        notBound.forEach((name, exemption) -> {
-            List<Bound> matching = claimed.stream().filter(b -> b.name().equals(name))
-                    .filter(b -> exemption.owner().map(b.owner()::equals).orElse(true)).toList();
-            if (matching.isEmpty()) {
-                throw new IllegalStateException("'" + apiName + "' exempts '" + name + "', which no implemented "
-                        + "interface declares -- claimed: " + claimed);
+        Set<Bound> exempt = new LinkedHashSet<>();
+        for (Exemption exemption : notBound) {
+            Bound method = Bound.of(exemption.method());
+            if (!claimed.contains(method)) {
+                throw new IllegalStateException("'" + apiName + "' exempts '" + method + "', which is not a method "
+                        + "of an interface it implements -- claimed: " + claimed);
             }
-            if (matching.size() > 1) {
-                throw new IllegalStateException("'" + apiName + "' exempts '" + name + "', which " + matching
-                        + " all declare; say which with `interface:`");
-            }
-        });
+            exempt.add(method);
+        }
 
-        List<Bound> missing = claimed.stream().filter(b -> !bound.contains(b) && !exempt(b)).toList();
+        List<Bound> missing = claimed.stream().filter(b -> !bound.contains(b) && !exempt.contains(b)).toList();
         if (!missing.isEmpty()) {
             throw new IllegalStateException("'" + apiName + "' implements interfaces declaring " + missing
                     + " but has no binding for them; bind each, or exempt it in not_bound with a reason");
         }
         return this;
-    }
-
-    private boolean exempt(Bound method) {
-        Exemption exemption = notBound.get(method.name());
-        return exemption != null && exemption.owner().map(method.owner()::equals).orElse(true);
     }
 
     Optional<Route> route(HttpVerb verb, String path) {
@@ -170,6 +182,11 @@ record Routes(String apiName, List<Route> routes, Set<Bound> claimed, Map<String
 
     private static final Set<Integer> EMPTY_STATUSES = Set.of(204, 205, 304);
 
+    /**
+     * The implemented interfaces, through {@code extends}. Each name is a reference the resolver judged, so a
+     * missing one is an interface the caller did not hand over, not an author's typo; the cycle is the one thing
+     * a reference cannot rule out.
+     */
     private static void collect(String apiName, String name, Map<String, Interface> declared,
                                 Map<String, Interface> into, Set<String> walking) {
         if (into.containsKey(name)) {
@@ -181,31 +198,22 @@ record Routes(String apiName, List<Route> routes, Set<Bound> claimed, Map<String
         }
         Interface iface = declared.get(name);
         if (iface == null) {
-            throw new IllegalArgumentException("'" + apiName + "' names '" + name
-                    + "', which is not an interface in this namespace");
+            throw new IllegalStateException("'" + apiName + "' reaches interface '" + name + "', which is not among "
+                    + "the interfaces handed to the reader: " + declared.keySet());
         }
-        for (String parent : iface.extended()) {
-            collect(apiName, parent, declared, into, walking);
+        for (TypeRef parent : iface.extended()) {
+            collect(apiName, parent.name(), declared, into, walking);
         }
         into.put(name, iface);
     }
 
-    private static Bound methodNamed(String label, Binding binding, Map<String, Interface> interfaces) {
-        String name = binding.method();
-        List<Bound> found = new ArrayList<>();
-        interfaces.forEach((ifaceName, iface) -> {
-            if (iface.methods().get(name) != null && binding.owner().map(ifaceName::equals).orElse(true)) {
-                found.add(new Bound(ifaceName, name));
-            }
-        });
-        if (found.isEmpty()) {
-            throw new IllegalArgumentException("'" + label + "' names method '" + name + "', which no implemented "
-                    + "interface declares -- implemented: " + interfaces.keySet());
+    /** The method a binding names, which must belong to an interface the api implements. */
+    private static Bound implementedMethod(String label, Binding binding, Map<String, Interface> interfaces) {
+        Bound bound = Bound.of(binding.method());
+        if (!interfaces.containsKey(bound.owner())) {
+            throw new IllegalArgumentException("'" + label + "' binds '" + bound + "', a method of an interface "
+                    + "this api does not implement -- implemented: " + interfaces.keySet());
         }
-        if (found.size() > 1) {
-            throw new IllegalArgumentException("'" + label + "' names method '" + name + "', which " + found
-                    + " all declare; say which with `interface:`");
-        }
-        return found.getFirst();
+        return bound;
     }
 }

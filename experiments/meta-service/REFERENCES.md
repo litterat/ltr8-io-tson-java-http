@@ -1,8 +1,10 @@
 # Bounded references: `ref<T>` and qualified names
 
-**Status: proposal.** None of the three documents below resolves today. Each needs the kernel changes in the next
-section, and those are the subject. Everything else in them -- an interface and the records its methods take,
-declared together in one schema governed by `meta-service.tn` -- resolves on the Revision 38 proposal as it stands.
+**Status: landed, in a different shape.** The Revision 38 proposal has `ref<T>` naming a *value* (`ref_type`, tson-java
+PR #749), `kind<C>` for a type's name, `namespace` as a constructor (PR #753), a walk through namespace keys and record
+values' fields (PR #758), and a reference declared only in a kernel-governed schema (PR #760). `meta-service.tn` runs on
+it: a binding's `method` is `ref<method>`, spelled `orders.orders.methods.place_order`. What follows is the proposal as
+written, kept for the argument; its kernel shapes are not the ones that landed.
 
 ## The question
 
