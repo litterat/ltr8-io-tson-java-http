@@ -8,6 +8,13 @@ import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonDocumentHeader;
 import io.ltr8.tson.compiler.TsonDocumentPeek;
 import io.ltr8.tson.http.TsonProblemSchema;
+import io.ltr8.tson.http.api.Api;
+import io.ltr8.tson.http.api.HttpVerb;
+import io.ltr8.tson.http.api.Interface;
+import io.ltr8.tson.http.api.RequestPlacement;
+import io.ltr8.tson.http.api.Route;
+import io.ltr8.tson.http.api.TsonApiDescription;
+import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.schema.TsonSchema;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.Top;
@@ -73,15 +80,10 @@ class ExamplesProbe {
         }
     }
 
-    /** Resolves one example by identity and hands back its entries; the resolver's verdict must be clean. */
-    static Routes routesOf(Tson tson, String file, String apiName) {
-        Api api = apiOf(tson, file, apiName);
-        var entries = tson.schemaRegistry().get(EXAMPLES + file).orElseThrow().schema().entries();
-        Map<String, Interface> interfaces = new LinkedHashMap<>();
-        tson.schemaRegistry().get(EXAMPLES + "orders-1.tn").ifPresent(iface ->
-                interfaces.putAll(Experiment.heldByName(iface.schema().entries(), "interfaces", Interface.class)));
-        interfaces.putAll(Experiment.heldByName(entries, "interfaces", Interface.class));
-        return Routes.of(apiName, api, interfaces, entries::get);
+    /** Resolves one example by identity and reads its description; the resolver's verdict must be clean. */
+    static TsonApiDescription routesOf(Tson tson, String file, String apiName) {
+        apiOf(tson, file, apiName);
+        return TsonApiSchema.describedBy(tson, EXAMPLES + file);
     }
 
     static Api apiOf(Tson tson, String file, String apiName) {
@@ -127,11 +129,11 @@ class ExamplesProbe {
 
     @Test
     void theWebServiceOnlyExampleReadsIntoRoutes() {
-        Routes routes = routesOf(tson(), "orders-api-inline-1.tn", "orders_api").requireComplete();
+        TsonApiDescription routes = routesOf(tson(), "orders-api-inline-1.tn", "orders_api");
 
         assertEquals(3, routes.routes().size());
-        Routes.Route items = routes.route(HttpVerb.GET, "/orders/{id}/items").orElseThrow();
-        assertEquals(Map.of("id", Placement.Location.PATH), items.placement().fields());
+        Route items = routes.route(HttpVerb.GET, "/orders/{id}/items").orElseThrow();
+        assertEquals(Map.of("id", RequestPlacement.Location.PATH), items.placement().fields());
         assertEquals(201, routes.route(HttpVerb.POST, "/orders").orElseThrow().status());
         // On an operation the marker sits before the verb key, the same way -- and the reader checks it.
         Api api = apiOf(tson(), "orders-api-inline-1.tn", "orders_api");
@@ -140,16 +142,16 @@ class ExamplesProbe {
 
     @Test
     void theBothExampleReadsIntoRoutesAndHonoursItsClaim() {
-        Routes routes = routesOf(tson(), "orders-api-1.tn", "orders_api").requireComplete();
+        TsonApiDescription routes = routesOf(tson(), "orders-api-1.tn", "orders_api");
 
         assertEquals(4, routes.routes().size());
-        Routes.Route create = routes.route(HttpVerb.POST, "/orders").orElseThrow();
-        assertEquals(List.of("order"), create.placement().at(Placement.Location.BODY));
-        assertEquals(List.of("idempotency_key"), create.placement().at(Placement.Location.HEADER));
+        Route create = routes.route(HttpVerb.POST, "/orders").orElseThrow();
+        assertEquals(List.of("order"), create.placement().at(RequestPlacement.Location.BODY));
+        assertEquals(List.of("idempotency_key"), create.placement().at(RequestPlacement.Location.HEADER));
         assertEquals("new_order", create.request().orElseThrow().name());
         assertEquals(List.of("status", "page", "page_size"),
-                routes.route(HttpVerb.GET, "/orders").orElseThrow().placement().at(Placement.Location.QUERY));
-        assertEquals(Map.of("id", Placement.Location.PATH),
+                routes.route(HttpVerb.GET, "/orders").orElseThrow().placement().at(RequestPlacement.Location.QUERY));
+        assertEquals(Map.of("id", RequestPlacement.Location.PATH),
                 routes.route(HttpVerb.DELETE, "/orders/{id}").orElseThrow().placement().fields());
     }
 

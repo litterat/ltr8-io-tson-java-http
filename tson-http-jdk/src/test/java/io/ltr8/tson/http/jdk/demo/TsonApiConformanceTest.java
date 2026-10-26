@@ -8,11 +8,10 @@ import io.ltr8.tson.compiler.TsonDocumentHeader;
 import io.ltr8.tson.compiler.TsonDocumentPeek;
 import io.ltr8.tson.http.TsonMediaType;
 import io.ltr8.tson.http.TsonSchemaHeader;
-import io.ltr8.tson.http.api.HttpMethod;
-import io.ltr8.tson.http.api.Operation;
-import io.ltr8.tson.http.api.Parameter;
-import io.ltr8.tson.http.api.ParameterLocation;
-import io.ltr8.tson.http.api.Response;
+import io.ltr8.tson.http.api.HttpVerb;
+import io.ltr8.tson.http.api.InterfaceMethod;
+import io.ltr8.tson.http.api.RequestPlacement;
+import io.ltr8.tson.http.api.Route;
 import io.ltr8.tson.http.api.TsonApiDescription;
 import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.json.Json;
@@ -26,10 +25,12 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -111,18 +112,25 @@ class TsonApiConformanceTest {
 
     @Test
     void theServerPublishesADescriptionOfItself() {
-        assertEquals(java.util.Set.of("create_order", "get_schema"), api.operations().keySet());
+        Set<String> keys = new TreeSet<>();
+        api.routes().forEach(route -> keys.add(route.key()));
+        assertEquals(Set.of("POST /orders", "GET /{+schemaPath}"), keys);
 
-        Operation post = api.operation(HttpMethod.POST, "/orders").orElseThrow();
-        assertEquals("order", post.request().orElseThrow().name(), "a resolved reference, not a string");
+        Route post = api.route(HttpVerb.POST, "/orders").orElseThrow();
+        assertEquals(Optional.of(new InterfaceMethod("orders.orders", "place_order")), post.method());
+        assertEquals("order", post.request().orElseThrow().name(), "a resolved reference, borrowed from the method");
         assertEquals(Optional.of("Place an order"), post.summary());
-        assertFalse(post.isDeprecated());
+        assertEquals(Optional.of("Accept an order and confirm it with the quantity doubled."), post.doc(),
+                "the method's own documentation, since the verb key adds none");
     }
 
-    /** Each declared response, exercised: the status is one the description declares, and so is the body. */
+    /**
+     * Each kind of answer, exercised: the declared success status with the response type, a declared business error
+     * at the status its type fixes, and a transport refusal answered as a {@code problem}.
+     */
     @Test
     void everyResponseMatchesWhatTheDescriptionDeclares() throws Exception {
-        Operation post = api.operation(HttpMethod.POST, "/orders").orElseThrow();
+        Route post = api.route(HttpVerb.POST, "/orders").orElseThrow();
 
         assertResponseMatches(post, postOrder(order("ABC-1", 3)), 201);
         assertResponseMatches(post, postOrder("""
@@ -131,18 +139,19 @@ class TsonApiConformanceTest {
         assertResponseMatches(post, postOrder(order(OrderServer.UNSTOCKED_SKU, 1)), 404);
     }
 
-    /** A status the description does not declare is a contract violation even if the body is fine. */
+    /**
+     * The schema route is a document: its success is labelled by the media type the description states rather
+     * than read as a value, its request record is placed from the path, and a miss is the boundary's problem.
+     */
     @Test
-    void theSchemaRouteMatchesItsDeclaredResponsesToo() throws Exception {
-        Operation getSchema = api.operation(HttpMethod.GET, "/{+schemaPath}").orElseThrow();
-        assertEquals(200, get("/2026/38/app/order-1.tn").statusCode());
-        assertTrue(getSchema.responseFor(200).isPresent());
-        assertResponseMatches(getSchema, get("/2026/38/app/nope-1.tn"), 404);
+    void theSchemaRouteIsADocumentOfItsMediaType() throws Exception {
+        Route getSchema = api.route(HttpVerb.GET, "/{+schemaPath}").orElseThrow();
+        assertEquals(Optional.of("application/tson"), getSchema.mediaType());
+        assertEquals("schema_ref", getSchema.request().orElseThrow().name());
+        assertEquals(Map.of("schemaPath", RequestPlacement.Location.PATH), getSchema.placement().fields());
 
-        Parameter path = getSchema.parameters().getFirst();
-        assertEquals(ParameterLocation.PATH, path.in());
-        assertTrue(path.required());
-        assertEquals("text", path.type().name(), "a scalar, though nothing in the type system enforces that");
+        assertResponseMatches(getSchema, get("/2026/38/app/order-1.tn"), 200);
+        assertResponseMatches(getSchema, get("/2026/38/app/nope-1.tn"), 404);
     }
 
     /** The description is served at its own identity's path, by the catalog like every other schema. */
@@ -155,30 +164,30 @@ class TsonApiConformanceTest {
     }
 
     /**
-     * <b>An operation speaks the encodings it declares, and no others.</b> One that declares JSON is sent JSON
+     * <b>An endpoint speaks the encodings it declares, and no others.</b> One that declares JSON is sent JSON
      * and asked for JSON, and each reply is held to the description as a TSON one is -- the status declared,
      * and the body read against the schema its {@code TSON-Schema} header names, at the type the description
      * gives for that status. A JSON body has no type-ref to show, so validating it at the declared type is the
      * check. One that does not declare JSON must refuse it, or the description understates the endpoint.
      */
     @Test
-    void everyOperationSpeaksTheEncodingsItDeclares() throws Exception {
+    void everyEndpointSpeaksTheEncodingsItDeclares() throws Exception {
         Tson published = serverResolved();
         Json json = Json.of(ProcessorConfig.defaults().withDataBindContext(published.dataBindContext()))
                 .withSchemas(published.schemaRegistry());
-        for (Operation operation : api.operations().values()) {
-            if (operation.request().isEmpty()) {
+        for (Route route : api.routes()) {
+            if (route.mediaType().isPresent() || route.verb() != HttpVerb.POST) {
                 continue;   // no body to send in either encoding
             }
-            if (!operation.speaksJson()) {
-                assertEquals(415, postJson(operation.path(), "{}").statusCode(),
-                        operation.path() + " does not declare JSON, so it must not read it");
+            if (!route.speaksJson()) {
+                assertEquals(415, postJson(route.path(), "{}").statusCode(),
+                        route.key() + " does not declare JSON, so it must not read it");
                 continue;
             }
-            assertJsonResponseMatches(json, operation, postJson(operation.path(),
+            assertJsonResponseMatches(json, route, postJson(route.path(),
                     "{\"sku\": \"ABC-1\", \"quantity\": 3}"), 201);
-            assertJsonResponseMatches(json, operation, postJson(operation.path(), "{}"), 400);
-            assertJsonResponseMatches(json, operation, postJson(operation.path(),
+            assertJsonResponseMatches(json, route, postJson(route.path(), "{}"), 400);
+            assertJsonResponseMatches(json, route, postJson(route.path(),
                     "{\"sku\": \"" + OrderServer.UNSTOCKED_SKU + "\", \"quantity\": 1}"), 404);
         }
     }
@@ -191,16 +200,34 @@ class TsonApiConformanceTest {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
     }
 
+    /**
+     * The type the description gives a reply at {@code status}: the response type at the endpoint's success status,
+     * a business error at the status its type fixes, and otherwise -- a transport refusal, which no endpoint lists
+     * because every endpoint has them -- the error boundary's {@code problem}. Any other success status is one the
+     * description does not declare, a contract violation however good the body.
+     */
+    private static String declaredType(Route route, int status) {
+        if (status == route.status()) {
+            return route.response().orElseThrow(() -> new AssertionError(route.key() + " declares no response "
+                    + "type for " + status)).name();
+        }
+        Optional<String> error = route.errorFor(status).map(ref -> ref.name());
+        if (error.isPresent()) {
+            return error.get();
+        }
+        if (status < 400) {
+            throw new AssertionError(route.key() + " answered " + status + ", which its description does not declare");
+        }
+        return "problem";
+    }
+
     /** {@link #assertResponseMatches} for JSON: the schema from the header, the type from the description. */
-    private void assertJsonResponseMatches(Json json, Operation operation, HttpResponse<String> response,
+    private void assertJsonResponseMatches(Json json, Route route, HttpResponse<String> response,
                                            int expectedStatus) throws Exception {
         assertEquals(expectedStatus, response.statusCode(), response.body());
         String mediaType = response.headers().firstValue("Content-Type").orElseThrow();
         assertTrue(TsonMediaType.namesJson(mediaType), () -> "a JSON client was answered in " + mediaType);
-        Response declared = operation.responseFor(response.statusCode()).orElseThrow(
-                () -> new AssertionError(operation.method() + " " + operation.path() + " answered "
-                        + response.statusCode() + ", which its description does not declare"));
-        String type = declared.body().orElseThrow().name();
+        String type = declaredType(route, response.statusCode());
 
         String schema = TsonSchemaHeader.parse(response.headers().firstValue(TsonSchemaHeader.NAME).orElse(null))
                 .orElseThrow(() -> new AssertionError("a JSON " + response.statusCode()
@@ -214,23 +241,22 @@ class TsonApiConformanceTest {
     }
 
     /**
-     * Holds one response to the description: the status must be declared, and where the description names a
-     * body, the response's own {@code !!schema} and type-ref must be the ones it names. Responses being
-     * self-describing is what makes this checkable without the description carrying examples.
+     * Holds one response to the description: a document's success must carry its media type, and any other reply
+     * must be self-describing -- its own {@code !!schema} and type-ref the ones the description gives that status.
+     * Responses being self-describing is what makes this checkable without the description carrying examples.
      */
-    private void assertResponseMatches(Operation operation, HttpResponse<String> response, int expectedStatus)
+    private void assertResponseMatches(Route route, HttpResponse<String> response, int expectedStatus)
             throws Exception {
         assertEquals(expectedStatus, response.statusCode(), response.body());
-        Response declared = operation.responseFor(response.statusCode()).orElseThrow(
-                () -> new AssertionError(operation.method() + " " + operation.path() + " answered "
-                        + response.statusCode() + ", which its description does not declare"));
-
-        Optional<String> type = declared.body().map(ref -> ref.name());
-        if (type.isEmpty()) {
+        if (route.mediaType().isPresent() && response.statusCode() == route.status()) {
+            String contentType = response.headers().firstValue("Content-Type").orElseThrow();
+            assertTrue(contentType.startsWith(route.mediaType().get()),
+                    () -> route.key() + " is a document of " + route.mediaType().get() + ", answered " + contentType);
             return;
         }
-        assertTrue(response.body().contains("!" + type.get() + " "),
-                () -> "the " + response.statusCode() + " body is not a " + type.get() + ": " + response.body());
+        String type = declaredType(route, response.statusCode());
+        assertTrue(response.body().contains("!" + type + " "),
+                () -> "the " + response.statusCode() + " body is not a " + type + ": " + response.body());
 
         // And the schema it names must be one this server publishes -- fetched, not assumed.
         TsonDocumentHeader header = TsonDocumentPeek.of(response.body()).header();

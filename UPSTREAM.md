@@ -82,8 +82,8 @@ type composes it, a value of one is a map (`Namespace`), the schema map and a re
 fields (`orders.get`, `i.orders.methods.place`, PR #758), and a `kind<C>` slot holds a type's name; both are judged by
 the slot's declared type, at any depth and under any host. A reference is declared only in a kernel-governed schema
 (PR #760), since only there can an entry hold a value. A namespace type declares only its facets, so a construct with
-fields beside its map is a record held under a key. `meta-http.tn`'s `api` and the meta-service probes run on all of
-it.
+fields beside its map is a record held under a key. `meta-service.tn`, the shipped service-description layer, runs
+on all of it.
 
 **Kind:** consumer evidence. Each item is something the meta-service experiment does in its reader today
 (`Routes`) because the schema cannot say it, with the probe that changes state when it can.
@@ -185,9 +185,9 @@ whose **equality is canonical identity**, with an instance for the canonical spe
 normalization: the host folds, the path keeps its case, and the scheme and the pin are dropped rather than folded.
 tson-java's `CanonicalIdentity` is the existing implementation.
 
-**Deliberately not proposed:** `status_code`, `http_method`, `header_name` and `uri_template` as types in core or
+**Deliberately not proposed:** `status_code`, `http_verb`, `header_name` and a URI template as types in core or
 `net.tn`. They are HTTP vocabulary rather than formats, and exactly the names #15 shows converted schemas declare for
-themselves, so they belong with what uses them: here, `meta-http.tn` (below). A URI
+themselves, so they belong with what uses them: here, `meta-service.tn` (below). A URI
 template in particular builds a URI rather than naming a host, so it is not `net.tn`'s, and its uses outside
 describing an API — HAL links, OpenAPI and AsyncAPI paths, JSON Hyper-Schema — are all that same use. **Raise it
 again** if a consumer outside API description needs RFC 6570, or a description needs levels 3–4; the shape then is a
@@ -199,11 +199,11 @@ constructor in `meta` beside `uri_type`, which reserves no name, with no instanc
   RFC (§3.1.1, §3.1.5) and `TsonProblem.at` is typically handed a request path. Pinned by
   `TsonProblemSchemaTest.aRelativeTypeAndInstanceAreValid`.
 - `diagnostic.path`, `schema_pointer` and `schema_id` stay `text` until 1 and 2 exist.
-- The HTTP vocabulary lives in `meta-http.tn`, the meta layer that uses it — `http_method`, `status_code` and
-  `uri_template` (RFC 6570 levels 1–2, so `{+var}` is expressible) — since a meta layer owns the vocabulary its
-  constructors use and an import stands at the importer's governing level. `TsonApiDescription` checks each
-  operation's template variables against its PATH parameters, which no pattern can. `problem.status` stays `int32`,
-  and the meta-service experiment keeps its own `status_code`, `path_template` and `header_name`.
+- The HTTP vocabulary lives in `meta-service.tn`, the meta layer that uses it — `http_verb`, `status_code`,
+  `header_name`, `media_type` and `path_template` (RFC 6570 levels 1–2, so `{+var}` is expressible) — since a meta
+  layer owns the vocabulary its constructors use and an import stands at the importer's governing level.
+  `TsonApiDescription` places each endpoint's request record over its path, which no pattern can. `problem.status`
+  stays `int32`.
 
 **Priority:** medium-high, since the library emits values its own schemas cannot describe.
 

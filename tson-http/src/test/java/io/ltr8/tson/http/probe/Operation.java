@@ -7,8 +7,7 @@ import java.util.List;
 
 /**
  * A minimal operation shape, bound by {@code UpstreamGapsTest}'s probes so they can drive a namespace type of their
- * own without depending on {@code meta-http.tn}'s real one: responses as bare type references, rather than as the
- * {@code { status: … body: … }} records the shipped meta layer declares.
+ * own without depending on the shipped meta layer's vocabulary, whose {@code operation} is a different record.
  *
  * <p>The class must be named {@code Operation}: {@code DefaultDataNameBinder} mangles the schema type name
  * to PascalCase and calls {@code Class.forName}, so {@link Typename} names the schema side but does not make

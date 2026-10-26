@@ -40,4 +40,4 @@ it extends) has a binding naming it, or an entry in `not_bound: [ { method: orde
 "served by the read replica" } ]` giving the reason. The names are references the resolver judges -- a binding's
 `method` is `orders.orders.methods.place_order`, through the interface's entry, its key and its methods -- so a
 misspelt method fails at load. What relates two things, the placement of a request over a path among them, is
-`Routes`', at startup, and `ExamplesProbe` runs both apis through it.
+`TsonApiDescription`'s, when it reads a description, and `ExamplesProbe` reads both apis through it.

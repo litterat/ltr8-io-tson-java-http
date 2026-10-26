@@ -13,7 +13,8 @@ import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonProblemDiagnostic;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaCatalog;
-import io.ltr8.tson.http.api.Operation;
+import io.ltr8.tson.http.api.HttpVerb;
+import io.ltr8.tson.http.api.Route;
 import io.ltr8.tson.http.api.TsonApiCoverage;
 import io.ltr8.tson.http.api.TsonApiDescription;
 import io.ltr8.tson.http.api.TsonApiSchema;
@@ -58,13 +59,12 @@ public final class OrderServer {
     public static final String ERRORS = schema("orders-errors-1.tn");
 
     /**
-     * A description of this service, as a schema governed by {@code meta-http.tn} -- published, resolved at
+     * A description of this service, as a schema governed by {@code meta-service.tn} -- published, resolved at
      * startup, and checked by a conformance test.
      *
-     * <p><b>The payload types are references, not strings.</b> {@code request: order} is resolved through the
-     * imports above when this schema loads, so a description naming a type nothing declares does not start
-     * this server. The data-shaped predecessor spelled the same thing as {@code "order"} and needed forty
-     * lines of its own to notice.
+     * <p><b>The payload types and the method a binding names are references, not strings.</b> {@code request:
+     * order} and {@code orders.orders.methods.place_order} are resolved when this schema loads, so a description
+     * naming a type or a method nothing declares does not start this server.
      */
     public static final String API_ID = "https://schemas.example.com/2026/38/app/orders-api-1.tn";
 
@@ -159,16 +159,16 @@ public final class OrderServer {
         // The handler never mentions validation. Reading is what validates: a body that breaks the schema
         // never reaches this code, and the client gets a 400 carrying every diagnostic at once.
         // The description is a contract, so hold this server to it before it accepts anything. `serving`
-        // hands back the operation, which is where the path below comes from -- and refuses a name the
-        // description does not declare, so a renamed operation fails at the handler that outlived it.
+        // hands back the endpoint, which is where the path and the encodings below come from -- and refuses
+        // one the description does not declare, so a moved endpoint fails at the handler that outlived it.
         TsonApiCoverage coverage = TsonApiCoverage.of(described);
 
-        Operation create = coverage.serving("create_order");
-        // The description says whether the operation speaks JSON, so the route's codec follows it rather than a
+        Route create = coverage.serving(HttpVerb.POST, "/orders");
+        // The description says whether the endpoint speaks JSON, so the route's codec follows it rather than a
         // second statement here disagreeing with it.
         TsonHttpCodec createCodec = create.speaksJson() ? codec.acceptingJson() : codec;
         app.post(create.path(), TsonHandler.asHandler(createCodec, tsonContext -> {
-            // A TSON body names its own schema; a JSON one cannot, so the operation's declared request type is
+            // A TSON body names its own schema; a JSON one cannot, so the method's declared request type is
             // its binding -- [TSON-JSON] §3.4's out-of-band route, with the description as the contract.
             Order order = TsonMediaType.namesJson(tsonContext.header("Content-Type"))
                     ? tsonContext.readObjectAs(SCHEMA_ID, "order", Order.class)
@@ -186,10 +186,10 @@ public final class OrderServer {
         }));
 
         // `<path>` rather than the declared `{+schemaPath}`: an identity path has slashes in it, and only the
-        // angle form matches across them -- which is exactly why coverage is claimed by name rather than by
+        // angle form matches across them -- which is exactly why a claim names the declared template rather than
         // comparing paths. Publishing at the identity path is what makes a !!schema URL dereferenceable, and
         // the API description is a schema too, so the catalog serves it like everything else.
-        coverage.serving("get_schema");
+        coverage.serving(HttpVerb.GET, "/{+schemaPath}");
         app.get("/<path>", TsonHandler.asHandler(codec,
                 TsonSchemaHandler.of(catalog(described, schemas))));
 

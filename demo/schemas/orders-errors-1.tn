@@ -4,5 +4,5 @@
 !!import:"https://tson.io/2026/38/io/ltr8/http/problem.tn"
 @doc:"Business errors: the request was schema-valid, and the domain still said no."
 {
-    sku_not_found => problem & { sku: text }
+    sku_not_found => problem & { status: = 404  sku: text }
 }

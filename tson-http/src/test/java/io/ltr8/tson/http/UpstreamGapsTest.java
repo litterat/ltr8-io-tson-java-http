@@ -56,7 +56,7 @@ class UpstreamGapsTest {
     private static final String META_ID = "https://tson.io/2026/38/io/ltr8/http/meta-probe.tn";
     private static final String API_ID = "https://schemas.example.com/2026/38/app/probe-1.tn";
 
-    /** A meta layer declaring namespace types of its own, standing in for meta-http without depending on its shape. */
+    /** A meta layer declaring namespace types of its own, standing in for meta-service without depending on its shape. */
     private static String meta(String declarations) {
         return """
                 !!id:"%s"
@@ -261,92 +261,77 @@ class UpstreamGapsTest {
                   y   => { a: text }
                   api => !ops { op => { method: "GET"  path: "/x"  responses: [ y ] } }""");
 
-        // io.ltr8.tson.http.api.Operation has `summary`, `parameters` and more; this meta declares none.
+        // io.ltr8.tson.http.api.Operation has `request`, `response`, `errors` and more; this meta declares none.
         BindMismatchException thrown = assertThrows(BindMismatchException.class,
                 () -> tson(metaSource, doc, "io.ltr8.tson.http.api").resolve(doc));
 
-        assertTrue(thrown.getMessage().contains("parameters") || thrown.getMessage().contains("summary"),
+        assertTrue(thrown.getMessage().contains("component 'request'") && thrown.getMessage().contains("'method'"),
                 thrown.getMessage());
     }
 
     // ── a templated api: a namespace value under a template, applied by name ─────────────────────
 
     /**
-     * <b>The CRUD-family payoff, restated for a namespace.</b> An operation is a value held under a key of an
-     * {@code api}, so it is no entry and cannot be applied on its own; what a template can hold is the whole
-     * {@code api}. {@code fetching => <T> !api { … }} stands for every fetch-by-id family, and {@code orders =>
-     * fetching<order>} names its application. [TSON-SCHEMA] §8.2 makes a declaration naming an application
-     * that application's entry, so {@code orders} <em>is</em> the materialised namespace value, under the
-     * author's name, with the argument substituted into its operations.
+     * <b>The CRUD-family payoff, restated for a namespace.</b> An endpoint is a value held two maps down in an api,
+     * so it is no entry and cannot be applied on its own; what a template can hold is a whole {@code !apis} value.
+     * {@code fetching => <T> !apis { … }} stands for every fetch-by-id family, and {@code orders =>
+     * fetching<order>} names its application. [TSON-SCHEMA] §8.2 makes a declaration naming an application that
+     * application's entry, so {@code orders} <em>is</em> the materialised namespace value, under the author's name,
+     * with the argument substituted into its endpoints.
      *
-     * <p>So {@link io.ltr8.tson.http.api.TsonApiDescription} finds it the way it finds a written-out one, by
-     * what the entry is. Asserted through the description rather than the entries map, because that is the
-     * consumer the payoff is for; the written-out {@code api} beside it keeps the comparison honest.
+     * <p>So {@link io.ltr8.tson.http.api.TsonApiDescription} finds it the way it finds a written-out one, by what
+     * the entry is. Asserted through the description rather than the entries map, because that is the consumer the
+     * payoff is for; the written-out api beside it keeps the comparison honest.
      */
     @Test
     void aTemplatedApiIsAppliedByName() {
         String template = """
-                  order    => { sku: text }
-                  fetching => <T> !api {
-                    getOrder => {
-                      method: GET  path: "/orders/{id}"
-                      parameters: [ { name: "id"  in: PATH  type: text  required: true } ]
-                      responses: [ { status: 200  body: T  description: "found" } ]
-                    }
-                  }
-                  orders   => fetching<order>
-                  writes   => !api {
-                    putOrder => {
-                      method: PUT  path: "/orders/{id}"
-                      parameters: [ { name: "id"  in: PATH  type: text  required: true } ]
-                      request: order
-                      responses: [ { status: 200  body: order  description: "replaced" } ]
-                    }
-                  }""";
+                  order     => { sku: text }
+                  order_ref => { id: text }
+                  order_put => { id: text  sku: text }
+                  fetching  => <T> !apis { fetch => { "/orders/{id}" => !resource {
+                    @safe GET => !operation { request: order_ref  response: T } } } }
+                  orders    => fetching<order>
+                  writes    => !apis { writes => { "/orders/{id}" => !resource {
+                    @idempotent PUT => !operation { request: order_put  response: order } } } }""";
 
-        var operations = TsonApiSchema.describedBy(resolveAgainstApiMeta(template), API_ID).operations();
+        var described = TsonApiSchema.describedBy(resolveAgainstApiMeta(template), API_ID);
 
-        assertEquals(Set.of("getOrder", "putOrder"), operations.keySet(), "the template itself holds no operation");
-        var getOrder = operations.get("getOrder");
-        assertEquals("/orders/{id}", getOrder.path());
-        assertEquals("order", getOrder.responseFor(200).orElseThrow().body().orElseThrow().name(),
-                "the argument is substituted into the response body");
+        assertEquals(List.of("GET /orders/{id}", "PUT /orders/{id}"),
+                described.routes().stream().map(io.ltr8.tson.http.api.Route::key).sorted().toList(),
+                "the template itself holds no endpoint");
+        var get = described.route(io.ltr8.tson.http.api.HttpVerb.GET, "/orders/{id}").orElseThrow();
+        assertEquals("order", get.response().orElseThrow().name(), "the argument is substituted into the response");
     }
 
     /**
-     * <b>An operation's path is content, not a name</b> -- kept because an HTTP path is the case that found it
-     * and would be the first to regress. A templated operation with {@code path: "/x"} once minted
-     * {@code operation_/x_GET_…}, which §8.2 makes a MUST violation ("an internal name is a valid identifier")
-     * and which surfaced as a name-hygiene refusal on {@code U+002F} -- a refusal on a name nobody wrote and
-     * nobody could edit. A declaration naming the application mints no name at all, and §8.2's hygiene walks
-     * names only, so every path resolves -- including one in Cyrillic, which the default identifier policy
-     * would refuse for its script were it judged as a name.
+     * <b>An endpoint's path is content, not a name</b> -- kept because an HTTP path is the case that found it and
+     * would be the first to regress. A templated operation with a path {@code "/x"} once minted a name holding
+     * {@code /}, which §8.2 makes a MUST violation ("an internal name is a valid identifier") and which surfaced as
+     * a name-hygiene refusal on {@code U+002F} -- a refusal on a name nobody wrote and nobody could edit. A
+     * declaration naming the application mints no name at all, and a path is a key of a map keyed by text, so every
+     * path resolves -- including one in Cyrillic, which the default identifier policy would refuse for its script
+     * were it judged as a name.
      */
     @Test
-    void anOperationsPathIsNotJudgedByNameHygiene() {
+    void anEndpointsPathIsNotJudgedByNameHygiene() {
         String body = """
                   order    => { sku: text }
-                  fetching => <T> !api {
-                    getOrder => {
-                      method: GET  path: "%s"
-                      responses: [ { status: 200  body: T  description: "found" } ]
-                    }
-                  }
+                  fetching => <T> !apis { fetch => { "%s" => !resource { @safe GET => !operation { response: T } } } }
                   orders   => fetching<order>""";
 
         for (String path : List.of("/", "/x", "/orders/42", "/путь")) {
-            var operations = assertDoesNotThrow(() -> TsonApiSchema.describedBy(
-                    resolveAgainstApiMeta(body.formatted(path)), API_ID).operations(), path);
-            assertEquals(path, operations.get("getOrder").path());
+            var described = assertDoesNotThrow(() -> TsonApiSchema.describedBy(
+                    resolveAgainstApiMeta(body.formatted(path)), API_ID), path);
+            assertTrue(described.route(io.ltr8.tson.http.api.HttpVerb.GET, path).isPresent(), path);
         }
     }
 
     /**
-     * Resolves {@code declarations} as a schema governed by this project's own {@code meta-http.tn}. The
-     * probe meta the other tests use would do for the parse, but not past it: it declares a deliberately
-     * minimal {@code operation}, and once these declarations resolve far enough to bind, that shape disagrees
-     * with {@link io.ltr8.tson.http.api.Operation} and the mismatch arrives instead of the answer being asked
-     * for. The real meta is also the one whose payoff this is.
+     * Resolves {@code declarations} as a schema governed by this project's own {@code meta-service.tn}. The probe
+     * meta the other tests use would do for the parse, but not past it: once these declarations resolve far enough
+     * to bind, its minimal records disagree with this project's bound classes. The real meta is also the one whose
+     * payoff this is.
      */
     private static Tson resolveAgainstApiMeta(String declarations) {
         String doc = """
@@ -889,9 +874,8 @@ class UpstreamGapsTest {
      * schema is not, and an import crossing them is refused in both directions, each with its own fix:
      *
      * <ul>
-     *   <li>a meta layer importing a {@code meta.tn}-governed library, which is how this project first gave
-     *       {@code meta-http.tn} its HTTP vocabulary -- a meta layer declares the vocabulary its constructors use
-     *       itself;</li>
+     *   <li>a meta layer importing a {@code meta.tn}-governed library, which is how this project first gave its
+     *       meta layer its HTTP vocabulary -- a meta layer declares the vocabulary its constructors use itself;</li>
      *   <li>an ordinary schema importing a kernel-governed library -- it reaches a meta-schema's constructors only
      *       through its {@code !!meta}.</li>
      * </ul>

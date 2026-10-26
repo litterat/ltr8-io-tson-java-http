@@ -1,7 +1,14 @@
 # `meta-service.tn` -- interfaces and operations in one meta layer
 
-**Status: experiment.** Nothing here is served, published or depended on. `meta-http.tn` remains the meta layer
-the demos use.
+**Status: graduated.** `meta-service.tn` ships in `tson-http` (`tson-http/src/main/resources/meta-service.tn`),
+replacing `meta-http.tn`, and the demos describe themselves with it; `CLAUDE.md`'s "Describing a service" is the
+account of it as it ships. Graduating added three things the demos needed: `path_template` as an RFC 6570 level-2
+template (`{+schemaPath}`), `encodings` on an endpoint, and `!document`, an endpoint answering bytes of a media type.
+What moved, under what name: `Routes` became `TsonApiDescription`, `Placement` became `RequestPlacement`, the bound
+records moved to `io.ltr8.tson.http.api`, `ApiProbe` became `TsonApiDescriptionTest`, and `SupertypeProbe` and
+`MetaServiceSketchProbe` folded into `TsonApiSchemaTest`. The prose below is the design record and keeps the old
+names. What stays here probes the shipped layer from directions its own suite does not: the wire form (`rpc.tn`),
+the agent layers, the examples, and the findings the map design rests on.
 
 **Ported to tson-java PR #753 (merged), which retires `data`.** `interface` and `api` are now records held by two namespace
 types, `interfaces` and `apis`, because each carries fields beside its map (`extends`, `implements`) and a namespace
@@ -87,24 +94,12 @@ schema writes, and both are **maps**:
 
 What names something across the two maps -- a method, an `implements`, an `extends` -- is a reference the resolver
 judges (above). What relates two things -- a `{segment}` to a request field, a method to an interface the api
-implements, the claim itself -- is `Routes`, the reader that checks it at startup: it resolves each endpoint's
-signature, computes its `Placement`, and holds the `implements` claim. The probes:
+implements, the claim itself -- is `Routes` (now `TsonApiDescription`), the reader that checks it: it resolves each
+endpoint's signature, computes its `Placement`, and holds the `implements` claim. The suites that check the shipped
+layer are `tson-http`'s `TsonApiSchemaTest` and `TsonApiDescriptionTest`; the probes that stay here:
 
-- `MetaServiceSketchProbe` -- the sketch resolves and its constructs behave as assumed: a `data` constructor
-  with a record mixin and no body; an error type's fixed status readable from the resolved schema; and the
-  rule the
-  design bends around, a `data` *instance* named as a type refused at load.
 - `InterfaceMapProbe` -- the finding the map design rests on, below.
-- `ExamplesProbe` -- the documents under `examples/` resolve against the sketch and both apis read into route tables.
-- `ApiProbe` -- an interface and the web service that maps it, through `Routes`: the placement of each request
-  record; an inline-only api; the `implements` claim failing and then exempted; `extends` walked, and an inherited
-  method named where it is declared; an `extends` cycle; the tag rule the resolver enforces; a misspelt method and a
-  reference to the wrong kind of thing refused by the resolver; a method of an interface the api does not implement
-  refused by the reader; a qualified name saying which of two interfaces is meant; a container in a path; a request
-  that is not a record at all; the three borrowed grammars at their keys; and the method-as-type alternative kept
-  for comparison.
-- `SupertypeProbe` -- the mechanism `!binding` rides on: a derived constructor's instance admitted at its
-  base-typed slot, the base abstract for free, its constraints inherited.
+- `ExamplesProbe` -- the documents under `examples/` resolve against the layer and both apis read into routes.
 - `NameRoleProbe` -- what a naming role buys at a map key, and the hygiene gap below.
 - `RpcProbe` -- `rpc.tn` and the wire schema resolve; a call is typed by the interface's own types and a bad
   request is refused at its field; a return carries the declared response or error with its status pin enforced,
@@ -521,7 +516,7 @@ record or two declarations of a schema. `NameRoleProbe` pins both, `aDataDocumen
 
 ## Files
 
-- `meta-service.tn` -- the sketch, its reasoning in its own `@doc`s.
+- `meta-service.tn` -- graduated: `tson-http/src/main/resources/meta-service.tn`, its reasoning in its own `@doc`s.
 - `REFERENCES.md` -- the proposal for `ref<T>`, qualified names and a `namespace` kind, so a binding names its
   method and the resolver checks it as it checks a request record. Landed in Revision 38 in a
   different shape, which the sketch now runs on (the port note at the top).
@@ -537,11 +532,6 @@ record or two declarations of a schema. `NameRoleProbe` pins both, `aDataDocumen
 - `agent.tn`, `agent-vm.tn` -- the plan (AST) and the agent (bytecode) it compiles to; the section above.
 - `examples/` -- real documents: the shared types and errors, the interface only, the web service only, and
   both, each at its own `!!id`; `examples.md` is the guide to them and the placement table. `ExamplesProbe`
-  resolves every file and runs both apis through `Routes`.
-- `java/…/experiment/metaservice/` -- the bound records the `data` constructors need (`Method`, `Interface`,
-  `Endpoint` -- a sealed interface, the base -- `Operation`, `Binding`, `Resource`, `Api`, `HttpVerb`;
-  `Signature`, `InterfaceOfSignatures`, `DataMethod`, `InterfaceOfDataMethods`, `ByTypeName`, `ByMethodName`,
-  `ByText` for the probes that need their own constructors), `Placement` and `Routes` (the reader-side checks the
-  maps need), and five probes. Field names match the
-  schema's exactly (`idempotency_key`), because binding does no case conversion; a Java keyword as a field name
-  (`extends`, `interface`) is renamed with `@Field`.
+  resolves every file and reads both apis through `TsonApiDescription`.
+- `java/…/experiment/metaservice/` -- the probes that stay, and `Experiment`, which hands them the shipped layer and
+  its binder. The bound records are `tson-http`'s, in `io.ltr8.tson.http.api`.

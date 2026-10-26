@@ -3,35 +3,36 @@
 !!import:"https://tson.io/2026/38/m/meta.tn"
 @doc:"""
   A meta layer for describing a service: what it can be asked to do (methods, grouped into interfaces)
-  and how one transport exposes that (HTTP operations). A schema governed by this one is a service
-  description, and its entries are methods, operations, or a mix.
+  and how HTTP exposes that (an api of endpoints). A schema governed by this one is a service description,
+  and `TsonApiDescription` reads it.
 
   One vocabulary, two constructors -- and only two. `interfaces` and `apis` are the entries a governed
   schema writes, so they are namespace types (§4.1): an entry applying one is a map from a name to a
   value, and a value, never a type. Everything inside them -- `interface`, `api`, `method`, `endpoint`,
-  `operation`, `binding`, `resource` -- is an ordinary RECORD, because it only ever appears as a map
-  value. A record composes (`operation => endpoint & signature`), is admitted as a subtype where its
+  `operation`, `binding`, `document`, `resource` -- is an ordinary RECORD, because it only ever appears as
+  a map value. A record composes (`operation => endpoint & signature`), is admitted as a subtype where its
   base is expected (§7.2), and is never a constructor anyone applies at entry level.
 
   `interface` and `api` are records held one level down, under a key of a namespace, rather than being
   the namespace types themselves, because each carries fields beside its map -- `extends`, `implements`,
-  `not_bound` -- and a value of a namespace type is the map alone, with no fields of its own. The probes
-  write one namespace entry per interface, named as its one key:
+  `not_bound` -- and a value of a namespace type is the map alone, with no fields of its own. A description
+  writes one namespace entry per interface or api, named as its one key:
 
-    orders     => !interfaces { orders => { methods: { place_order => { ... }  ... } } }
-    orders_api => !apis { orders_api => { implements: [orders]
-                          resources: { "/orders" => !resource { POST => !binding { method: place_order ... } } } } }
+    orders     => !interfaces { orders => { place_order => { request: order  response: order } } }
+    orders_api => !apis { orders_api => { implements: [orders.orders]
+                          resources: { "/orders" => !resource {
+                            POST => !binding { method: orders.orders.methods.place_order  status: 201 } } } } }
 
   Methods are keys inside their interface, and endpoints are values two maps down -- keyed by path,
-  then by verb -- so neither is a global entry. That is what the flat namespace was costing: two
-  interfaces may both declare `place_order`, an api needs no invented operation names, and an
-  interface is one entry with a name, a `@doc` and an `extends`.
+  then by verb -- so neither is a global entry: two interfaces may both declare `place_order`, an api
+  needs no invented operation names, and an interface is one entry with a name, a `@doc` and an `extends`.
 
   Three ways to use it:
     interface only    an `interface`; nothing HTTP in the document.
     web service only  an `api` of `!operation`s, each carrying its signature INLINE.
     both              an `interface`, and an `api` that `implements` it with `!binding`s naming its methods.
-                      Both are `endpoint`s, and the tag says which each verb holds.
+  An endpoint whose body is not a TSON value -- a schema document served as bytes, a page -- is a
+  `!document`, stating its media type where the others state a response type.
 
   THE POSITIONAL FORM, AND WHAT IT COSTS. `interface`, `api` and `resource` each have exactly one bare
   REQUIRED field, so §5.6 lets the map stand in for it: `orders => { place_order => ... }` is
@@ -48,11 +49,11 @@
   `methods` field and the method's key -- `orders.orders.methods.place_order`. A name nothing declares, one
   naming the wrong kind of thing (an interface where a method is wanted), or a method key the interface does
   not hold is refused there, and a qualified name says which interface it means, so no name is ambiguous.
-  What relates two things beyond naming one stays the description reader's (`Routes`, in the experiment's
-  Java), at startup, the same tier as coverage: a binding's method belonging to an interface the api
-  implements, the `implements` claim, an `extends` cycle, the placement of a request record over a path,
-  and a verb or a status against what the method declares. `extends` is a reference and not a composition,
-  so an inherited method is named at the interface that declares it.
+  What relates two things beyond naming one is `TsonApiDescription`'s, when it reads a description, and an
+  unsound description has no model: a binding's method belonging to an interface the api implements, the
+  `implements` claim, an `extends` cycle, the placement of a request record over a path, a verb or a status
+  against what the method declares, and an error type fixing its status. `extends` is a reference and not a
+  composition, so an inherited method is named at the interface that declares it.
   """
 {
   @doc:"""
@@ -119,8 +120,17 @@
     """
   method_name => identifier
 
-  @doc:"An api's key: an RFC 3986 path, absolute, whose `{segment}`s name fields of a request record."
-  path_template => !text ^ { pattern: "/|(/([^/{}]+|\\{[A-Za-z_][A-Za-z0-9_-]*\\}))+" }
+  @doc:"""
+    An api's key: an absolute path written as a URI template (RFC 6570) at levels 1 and 2, whose variables
+    name fields of the endpoint's request record. `{id}` expands a value percent-encoded; `{+schemaPath}`,
+    reserved expansion, leaves its `/` unencoded, which is what an identity path with slashes in it needs.
+    The fragment operator is not admitted, since a server never receives a fragment, and nor are levels 3 and
+    4 -- several variables to an expression, query forms, prefixes and explode -- which describe expansion
+    rather than a route a server can match. A variable name is ASCII letters, digits and `_`.
+    """
+  path_template => !text_type {
+    pattern: "/([^\\p{Cc} \"'%<>\\\\^`{|}]|%[0-9A-Fa-f]{2}|\\{[+]?[A-Za-z0-9_]+\\})*"
+  }
 
   @doc:"""
     A header field name: an RFC 9110 token, compared without case as RFC 9110 §5.1 has it -- held folded, so
@@ -157,22 +167,23 @@
   }
 
   @doc:"""
-    What sits under a verb, under a path, in an api: the base record of `operation` and `binding`,
-    carrying what both have -- the placement of a request record and the status of the response. A
-    value at an `endpoint`-typed slot is tagged `!operation` or `!binding` and admitted as the subtype it
-    names (§7.2); a reader binds the base to a type with no bare form, so an untagged value is refused
-    naming both subtypes. That tag is the whole difference between the one-declaration form and the
+    What sits under a verb, under a path, in an api: the base record of `operation`, `binding` and `document`,
+    carrying what each has -- the placement of a request record, the status of the response, and the
+    encodings the endpoint speaks. A value at an `endpoint`-typed slot is tagged with the subtype it is and
+    admitted as that subtype (§7.2); a reader binds the base to a type with no bare form, so an untagged value
+    is refused naming the subtypes. The tag is the whole difference between the one-declaration form and the
     two-declaration form, and it is read before anything else.
 
-    `status` is the status of `response`; there is no list of responses, because a method has one
+    `status` is the status of the success response; there is no list of responses, because a method has one
     response type. An error's status is the `status` member its own type pins --
-    `sku_not_found => problem & { status: = 404  sku: text }` -- so an error type an endpoint names MUST
-    fix it. That is a conformance check on the service, not a resolver check.
+    `sku_not_found => problem & { status: = 404  sku: text }` -- so an error type an endpoint names MUST fix
+    it, and `TsonApiDescription` refuses one that does not. A transport's own refusals -- a body failing its
+    schema, an Accept nothing satisfies -- are not listed: every endpoint has them, and the error boundary
+    answers each with a `problem`.
 
     Documentation is annotation, not fields: `@doc` before the verb key is the long form and `@summary` the
-    short one, both surviving into the read value as the key's annotations. A summary was a field in
-    `meta-http.tn` because an operation's responses and parameters were values with nothing for an
-    annotation to attach to; an endpoint is a map value, and a map key carries annotations.
+    short one, both surviving into the read value as the key's annotations, since an endpoint is a map value
+    and a map key carries annotations. A binding's method carries its own on its key in the interface.
 
     Deliberately absent, each a decision: security schemes, response headers, links, callbacks,
     examples, tags, servers, multi-media-type negotiation, and more than one success response. Adding
@@ -180,7 +191,32 @@
     is a new record composing this one, admitted wherever an `endpoint` is.
     """
   endpoint => placement & {
-    status?:  status_code ~ 200
+    status?:     status_code ~ 200
+    encodings?:  [encoding]
+  }
+
+  @doc:"""
+    An encoding an endpoint's payloads travel in: TSON text, or TSON's JSON encoding ([TSON-JSON]). Every
+    endpoint speaks TSON, so `encodings` says what it speaks beside it, absent meaning TSON alone. An encoding
+    and not a media type, because that is the contract: application/tson+json and application/json are two
+    labels for the one JSON encoding, and which label a response carries is Accept's to negotiate rather than
+    the description's to fix.
+    """
+  encoding => !enum [TSON JSON]
+
+  @doc:"A media type (RFC 9110 §8.3.1): a type and a subtype, each a token, with no parameters."
+  media_type => !text_type { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+/[!#$%&'*+.^_`|~0-9A-Za-z-]+" }
+
+  @doc:"""
+    An endpoint whose body is not a TSON value: a schema document served as the bytes it was published as, a
+    page. It states the `media_type` of what it answers where an operation states a response type, and may
+    still take a request record to place and name business errors. Its success body is not judged as a
+    value, only labelled -- the media type is the contract.
+    """
+  document => endpoint & {
+    request?:   type_kind
+    errors?:    [type_kind]
+    media_type: media_type
   }
 
   @doc:"""

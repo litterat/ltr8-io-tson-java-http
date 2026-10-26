@@ -8,7 +8,7 @@ Four modules:
 
 | Module | What it is |
 |---|---|
-| `tson-http` | Server-agnostic core: media type and `Accept` negotiation, codec, status policy, TSON error body (`problem.tn`), API description (`meta-http.tn`), schema catalog. No external dependencies. |
+| `tson-http` | Server-agnostic core: media type and `Accept` negotiation, codec, status policy, TSON error body (`problem.tn`), service description (`meta-service.tn`), schema catalog. No external dependencies. |
 | `tson-http-jdk` | Adapter for the JDK's own `com.sun.net.httpserver`, plus schema serving. No external dependencies. |
 | `tson-http-javalin` | Adapter for [Javalin](https://javalin.io) 6. |
 | `tson-http-helidon` | Adapter for [Helidon](https://helidon.io) 4 SE, plus `TsonMediaSupport` so plain handlers read and write TSON natively. |
@@ -19,7 +19,7 @@ content-negotiation handling differs. Each proves the same loop: a schema served
 fetched back over HTTP under policy, and used to validate a posted document. Serves multiple schema versions
 side by side, routed by the `TSON-Schema` header ([TSON-JSON] §3.5) or the body's own `!!schema`, and speaks JSON
 where an endpoint opts in: a JSON body validated against a TSON schema, and a JSON reply for a client that prefers
-one. A service also publishes a description of itself, as a schema whose payload types the
+one. A service also publishes a description of itself, as a schema whose payload types and method references the
 compiler resolves — and the examples below are executed by a test, so they are true or the build fails.
 
 ## Try it
@@ -49,7 +49,7 @@ $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binar
 
 Both problems, in one response — a client fixing one error per round trip needs one round trip per error.
 
-The API description says `create_order` also speaks TSON's JSON encoding ([TSON-JSON]), so the same order can
+The service description says `POST /orders` also speaks TSON's JSON encoding ([TSON-JSON]), so the same order can
 arrive as JSON and be answered in it, the schema named in the `TSON-Schema` header since a JSON body has nowhere
 else to name it:
 

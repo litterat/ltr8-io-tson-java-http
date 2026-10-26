@@ -1,4 +1,4 @@
-package io.ltr8.tson.http.experiment.metaservice;
+package io.ltr8.tson.http.api;
 
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.Diagnostic;
@@ -11,6 +11,7 @@ import io.ltr8.tson.schema.meta.Namespace;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.Top;
 import io.ltr8.tson.schema.meta.TypeChain;
+import io.ltr8.tson.http.api.RequestPlacement.Location;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -23,8 +24,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * An interface declared on its own, and a web service in a second document that maps it -- the case the whole
- * experiment exists for -- read through {@link Routes}.
+ * An interface declared on its own, and a web service in a second document that maps it, read through {@link
+ * TsonApiDescription}.
  *
  * <p>The interface is a map of methods; the api is a map of paths, each a map of verbs. What names something is a
  * reference the resolver judges -- {@code implements}, a binding's and an exemption's {@code method} -- so a
@@ -37,7 +38,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>The last probe is the alternative model kept for comparison: a method as a <em>type</em> under plain
  * {@code meta.tn}, composing into an operation with fixed binding fields, and the cost that shows in its values.
  */
-class ApiProbe {
+class TsonApiDescriptionTest {
+
+    static final String ERR_ID = "https://schemas.example.com/2026/38/app/orders-errors-1.tn";
+
+    /** Business errors, each fixing the status it inherits from {@code problem}. */
+    static final String ERRORS = """
+            !!id:"%s"
+            !!meta:"https://tson.io/2026/38/m/meta.tn"
+            !!import:"https://tson.io/2026/38/m/core.tn"
+            !!import:"%s"
+            {
+              sku_not_found   => problem & { status: = 404  sku: text }
+              order_not_found => problem & { status: = 404 }
+            }""".formatted(ERR_ID, TsonProblemSchema.ID);
 
     static final String IFACE_ID = "https://schemas.example.com/2026/38/app/orders-1.tn";
     static final String API_ID = "https://schemas.example.com/2026/38/app/orders-api-1.tn";
@@ -79,7 +93,7 @@ class ApiProbe {
 
           @doc:"A request that is not a record at all, which the placement cannot distribute."
           scalars => !interfaces { scalars => { by_text => { request: text } } }
-        }""".formatted(IFACE_ID, Experiment.META_ID, MetaServiceSketchProbe.ERR_ID);
+        }""".formatted(IFACE_ID, TsonApiSchema.ID, ERR_ID);
 
     /**
      * The web service, in a second document: the same four methods, each looking as different from its method
@@ -111,40 +125,27 @@ class ApiProbe {
         !!import:"%s"
         {
         %s
-        }""".formatted(API_ID, Experiment.META_ID, IFACE_ID, entries);
+        }""".formatted(API_ID, TsonApiSchema.ID, IFACE_ID, entries);
     }
 
     static Tson tson(String api) {
         Map<String, String> lib = new LinkedHashMap<>();
-        lib.put(Experiment.META_ID, Experiment.metaServiceSource());
+        lib.putAll(TsonApiSchema.publishedById());
         lib.put(TsonProblemSchema.ID, TsonProblemSchema.source());
-        lib.put(MetaServiceSketchProbe.ERR_ID, MetaServiceSketchProbe.ERRORS);
+        lib.put(ERR_ID, ERRORS);
         lib.put(IFACE_ID, IFACE);
         lib.put(API_ID, api);
-        return Tson.of(Experiment.bindVocabulary(ProcessorConfig.defaults()
-                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))));
+        return Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))
+                .withMetaNameBinder(TsonApiSchema.metaNameBinder()));
     }
 
-    /** Resolves the api document and reads it into routes; the resolver's verdict is asserted clean first. */
-    static Routes routes(String api) {
+    /** Resolves the api document and reads its description; the resolver's verdict is asserted clean first. */
+    static TsonApiDescription routes(String api) {
         Tson tson = tson(api);
         List<Diagnostic> problems = tson.validateSchema(api);
         assertEquals(List.of(), problems, () -> "" + problems);
-        var entries = tson.schemaRegistry().get(API_ID).orElseThrow().schema().entries();
-        var apis = Experiment.held(entries, "apis", Api.class);
-        String name = apis.keySet().iterator().next();
-        return Routes.of(name, apis.get(name), interfaces(tson, entries), entries::get);
-    }
-
-    /**
-     * The interfaces an api may implement, by qualified name: the interface document's, and any the api document
-     * declares itself.
-     */
-    static Map<String, Interface> interfaces(Tson tson, Namespace<Top> entries) {
-        Map<String, Interface> all = new LinkedHashMap<>(Experiment.heldByName(
-                tson.schemaRegistry().get(IFACE_ID).orElseThrow().schema().entries(), "interfaces", Interface.class));
-        all.putAll(Experiment.heldByName(entries, "interfaces", Interface.class));
-        return all;
+        return TsonApiSchema.describedBy(tson, API_ID);
     }
 
     /**
@@ -154,38 +155,38 @@ class ApiProbe {
      */
     @Test
     void anInterfaceAndTheWebServiceThatMapsIt() {
-        Routes routes = routes(API).requireComplete();
+        TsonApiDescription routes = routes(API);
         assertEquals(4, routes.routes().size());
 
-        Routes.Route create = routes.route(HttpVerb.POST, "/orders").orElseThrow();
-        assertEquals(Optional.of(new Routes.Bound("orders.orders", "place_order")), create.method());
+        Route create = routes.route(HttpVerb.POST, "/orders").orElseThrow();
+        assertEquals(Optional.of(new InterfaceMethod("orders.orders", "place_order")), create.method());
         assertEquals("new_order", create.request().orElseThrow().name());   // borrowed from the method
         assertEquals(201, create.status());
-        assertEquals(List.of("order"), create.placement().at(Placement.Location.BODY));
-        assertEquals(List.of("idempotency_key"), create.placement().at(Placement.Location.HEADER));
+        assertEquals(List.of("order"), create.placement().at(Location.BODY));
+        assertEquals(List.of("idempotency_key"), create.placement().at(Location.HEADER));
 
-        Routes.Route fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
-        assertEquals(Map.of("id", Placement.Location.PATH), fetch.placement().fields());
+        Route fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
+        assertEquals(Map.of("id", Location.PATH), fetch.placement().fields());
 
-        Routes.Route search = routes.route(HttpVerb.GET, "/orders").orElseThrow();
-        assertEquals(List.of("status", "page", "page_size"), search.placement().at(Placement.Location.QUERY));
+        Route search = routes.route(HttpVerb.GET, "/orders").orElseThrow();
+        assertEquals(List.of("status", "page", "page_size"), search.placement().at(Location.QUERY));
 
-        Routes.Route cancel = routes.route(HttpVerb.DELETE, "/orders/{id}").orElseThrow();
-        assertEquals(Map.of("id", Placement.Location.PATH), cancel.placement().fields());
-        assertEquals("order_not_found", cancel.errors().getFirst().name());
+        Route cancel = routes.route(HttpVerb.DELETE, "/orders/{id}").orElseThrow();
+        assertEquals(Map.of("id", Location.PATH), cancel.placement().fields());
+        assertEquals("order_not_found", cancel.errorFor(404).orElseThrow().name());
     }
 
     /** A web service on its own terms: no interface, every endpoint an {@code !operation} with its signature inline. */
     @Test
     void anApiWithNoInterfaceCarriesItsSignaturesInline() {
-        Routes routes = routes(api("""
+        TsonApiDescription routes = routes(api("""
               standalone => !apis { standalone => { "/orders/{id}" => !resource {
                 @safe GET => !operation { request: order_ref  response: order } } } }
-            """)).requireComplete();
+            """));
 
-        Routes.Route fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
+        Route fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
         assertEquals(Optional.empty(), fetch.method());
-        assertEquals(Map.of("id", Placement.Location.PATH), fetch.placement().fields());
+        assertEquals(Map.of("id", Location.PATH), fetch.placement().fields());
     }
 
     /** {@code implements} is a claim: a method with no operation fails, and a reasoned exemption passes. */
@@ -196,7 +197,7 @@ class ApiProbe {
                 resources: { "/orders" => !resource { POST => !binding { method: orders.orders.methods.place_order } } }
               } }
             """);
-        String refused = assertThrows(IllegalStateException.class, () -> routes(partial).requireComplete())
+        String refused = assertThrows(IllegalArgumentException.class, () -> routes(partial))
                 .getMessage();
         assertTrue(refused.contains("[orders.orders.methods.get_order, orders.orders.methods.list_orders, "
                         + "orders.orders.methods.cancel_order]") && refused.contains("not_bound"),
@@ -209,7 +210,7 @@ class ApiProbe {
                              { method: orders.orders.methods.cancel_order  reason: "not built yet" } ]
                 resources: { "/orders" => !resource { POST => !binding { method: orders.orders.methods.place_order } } }
               } }
-            """)).requireComplete();
+            """));
     }
 
     /**
@@ -218,11 +219,11 @@ class ApiProbe {
      */
     @Test
     void extendsIsWalkedForTheClaim() {
-        String refused = assertThrows(IllegalStateException.class, () -> routes(api("""
+        String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
               v2 => !apis { v2 => { implements: [orders_v2.orders_v2]
                            resources: { "/refunds/{id}" => !resource {
                              PUT => !binding { method: orders_v2.orders_v2.methods.refund  status: 204 } } } } }
-            """)).requireComplete()).getMessage();
+            """))).getMessage();
 
         assertTrue(refused.contains("orders.orders.methods.place_order") && !refused.contains("refund"), refused);
     }
@@ -242,8 +243,8 @@ class ApiProbe {
     }
 
     /**
-     * An endpoint is an {@code !operation} or a {@code !binding}, and the tag says which: the base has no data of
-     * its own, so an untagged value is refused by the resolver naming both subtypes, and a method on an
+     * An endpoint is an {@code !operation}, a {@code !binding} or a {@code !document}, and the tag says which: the
+     * base has no data of its own, so an untagged value is refused by the resolver naming the subtypes, and a method on an
      * {@code !operation} is a field it does not have. The one-or-the-other rule needs no reader.
      */
     @Test
@@ -252,7 +253,7 @@ class ApiProbe {
               a => !apis { a => { "/orders" => !resource { POST => { method: place_order } } } }
             """));
         assertTrue(untagged.contains("'endpoint' has no data of its own to bind")
-                && untagged.contains("[operation, binding]"), untagged);
+                && untagged.contains("[document, operation, binding]"), untagged);
 
         String methodOnAnOperation = only(api("""
               a => !apis { a => { "/orders" => !resource { POST => !operation { method: place_order  request: order } } } }
@@ -331,17 +332,21 @@ class ApiProbe {
      */
     @Test
     void aQualifiedNameSaysWhichInterface() {
-        Routes routes = routes(api("""
+        TsonApiDescription routes = routes(api("""
               a => !apis { a => { implements: [orders.orders billing.billing]
+                          not_bound: [ { method: orders.orders.methods.place_order   reason: "elsewhere" }
+                                       { method: orders.orders.methods.get_order     reason: "elsewhere" }
+                                       { method: orders.orders.methods.list_orders   reason: "elsewhere" }
+                                       { method: orders.orders.methods.cancel_order  reason: "elsewhere" } ]
                           resources: { "/orders/{id}" => !resource {
                             GET => !binding { method: billing.billing.methods.get_order } } } } }
             """));
-        Routes.Route fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
-        assertEquals(Optional.of(new Routes.Bound("billing.billing", "get_order")), fetch.method());
+        Route fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
+        assertEquals(Optional.of(new InterfaceMethod("billing.billing", "get_order")), fetch.method());
         assertEquals("order_ref", fetch.request().orElseThrow().name());
     }
 
-    /** A URL segment cannot carry a record: the limit `meta-http.tn` could only state, checked. */
+    /** A URL segment cannot carry a record: the limit a parameter list could only state, checked. */
     @Test
     void aContainerFieldCannotRideInThePath() {
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
@@ -375,14 +380,14 @@ class ApiProbe {
      */
     @Test
     void aRepeatedQueryValueIsAnArrayOfScalars() {
-        Routes routes = routes(api("""
+        TsonApiDescription routes = routes(api("""
               a => !apis { a => { implements: [search.search]
                           not_bound: [ { method: search.search.methods.list_orders  reason: "elsewhere" } ]
                           resources: { "/search" => !resource {
                             GET => !binding { method: search.search.methods.search_orders } } } } }
-            """)).requireComplete();
+            """));
         assertEquals(List.of("tags", "status"),
-                routes.route(HttpVerb.GET, "/search").orElseThrow().placement().at(Placement.Location.QUERY));
+                routes.route(HttpVerb.GET, "/search").orElseThrow().placement().at(Location.QUERY));
 
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
               a => !apis { a => { implements: [bulk.bulk]
@@ -409,6 +414,9 @@ class ApiProbe {
         // A safe method is idempotent too, so DELETE takes one without saying so twice.
         routes(api("""
               a => !apis { a => { implements: [orders.orders]
+                          not_bound: [ { method: orders.orders.methods.place_order   reason: "elsewhere" }
+                                       { method: orders.orders.methods.list_orders   reason: "elsewhere" }
+                                       { method: orders.orders.methods.cancel_order  reason: "elsewhere" } ]
                           resources: { "/orders/{id}" => !resource {
                             DELETE => !binding { method: orders.orders.methods.get_order  status: 204 } } } } }
             """));
@@ -443,7 +451,7 @@ class ApiProbe {
               } }
             """);
         // orders' list_orders is bound and search's exempted; neither stands in for the other.
-        routes(bothClaimed).requireComplete();
+        routes(bothClaimed);
 
         String elsewhere = api("""
               a => !apis { a => { implements: [orders.orders]
@@ -451,7 +459,7 @@ class ApiProbe {
                 resources: { "/orders" => !resource { POST => !binding { method: orders.orders.methods.place_order } } }
               } }
             """);
-        String notClaimed = assertThrows(IllegalStateException.class, () -> routes(elsewhere).requireComplete())
+        String notClaimed = assertThrows(IllegalArgumentException.class, () -> routes(elsewhere))
                 .getMessage();
         assertTrue(notClaimed.contains("exempts 'billing.billing.methods.get_order'")
                 && notClaimed.contains("not a method of an interface it implements"), notClaimed);
@@ -474,7 +482,7 @@ class ApiProbe {
         Tson tson = tson(API);
         assertEquals(List.of(), tson.validateSchema(API));
         var entries = tson.schemaRegistry().get(API_ID).orElseThrow().schema().entries();
-        Api api = Experiment.held(entries, "apis", Api.class).get("orders_api");
+        Api api = (Api) ((Namespace<?>) entries.get("orders_api")).get("orders_api");
         assertEquals(Map.of("idempotency_key", "idempotency-key"),
                 api.resources().get("/orders").endpoints().get("POST").headers());
     }

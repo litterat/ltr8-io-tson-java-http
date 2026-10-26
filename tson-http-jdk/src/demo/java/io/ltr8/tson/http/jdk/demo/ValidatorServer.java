@@ -20,7 +20,8 @@ import io.ltr8.tson.http.TsonProblemDiagnostic;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaCatalog;
 import io.ltr8.tson.http.TsonSchemaHeader;
-import io.ltr8.tson.http.api.Operation;
+import io.ltr8.tson.http.api.HttpVerb;
+import io.ltr8.tson.http.api.Route;
 import io.ltr8.tson.http.api.TsonApiCoverage;
 import io.ltr8.tson.http.api.TsonApiDescription;
 import io.ltr8.tson.http.api.TsonApiSchema;
@@ -250,9 +251,9 @@ public final class ValidatorServer {
 
         TsonApiCoverage coverage = TsonApiCoverage.of(described);
 
-        Operation validate = coverage.serving("validate");
+        Route validate = coverage.serving(HttpVerb.POST, "/validate");
         server.createContext(validate.path(), TsonHandler.asHttpHandler(codec, exchange -> {
-            exchange.requireMethod(validate.method().name());
+            exchange.requireMethod(validate.verb().name());
             requireBodyWithinCap(exchange.exchange());
             ValidationRequest request = exchange.readObjectAs(VALIDATE_ID, "validation_request",
                     ValidationRequest.class);
@@ -267,13 +268,13 @@ public final class ValidatorServer {
             exchange.respondBytes(200, body);
         }));
 
-        // One context for two operations, because com.sun.net.httpserver matches a prefix: "/" catches the
+        // One context for three endpoints, because com.sun.net.httpserver matches a prefix: "/" catches the
         // page and every schema path alike, so the split is made here rather than by the framework. The page
         // deliberately does NOT go through TsonHandler -- that boundary checks Accept and every route behind
         // it produces TSON, so a browser asking for text/html would be answered 406 before it ever rendered.
-        Operation page = coverage.serving("get_page");
-        Operation wellKnown = coverage.serving("get_acceptance_profile");
-        coverage.serving("get_schema");
+        Route page = coverage.serving(HttpVerb.GET, "/");
+        Route wellKnown = coverage.serving(HttpVerb.GET, "/.well-known/tson-deployment");
+        coverage.serving(HttpVerb.GET, "/{+schemaPath}");
         // The policy each per-request probe enforces, taken from the config verdict() builds it from rather
         // than from the descriptor: a profile of what is enforced cannot disagree with what refuses a request.
         byte[] profile = codec.write(deployment.profile(deployment.applyTo(ProcessorConfig.defaults())

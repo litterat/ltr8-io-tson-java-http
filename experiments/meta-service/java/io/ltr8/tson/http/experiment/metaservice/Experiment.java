@@ -1,35 +1,28 @@
 package io.ltr8.tson.http.experiment.metaservice;
 
-import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.schema.meta.Namespace;
 import io.ltr8.tson.schema.meta.Top;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Set;
 
-/** Where this experiment's files are, and the binder for its vocabulary -- shared by the two probes. */
+/**
+ * The shipped meta layer as this experiment's probes use it, and the reading of a value held under a namespace key.
+ * {@code meta-service.tn} graduated into {@code tson-http}; what stays here probes it from directions the shipped
+ * suite does not -- the agent layers, the wire form, and the findings the map design rests on.
+ */
 final class Experiment {
 
-    /** The meta layer under test, read from {@code experiments/meta-service/} rather than copied into a string. */
-    static final String META_ID = "https://tson.io/2026/38/io/ltr8/http/meta-service.tn";
+    /** The meta layer under test: {@code tson-http}'s own. */
+    static final String META_ID = TsonApiSchema.ID;
 
     private Experiment() {
     }
 
-    /** {@code experiments.dir} is set by the Gradle test task; the fallback is the module directory's parent. */
     static String metaServiceSource() {
-        Path dir = Path.of(System.getProperty("experiments.dir", "../experiments"));
-        try {
-            return Files.readString(dir.resolve("meta-service/meta-service.tn"));
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        return TsonApiSchema.source();
     }
 
     /**
@@ -47,24 +40,8 @@ final class Experiment {
         return found;
     }
 
-    /**
-     * {@link #held}, keyed by the qualified name a reference spells -- the entry, then the key ({@code
-     * orders.orders}) -- which is how {@link Routes} matches a {@code ref<interface>} or a {@code ref<method>} to
-     * the interface it names.
-     */
-    static <T> Map<String, T> heldByName(Namespace<Top> entries, String constructor, Class<T> type) {
-        Map<String, T> found = new LinkedHashMap<>();
-        entries.forEach((entry, value) -> {
-            if (value instanceof Namespace<?> namespace && namespace.type().equals(constructor)) {
-                namespace.forEach((key, held) -> found.put(entry + "." + key, type.cast(held)));
-            }
-        });
-        return found;
-    }
-
-    /** The bound classes for the sketch's records, as {@code TsonApiSchema.metaNameBinder()} does. */
+    /** The bound classes for the layer's records. */
     static ProcessorConfig bindVocabulary(ProcessorConfig config) {
-        return config.withMetaNameBinder(new DataNameBinder.DefaultDataNameBinder(
-                Set.of("io.ltr8.tson.http.experiment.metaservice"), Map.of()));
+        return config.withMetaNameBinder(TsonApiSchema.metaNameBinder());
     }
 }

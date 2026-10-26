@@ -13,30 +13,29 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * {@code meta-http.tn} — the meta layer a schema names to describe an HTTP API — as source text a server
- * can publish, and as the binder that makes it usable.
+ * {@code meta-service.tn} — the meta layer a schema names to describe a service — as source text a server can
+ * publish, and as the binder that makes it usable.
  *
  * <h2>What this is for</h2>
  *
- * <p>A schema governed by this one holds its operations in an {@code api}, each under its operationId:
+ * <p>A schema governed by this one declares interfaces of methods, and apis whose endpoints bind them, carry a
+ * signature inline, or answer a document:
  *
  * <pre>{@code
- * !!meta:"https://tson.io/2026/38/io/ltr8/http/meta-http.tn"
+ * !!meta:"https://tson.io/2026/38/io/ltr8/http/meta-service.tn"
  * !!import:"https://schemas.example.com/2026/38/app/order-1.tn"
  * {
- *   orders => !api {
- *     create_order => {
- *       method: POST  path: "/orders"  request: order
- *       responses: [ { status: 201  body: order } ]
- *     }
- *   }
+ *   orders => !interfaces { orders => { place_order => { request: order  response: order } } }
+ *   orders_api => !apis { orders_api => { implements: [orders.orders]
+ *     "/orders" => !resource { POST => !binding { method: orders.orders.methods.place_order  status: 201 } } } }
  * }
  * }</pre>
  *
- * <p><b>{@code order} there is a type reference, not a string.</b> The compiler resolves it through the
- * imports and refuses a name nothing declares — which is the whole reason to describe an API at the schema
- * layer. A description written as data can name a schema but cannot hold a reference to a type, so it carries
- * bare names and every consumer needs its own resolver for them — in every language that reads it.
+ * <p><b>{@code order} there is a type reference, not a string, and {@code orders.orders.methods.place_order} is a
+ * reference to a value.</b> The compiler resolves both and refuses a name nothing declares — which is the whole
+ * reason to describe a service at the schema layer. A description written as data can name a schema but cannot
+ * hold a reference, so it carries bare names and every consumer needs its own resolver for them — in every
+ * language that reads it.
  *
  * <h2>Wiring</h2>
  *
@@ -55,9 +54,9 @@ import java.util.Set;
 public final class TsonApiSchema {
 
     /** This meta layer's identity — the {@code !!id} it declares and the URL it is served at. */
-    public static final String ID = "https://tson.io/2026/38/io/ltr8/http/meta-http.tn";
+    public static final String ID = "https://tson.io/2026/38/io/ltr8/http/meta-service.tn";
 
-    private static final String SOURCE = readResource("/meta-http.tn");
+    private static final String SOURCE = readResource("/meta-service.tn");
 
     private TsonApiSchema() {
     }
@@ -87,9 +86,9 @@ public final class TsonApiSchema {
     }
 
     /**
-     * The binder for this meta layer's own vocabulary — {@code operation} and the records it carries, mapped
-     * to the classes in this package. {@code api} needs no class: a value of a namespace type is a
-     * {@code Namespace}.
+     * The binder for this meta layer's own vocabulary — {@code interface}, {@code api} and the records they hold,
+     * mapped to the classes in this package. {@code interfaces}, {@code apis} and {@code methods} need no class: a
+     * value of a namespace type is a {@code Namespace}, or the map its host declares.
      *
      * <p>Pass it to {@code ProcessorConfig.metaNameBinder}, which composes it over the kernel's own vocabulary
      * rather than replacing it. A schema governed by this meta layer will not resolve without it: the
@@ -100,11 +99,12 @@ public final class TsonApiSchema {
     }
 
     /**
-     * Reads the API a resolved schema describes.
+     * Reads the service a resolved schema describes, checking what the resolver could not.
      *
      * @param tson     a {@code Tson} built with {@link #metaNameBinder()}, with {@code schemaId} resolved
      * @param schemaId the identity of the description schema
-     * @throws IllegalArgumentException if {@code schemaId} is not resolved in {@code tson}
+     * @throws IllegalArgumentException if {@code schemaId} is not resolved in {@code tson}, or the description is
+     *                                  unsound in a way only a reader can see ({@link TsonApiDescription})
      */
     public static TsonApiDescription describedBy(Tson tson, String schemaId) {
         return TsonApiDescription.of(tson, schemaId);

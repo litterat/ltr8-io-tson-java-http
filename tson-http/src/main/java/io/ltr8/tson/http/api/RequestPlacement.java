@@ -1,4 +1,4 @@
-package io.ltr8.tson.http.experiment.metaservice;
+package io.ltr8.tson.http.api;
 
 import io.ltr8.tson.schema.meta.ArrayBody;
 import io.ltr8.tson.schema.meta.MapBody;
@@ -19,8 +19,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Where each field of a request record lands in the HTTP request an operation describes -- the check the
- * resolver cannot make, because an operation names its fields by identifier and its path is a map key.
+ * Where each field of a request record lands in the HTTP request an endpoint describes -- the check the resolver
+ * cannot make, because an endpoint names its fields by identifier and its path is a map key.
  *
  * <p>Precedence: path segments, then {@code query}, then {@code headers}, then {@code body}; whatever is left is
  * the remainder, which goes to the body unless the verb is GET or HEAD or {@code body} already named a field, in
@@ -33,13 +33,15 @@ import java.util.regex.Pattern;
  * the whole mapping is a distribution of one record's fields, so {@code request: text} places nothing, and
  * silently placing nothing reads as a working endpoint that carries no data.
  */
-record Placement(Map<String, Location> fields) {
+public record RequestPlacement(Map<String, Location> fields) {
 
-    enum Location { PATH, QUERY, HEADER, BODY }
+    /** Where one request field travels. */
+    public enum Location { PATH, QUERY, HEADER, BODY }
 
-    private static final Pattern SEGMENT = Pattern.compile("\\{([^}]+)}");
+    /** A template variable, the operator stripped: {@code {+schemaPath}} places {@code schemaPath} as one field. */
+    private static final Pattern SEGMENT = Pattern.compile("\\{[+]?([^}]+)}");
 
-    static Placement of(String name, HttpVerb verb, String path, List<String> query, Map<String, String> headers,
+    static RequestPlacement of(String name, HttpVerb verb, String path, List<String> query, Map<String, String> headers,
                         Optional<String> body, Optional<TypeRef> request,
                         Function<String, Top> entries) {
         Map<String, RecordField> declared = new LinkedHashMap<>();
@@ -72,7 +74,7 @@ record Placement(Map<String, Location> fields) {
             }
             inRecordOrder.put(field, where);
         }
-        return new Placement(Collections.unmodifiableMap(inRecordOrder));
+        return new RequestPlacement(Collections.unmodifiableMap(inRecordOrder));
     }
 
     private static void place(String entry, Map<String, Location> placed, Map<String, RecordField> declared,
@@ -129,7 +131,7 @@ record Placement(Map<String, Location> fields) {
     }
 
     /** The fields at {@code where}, in the request record's order. */
-    List<String> at(Location where) {
+    public List<String> at(Location where) {
         return fields.entrySet().stream().filter(e -> e.getValue() == where).map(Map.Entry::getKey).toList();
     }
 }

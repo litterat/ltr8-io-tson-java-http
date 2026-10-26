@@ -7,6 +7,9 @@ import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.schema.meta.Namespace;
 import io.ltr8.tson.schema.meta.Top;
+import io.ltr8.tson.http.api.Interface;
+import io.ltr8.tson.http.api.Method;
+import io.ltr8.tson.http.api.Signature;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;

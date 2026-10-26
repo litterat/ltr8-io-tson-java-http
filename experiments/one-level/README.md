@@ -104,10 +104,11 @@ Then three threads this note pulls on:
 ## What collapsing it would remove
 
 **From this project:**
-- **The two-file split for an API.** `meta-http.tn` exists as a separate document because `operation => data & { … }`
-  may only be declared under the kernel. With one level, `http.tn` is an ordinary library declaring `operation` as an
-  ordinary record type beside `http_method`, `status_code` and `uri_template`, and an API description imports it like
-  any other schema. No kernel extension is involved (see "Entries are types or values, and `data` goes").
+- **The two-file split for an API.** The meta layer (`meta-http.tn` when this was written, `meta-service.tn` now) exists
+  as a separate document because its constructors may only be declared under the kernel. With one level, `http.tn` is an
+  ordinary library declaring `operation` as an ordinary record type beside `http_method`, `status_code` and
+  `uri_template`, and an API description imports it like any other schema. No kernel extension is involved (see "Entries
+  are types or values, and `data` goes").
 - **The fold of `http.tn` into `meta-http.tn`** (commits `abadf10` and `0224035`). It was forced by levels: a meta
   layer couldn't import an ordinary library's vocabulary, a rule tson-java PR #755 now enforces. Under one level the
   rule is withdrawn and the fold reverses.
@@ -610,13 +611,14 @@ naming the schema whose policy it sets.
 
 ## API descriptions and HTTP routes over schema records
 
-**Today:**
-- `orders-api-1.tn` is governed by `meta-http.tn` and imports `order-1.tn`.
-- An operation's `request` and `response.body` are kind slots naming records in that ordinary schema, and the resolver
-  judges them.
-- What the resolver can't judge is checked in Java at startup:
-  - path template against PATH parameters (`TsonApiDescription.requirePathMatchesItsParameters`);
-  - in the meta-service sketch, placement against the request record's fields (`Routes`, `Placement`).
+**Today** (since `meta-service.tn` graduated into `tson-http`, replacing `meta-http.tn`, in which this section was
+first measured):
+- `orders-api-1.tn` is governed by `meta-service.tn` and imports `order-1.tn`.
+- A method's `request`, `response` and `errors` are kind slots naming records in that ordinary schema, and a binding's
+  `method` is a `ref<method>`; the resolver judges them all.
+- What the resolver can't judge is checked in Java when the description is read (`TsonApiDescription`): placement
+  against the request record's fields (`RequestPlacement`), the `implements` claim, and a verb or status against the
+  method.
 
 **Under one level:**
 
@@ -740,9 +742,9 @@ Not edited; recorded here until the direction is decided.
 - **The reference rule** tson-java PR #760 landed (core.tn declares no `ref`; a reference is declared only in a
   kernel-governed schema) is withdrawn with it: under one level a schema that governs data has value entries, so
   `ref<T>` is valid everywhere and core.tn needs no sibling of anything.
-- **The "Describing an API" section's** argument that "the meta layer owns the vocabulary its constructors use" is a
+- **The "Describing a service" section's** argument that "the meta layer owns the vocabulary its constructors use" is a
   consequence of levels. Under one level, `http.tn` returns as an ordinary library.
-- **"Describing an API"'s** wiring note that `metaNameBinder`, not `bindings`, binds the description's vocabulary, and
+- **"Describing a service"'s** wiring note that `metaNameBinder`, not `bindings`, binds the description's vocabulary, and
   that "a meta layer's vocabulary is a separate namespace on purpose", goes with `data`.
 - **The "Deployment descriptors" section's** argument that a descriptor is data because "it references no types"
   moves to the reasons above: self-certification, immutability, and that nothing may name one.
