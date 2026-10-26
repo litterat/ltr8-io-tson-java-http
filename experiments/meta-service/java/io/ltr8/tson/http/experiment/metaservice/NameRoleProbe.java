@@ -86,7 +86,8 @@ class NameRoleProbe {
     /**
      * A namespace's keys are names, so a {@code text} key family is refused where the layer declares it: {@code
      * key_type} is an {@code identifier_kind}. A map keyed by {@code text} is still a map, and accepts anything --
-     * it is just no namespace, so a qualified name does not enter it.
+     * it is just no namespace, so a qualified name does not enter it, and an entry in it is reached by location. A
+     * text-keyed namespace is not proposed in Revision 38, a qualified name's segment being an identifier.
      */
     @Test
     void aNamespaceCannotBeKeyedByText() {

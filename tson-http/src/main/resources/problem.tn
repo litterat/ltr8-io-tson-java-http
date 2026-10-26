@@ -83,6 +83,10 @@
     in the schema (schema_id, schema_pointer, schema_position). Either end may be absent -- a problem
     found in a schema has no data, and a schemaless read has no schema.
 
+    schema_id is the schema's canonical identity, "example.com/people.tn" ([TSON-DATA] §2.2.1), which
+    is no URI. It is text because the series defines no atom for an identity: a processor emits one in
+    its canonical spelling only, so text's equality is an identity's.
+
     A position is "line:column:byte_offset", all three 1-based except byte_offset, which counts
     UTF-8 bytes from 0 ([TSON-DATA] §8.1). The offsets are into the request body as sent.
 

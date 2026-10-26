@@ -189,5 +189,5 @@ namespace kind, because both have to say what is looked up lexically, and B make
   probe above accepts both today.
 - **Whether `template_param` moves** to sit beside `record` in the kernel, now that two constructors use it.
 - **A namespace's parameters.** The namespace table in `README.md` lists template parameters as a lexically scoped
-  namespace. An open record then holds two keyed sets, `parameters` and `fields`, so the members facet in
-  `UPSTREAM.md`'s namespaces entry may want to cover both.
+  namespace. An open record then holds two keyed sets, `parameters` and `fields`, so a members facet, if one is ever
+  proposed, may want to cover both.

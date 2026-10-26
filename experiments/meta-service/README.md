@@ -24,9 +24,10 @@ method's key -- `orders.orders.methods.place_order`. A misspelt method, a refere
 ambiguous name are refused at load, so `binding.interface` is gone and `not_bound` is a list of `{ method  reason }`
 records, a map key being no reference. `Routes` keeps what relates two things: a bound method belonging to an
 interface the api implements, the `implements` claim, an `extends` cycle, placement, and a verb or status against the
-method. `extends` is a reference and not a composition, so an inherited method is named where it is declared; the
-doubled `orders.orders` and the `methods` segment are what `&` over namespace types (`UPSTREAM.md`) would remove. The
-prose below predates the port wherever it calls these identifiers.
+method. `extends` is a reference and not a composition, so an inherited method is named where it is declared, and the
+doubled `orders.orders` and the `methods` segment stay: `&` over namespace values, which would remove them, is not
+proposed in Revision 38, composition being over types. The prose below predates the port wherever it calls these
+identifiers.
 
 **Scope: the descriptor, for RPC- and API-style endpoints.** `meta-service.tn` describing an interface, a web
 service over it, and the endpoints of both is the work in hand; `rpc.tn` is its wire form and belongs to that
@@ -268,7 +269,8 @@ rows, schema and document, interface and calls. And **a namespace keyed by data 
 once**: §5.2's selector pins, "pairwise distinct as values", are a key-uniqueness rule under value equality over a
 set of subtypes. The cell the proposal calls empty is unnamed rather than empty.
 
-Three things follow, and each moved the staged spec feedback (`UPSTREAM.md`, the namespaces entry):
+Three things follow, and each moved the spec feedback this project staged on namespaces (since answered: Revision 38
+keeps a namespace's keys names and composition over types):
 
 - **An api is a namespace.** An endpoint describes an unbounded set of exchanges, so it is a declaration, and a URL
   is a reference to it by key -- `(api, path, verb)`. It is keyed by data and two levels deep, which is what makes it

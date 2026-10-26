@@ -301,7 +301,8 @@ description, and **an unsound description has no model** — a startup failure, 
   with a reason — held per `InterfaceMethod` (interface, method), never per name, since two interfaces may both
   declare `get_order`;
 - `extends` has no cycle, the one thing a reference cannot rule out; and it is a reference, not a composition, so an
-  inherited method is named where it is declared (`&` over namespace types, in `UPSTREAM.md`, would change that);
+  inherited method is named where it is declared — `&` over namespace values is not proposed, composition being over
+  types, and may be revisited with a reference in a data document;
 - each request record's fields are placed exactly once over the path, the query, the headers and the body
   (`RequestPlacement`) — a `{segment}` binds the field of that name, `query` and `headers` name fields, `body` names
   one field carried unwrapped, and the remainder is the body, or the query for a GET or HEAD; a field in the path,

@@ -68,59 +68,18 @@ Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. T
 each time a revision closes, and its convention is *cite the spec, not the argument that got it there* — so
 re-check every `SPEC-FEEDBACK.md #N` in this repo after a revision bump.
 
-
-### To file: namespaces after tson-java PR #753 — what this project still needs
-
-**Sections:** [TSON-SCHEMA] §4.1 (`namespace`, in place of `data`), §5.8 (composition), §8.1 (the constructor type
-slots); [TSON-DATA] §2.6 (map keys are values). Upstream tracks the design as its `SPEC-FEEDBACK.md` "A namespace is a
-constructor whose instances are maps" and "A reference to a value is the kind's sibling", and the work in
-`design/meta-layer-namespaces.md`; this entry is the consumer evidence for what those leave open.
-
-**Where it stands.** PR #753 landed in Revision 38: `namespace` is a constructor under `top`, a namespace
-type composes it, a value of one is a map (`Namespace`), the schema map and a record's fields are two of them, and
-`data` is retired. A `ref<T>` slot reaches a value by a qualified name through namespace keys and record values'
-fields (`orders.get`, `i.orders.methods.place`, PR #758), and a `kind<C>` slot holds a type's name; both are judged by
-the slot's declared type, at any depth and under any host. A reference is declared only in a kernel-governed schema
-(PR #760), since only there can an entry hold a value. A namespace type declares only its facets, so a construct with
-fields beside its map is a record held under a key. `meta-service.tn`, the shipped service-description layer, runs
-on all of it.
-
-**Kind:** consumer evidence. Each item is something the meta-service experiment does in its reader today
-(`Routes`) because the schema cannot say it, with the probe that changes state when it can.
-
-1. **`&` over namespace types, so `extends` and `implements` are structural.** A namespace value has no fields, so
-   the experiment's `interface` and `api` are records under keys of `interfaces` and `apis`, carrying `extends?:
-   [ref<interface>]` and `implements?: [ref<interface>]`: references the resolver judges, but not compositions, so an
-   inherited method is named where it is declared, `Routes` walks `extends` and refuses a cycle, and a binding spells
-   `orders.orders.methods.place_order`. With `&` merging member sets, `orders => reads & { … }` would have `reads`'
-   methods and its own, a collision refused as between two composed records' fields, and the extra level and the
-   `methods` segment would go (`orders.place_order`). An inherited member should not be copied: a method composed
-   into several interfaces stays one value with one identity.
-2. **Data keys.** An api is keyed by path, then verb, and a namespace's `key_type` is an identifier family, so a
-   text-keyed namespace is refused (`NameRoleProbe.aNamespaceCannotBeKeyedByText`) and the experiment's `resources`
-   is a plain map that no qualified name enters. A key that is not a name also needs a reach other than `.`: the
-   pointer form the "formats" entry below stages, `/orders/POST`, where a compound `[path, verb]` key has no pointer
-   token today (`UpstreamGapsTest.aCompoundKeyHasNoPointerTokenAndTheEncodingsDisagree`).
-
-**Out of scope, deliberately:** the `(schema identity, root type name)` pair this project reassembles at every call
-site (`describing`, `readObjectAs`, the `TSON-Schema` header plus a route-supplied type). It exists because a data
-document cannot hold a reference to a type, and nothing above changes that.
-
-**Priority:** item 1 first. It is the one the experiment's shape is waiting on.
-
-### To file: formats this project needs and the vocabulary cannot state — two types, by strength of evidence
+### To file: a format this project needs and the vocabulary cannot state — `json_pointer`
 
 **Sections:** [TSON-SCHEMA] §2.2.3 (a name an import binds is reserved), §4.2 and §5.5 (atom families and their
-equality), §7.4 (text member sets), §9 (core's contents); [TSON-DATA] §2.2.1 (canonical identity), §2.6 (map key
-identity), §5.5 (text and network atoms); the meta-kernel's `text_type`, `uri_type` and `atom_specification`. Builds
-on #13/#14 (`uri`, `uri_reference`, `iri`), #15 *core should hold only what a schema cannot do without* and #19
-*`normalization` should be `text_type`'s … and offer `NFKC_CASEFOLD`*, numbered as they stood on the Revision 37
-register; all three were adopted in Revision 37.
+equality), §9 (core's contents); [TSON-DATA] §2.6 (map key identity), §5.5 (text atoms); the meta-kernel's
+`text_type` and `atom_specification`. Builds on #13/#14 (`uri`, `uri_reference`, `iri`), #15 *core should hold
+only what a schema cannot do without* and #19 *`normalization` should be `text_type`'s … and offer
+`NFKC_CASEFOLD`*, numbered as they stood on the Revision 37 register; all three were adopted in Revision 37.
 
-**Kind:** proposals, one per type, each from a place this project produces or reads a value its schemas can only
-type as `text`. Ordered by evidence: the first two are values tson-java *itself* emits.
+**Kind:** proposal, from a place this project produces a value its schemas can only type as `text`, and one
+tson-java *itself* emits.
 
-**The question each one has to answer.** An atom earns its place over `!text ^ { pattern: … }` in one of two ways:
+**The question it has to answer.** An atom earns its place over `!text ^ { pattern: … }` in one of two ways:
 a grammar a pattern cannot state, or an **equality** that is not `text`'s. Equality is the one that bites. TSON
 compares by the type's own equality in four places: a pin (§5.2, against the decoded value), enum and member sets
 (§7.4), map-key identity ([TSON-DATA] §2.6), and set uniqueness. Under `text`, two spellings of one value are two
@@ -173,18 +132,6 @@ The `json_pointer` atom then pins RFC 6901 *and* this profile, and the two `Upst
 (`aMapKeysPointerTokenIsItsSpellingNotItsValue`, `aCompoundKeyHasNoPointerTokenAndTheEncodingsDisagree`) fail the
 day it lands.
 
-**2. A schema reference with §2.2.1's equality — core.** [TSON-DATA] §2.2.1 defines a reference's canonical identity
-(lowercase host plus path; scheme and `?sha256=` pin ignored) and a canonical-form rule for an identifying URI (no
-port, userinfo or fragment). It is the series' own format, and the type system cannot state it:
-
-- `diagnostic.schema_id` carries the canonical form, `example.com/people.tn`, which is not a URI at all.
-- A set or map of references cannot dedupe `https://x/a.tn` against `http://x/a.tn?sha256=…`.
-
-Proposed: a reference family whose values are absolute, identifying references held to the canonical-form rule, and
-whose **equality is canonical identity**, with an instance for the canonical spelling beside it. It is not a
-normalization: the host folds, the path keeps its case, and the scheme and the pin are dropped rather than folded.
-tson-java's `CanonicalIdentity` is the existing implementation.
-
 **Deliberately not proposed:** `status_code`, `http_verb`, `header_name` and a URI template as types in core or
 `net.tn`. They are HTTP vocabulary rather than formats, and exactly the names #15 shows converted schemas declare for
 themselves, so they belong with what uses them: here, `meta-service.tn` (below). A URI
@@ -198,7 +145,7 @@ constructor in `meta` beside `uri_type`, which reserves no name, with no instanc
 - `problem.tn` types RFC 9457's `type` and `instance` as `uri_reference`, since both are URI references by that
   RFC (§3.1.1, §3.1.5) and `TsonProblem.at` is typically handed a request path. Pinned by
   `TsonProblemSchemaTest.aRelativeTypeAndInstanceAreValid`.
-- `diagnostic.path`, `schema_pointer` and `schema_id` stay `text` until 1 and 2 exist.
+- `diagnostic.path` and `schema_pointer` stay `text` until 1 exists.
 - The HTTP vocabulary lives in `meta-service.tn`, the meta layer that uses it — `http_verb`, `status_code`,
   `header_name`, `media_type` and `path_template` (RFC 6570 levels 1–2, so `{+var}` is expressible) — since a meta
   layer owns the vocabulary its constructors use and an import stands at the importer's governing level.
@@ -213,9 +160,12 @@ constructor in `meta` beside `uri_type`, which reserves no name, with no instanc
 artifact, which Revision 37 closed with the bundled `policy.tn`; naming a schema for a document that cannot carry
 `!!schema`; no shorthand for a template application at a `type_ref` slot in data; a namespace should be a value (all
 four on 2026-09-01), the last since landed in Revision 38 as the `namespace` constructor; and `identifier` as a text
-family with `enum` stating its type, adopted in Revision 37. From this project's review, tson-java also filed and
-built for Revision 38: `hostname` and `host`, a non-ASCII identity's host as one identity in either label form,
-`media_type` in `net.tn`, an import standing at the importer's governing level (PR #755), a reference delivered
+family with `enum` stating its type, adopted in Revision 37. Two more were answered by decision in Revision 38: an
+identity as a value is text in its canonical form, with no atom of its own (`problem.tn`'s `schema_id` says so); and a
+text-keyed namespace and `&` over namespace values are not proposed, composition being over types, to be revisited
+with a reference in a data document (`CLAUDE.md`, "Describing a service"). From this project's review, tson-java also
+filed and built for Revision 38: `hostname` and `host`, a non-ASCII identity's host as one identity in either label
+form, `media_type` in `net.tn`, an import standing at the importer's governing level (PR #755), a reference delivered
 through a record value's field (PR #758), and a reference declared only in a kernel-governed schema (PR #760). A
 reference in a data document is a Revision 39 question, with the one-level work (`experiments/one-level/README.md`,
 "The reference atom"). Prose in this repo names each by its subject, not its number. A new finding goes here in the

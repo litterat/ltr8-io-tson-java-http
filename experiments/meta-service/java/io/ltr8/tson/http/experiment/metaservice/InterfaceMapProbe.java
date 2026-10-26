@@ -108,7 +108,7 @@ class InterfaceMapProbe {
     /** The namespace variant: the entry IS the map of methods, read as a {@code Namespace} of signatures. */
     @Test
     void aNamespaceOfSignaturesIsTheMapItself() {
-        var orders = assertInstanceOf(Namespace.class, resolvedEntry("""
+        Namespace<?> orders = assertInstanceOf(Namespace.class, resolvedEntry("""
                   orders => !interface_of_signatures { place_order  => { request: order  response: order }
                                                        cancel_order => { request: order_ref } }"""));
 

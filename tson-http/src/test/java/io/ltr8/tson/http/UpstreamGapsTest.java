@@ -736,7 +736,7 @@ class UpstreamGapsTest {
      * key may be any value ([TSON-DATA] §2.6). {@code 0x10}, {@code 16} and {@code 1_6} are one key -- the duplicate
      * is caught -- and three pointers. Both encodings agree, a JSON member name being able to spell the same
      * forms, so this is about one key having many pointers rather than about parity. Staged in {@code UPSTREAM.md}
-     * under "formats this project needs", item 1; fails the day a key's token is its canonical text.
+     * under {@code json_pointer}; fails the day a key's token is its canonical text.
      */
     @Test
     void aMapKeysPointerTokenIsItsSpellingNotItsValue() {
