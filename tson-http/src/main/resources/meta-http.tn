@@ -34,8 +34,8 @@
   HTTP's own vocabulary -- http_method, status_code, uri_template -- is declared here, at this layer's level,
   and nowhere else. An API is defined at the schema level because a request and its data are the projection
   of an API as data is the projection of a schema, so the definition belongs above them, and a meta layer
-  owns the vocabulary its constructors use. The cost is stated rather than hidden: an ordinary schema does
-  not import these types (an import should not cross governing levels), and one wanting the same terms --
+  owns the vocabulary its constructors use. The cost is stated rather than hidden: an ordinary schema cannot
+  import these types (an import stands at the importer's governing level), and one wanting the same terms --
   an error schema's status, say -- declares its own.
   """
 {

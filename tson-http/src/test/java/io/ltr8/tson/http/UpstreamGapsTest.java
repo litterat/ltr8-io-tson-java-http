@@ -850,24 +850,26 @@ class UpstreamGapsTest {
         assertDoesNotThrow(() -> HttpSchemaSource.builder().allowHost("bücher.example").build().close());
     }
 
-    // ── open: an import across governing levels is not refused ───────────────────────────────────
+    // ── fixed upstream: an import stands at the importer's governing level ───────────────────────
 
     /**
-     * <b>A schema may import one governed by a different meta level, and nothing refuses it.</b> A meta layer
-     * is governed by the meta-kernel; an ordinary schema by {@code meta.tn}. They are different levels -- one
-     * declares the constructors the other's entries are built with -- and an import that crosses them mixes
-     * a structure namespace with a type namespace. Both directions resolve today:
+     * <b>An import stands at the importer's governing level</b> ([TSON-SCHEMA] §2.2.3, §3.1): importer and imported
+     * both name the meta-kernel as their {@code !!meta}, or neither. A meta layer is kernel-governed and an ordinary
+     * schema is not, and an import crossing them is refused in both directions, each with its own fix:
      *
      * <ul>
      *   <li>a meta layer importing a {@code meta.tn}-governed library, which is how this project first gave
-     *       {@code meta-http.tn} its HTTP vocabulary, before folding it into the layer;</li>
-     *   <li>an ordinary schema importing a kernel-governed library.</li>
+     *       {@code meta-http.tn} its HTTP vocabulary -- a meta layer declares the vocabulary its constructors use
+     *       itself;</li>
+     *   <li>an ordinary schema importing a kernel-governed library -- it reaches a meta-schema's constructors only
+     *       through its {@code !!meta}.</li>
      * </ul>
      *
-     * Fails the day either is refused. {@code UPSTREAM.md} #3 carries it.
+     * A schema a meta layer governs is ordinary, so it imports {@code core.tn} and the records it describes: every
+     * API description here does. Pinned so a relaxation of either direction fails here.
      */
     @Test
-    void anImportAcrossGoverningLevelsIsNotRefused() {
+    void anImportStandsAtTheImportersGoverningLevel() {
         String library = """
                 !!id:"https://example.com/2026/38/app/levels-lib.tn"
                 !!meta:"https://tson.io/2026/38/m/meta.tn"
@@ -883,8 +885,13 @@ class UpstreamGapsTest {
                 }""";
         Tson kernelOverMeta = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(
                 Map.of("https://example.com/2026/38/app/levels-lib.tn", library)))));
-        assertEquals(List.of(), kernelOverMeta.validateSchema(layer),
-                "a kernel-governed layer importing a meta.tn-governed library is refused now -- see UPSTREAM.md #3");
+        List<Diagnostic> layerImporting = kernelOverMeta.validateSchema(layer);
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), layerImporting.stream().map(Diagnostic::code).toList(),
+                () -> "" + layerImporting);
+        String layerImportingMessage = layerImporting.getFirst().message();
+        assertTrue(layerImportingMessage.contains("an !!import stands at the importer's governing level")
+                && layerImportingMessage.contains("a meta layer declares the vocabulary its constructors use itself"),
+                layerImportingMessage);
 
         String kernelLibrary = """
                 !!id:"https://example.com/2026/38/app/levels-kernel-lib.tn"
@@ -898,8 +905,13 @@ class UpstreamGapsTest {
                 { reply => { status: status_code } }""";
         Tson metaOverKernel = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(
                 Map.of("https://example.com/2026/38/app/levels-kernel-lib.tn", kernelLibrary)))));
-        assertEquals(List.of(), metaOverKernel.validateSchema(application),
-                "a meta.tn-governed schema importing a kernel-governed library is refused now -- see UPSTREAM.md #3");
+        List<Diagnostic> schemaImporting = metaOverKernel.validateSchema(application);
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), schemaImporting.stream().map(Diagnostic::code).toList(),
+                () -> "" + schemaImporting);
+        String schemaImportingMessage = schemaImporting.getFirst().message();
+        assertTrue(schemaImportingMessage.contains("an !!import stands at the importer's governing level")
+                && schemaImportingMessage.contains("an ordinary schema reaches a meta-schema's constructors only "
+                        + "through its !!meta"), schemaImportingMessage);
     }
 
     // ── decided upstream: a stated schema overrides the document's own ──────────────────────────────

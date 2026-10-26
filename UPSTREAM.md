@@ -62,34 +62,6 @@ names the library.
 
 ---
 
-## 3. An import across governing levels is not refused
-
-**Hit:** this project's `meta-http.tn` is a meta layer — governed by the meta-kernel, because declaring a constructor
-(`api => namespace & {…}`) is permitted only there. Its constructors want HTTP's vocabulary: `operation.method` an
-`http_method`, `response.status` a `status_code`, `operation.path` a `uri_template`. Those were first declared in an
-ordinary library, `http.tn` governed by `meta.tn`, and `meta-http.tn` imported it. That resolved, and it should not
-have: the two are different levels — one declares the constructors the other's entries are built with — and an
-import across them mixes a structure namespace with a type namespace. The other direction resolves too: an ordinary
-schema (`meta.tn`, importing core) importing a kernel-governed library.
-
-**The bug:** the resolver refuses neither. [TSON-SCHEMA] §2.2.3 and §3.3.1 describe a namespace built from `!!meta`
-and `!!import`, and §3.1's ladder (document → schema → meta-schema → kernel) has levels, but nothing says an imported
-schema must stand at the importer's level. The rule wanted is that it must — its `!!meta` the importer's own — with
-the bundled chain as the existing case it fits (`meta.tn` is kernel-governed and imports the kernel). Pinned, both
-directions, by `UpstreamGapsTest.anImportAcrossGoverningLevelsIsNotRefused`.
-
-**What the rule costs, and this project's answer.** A meta layer's constructors often want type names that
-ordinarily live in schemas — HTTP's vocabulary here, `net.tn`'s `host` for a server list elsewhere — and under the
-rule a meta layer cannot import them; it declares them at its own level, and the schemas it governs cannot import
-them back. This project takes that as right rather than as a gap: an API is defined at the schema level because a
-request and its data are the projection of an API as data is the projection of a schema, so a meta layer owns the
-vocabulary its constructors use. `meta-http.tn` declares `http_method`, `status_code` and `uri_template` itself, and
-an ordinary schema wanting the same terms declares its own (`problem.tn`'s `status` is an `int32`). A value type for
-naming a type in data, which would have let a description be data instead, was weighed and set aside on that
-ground. The spec should say the rule and, beside it, that a meta layer's vocabulary is its own.
-
----
-
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. That register renumbers from #1
@@ -131,11 +103,14 @@ namespace type declares only its facets, so a construct with fields beside its m
    is a plain map that no qualified name enters. A key that is not a name also needs a reach other than `.`: the
    pointer form the "formats" entry below stages, `/orders/POST`, where a compound `[path, verb]` key has no pointer
    token today (`UpstreamGapsTest.aCompoundKeyHasNoPointerTokenAndTheEncodingsDisagree`).
-4. **A reference in a data document.** A value's name at a `ref<T>` slot in a data document is declared and reported
-   `NOT_IMPLEMENTED` (`OneLevelProbe`). It is what lets a plan document bind a method (`agent.tn`), or a delegation
-   name the methods it grants (`experiments/one-level/IDENTITY.md`), against the interface's namespace rather than
-   as text. Which namespace such a name resolves in is the open question: a data document's own schema, or the
-   interface's, by a §7.8 scope push.
+4. **A reference in a data document — a Revision 39 question, with the one-level work.** It is what would let a plan
+   document bind a method (`agent.tn`), or a delegation name the methods it grants (`experiments/one-level/IDENTITY.md`),
+   against the interface's namespace rather than as text. Under the ladder it cannot exist: a reference names an entry
+   holding a value, only a kernel-governed schema can declare the namespace type that puts one there, and a schema that
+   governs data imports no kernel-governed one (PR #755), so its closure has nothing to name. tson-java #756 (open)
+   removes core's `ref` on that ground. Under one level a schema that governs data holds value entries and the question
+   returns, with the kind's rule as the candidate (the name resolves in the closure of the document's `!!schema`):
+   `experiments/one-level/README.md`, "The reference atom".
 
 **Out of scope, deliberately:** the `(schema identity, root type name)` pair this project reassembles at every call
 site (`describing`, `readObjectAs`, the `TSON-Schema` header plus a route-supplied type). It exists because a data
@@ -236,9 +211,9 @@ constructor in `meta` beside `uri_type`, which reserves no name, with no instanc
 - `diagnostic.path`, `schema_pointer` and `schema_id` stay `text` until 1 and 2 exist.
 - The HTTP vocabulary lives in `meta-http.tn`, the meta layer that uses it — `http_method`, `status_code` and
   `uri_template` (RFC 6570 levels 1–2, so `{+var}` is expressible) — since a meta layer owns the vocabulary its
-  constructors use (#3). `TsonApiDescription` checks each operation's template variables against its PATH
-  parameters, which no pattern can. `problem.status` stays `int32`, and the meta-service experiment keeps its own
-  `status_code`, `path_template` and `header_name`.
+  constructors use and an import stands at the importer's governing level. `TsonApiDescription` checks each
+  operation's template variables against its PATH parameters, which no pattern can. `problem.status` stays `int32`,
+  and the meta-service experiment keeps its own `status_code`, `path_template` and `header_name`.
 
 **Priority:** medium-high, since the library emits values its own schemas cannot describe.
 
@@ -250,6 +225,7 @@ artifact, which Revision 37 closed with the bundled `policy.tn`; naming a schema
 four on 2026-09-01), the last since landed on the Revision 38 proposal as the `namespace` constructor; and
 `identifier` as a text family with `enum` stating its type, adopted in Revision 37. From this project's review,
 tson-java also filed and built on `r2026-38-proposal`: `hostname` and `host`, a non-ASCII identity's host as one
-identity in either label form (SPEC-FEEDBACK #4), and `media_type` in `net.tn` (#8). Prose in
+identity in either label form (SPEC-FEEDBACK #4), `media_type` in `net.tn` (#8), and an import standing at the
+importer's governing level (#25, PR #755). Prose in
 this repo names each by its subject, not its number. A new finding goes here in the same shape: a `### To file:`
 heading naming the spec sections, the gap, what this project does meanwhile, and a priority.

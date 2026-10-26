@@ -11,7 +11,8 @@ map for identity and delegation, for agents acting on people's behalf.
 **Since then, tson-java PR #753 (merged) retires `data`** and makes `namespace` a constructor under `top`, which is this
 note's "entries are types or values" step taken inside the ladder. The probes are ported to it: a namespace is
 written as the bare map and walked as `orders.get` with no reading-side rule, and the record-template workaround is
-gone. The rest of the note still reads as measured at `a53c3f66`.
+gone. The rest of the note still reads as measured at `a53c3f66`, except "The reference atom", measured at
+`5c39e2df` beside tson-java #756, which confines `ref<T>` to kernel-governed schemas under the ladder.
 
 ## Verdict
 
@@ -21,10 +22,10 @@ is weighed by how much it changes: re-pinning every meta layer, rewriting the co
 for nothing against a rule that is more correct.
 
 **Under that rule, one level is warranted:**
-- **One checked rule replaces four that leak.** Visibility, placement, direction of service and the meta-as-import
-  cycle check hold the ladder up today (measured below), and it still has holes: an import across levels isn't refused
-  (`UPSTREAM.md` #3), and a kernel import lets a data document hold a kind-typed field. Read-defer-resolve with a cycle
-  check is one rule, and it is checked.
+- **One checked rule replaces five that leaked.** Visibility, placement, direction of service and the meta-as-import
+  cycle check held the ladder up (measured below), and an import across levels went through all four until tson-java
+  PR #755 added a fifth rule, the level of an import. Read-defer-resolve with a cycle check is one rule, and it is
+  checked.
 - **The bootstrap becomes an instance of the rule.** The kernel's pre-loaded self-reference is the one cycle closed by
   hand, and its resolved form is the fixed point, instead of being an exception four rules carve out.
 - **`data` duplicates the kind system,** and the duplication keeps producing special cases: #751's value-body read
@@ -32,6 +33,9 @@ for nothing against a rule that is more correct.
 - **The types become right.** `record_field.value`, defaults, annotation values and `type_argument` values get their
   real types through dependent fields, instead of an atoms-only `value_type`.
 - **The fixture check gets stronger.** A resolved form trusts only the pre-loaded kernel.
+- **The reference vocabulary converges.** `kind_type`, `ref_type` and the name-only `type_ref` are one atom over a
+  qualified name, kept apart only because `of` resolves in two stores; under the ladder `ref<T>` is dead at the level
+  data lives and the `members` index names the wrong level's types ("The reference atom", below).
 - **Explicitness survives at a finer grain.** The header used to say a document *may* declare constructors; each entry
   now says it *is* one, by composing `top`. A data document still declares nothing, and a document's kind is still in
   its header.
@@ -78,18 +82,20 @@ Then three threads this note pulls on:
 | constructor declared in a meta layer, applied in a schema it governs | resolves |
 | a meta layer applying its own constructor | refused: "'!step' does not resolve against the structure namespace" (§3.3.1) |
 | an ordinary schema declaring `step => data & { … }` | refused: "supertype 'data' names no type this schema declares or imports" |
-| an ordinary schema importing the kernel and core | refused: "'void' is declared by two different schemas" |
-| an ordinary schema importing the kernel, declaring a constructor | refused by placement: "only a schema chaining to meta-kernel.tn directly may declare new constructors" (§2.2.2) |
+| an ordinary schema importing the kernel and core | refused: "'void' is declared by two different schemas"; since tson-java PR #755, at the import's level |
+| an ordinary schema importing the kernel, declaring a constructor | refused by placement: "only a schema chaining to meta-kernel.tn directly may declare new constructors" (§2.2.2); since PR #755, at the import's level |
 | a schema whose `!!meta` names itself, declaring only types | refused: "is part of an import cycle" ([TSON-DATA] §2.2.3) |
 | in one governed schema, an instance naming a type declared beside it | resolves; a kind slot naming an instance beside it is refused |
 
 **What the table shows:**
-- **Four separate mechanisms hold one ladder up:**
+- **Separate mechanisms hold one ladder up:**
   - visibility: the kernel's names aren't in an ordinary schema's namespace, so `data` is simply undeclared;
   - placement: a constructor may be declared only under the kernel;
   - direction of service: a schema's `!` targets come from its meta, never from its own entries;
-  - the import-cycle rule, which counts `!!meta` as an edge.
-- **The kernel escapes all four by being pre-loaded.** Its own doc says so: "the circularity is closed by pre-loading
+  - the import-cycle rule, which counts `!!meta` as an edge;
+  - and since tson-java PR #755 a fifth, the import's level: an ordinary schema imports no kernel-governed one, so the
+    kernel's names never reach it and placement is reached by no loaded document.
+- **The kernel escapes the first four by being pre-loaded.** Its own doc says so: "the circularity is closed by pre-loading
   rather than by resolution". §2.2.2's "when a schema is its own meta, the two namespaces are the same entry set" is
   true only for the one document that is pre-loaded.
 - **Ordering is already solved inside one document for types.** An instance naming a type declared beside it resolves,
@@ -103,8 +109,8 @@ Then three threads this note pulls on:
   ordinary record type beside `http_method`, `status_code` and `uri_template`, and an API description imports it like
   any other schema. No kernel extension is involved (see "Entries are types or values, and `data` goes").
 - **The fold of `http.tn` into `meta-http.tn`** (commits `abadf10` and `0224035`). It was forced by levels: a meta
-  layer couldn't import an ordinary library's vocabulary. `UPSTREAM.md` #3 asks upstream to *enforce* that rule. Under
-  one level, #3 is withdrawn and the fold reverses.
+  layer couldn't import an ordinary library's vocabulary, a rule tson-java PR #755 now enforces. Under one level the
+  rule is withdrawn and the fold reverses.
 - **The namespace roadblock.** The design `namespace => abstract top & { of: kind<map> }` put a fact about the
   constructor in an instance field, and made `field_map` a constructor that can't type `record.fields`. With one level,
   `myapi => !api { get_orders => … }` is a value entry of an ordinary record type, and a namespace kind is a record
@@ -423,6 +429,93 @@ as one rule:
 - **In a data document** the probe already shows `type_kind` judged for membership. The same rule extends to value
   entries, which is how an agent plan's `method` could be checked (see the agent section).
 
+### The reference atom: `kind`, `ref` and `type_ref` are one
+
+The section above was an argument from what one level would allow. This one is an argument from what the kernel
+already does, measured at tson-java `5c39e2df` while working tson-java #756: the three ways the kernel holds a name in
+a slot are one atom, and the only thing keeping them apart is the ladder.
+
+**The three forms.** `kind_type` is an atom whose `of` names a constructor of the structure namespace and whose values
+are one-segment type names, with a resolver-computed `members` index. `ref_type` is an atom whose `of` names a type of
+the writer's own namespace and whose values are qualified names walking entries, then namespace keys and record
+fields. `type_ref` is a record, `{ name: type_name  arguments?: [type_argument] }`, the application form. The types
+under `type` otherwise describe data: an atom's values are tokens, a record's are records, an array's are arrays. These
+three describe a *location in the namespace*, and all three are represented by the one thing, a qualified name.
+
+**Four measured facts.**
+1. **Every slot delivers into one host shape.** tson-java reads a kind-typed, a reference-typed and a `type_ref`-typed
+   slot into the same `TypeRef`, and the judgement belongs to the slot (`design/references.md`: "One host shape for every
+   reference: a `TypeRef`, whatever the slot. Only the judgement differs by slot, and it is the slot's, never the host's").
+   The implementation found the one atom before the spec did.
+2. **`type_ref` without arguments is already `kind<type>`.** No bundled resolved output carries an `arguments:` field:
+   every closed application lifts to a minted entry (`array_type_name_xxhash`, `kind_type_type_c430c650`), so in
+   resolved output a closed type reference is a bare name. The kernel's own slots that name a type (`record_field.type`,
+   `map.key_type`, `array.element_type`, `choice.variants`, `template_param.bound`) are typed `type_kind`, which is
+   `kind<type>`; `type_ref` survives in three slots (`type_chain.parents`, `reference.target`, `type_argument.name`).
+   What it carries beyond a name is an application still open: the kernel's `type_ref` doc keeps `arguments` "inside
+   template bodies and in an alias's `reference.target`", and a record template's resolved body is one (#17). The
+   bundled outputs show none only because no bundled schema has one. So `type_ref` is two things: a bare name, which
+   is `kind<type>`, and the open-application form, which nothing else expresses.
+3. **`kind<C>` is `ref<C>` read at the meta level.** Under SPEC-FEEDBACK #14 a schema map's entry is its value, so
+   `order => { sku: text }` is a value of the kernel type `record`. `kind<record>`, "the name of an entry whose value is
+   built with `record`", is then "the name of an entry whose value IS-A `record`", which is `ref<record>`'s predicate
+   word for word, minus #22's exclusions: not a constructor whose instances are types (a namespace constructor, whose
+instances are maps, is a member), and not a template over another constructor (a record template is a type and a
+member). The spec refuses `ref<record>`
+   and makes `kind<record>` the spelling for one reason only: `of` resolves in two stores, the structure namespace for a
+   kind and the type-name namespace for a reference. Two stores is the ladder. The exclusions are facts about `top`'s
+   family, not about stores, and survive as one predicate on the referent.
+4. **The ladder makes half the vocabulary dead and the index wrong.** A reference's first segment names an entry
+   holding a value, and under the import-level rule (PR #755) a namespace type, the only thing that puts a value in an
+   entry, exists only in a kernel-governed schema. So `ref<T>` in a schema governed by meta.tn, which is where data
+   lives, admits no value at all: an empty atom, which #756 (open) removes from core.tn. And `kind_type.members`, the derived
+   index in resolved output, is computed over the *declaring* schema's closure, while the names at the slot resolve in
+   the *holding* document's. For a kind declared at level 2 and held at level 1 the index lists level-2 types, and the
+   linker rightly ignores it; it is honest only when declaring and judging closure coincide, a level-1 kind on level-0
+   data. Neither is a bug in the atoms. Both are the two stores showing through them.
+
+**Is `kind_type` an atom or a sum?** An atom. A sum's values are values of a variant; a kind's values are names. #22's
+example decides it: `name_type: kind<identifier_type>` admits `identifier` and refuses `NewYork`. `choice` is the sum,
+and its `variants: [type_kind]` is built over the kind; `enum_type` is an atom with a `members` field on the same
+terms. What `members` shows is only fact 4, that the set is closure-relative.
+
+**What one level makes of it.** One namespace is one store, so one atom:
+
+```
+reference => atom & { of: type_name }    -- a qualified name; past entries, keys and fields, the referent IS-A `of`
+kind      => <T> !reference { of: T }    -- the one-segment spelling
+ref       => <T> !reference { of: T }    -- the qualified spelling; the two may be one
+```
+
+- `of` names any entry of the one namespace, constructor or type: `kind<record>` and `ref<operation>` are the same
+  declaration with a different `of`, which is "What `kind<T>` means" above, now with its kernel shape.
+- `type_ref` stays as the application form. A closed one lifts to a minted entry as it does today, so no slot holding a
+  closed name is typed by it; an open one, in a template body or an alias's target, is still a `type_ref` in resolved
+  output, and that is the one place it is needed.
+- `members` goes. With one closure the declaring closure is the judging closure, so the index is computable at ingest
+  and says nothing a reader cannot recompute; if a resolved form keeps it for inspection it is honest for the first time.
+- The slot's meaning still comes from `of`, not the spelling: an `of` in the `type` family makes the slot a type reference
+  (structural identity, delivered as a `TypeRef`); any other `of` names a value. **`namespace` is where that rule is not
+  yet clean.** Upstream already lists `myapi`, a value, under `kind<api>` and `kind<namespace>` beside the namespace types
+  (SPEC-FEEDBACK #23, stated there as a consequence for the spec to decide), which supports the merge: a kind reaches
+  values today. But under one level a namespace type and its values share a closure, which the ladder prevents (a meta
+  layer cannot apply its own constructor), so `!reference { of: namespace }` admits both; and `namespace` sits under
+  `top`, not `type`, so the rule above reads it as naming values and drops the namespace types #22 and #23 put in
+  `type_kind`. The atom has to say which before it is written.
+- **`kind` and `ref` cannot differ by spelling alone.** Two templates expanding to the same `!reference { of: T }` make
+  `kind<X>` and `ref<X>` one application with one canonical content (§8.2), so a slot cannot know which was written. A
+  one-segment restriction is then a field of `reference` (a segment bound, say), or it goes and the two spellings are
+  one name.
+
+**Why this is a second proof.** The verdict's first argument was that one checked rule replaces five that leaked. This
+one is from the other end: the kernel's own vocabulary, designed under the ladder, converges on one reference atom at
+exactly the point where the two stores become one, and the cost of not collapsing shows up inside the atoms as a dead
+spelling and a lying index. A design that is right tends to show the same simplification from both directions.
+
+**Not for Revision 38.** Writing `reference` while `of` resolves in two stores would put the store choice in a field
+name (`{ name | of | kind }`) and carry the ladder inside the atom. Under the ladder the honest Revision 38 kernel is the
+one it has, with `ref` confined to kernel-governed schemas (#756, open).
+
 ### Templates and dependent fields: one mechanism
 
 A pinned dependent field *is* a template parameter: `ns ^ { of?: = method_map }` and `ns<method_map>` say the same thing,
@@ -458,19 +551,21 @@ strong form of that is already untrue:
 
 | case | outcome |
 |---|---|
-| user schema imports the kernel, declares `pick => { t: type_kind }`; data writes `!pick { t: order }` | admitted |
+| user schema imports core, declares `pick => { t: kind<type> }`; data writes `!pick { t: order }` | admitted |
 | the same, `t: no_such` | refused: "'no_such' is not a member of this kind" |
 | the same, `t: record`, a constructor | refused: not a member |
-| `rpick => { m: ref<order> }`; data writes `!rpick { m: whatever }` | `NOT_IMPLEMENTED`: "a reference … in a data document is not yet read" |
+| the same schema adds `rpick => { m: ref<order> }` through core's `ref`; data writes `!rpick { m: whatever }` | resolves; the read is `NOT_IMPLEMENTED`, though the closure holds no value entry to name (#756, open, removes core's `ref`) |
 | data governed by `meta.tn`: `!record { fields: { sku => { type: no_such } } }` | admitted: grammar and shape judged, membership not |
 
 **A data document can hold a checked name for a type today.** Membership is judged over the governing schema's
-closure. This is the "value type for naming a type in data" that `CLAUDE.md` and `UPSTREAM.md` #3 record as weighed
-and set aside. It exists, reached by importing the kernel, which #3's "other direction" also lets through. A
-reference to a value is declared and waiting (`ref<T>`'s doc: "a reference in a data document is not yet read").
+closure. This is the "value type for naming a type in data" that `CLAUDE.md` records as weighed and set aside. It
+exists through core's own `kind`, which keeps it in an ordinary schema's reach now that PR #755 refuses importing
+the kernel. A reference to a value does not, under the ladder: it names an entry holding a value, and only a
+kernel-governed schema can declare the namespace type that puts one there, so a schema that governs data has none to
+name. Under one level it does ("The reference atom", above).
 
 **So what separation is left?** A data document *declares nothing*: no name in it can be resolved against by anyone
-else. It can *refer* to types (kinds) and soon values (refs) in the namespace it names. The line is between a
+else. It can *refer* to types (kinds), and under one level values (refs), in the namespace it names. The line is between a
 document that **exports a namespace** and one that **only refers into one**, not between "may name a type" and "may
 not".
 
@@ -628,7 +723,8 @@ caught at that step.
 3. **Remove the ladder:** `!!meta` becomes the kernel-revision directive (or `!!import` classifies), and placement and
    direction of service go. `core.tn` imports the kernel instead of redeclaring `void`.
 4. **Remove `data`.** Value entries become instances of ordinary types; the binder split is redrawn.
-5. **Redefine `kind<T>`** as the name of an entry whose value IS-A `T`, with `ref<T>` its qualified form.
+5. **Replace `kind_type`, `ref_type` and the name-only `type_ref` with one reference atom,** `kind<T>` and `ref<T>` its
+   spellings and `members` gone ("The reference atom").
 6. **Add dependent fields, with templates unified into them.** `record_field.value` gets its real type.
 
 Steps 1 and 2 are the correctness work. Steps 3 to 6 are mostly deletion once they hold.
@@ -638,8 +734,11 @@ Steps 1 and 2 are the correctness work. Steps 3 to 6 are mostly deletion once th
 Not edited; recorded here until the direction is decided.
 - **`CLAUDE.md`, "Data can name a schema; only a schema can name a type":** measured to be untrue in its strong form.
   The restatement above ("exports a namespace" versus "refers into one") is the candidate.
-- **`UPSTREAM.md` #3** (refuse an import across levels) would be withdrawn under one level. Until then it stands: the
-  kernel import that lets data hold a kind is the hole #3 describes.
+- **The import-level rule** tson-java PR #755 added would be withdrawn under one level: it is a ladder rule. A data
+  document's kinds reach it through core today and through the one namespace then.
+- **The reference rule** tson-java #756 (open) proposes (core.tn declares no `ref`; a reference is declared only in a
+  kernel-governed schema) is withdrawn with it: under one level a schema that governs data has value entries, so
+  `ref<T>` is valid everywhere and core.tn needs no sibling of anything.
 - **The "Describing an API" section's** argument that "the meta layer owns the vocabulary its constructors use" is a
   consequence of levels. Under one level, `http.tn` returns as an ordinary library.
 - **"Describing an API"'s** wiring note that `metaNameBinder`, not `bindings`, binds the description's vocabulary, and
@@ -667,3 +766,10 @@ Not edited; recorded here until the direction is decided.
   dependency model.
 - **Streaming a free dependent field:** require its sibling first, or buffer.
 - **The two upstream inconsistencies** above, which are worth filing regardless of this direction.
+- **#22's exclusions under one reference atom:** "not a constructor whose instances are types, not a template over
+  another constructor" as one predicate on the referent (has instances), and whether `kind<type>` then admits an
+  abstract type, which SPEC-FEEDBACK #22 leaves open today.
+- **`namespace` under one reference atom:** whether `!reference { of: namespace }` names the namespace types, their
+  values, or both, once one closure holds both ("The reference atom").
+- **Where `members` is computed:** fact 4 says over the declaring schema's closure; the kernel's `kind_type` doc says
+  "over the governing schema's closure". One of the two should change, whichever way the atom goes.

@@ -263,8 +263,10 @@ the documents that project it. A `type_reference` value type in data (a field wh
 against the document's scope) was weighed as a way to write a description as data and avoid the meta layer's
 restrictions, and set aside for that reason: the restrictions come with the level and are accepted. **The meta
 layer owns the vocabulary its constructors use** — `http_method`, `status_code` and `uri_template` are declared
-in `meta-http.tn` itself, not imported, since an import should not cross governing levels (`UPSTREAM.md` #3) —
-and an ordinary schema wanting the same terms declares its own: `problem.tn`'s `status` is an `int32`.
+in `meta-http.tn` itself, not imported, since an import stands at the importer's governing level — a meta layer
+imports no ordinary library and no ordinary schema imports a meta layer, both refused at schema load
+(`UpstreamGapsTest.anImportStandsAtTheImportersGoverningLevel`) — and an ordinary schema wanting the same terms
+declares its own: `problem.tn`'s `status` is an `int32`.
 
 **An entry applying a namespace type is a value, never a type.** The Revision 38 proposal retired §4.1's `data`
 kind (tson-java PR #753): a meta layer's own vocabulary is a record held by a namespace type, the kernel's

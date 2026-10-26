@@ -33,11 +33,11 @@ class OneLevelProbe {
     static final String ID = "https://schemas.example.com/2026/38/one-level/s-1.tn";
     static final String LAYER_ID = "https://schemas.example.com/2026/38/one-level/layer-1.tn";
 
-    /** A meta layer declaring the probe's one constructor, the two-document shape every governed schema has today. */
     /** The probe's vocabulary: a record, and the namespace type a governed schema applies to hold it. */
     static final String STEPS =
             "step => { takes: type_kind }  steps => namespace & { key_type: = identifier  value_type: = step }";
 
+    /** A meta layer declaring the probe's one constructor, the two-document shape every governed schema has today. */
     static final String LAYER = head(LAYER_ID, KERNEL, META)
             + "{ " + STEPS + " }";
 
@@ -100,19 +100,20 @@ class OneLevelProbe {
         assertTrue(message.contains("supertype 'namespace' names no type this schema declares or imports"), message);
     }
 
-    /** Importing the kernel beside core is refused: both declare {@code void}. */
+    /**
+     * An ordinary schema cannot import the kernel, with core or without: an import stands at the importer's governing
+     * level (§2.2.3), so the edge is refused before core's {@code void} collides or the placement rule (§2.2.2) is
+     * reached, and that rule now meets no loaded document.
+     */
     @Test
-    void theKernelAndCoreCannotBothBeImported() {
-        String message = onlyMessage(resolve(head(ID, META, CORE, KERNEL) + "{ order => { sku: text } }"));
-        assertTrue(message.contains("'void' is declared by two different schemas"), message);
-    }
-
-    /** With the kernel imported, the placement rule is what refuses the constructor (§2.2.2). */
-    @Test
-    void aSchemaImportingTheKernelStillCannotDeclareAConstructor() {
-        String message = onlyMessage(resolve(head(ID, META, KERNEL) + "{ " + STEPS + " }"));
-        assertTrue(message.contains("only a schema chaining to meta-kernel.tn directly may declare new constructors"),
-                message);
+    void anOrdinarySchemaCannotImportTheKernel() {
+        for (String schema : List.of(head(ID, META, CORE, KERNEL) + "{ order => { sku: text } }",
+                head(ID, META, KERNEL) + "{ " + STEPS + " }")) {
+            String message = onlyMessage(resolve(schema));
+            assertTrue(message.contains("an !!import stands at the importer's governing level")
+                    && message.contains("an ordinary schema reaches a meta-schema's constructors only through its "
+                    + "!!meta"), message);
+        }
     }
 
     /**
@@ -137,15 +138,24 @@ class OneLevelProbe {
 
     // ── across the data/schema line ─────────────────────────────────────────────────────────────────────────────
 
-    /** A schema importing the kernel (without core) may type a field by a kind, and by a reference. */
-    static final String NAMING = head(ID, META, KERNEL)
-            + "{ order => { sku: text }  pick => { t: type_kind }  rpick => { m: ref<order> } }";
+    /** An ordinary schema types a field by a kind through core's own {@code kind}. */
+    static final String NAMING = head(ID, META, CORE) + "{ order => { sku: text }  pick => { t: kind<type> } }";
+
+    /** The same, typing a field by a reference through core's own {@code ref}, which tson-java #756 removes. */
+    static final String REFERRING = head(ID, META, CORE) + "{ order => { sku: text }  rpick => { m: ref<order> } }";
 
     static List<Diagnostic> readUnderNaming(String body) {
+        return readUnder(NAMING, body);
+    }
+
+    /** Reads {@code body} under {@code schema}, served at {@link #ID}, once the schema has resolved soundly. */
+    static List<Diagnostic> readUnder(String schema, String body) {
         Map<String, String> documents = new LinkedHashMap<>();
-        documents.put(ID, NAMING);
+        documents.put(ID, schema);
         Tson tson = tson(documents);
-        assertEquals(List.of(), tson.validateSchema(NAMING));
+        List<Diagnostic> problems = tson.validateSchema(schema);
+        assertEquals(List.of(), problems, () -> "the schema no longer resolves; for REFERRING that is tson-java #756 "
+                + "landing, which the one-level README's reference section expects: " + problems);
         return tson.validate("!!schema:\"" + ID + "\"\n" + body);
     }
 
@@ -166,10 +176,17 @@ class OneLevelProbe {
         assertTrue(constructor.contains("'record' is not a member of this kind"), constructor);
     }
 
-    /** A value's name in a data document is declared and not yet read: a gap, reported as one. */
+    /**
+     * <b>A reference in an ordinary schema resolves and names nothing.</b> Core's {@code ref} reaches an ordinary
+     * schema, but a reference names an entry holding a value, and only a kernel-governed schema can declare the
+     * namespace type that puts one there, so the closure of a schema that governs data has nothing to name. The read
+     * is reported as a gap. tson-java #756 (open) removes core's {@code ref} on that ground, and the day it lands
+     * {@link #REFERRING} stops resolving and this fails; the kind half ({@link #aDataDocumentCanHoldACheckedTypeName})
+     * does not depend on it.
+     */
     @Test
-    void aReferenceInADataDocumentIsNotYetRead() {
-        List<Diagnostic> problems = readUnderNaming("!rpick { m: whatever }");
+    void aReferenceInAnOrdinarySchemaResolvesAndNamesNothing() {
+        List<Diagnostic> problems = readUnder(REFERRING, "!rpick { m: whatever }");
         assertEquals(List.of(Diagnostic.Code.NOT_IMPLEMENTED), problems.stream().map(Diagnostic::code).toList());
         assertTrue(problems.getFirst().message().contains("a data document has no link"),
                 problems.getFirst().message());
