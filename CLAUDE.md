@@ -13,14 +13,11 @@ It is a **consumer** of the TSON library, not part of it. The library lives in t
 and consumed as a Gradle **included build** (see "Consuming tson-java" below). Destination remote:
 `https://github.com/litterat/`.
 
-**This branch, `r2026-38-proposal`, is built against Revision 38** — the sibling's branch of the same name, which
-becomes Revision 38 on the sibling's `main` when it merges. Until then `main` here is built against the sibling's
-`main`, Revision 37, and this branch merges to it when the sibling's does: a fast-forward, `main` holding nothing
-this branch lacks, after which CI (which checks out the sibling's default branch) builds it against Revision 38. The
-proposal is where the changes this project needed from the spec were tried and used before publication: `net.tn`
-with `hostname`, `host` and `media_type`, `record.name_type`, namespaces as values, kinds and references, and the
-import-level rule. Every identity in this repo carries `/2026/38/`, and `tson.version` names the matching
-`0.38.0-SNAPSHOT`. The revision series changes without
+**This project is built against Revision 38**, published at tson.io and on the sibling's `main`, which is what CI
+checks out. Revision 38 began as a proposal branch in both repos, where the changes this project needed from the spec
+were tried and used before publication: `net.tn` with `hostname`, `host` and `media_type`, `record.name_type`,
+namespaces as values, kinds and references, and the import-level rule. Every identity in this repo carries
+`/2026/38/`, and `tson.version` names the matching `0.38.0-SNAPSHOT`. The revision series changes without
 compatibility guarantees, so a `git pull` of the sibling can move the whole identity space; "Project-owned schema
 `!!id`" below says what that costs.
 

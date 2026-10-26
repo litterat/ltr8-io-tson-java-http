@@ -452,7 +452,7 @@ An earlier draft of this note made a namespace kind an ordinary record whose one
 second, reading-side §5.6 rule to walk `orders.get`. PR #753 settled it the other way inside the ladder: `namespace`
 is a constructor under `top` whose instances are maps, so an entry's value is written and read *as the map*, with no
 special case. One level doesn't change that, because `namespace` under `top` works unchanged in one store. Measured on
-the Revision 38 proposal branch
+Revision 38
 ([`NamespaceTemplateProbe`](java/io/ltr8/tson/http/experiment/onelevel/NamespaceTemplateProbe.java)):
 
 | case | outcome |
