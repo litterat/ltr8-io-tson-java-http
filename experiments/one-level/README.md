@@ -30,10 +30,11 @@ for nothing against a rule that is more correct.
   hand, and its resolved form is the fixed point, instead of being an exception four rules carve out.
 - **`data` duplicates the kind system,** and the duplication keeps producing special cases: #751's value-body read
   mode, §4.1's DATA refusals, "a constructor is never the type of a value".
-- **`value_type` goes, and the types become right.** With mutual resolution in one level and the `sibling!`
-  dependent-field syntax, `record_field.value` (`value?: type!`), defaults, annotation values, `type_argument` values,
-  and every `value`-typed facet in `meta.tn` (`decimal_type.min`, `float_type.min`, `date_type.min`,
-  `ipv4_type.within`) get their real types instead of an untyped escape hatch.
+- **The types become right, and `value_type` narrows to one slot.** The `sibling!` dependent-field syntax gives
+  `record_field.value` (`value?: type!`), and so every default and pin, its real type. With a constructor and its
+  instance in one document, every `value`-typed facet in `meta.tn` (`decimal_type.min`, `float_type.min`,
+  `date_type.min`, `ipv4_type.within`) gets one too. What is left of the escape hatch is `type_argument.value`, whose
+  type is a parameter's, reached through a reference (see "Two limits on `field!`").
 - **Most coherence rules become per-value checks.** A facet refined by a sibling (`max_items: !non_negative_integer ^
   { min: min_items! }`) turns a prose schema-load check (`min_items <= max_items`) into ordinary range validation. Not
   every rule fits: a bound reached from either of two alternatives in a field group does not (see "Per-value facet
@@ -46,19 +47,27 @@ for nothing against a rule that is more correct.
   now says it *is* one, by composing `top`. A data document still declares nothing, and a document's kind is still in
   its header.
 
-**Dependent fields (`type!`) are not separable from one level.** A default whose type is declared later in the same
-schema, or whose type is the record being declared, needs the same read-defer-resolve and cycle check as a constructor
-applied in the document that declares it. Building the machinery for one is building it for both, so the choice is both
-or neither. Under the rule, both.
+**Half of `type!` is separable from one level.** `record_field.value: type!` needs the shape of the type its sibling
+names, and under the ladder that is always a type in the closure, never a constructor declared beside it: a value
+waiting on a shape, which Pass 2 already does. A default naming a type declared later, or the record being declared,
+is the same edge. What does need one level is `meta.tn`'s facets: typing `decimal_type.min` as `number` needs the
+constructor and its instance in one document, which is the ladder's removal.
+
+**So it is two revisions, not one.** The dependency model, the separable half of `type!`, the Revision 38 errata this
+note turned up, and three decisions made on paper ("Decisions before the ladder goes") are Revision 39. Removing the
+ladder, and with one store in hand the reference atom, is Revision 40 ("Order of work"). Two of the deletions carry
+correctness questions of their own, who may extend the kernel and which names a schema may use, and landing them in
+the revision that introduces the dependency model would make it impossible to tell, when a fixture moves, which
+decision moved it.
 
 **The correctness work is the dependency model** ("The dependency model: shape and value", below): what an entry's
 reading may wait on, and what counts as a cycle. Everything else in this note rides on that definition, and it is
-specified, and proved on the kernel, before anything is removed ("Order of work").
+specified, and proved on the kernel, before anything is removed.
 
 **Under a rule weighted by cost, the verdict would differ.** Most of the problems that motivated this have local
-fixes: a namespace kind written as a record template works today (`NamespaceTemplateProbe`), and the host-shape gap
-is a bug fix. That is recorded so the rule stays visible as the reason for the verdict, and so the verdict is revisited
-if the rule ever changes.
+fixes: namespaces became a constructor inside the ladder (PR #753), and the host-shape gap is a bug fix. That is
+recorded so the rule stays visible as the reason for the verdict, and so the verdict is revisited if the rule ever
+changes.
 
 ## The question
 
@@ -118,11 +127,6 @@ Then three threads this note pulls on:
 - **The fold of `http.tn` into `meta-http.tn`** (commits `abadf10` and `0224035`). It was forced by levels: a meta
   layer couldn't import an ordinary library's vocabulary, a rule tson-java PR #755 now enforces. Under one level the
   rule is withdrawn and the fold reverses.
-- **The namespace roadblock.** The design `namespace => abstract top & { of: kind<map> }` put a fact about the
-  constructor in an instance field, and made `field_map` a constructor that can't type `record.fields`. With one level,
-  `myapi => !api { get_orders => … }` is a value entry of an ordinary record type, and a namespace kind is a record
-  whose one field is typed by a pinned sibling (`entries: of!`; see "Dependent fields (`type!`) and the elimination of
-  `value_type`").
 - **The meta-service experiment's two documents.** `meta-service.tn` and its examples would be one library and its
   users, with no `!!meta` between them.
 
@@ -135,8 +139,11 @@ Then three threads this note pulls on:
 - **sibling duplication** (§3.3.5, §5.10): `core.tn` no longer redeclares fresh siblings of the kernel's `void`,
   `boolean`, `integer`, `text`, `regex`, `iri`, `kind` and `doc`, nor of `meta.tn`'s `set`, and §5.10's rule that two
   same-named entries with the same resolved body are one type when parameter types are compared is deleted;
-- **`value_type` and `value`** (§4.2, §7.4): replaced everywhere by mutual atom declarations and `type!` dependent
-  fields.
+- **`value_type` and `value`** (§4.2, §7.4): out of `record_field` through `type!` (Revision 39) and out of `meta.tn`'s
+  facets through mutual atom declarations (Revision 40), leaving `type_argument.value`.
+
+The namespace roadblock this note once listed here is gone already: PR #753 made `namespace` a constructor whose
+instances are maps, inside the ladder, and one level keeps it ("Namespaces stay a constructor", below).
 
 **And `data`.** Once an entry may be a value of an ordinary type, "this entry is not a type" is said by the kind
 system already, and `data` only restates it (see "Entries are types or values, and `data` goes").
@@ -207,11 +214,10 @@ both are held to it by a rule that already exists or is stated here:
 - **A family selector's pins are part of the base's shape,** since dispatch reads them. §5.2 already confines a selector
   to an atom or an enum, whose shapes never wait on a user value, so the pins are read with readers that are always
   closed.
-- **A pinned dependent field (`of?: = method_map` with `entries: of!`) is part of the type's shape.** Its sibling is
+- **A pinned dependent field (`type?: = order` with `value?: type!`) is part of the type's shape.** Its sibling is
   typed by a type reference (`type_kind`, or a `kind<C>`), so its value is a name: a link, not a read. A type-position
-  `sibling!` whose sibling isn't a type reference is refused at its declaration. (`field_map` below pins `of` to an
-  inline `!namespace { … }`, which is not a name; it has to be a named entry, or the pin is a read and this case
-  breaks.)
+  `sibling!` whose sibling isn't a type reference is refused at its declaration, and so is a pin that is not a name
+  (an inline constructor application), since reading it would make the shape wait on a value.
 
 **A cycle is a cycle of shape → shape edges (or intra-record `sibling!` edges),** refused naming the entries or fields
 on it. The kernel is the one exception: the shape of `record` is described by a `!record`, and that cycle is closed by
@@ -223,7 +229,7 @@ pre-loading the kernel's shapes.
 | `frame => { origin: point = { x: 0  y: 0 } }`, `point` declared after it | value → shape of `point` | sound: order of declaration is irrelevant |
 | `decimal_type => atom & { min?: number … }`, `number => !decimal_type {}` | `decimal_type` links `number`; `number`'s shape → `decimal_type`'s shape | sound: `decimal_type`'s shape is a kernel `record` |
 | `step => top & { takes: type_kind }`, then `s => !step { takes: order }` | shape of `step` → kernel `record`; `s`'s value → shape of `step` | sound |
-| `api => ns ^ { of?: = method_map }` (`entries: of!`) | shape of `api` names `method_map` (link) | sound |
+| `order_field => record_field ^ { type?: = order }` (`value?: type!`) | shape of `order_field` names `order` (link) | sound |
 | `record_field { type: point  value: { x: 0 } }` (`value?: type!`) | `value` → `type` sibling's value (`point`) → shape of `point` | sound |
 | `a => b`, `b => a` | shape of `a` → shape of `b` → shape of `a` | cycle: refused |
 | `c1 => !c2 { … }`, `c2 => !c1 { … }` | shape of `c1` → shape of `c2` → shape of `c1` | cycle: refused |
@@ -335,14 +341,19 @@ record_field => {
   resolved, a field typed by a record, array, map, or tuple (`origin?: point ~ { x: 0  y: 0 }`, `tags?: [text] ~ [a b]`)
   is read by that shape's reader. The v1 restriction of `~` and `=` to scalar tokens (§5.2) can be lifted whenever
   desired.
+- **It lands under the ladder (Revision 39).** The type `type` names is a type in the holding schema's closure, as a
+  kind slot's name already is, so reading `value` is a value waiting on a shape: Pass 2 work, with the intra-record
+  `sibling!` order and no cycle check over constructors.
 
-#### 2. Eliminating `value_type` across `meta.tn` and `core.tn`
+#### 2. Retiring `value` from `meta.tn`'s facets (needs one level)
 
 In Revision 38, `meta.tn` declares atom constructors (`decimal_type`, `float_type`, `rational_type`, `date_type`,
 `time_type`, `datetime_type`, `duration_type`, `period_type`, `ipv4_type`, `ipv6_type`, `cidr4_type`, `cidr6_type`)
 while their instances (`number`, `float64`, `date`, `ipv4`, `cidr4`, …) live one rung down in `core.tn` and `net.tn`.
 Because `meta.tn` cannot reference `core.tn`, every bound and network list in `meta.tn` is typed `value`, requiring the
-bespoke eager-conversion prose of §7.4.
+bespoke eager-conversion prose of §7.4. `type!` doesn't help: no sibling names "the atom this constructor builds".
+Nor can `meta.tn` declare `number => !decimal_type {}` itself under the ladder, because its `!` targets resolve in the
+kernel's entries, not its own (§3.3.1).
 
 Under one level, each atom constructor and its canonical instance sit together (or mutually resolve in the same pass, as
 `integer_type` and `integer` already do in `meta-kernel.tn`):
@@ -366,8 +377,10 @@ ipv4_type => atom & atom_specification & {
 ipv4 => !ipv4_type {}
 ```
 
-**`value_type` and `value` are deleted from the meta-kernel.** Every slot in the specification has a concrete or
-dependent type.
+**`value` then types one slot, `type_argument.value`.** Its type is the parameter's, and reaching it from a
+`type_argument` means following the enclosing application's template name to that template's parameter list: a
+projection through a reference, which `sibling!` doesn't do ("Two limits on `field!`"). So `value_type` survives at
+that slot unless chained projections are ever added.
 
 #### 3. Per-value facet checks (facet coherence as types)
 
@@ -413,10 +426,11 @@ integer_type => atom & {
   in the one facet `exclusive_min`. Stating it needs a choice between siblings (`exclusive_min: ( min! | exclusive_min! )`)
   or it stays prose.
 
-So per-value checks retire `min_items <= max_items`, `min_length <= max_length` and `min_prefix <= max_prefix`, and the
-numeric and temporal bounds stay prose unless sibling choice is added.
+So per-value checks retire three prose rules, `min_items <= max_items`, `min_length <= max_length` and
+`min_prefix <= max_prefix`, and leave the numeric and temporal bounds, the common ones, in prose unless sibling choice
+is added. A modest win, and a separable one: these land under the ladder with `record_field.value`.
 
-#### 4. Typed template bodies: open, and not part of step 6
+#### 4. Typed template bodies: open, and in neither revision
 
 `template => top & { parameters: [template_param]  template: text }` holds a body as text, and §5.10 says why: a
 parameter stands wherever a token stands, so `min_items: N` is not a value of any constructor's record shape until it
@@ -429,77 +443,105 @@ closes. A typed body would need:
   "Why the dependent part stays manageable" says the model doesn't do.
 
 The payoff is real (resolved-output consumers would no longer need the schema parser for a held body, §1.3), but it is
-a feature of its own. It's listed under "Open questions", and step 6 doesn't include it.
+a feature of its own. It's listed under "Open", and neither revision includes it.
 
-#### 5. The namespace kind under `of!`
+#### 5. Namespaces stay a constructor
 
-```
-ns        => abstract { of: kind<namespace>  entries: of! }      -- an ordinary record type, not a constructor
-field_map => ns ^ { of?: = !namespace { key_type: text  value_type: record_field  ordered: true } }
-api       => ns ^ { of?: = method_map }
-governed:  myapi => !api { get_orders => { verb: GET  response: order_list } }
-```
-
-Each concrete kind pins `of`, so `entries: of!` has a fixed type at the declaration. **A pinned dependent field is a
-template parameter**, so this static case is `ns => <M> { entries: M }` applied once per kind. Record templates are
-records since #727/#731, so the static case can be measured today, under a meta layer, with `data &` standing in for
-what one level makes unnecessary
+An earlier draft of this note made a namespace kind an ordinary record whose one field was typed by a pinned sibling,
+`ns => abstract { of: kind<namespace>  entries: of! }`. That brought back the path `orders.entries.get`, and needed a
+second, reading-side §5.6 rule to walk `orders.get`. PR #753 settled it the other way inside the ladder: `namespace`
+is a constructor under `top` whose instances are maps, so an entry's value is written and read *as the map*, with no
+special case. One level doesn't change that, because `namespace` under `top` works unchanged in one store. Measured on
+the Revision 38 proposal branch
 ([`NamespaceTemplateProbe`](java/io/ltr8/tson/http/experiment/onelevel/NamespaceTemplateProbe.java)):
 
-| case | outcome on `a53c3f66` |
+| case | outcome |
 |---|---|
-| `iface => data & ns<meth_map>`, `meth_map` a `!namespace` | resolves |
-| written `!iface { get => { request: order } }` | the same value as `{ entries: { … } }`: §5.6 lets the map stand in for the one required field |
-| `request: no_such` inside | refused at `/entries/get/request` |
-| `ref<meth>` to `orders.entries.get` | resolves |
-| `ref<meth>` to `orders.get` | refused: "'orders' is an 'iface', which has no field 'get'" |
-| the same template closed over a plain map `{identifier => meth}` | not entered: "a map that is no namespace" |
-| `ref<meth>` bound to a `String` host component, naming `nobody.get` | **resolves**: not judged; judged since PR #753 (`NamespaceTemplateProbe`) |
+| `iface => namespace & { key_type: = identifier  value_type: = meth }`, written `orders => !iface { get => { … } }` | the entry is the map: a `Namespace` of `iface`, holding each value under its key |
+| `request: no_such` inside | refused at `/get/request` |
+| `ref<meth>` to `orders.get` | resolves; `orders.nope` refused: "'orders' has no key 'nope' -- it holds get" |
+| a record field holding a plain map `{identifier => meth}` | not entered: "a map that is no namespace, so it is not entered by name" |
+| `ref<meth>` bound to a `String` host component, naming `nobody.get` | refused: "'nobody' is no entry of this schema or its imports" |
 
-**The wrinkle is the path, `orders.entries.get`.** The fix is the reading-side counterpart of §5.6: a record whose one
-required field holds a namespace is entered through that field. Then `orders.get` walks, and writing and walking agree.
-
-**What `field!` adds beyond templates is variation per value.** Templates cover every namespace kind, because each
-fixes its map type. `field!` is needed where each instance of the record differs:
+**What `field!` is for is variation per value.** A template fixes a slot once per application; `field!` is needed
+where each instance of the record differs:
 - `record_field.value` (`value?: type!`): every field in `record.fields` has its own `type`;
-- `type_argument`: `{ param: ref<template_param>  value: param.type! }`, unifying the `name`/`value` split with the
-  parameter's actual type (a projection through a reference, so subject to the second limit below);
 - sibling-indexed bounds (`max_items: !non_negative_integer ^ { min: min_items! }`);
 - an annotation attachment whose value is typed by the annotation's target type.
+
+`type_argument` would want `{ param: ref<template_param>  value: param.type! }`, but that is a projection through a
+reference, under the second limit below, so `type_argument.value` keeps `value`.
 
 §7.8's scoped slot is the existing per-value case. There the type travels inside the value (`!T`); a dependent field
 puts it in a sibling.
 
 **Two limits on `field!`:**
-- **Streaming.** In a data document, a free (unpinned) sibling `S` must either arrive before any field `S!` that
-  depends on it, or the reader buffers the record's tokens until `S` is read. Requiring `S` to appear first in streamed
-  data documents when `S` is unpinned matches how a `!tag` is read first and avoids unbounded buffering; in schema
-  documents (which are read to an AST in Pass 1 anyway) and for pinned siblings (`of?: = …`), field order is
-  unrestricted.
+- **Streaming, and it is a Part 1 rule.** In a data document, a free (unpinned) sibling `S` must either arrive before
+  any field `S!` that depends on it, or the reader buffers the record's tokens until `S` is read. Requiring `S` first
+  in a streamed data document matches how a `!tag` is read first and avoids unbounded buffering; in a schema document
+  (read to an AST in Pass 1 anyway) and for a pinned sibling, field order is unrestricted. But [TSON-DATA] holds that a
+  record's field order is insignificant, so this is an exception to a Part 1 rule and is written there, not implied by
+  Part 2; and [TSON-JSON] needs the same sentence, since a JSON object's member order is insignificant too and a
+  streamed JSON reader meets the same sibling.
 - **Single segment only.** `sibling!` reads one field of the same record instance. A chained projection
   (`method.request.fields!`) follows a reference into another entry and then into the definition of the type it names,
   which is a different operation spelled with the same `!`, and an entry-level value → value edge the dependency model
-  doesn't have. It stays out of step 6 ("API descriptions and HTTP routes over schema records", below, says what it
+  doesn't have. It is in neither revision ("API descriptions and HTTP routes over schema records", below, says what it
   would and wouldn't reach).
 
 ### What it costs
 
 Churn isn't counted (see "Verdict"). What is left are properties of the design, and each needs an answer:
-- **A document's role is no longer visible from its header.** Whether a schema defines vocabulary becomes visible per
-  entry instead: an entry composing `top` is a constructor. The spec currently prefers the document-level statement
-  ("the ladder keeps that role explicit rather than emergent"), and the entry-level one replaces it.
+- **A document's role is no longer visible from its header,** unless a header opt-in keeps it. Whether a schema
+  defines vocabulary becomes visible per entry: an entry composing `top` is a constructor. The spec currently prefers
+  the document-level statement ("the ladder keeps that role explicit rather than emergent"), and §11.2 and §11.3 treat
+  `!!meta` and `!!import` as the sensitive channel because they select vocabulary. Decided in step 1 ("Decisions before
+  the ladder goes").
 - **A schema can extend the language it is written in.** Its meaning then depends on itself, so tooling and readers
   have more to hold in their heads.
 - **More work per untrusted schema.** A schema named by a request body can declare constructors and use them. §9.1
   would want a bound on read-dependency depth beside nesting depth.
 - **Less push toward sharing.** Today one meta layer is *the* `operation`. With one level, any schema can declare its
   own; sharing still works through imports, but nothing pushes toward it.
-- **Every schema reserves meta's names.** With `core.tn` importing `meta.tn`, each name `meta.tn` declares (`record`,
-  `array`, `map`, `template`, every atom constructor) is reserved in each schema importing `core.tn` (§2.2.3), where
-  today a schema sees only core's types.
+- **Every schema reserves meta's names.** With `core.tn` importing `meta.tn` and imports transitive, each name
+  `meta.tn` declares (`record`, `array`, `map`, `set`, `template`, `choice`, every `*_type` constructor) is reserved in
+  each schema importing `core.tn` (§2.2.3). That reverses an argument Revision 38 just made: it moved five network
+  names out of core into `net.tn` because `mac` and `hostname` are plausible schema type names, and `record`, `template`
+  and `map` are far more plausible ones. Decided in step 5, before the ladder goes ("Decisions before the ladder
+  goes").
 - **`field!` widens two grammars, not one.** A facet value inside an atom refinement is [TSON-DATA]'s value grammar
   ([TSON-SCHEMA] §12.1 imports `record` for that body), so postfix `!` enters the data grammar there; and a pin
   referring to a sibling (`= S!`) is not a bare token, which §5.2 requires of a field-modifier value.
+
+### Decisions before the ladder goes
+
+Three questions this note used to leave open have correctness answers of their own, and each has to be settled on
+paper in Revision 39, so that Revision 40 is deletion.
+
+**1. Who may extend the kernel (decided in step 1).** With placement gone, a schema named by a request body can
+declare constructors, every `!!schema` target is potentially a meta extension, and a reviewer loses the header-level
+fact that a document *cannot* redefine what `record` means. It can't stay open, because step 1's depth bound for
+untrusted schemas depends on it. The proposal: **a header-level opt-in.** A document that composes `top` says so once,
+in its header; explicitness at document grain survives where the ladder doesn't, and a deployment policy has
+something to refuse. Two ways to spell it:
+- a directive of its own beside the kernel-revision directive ("How a schema identifies itself", below);
+- a direct `!!import` of the kernel, if decision 2 makes imports non-transitive for visibility: then `top` is in a
+  schema's namespace only when its header imports the kernel, and the opt-in is that import.
+
+**2. Which names a schema may use (decided in step 5, before step 6 removes the ladder).** The cost is above under
+"Every schema reserves meta's names". **Partitioning the namespace by role doesn't answer it under one level.**
+Revision 38 lets a schema's `record` and the kernel's coexist because no position consults both (§3.3.5): a `!` head
+wants a constructor and a type-ref wants a type. One level removes exactly that. A `!` head takes either role
+(`!decimal_type { … }` makes a type, `!operation { … }` a value of an ordinary type), and so does a supertype position
+(`atom & { … }` builds a constructor, `point & { … }` a record). Partitioning by role is the two stores again, which
+"The reference atom" calls the ladder. The options are about imports instead:
+- **non-transitive imports for reservation:** `core.tn` imports `meta.tn` to declare its instances, and a schema
+  importing `core.tn` sees core's names and not meta's. This pairs with decision 1's second spelling;
+- **local shadowing:** a schema's own declaration shadows an imported name it doesn't otherwise use, with a diagnostic,
+  which weakens §2.2.3's reservation.
+
+**3. `namespace` stays a constructor.** Settled by PR #753 and kept ("Namespaces stay a constructor", above): no
+`of!` record, no reading-side §5.6 rule, no parent slots in its place.
 
 ### How a schema identifies itself
 
@@ -574,8 +616,8 @@ to bind it. Under one level an entry's value is either built by a constructor or
   still composes `top`, `atom`, `product` or `sum`. `operation`, `interface` and `api` don't: they are ordinary record
   types, and their instances are value entries.
 - **What placement guarded moves to the kernel import.** Today only a kernel-governed document may declare a
-  constructor. Under one level, any schema importing the kernel can extend it. Whether that needs a guard of its own
-  (an explicit marker, or a policy a deployment can refuse) is open below.
+  constructor. Under one level, any schema importing the kernel can extend it, and the guard is a header-level opt-in
+  (decision 1 under "Decisions before the ladder goes").
 
 **The cost is the split between the two binders.** Today `metaNameBinder` binds a meta layer's `data` constructors and
 the data binder (`bindings`) binds document types, and `CLAUDE.md` calls the separation deliberate ("a meta layer's
@@ -693,10 +735,9 @@ one it has, with `ref` confined to kernel-governed schemas (PR #760).
 
 ### Templates and dependent fields (`type!`): one mechanism
 
-A pinned dependent field *is* a template parameter: `ns ^ { of?: = method_map }` (where `ns` declares `entries: of!`)
-and `ns<method_map>` say the same thing, and `NamespaceTemplateProbe` measures the second. A base meant to last
-shouldn't carry two mechanisms for one idea, because two mechanisms drift: each gains rules the other lacks, and
-authors have to know which to reach for.
+A pinned dependent field *is* a template parameter: `{ type?: type_kind = order  value?: type! }` and
+`<T> { value?: T }` applied to `order` say the same thing. A base meant to last shouldn't carry two mechanisms for one
+idea, because two mechanisms drift: each gains rules the other lacks, and authors have to know which to reach for.
 
 **The direction: one parameterised record, with the slot fixed at one of two times.**
 - **Fixed per application** is a template: `box => <T> { v: T }`, closed by `box<order>`. `T` is a slot fixed at the
@@ -714,7 +755,7 @@ at the type site or by `field: val` in the value. `<T>` stays as the surface spe
 **What has to be checked before committing:**
 - **The wire.** A parameter fixed per application is never written; a dependent field is, unless pinned and injected. A
   pinned dependent field and a template parameter must therefore produce the same wire form, which an injected pin
-  (`of?: = …`) does.
+  (`type?: = order`) does.
 - **Binding.** An injected field has no component in a bound class today unless one is declared. A parameter fixed per
   application has none either, so the two agree if an injected kind-typed pin needs no component.
 - **Identity.** Two applications with equal arguments are one entry (§8.2). Two values with equal dependent fields are
@@ -817,11 +858,15 @@ serves, or `TsonApiCoverage.notServedHere` exemptions moving from code into conf
 a namespace it names, which the rule allows. The API naming a descriptor still isn't, and neither is a descriptor
 naming the schema whose policy it sets.
 
-**Two inconsistencies the probe turned up**, worth asking upstream:
+**Three Revision 38 errata this note turned up**, worth filing whichever way the direction goes:
 - **Membership depends on the governing schema.** At a kind slot under a user schema, membership is judged. At the same
   kind under `meta.tn`, reading a type definition as data, it isn't.
-- **The not-a-member message leaks closer-minted names.** It lists every member, including names like
+- **The not-a-member message leaks resolver-minted names.** It lists every member, including names like
   `array_text_1_3600e7d5` that no author wrote.
+- **Where `members` is computed.** The kernel's `kind_type` doc says "at link over the governing schema's closure",
+  so two schemas importing different sets see different members; but the declaring schema's resolved output writes one
+  list, which is honest only when the declaring and governing closures coincide (fact 4 under "The reference atom").
+  The spec text carries the same disagreement.
 
 ## API descriptions and HTTP routes over schema records
 
@@ -924,7 +969,7 @@ documents.
   judged on read. Kinds in data work today (measured); refs in data are `NOT_IMPLEMENTED`.
 - **The namespace they refer into is the interface's, not the plan's own schema.** Today a kind or a ref resolves in
   the *governing* schema's closure, and a plan names its interface in a field, `interface: uri`. A field whose value
-  sets the scope for later fields is the dependent pair again (`interface!`), the same shape as `of!`.
+  sets the scope for later fields is the dependent pair again (`interface!`): a sibling naming the scope, not a type.
 - The answer TSON already has is to make the scope visible instead of computed. Either:
   - the plan is governed by a derived schema that imports both `agent.tn` and the interface, the pattern
     `orders-wire-1.tn` uses for RPC packets; or
@@ -935,37 +980,50 @@ documents.
 
 ## Order of work
 
-Each step is checked against the `-resolved.tn` fixtures before the next starts, so a step that moves a fixture is
-caught at that step.
+Two revisions. Each step is checked against the `-resolved.tn` fixtures before the next starts, so a step that moves
+a fixture is caught at that step, and no revision lands two decisions that could move the same fixture.
+
+**Revision 39: the model, the separable half of `type!`, and the decisions on paper.**
 
 1. **Specify the dependency model:** shape and value, the edges, the invariant that a shape never waits on a value,
    intra-record `sibling!` edges, what a cycle is, and the limits (dependency depth for untrusted schemas, a
-   template-expansion bound, sibling-first for a free `sibling!` field in a streamed data document).
+   template-expansion bound). The kernel-extension guard is decided here, since the depth bound depends on it
+   ("Decisions before the ladder goes", 1). The streaming rule for a free `sibling!` field goes into [TSON-DATA] and
+   [TSON-JSON], as an exception to field order being insignificant.
 2. **Prove it on the kernel.** `meta-kernel-resolved.tn` comes out as a fixed point under read-defer-resolve over the
    pre-loaded kernel shapes. Until it does, nothing below starts.
-3. **Remove the ladder:** `!!meta` becomes the kernel-revision directive (or `!!import` classifies), and placement,
-   direction of service, and the import-level rule go. `core.tn` imports `meta.tn` (and transitively the kernel)
-   instead of redeclaring siblings (`void`, `boolean`, `integer`, `text`, `regex`, `iri`, `set`, `kind`, `doc`).
-4. **Remove `data`.** Value entries become instances of ordinary types; the binder split is redrawn.
-5. **Replace `kind_type`, `ref_type` and the name-only `type_ref` with one reference atom,** `kind<T>` and `ref<T>` its
-   spellings and `members` gone ("The reference atom").
-6. **Add dependent fields (`type!`) and retire `value_type`.**
-   - `record_field.value` becomes `value?: type!`.
-   - `meta.tn` and `core.tn` merge or mutually resolve atom constructors and instances (`decimal_type` uses `number`,
-     `ipv4_type` uses `cidr4`), and `value_type` / `value` are deleted from the kernel.
-   - Sibling-indexed facets (`max_items: !non_negative_integer ^ { min: min_items! }`) replace the prose coherence
-     checks they can state; bounds reached through a field group stay prose.
-   - Templates unify with dependent fields, under the four checks in "Templates and dependent fields". Held bodies stay
-     text.
+3. **Add `sibling!` under the ladder.**
+   - `record_field.value` becomes `value?: type!`, so defaults and pins are read by their field's type.
+   - Sibling-indexed facets (`max_items: !non_negative_integer ^ { min: min_items! }`) retire the three prose
+     coherence rules they can state; bounds reached through a field group stay prose.
+   - The grammar changes in "Grammar and ABNF updates for `field!`".
+4. **The Revision 38 errata** under "The API and the deployment descriptor": membership under `meta.tn`, minted names
+   in the not-a-member message, and where `members` is computed.
+5. **Settle the other two decisions on paper:** which names a schema may use, and `namespace` kept as a constructor.
 
-Steps 1 and 2 are the correctness work. Steps 3 to 6 are mostly deletion once they hold; step 6 also changes
-grammar, in two places ("Grammar and ABNF updates for `field!`").
+**Revision 40: the ladder goes, and the reference atom with one store in hand.**
+
+6. **Remove the ladder:** `!!meta` becomes the kernel-revision directive (or `!!import` classifies), and placement,
+   direction of service, and the import-level rule go. `core.tn` imports `meta.tn` instead of redeclaring siblings,
+   under the answer to decision 2. Value entries become instances of ordinary types, finishing what PR #753 began when
+   it retired `data`, and the binder split is redrawn.
+7. **Retire `value` from `meta.tn`'s facets:** atom constructors and their instances sit together or mutually resolve
+   (`decimal_type` uses `number`, `ipv4_type` uses `cidr4`). `value_type` is left at `type_argument.value`.
+8. **Replace `kind_type`, `ref_type` and the name-only `type_ref` with one reference atom,** `kind<T>` and `ref<T>` its
+   spellings and `members` gone ("The reference atom"). It has the most measured evidence of any step and has to come
+   last, because writing it while `of` resolves in two stores puts the store in a field name.
+9. **Unify templates with dependent fields,** under the four checks in "Templates and dependent fields". Held bodies
+   stay text.
+
+Steps 1 and 2 are the correctness work. Steps 3 to 5 change little and are testable on their own; steps 6 to 9 are
+mostly deletion once the decisions hold.
 
 ## What this would change in the project's rules
 
 Not edited; recorded here until the direction is decided.
 - **`CLAUDE.md`, "Data can name a schema; only a schema can name a type":** measured to be untrue in its strong form.
-  The restatement above ("exports a namespace" versus "refers into one") is the candidate.
+  The restatement above ("exports a namespace" versus "refers into one") is the candidate, and it holds under the
+  ladder already (kinds in data), so it can be adopted independently of either revision.
 - **The import-level rule** tson-java PR #755 added would be withdrawn under one level: it is a ladder rule. A data
   document's kinds reach it through core today and through the one namespace then.
 - **The reference rule** tson-java PR #760 landed (core.tn declares no `ref`; a reference is declared only in a
@@ -990,25 +1048,17 @@ Not edited; recorded here until the direction is decided.
   ("Typed template bodies", above).
 - **Chained projections (`method.request.fields!`):** whether an entry-level value → value edge is ever worth adding.
   Not for `RequestPlacement`, which keeps its relational checks either way.
-- **Self-identification.** Keep `!!meta` as the kernel revision (renamed or not), or classify by `!!import`.
+- **Self-identification.** Keep `!!meta` as the kernel revision (renamed or not), or classify by `!!import`; whichever
+  it is, it has to leave room for decision 1's header opt-in.
 - **The bootstrap.** Does the kernel keep a directive naming itself, or is pre-loading stated as the one closed cycle?
 - **Re-resolving a resolved form to itself** as a second fixture check, once its readers come from the fixture.
 - **The cycle message**, and whether a circular dependency through an import is the same error as one within a
   document (today a cycle through `!!import` is refused by [TSON-DATA] §2.2.3).
 - **§9.1:** a bound on read-dependency depth, and where it sits beside nesting depth.
-- **A guard on extending the kernel.** Placement goes, so any schema importing the kernel can declare a constructor:
-  an explicit marker, a deployment policy, or nothing.
-- **The binder split** once `data` goes: by the type, by the use, or one binder.
-- **The reading-side §5.6 rule** that walks `orders.get` through a record's one namespace-typed field, or parent
-  slots in its place (`SLOTS.md`), which also absorb an interface's `extends` and add acyclic lookup edges to the
-  dependency model.
-- **Streaming a free dependent field (`type!`):** require its sibling `type` to appear first in streamed data, or
-  buffer.
-- **The two upstream inconsistencies** above, which are worth filing regardless of this direction.
+- **The binder split** once value entries are instances of ordinary types (step 6): by the type, by the use, or one
+  binder.
 - **The kind's exclusions under one reference atom:** "not a constructor whose instances are types, not a template over
   another constructor" as one predicate on the referent (has instances), and whether `kind<type>` then admits an
   abstract type, which the kind entry leaves open today.
 - **`namespace` under one reference atom:** whether `!reference { of: namespace }` names the namespace types, their
   values, or both, once one closure holds both ("The reference atom").
-- **Where `members` is computed:** fact 4 says over the declaring schema's closure; the kernel's `kind_type` doc says
-  "over the governing schema's closure". One of the two should change, whichever way the atom goes.
