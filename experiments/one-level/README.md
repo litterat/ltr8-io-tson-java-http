@@ -453,13 +453,14 @@ three describe a *location in the namespace*, and all three are represented by t
    `map.key_type`, `array.element_type`, `choice.variants`, `template_param.bound`) are typed `type_kind`, which is
    `kind<type>`; `type_ref` survives in three slots (`type_chain.parents`, `reference.target`, `type_argument.name`).
    What it carries beyond a name is an application still open: the kernel's `type_ref` doc keeps `arguments` "inside
-   template bodies and in an alias's `reference.target`", and a record template's resolved body is one (#17). The
-   bundled outputs show none only because no bundled schema has one. So `type_ref` is two things: a bare name, which
-   is `kind<type>`, and the open-application form, which nothing else expresses.
-3. **`kind<C>` is `ref<C>` read at the meta level.** Under SPEC-FEEDBACK #14 a schema map's entry is its value, so
+   template bodies and in an alias's `reference.target`", and a record template's resolved body is one (a record
+   template is a `record` with `parameters`). The bundled outputs show none only because no bundled schema has one. So
+   `type_ref` is two things: a bare name, which is `kind<type>`, and the open-application form, which nothing else
+   expresses.
+3. **`kind<C>` is `ref<C>` read at the meta level.** A schema map's entry is its value (Revision 38), so
    `order => { sku: text }` is a value of the kernel type `record`. `kind<record>`, "the name of an entry whose value is
    built with `record`", is then "the name of an entry whose value IS-A `record`", which is `ref<record>`'s predicate
-   word for word, minus #22's exclusions: not a constructor whose instances are types (a namespace constructor, whose
+   word for word, minus the kind's exclusions: not a constructor whose instances are types (a namespace constructor, whose
 instances are maps, is a member), and not a template over another constructor (a record template is a type and a
 member). The spec refuses `ref<record>`
    and makes `kind<record>` the spelling for one reason only: `of` resolves in two stores, the structure namespace for a
@@ -474,10 +475,10 @@ member). The spec refuses `ref<record>`
    linker rightly ignores it; it is honest only when declaring and judging closure coincide, a level-1 kind on level-0
    data. Neither is a bug in the atoms. Both are the two stores showing through them.
 
-**Is `kind_type` an atom or a sum?** An atom. A sum's values are values of a variant; a kind's values are names. #22's
-example decides it: `name_type: kind<identifier_type>` admits `identifier` and refuses `NewYork`. `choice` is the sum,
-and its `variants: [type_kind]` is built over the kind; `enum_type` is an atom with a `members` field on the same
-terms. What `members` shows is only fact 4, that the set is closure-relative.
+**Is `kind_type` an atom or a sum?** An atom. A sum's values are values of a variant; a kind's values are names. The
+kind's own example decides it: `name_type: kind<identifier_type>` admits `identifier` and refuses `NewYork`. `choice` is
+the sum, and its `variants: [type_kind]` is built over the kind; `enum_type` is an atom with a `members` field on the
+same terms. What `members` shows is only fact 4, that the set is closure-relative.
 
 **What one level makes of it.** One namespace is one store, so one atom:
 
@@ -494,14 +495,14 @@ ref       => <T> !reference { of: T }    -- the qualified spelling; the two may 
   output, and that is the one place it is needed.
 - `members` goes. With one closure the declaring closure is the judging closure, so the index is computable at ingest
   and says nothing a reader cannot recompute; if a resolved form keeps it for inspection it is honest for the first time.
-- The slot's meaning still comes from `of`, not the spelling: an `of` in the `type` family makes the slot a type reference
-  (structural identity, delivered as a `TypeRef`); any other `of` names a value. **`namespace` is where that rule is not
-  yet clean.** Upstream already lists `myapi`, a value, under `kind<api>` and `kind<namespace>` beside the namespace types
-  (SPEC-FEEDBACK #23, stated there as a consequence for the spec to decide), which supports the merge: a kind reaches
-  values today. But under one level a namespace type and its values share a closure, which the ladder prevents (a meta
-  layer cannot apply its own constructor), so `!reference { of: namespace }` admits both; and `namespace` sits under
-  `top`, not `type`, so the rule above reads it as naming values and drops the namespace types #22 and #23 put in
-  `type_kind`. The atom has to say which before it is written.
+- The slot's meaning still comes from `of`, not the spelling: an `of` in the `type` family makes the slot a type
+  reference (structural identity, delivered as a `TypeRef`); any other `of` names a value. **`namespace` is where that
+  rule is not yet clean.** Upstream already lists `myapi`, a value, under `kind<api>` and `kind<namespace>` beside the
+  namespace types (tson-java's namespace entry states it as a consequence for the spec to decide), which supports the
+  merge: a kind reaches values today. But under one level a namespace type and its values share a closure, which the
+  ladder prevents (a meta layer cannot apply its own constructor), so `!reference { of: namespace }` admits both; and
+  `namespace` sits under `top`, not `type`, so the rule above reads it as naming values and drops the namespace types
+  the kind and namespace rules put in `type_kind`. The atom has to say which before it is written.
 - **`kind` and `ref` cannot differ by spelling alone.** Two templates expanding to the same `!reference { of: T }` make
   `kind<X>` and `ref<X>` one application with one canonical content (§8.2), so a slot cannot know which was written. A
   one-segment restriction is then a field of `reference` (a segment bound, say), or it goes and the two spellings are
@@ -766,9 +767,9 @@ Not edited; recorded here until the direction is decided.
   dependency model.
 - **Streaming a free dependent field:** require its sibling first, or buffer.
 - **The two upstream inconsistencies** above, which are worth filing regardless of this direction.
-- **#22's exclusions under one reference atom:** "not a constructor whose instances are types, not a template over
+- **The kind's exclusions under one reference atom:** "not a constructor whose instances are types, not a template over
   another constructor" as one predicate on the referent (has instances), and whether `kind<type>` then admits an
-  abstract type, which SPEC-FEEDBACK #22 leaves open today.
+  abstract type, which the kind entry leaves open today.
 - **`namespace` under one reference atom:** whether `!reference { of: namespace }` names the namespace types, their
   values, or both, once one closure holds both ("The reference atom").
 - **Where `members` is computed:** fact 4 says over the declaring schema's closure; the kernel's `kind_type` doc says

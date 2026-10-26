@@ -13,12 +13,14 @@ It is a **consumer** of the TSON library, not part of it. The library lives in t
 and consumed as a Gradle **included build** (see "Consuming tson-java" below). Destination remote:
 `https://github.com/litterat/`.
 
-**This branch, `r2026-38-proposal`, is built against the Revision 38 proposal** — the sibling's branch of the same
-name, whose kernel and bundled identities are Revision 38 while its `spec/` prose still reads Revision 37, the
-published one. `main` here is built against the sibling's `main`, Revision 37. The proposal is where changes this
-project needs from the spec are tried and used before they are published: the first is `net.tn`, the bundled
-network-type library with `hostname`. Every identity in this repo carries `/2026/38/`, and `tson.version` names the
-matching `0.38.0-SNAPSHOT`. The revision series changes without
+**This branch, `r2026-38-proposal`, is built against Revision 38** — the sibling's branch of the same name, which
+becomes Revision 38 on the sibling's `main` when it merges. Until then `main` here is built against the sibling's
+`main`, Revision 37, and this branch merges to it when the sibling's does: a fast-forward, `main` holding nothing
+this branch lacks, after which CI (which checks out the sibling's default branch) builds it against Revision 38. The
+proposal is where the changes this project needed from the spec were tried and used before publication: `net.tn`
+with `hostname`, `host` and `media_type`, `record.name_type`, namespaces as values, kinds and references, and the
+import-level rule. Every identity in this repo carries `/2026/38/`, and `tson.version` names the matching
+`0.38.0-SNAPSHOT`. The revision series changes without
 compatibility guarantees, so a `git pull` of the sibling can move the whole identity space; "Project-owned schema
 `!!id`" below says what that costs.
 
@@ -268,8 +270,8 @@ imports no ordinary library and no ordinary schema imports a meta layer, both re
 (`UpstreamGapsTest.anImportStandsAtTheImportersGoverningLevel`) — and an ordinary schema wanting the same terms
 declares its own: `problem.tn`'s `status` is an `int32`.
 
-**An entry applying a namespace type is a value, never a type.** The Revision 38 proposal retired §4.1's `data`
-kind (tson-java PR #753): a meta layer's own vocabulary is a record held by a namespace type, the kernel's
+**An entry applying a namespace type is a value, never a type.** Revision 38 retires §4.1's `data` kind (tson-java
+PR #753): a meta layer's own vocabulary is a record held by a namespace type, the kernel's
 `namespace` being the constructor whose instances are maps. Naming such an entry where a type is expected is a
 resolver error ("a value and not a type"), and `request`/`response` are typed `type_kind`, so the read records each
 name and the linker judges it a member of the kind — a name nothing declares, or one that is no type, is an author
@@ -695,7 +697,7 @@ spelling of `pass` beside the Latin one, which is what
 `TsonHttpCodecTest.twoConfusableFieldNamesInASchemalessBodyAreABadRequest` now sends, and both halves are
 pinned by `UpstreamGapsTest.everyFieldNameOfASchemalessRecordMeetsAllThreeNameRules`.
 
-**A field name is a value of its record's `name_type`** (the Revision 38 proposal), an identifier family defaulting
+**A field name is a value of its record's `name_type`** (Revision 38), an identifier family defaulting
 to the series' identifier, so nothing here changes unless a schema says so. What a server meets: a schemaless
 `{ "first name": 1 }` is `ATOM_FORM_INVALID`, a 400 like the parse error it was; a governed record's undeclared
 name, identifier or not, is `UNRECOGNIZED_FIELD` in both encodings; and a body naming a schema this deployment will
@@ -1109,7 +1111,7 @@ So the validator's descriptor writes out the two parts it leaves at the default.
 `unicode_data_version` is left out of a descriptor: the tables are the processor's, so a descriptor naming one
 this processor does not carry stops the read.
 
-**Hosts are `net.tn`'s `host`** (Revision 38's proposal): a host name in either label form or an IPv4 or IPv6
+**Hosts are `net.tn`'s `host`** (Revision 38): a host name in either label form or an IPv4 or IPv6
 address, one string-class atom, so `listener.host` takes `localhost`, `"127.0.0.1"` and `"[::1]"` untagged — where
 `( hostname | ipv4 | ipv6 )` is not disjoint under §5.4 and would need a tag on every value. `schema_hosts` is a
 `set<host>`, compared by the type's equality: `bücher.example` is `xn--bcher-kva.example`, `Example.COM` is

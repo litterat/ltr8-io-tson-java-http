@@ -76,7 +76,7 @@ slots); [TSON-DATA] §2.6 (map keys are values). Upstream tracks the design as i
 constructor whose instances are maps" and "A reference to a value is the kind's sibling", and the work in
 `design/meta-layer-namespaces.md`; this entry is the consumer evidence for what those leave open.
 
-**Where it stands.** PR #753 landed on the Revision 38 proposal: `namespace` is a constructor under `top`, a namespace
+**Where it stands.** PR #753 landed in Revision 38: `namespace` is a constructor under `top`, a namespace
 type composes it, a value of one is a map (`Namespace`), the schema map and a record's fields are two of them, and
 `data` is retired. A `ref<T>` slot reaches a value by a qualified name through namespace keys and record values'
 fields (`orders.get`, `i.orders.methods.place`, PR #758), and a `kind<C>` slot holds a type's name; both are judged by
@@ -212,12 +212,12 @@ constructor in `meta` beside `uri_type`, which reserves no name, with no instanc
 **Already filed.** Five entries staged here have gone to `SPEC-FEEDBACK.md` and left this file: §8.2's policy has no
 artifact, which Revision 37 closed with the bundled `policy.tn`; naming a schema for a document that cannot carry
 `!!schema`; no shorthand for a template application at a `type_ref` slot in data; a namespace should be a value (all
-four on 2026-09-01), the last since landed on the Revision 38 proposal as the `namespace` constructor; and
-`identifier` as a text family with `enum` stating its type, adopted in Revision 37. From this project's review,
-tson-java also filed and built on `r2026-38-proposal`: `hostname` and `host`, a non-ASCII identity's host as one
-identity in either label form (SPEC-FEEDBACK #4), `media_type` in `net.tn` (#8), an import standing at the
-importer's governing level (#25, PR #755), a reference delivered through a record value's field (PR #758), and a
-reference declared only in a kernel-governed schema (PR #760). A reference in a data document is a Revision 39
-question, with the one-level work (`experiments/one-level/README.md`, "The reference atom"). Prose in
-this repo names each by its subject, not its number. A new finding goes here in the same shape: a `### To file:`
-heading naming the spec sections, the gap, what this project does meanwhile, and a priority.
+four on 2026-09-01), the last since landed in Revision 38 as the `namespace` constructor; and `identifier` as a text
+family with `enum` stating its type, adopted in Revision 37. From this project's review, tson-java also filed and
+built for Revision 38: `hostname` and `host`, a non-ASCII identity's host as one identity in either label form,
+`media_type` in `net.tn`, an import standing at the importer's governing level (PR #755), a reference delivered
+through a record value's field (PR #758), and a reference declared only in a kernel-governed schema (PR #760). A
+reference in a data document is a Revision 39 question, with the one-level work (`experiments/one-level/README.md`,
+"The reference atom"). Prose in this repo names each by its subject, not its number. A new finding goes here in the
+same shape: a `### To file:` heading naming the spec sections, the gap, what this project does meanwhile, and a
+priority.

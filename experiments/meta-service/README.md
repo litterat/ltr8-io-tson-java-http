@@ -523,7 +523,7 @@ record or two declarations of a schema. `NameRoleProbe` pins both, `aDataDocumen
 
 - `meta-service.tn` -- the sketch, its reasoning in its own `@doc`s.
 - `REFERENCES.md` -- the proposal for `ref<T>`, qualified names and a `namespace` kind, so a binding names its
-  method and the resolver checks it as it checks a request record. Landed on the Revision 38 proposal in a
+  method and the resolver checks it as it checks a request record. Landed in Revision 38 in a
   different shape, which the sketch now runs on (the port note at the top).
 - `RECORD-TEMPLATES.md` -- a proposal for a follow-on to tson-java PR #725: a record template is a type hiding
   inside `template`, so it collapses into `record` with optional parameters and no template text.
