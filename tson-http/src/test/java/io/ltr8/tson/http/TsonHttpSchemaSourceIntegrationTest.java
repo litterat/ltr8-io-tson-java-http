@@ -161,8 +161,8 @@ class TsonHttpSchemaSourceIntegrationTest {
     }
 
     /**
-     * <b>[TSON-DATA] §7.8's scope push is a second way a request body can name a schema, and it goes through
-     * the same allow-list.</b> Revision 35 gave a {@code scoped} position a real reader: at an {@code extern}
+     * <b>[TSON-SCHEMA] §7.8's scope push is a second way a request body can name a schema, and it goes through
+     * the same allow-list.</b> A {@code scoped} position has a real reader: at an {@code extern}
      * field the value carries its own nested {@code !!schema} and a type-ref resolved there, loaded as the
      * value arrives rather than from the document header. That is a URL out of an untrusted body at a
      * <em>value</em> position, so the question this pins is whether the policy that guards {@code !!schema}

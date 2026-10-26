@@ -165,9 +165,9 @@ identity as a value is text in its canonical form, with no atom of its own (`pro
 text-keyed namespace and `&` over namespace values are not proposed, composition being over types, to be revisited
 with a reference in a data document (`CLAUDE.md`, "Describing a service"). From this project's review, tson-java also
 filed and built for Revision 38: `hostname` and `host`, a non-ASCII identity's host as one identity in either label
-form, `media_type` in `net.tn`, an import standing at the importer's governing level (PR #755), a reference delivered
-through a record value's field (PR #758), and a reference declared only in a kernel-governed schema (PR #760). A
-reference in a data document is a Revision 39 question, with the one-level work (`experiments/one-level/README.md`,
-"The reference atom"). Prose in this repo names each by its subject, not its number. A new finding goes here in the
+form, `media_type` in `net.tn`, an import standing at the importer's governing level, a reference delivered through a
+record value's field, and a reference declared only in a kernel-governed schema. A reference in a data document is a
+question for the one-level work, which places it in Revision 40 (`experiments/one-level/README.md`, "The reference
+atom"). Prose in this repo names each by its subject, not its number. A new finding goes here in the
 same shape: a `### To file:` heading naming the spec sections, the gap, what this project does meanwhile, and a
 priority.

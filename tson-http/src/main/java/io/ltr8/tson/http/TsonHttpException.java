@@ -39,7 +39,7 @@ import java.util.Optional;
  * for. Collapsing these into one status would either blame a client for an outage or hide an outage as a client
  * error -- and the retry advice differs: a 400 says fix the document, a 502 says try again.
  *
- * <p><b>That row is now reached mostly at startup.</b> Every read through {@link TsonHttpCodec} collects, so a
+ * <p><b>That row is reached mostly at startup.</b> Every read through {@link TsonHttpCodec} collects, so a
  * fetch failure during a request is reported as one of the five {@code SCHEMA_*} codes rather than thrown --
  * leaving this branch to {@code preload} and {@code prepareToRead}, which do fail fast. Both channels answer
  * from {@link #fetchFailure}, this one mapping its {@code Reason} with {@link Diagnostic.Code#of} first, so the
@@ -232,11 +232,10 @@ public final class TsonHttpException extends RuntimeException {
     /**
      * A document that read but did not validate -- the diagnostics say what was wrong with it.
      *
-     * <p><b>Unless one of them is a library gap, in which case this is a 501 and not a 400.</b> A gap now
-     * travels as {@link Diagnostic.Code#NOT_IMPLEMENTED} in the same list as ordinary problems rather than
-     * only as an exception, so that one unimplemented construct no longer costs the author every other
-     * declaration's verdict. That is a better design and it moves a decision here: a list this method is
-     * handed may be mixed.
+     * <p><b>Unless one of them is a library gap, in which case this is a 501 and not a 400.</b> A gap travels
+     * as {@link Diagnostic.Code#NOT_IMPLEMENTED} in the same list as ordinary problems, so that one
+     * unimplemented construct does not cost the author every other declaration's verdict. That puts a decision
+     * here: a list this method is handed may be mixed.
      *
      * <p>A mixed list is a gap, deliberately, and this is the HTTP wearing of the rule the CLI rides its exit
      * codes on -- any {@code NOT_IMPLEMENTED} makes a run 70 rather than 1. The ordinary problems are real
@@ -288,8 +287,8 @@ public final class TsonHttpException extends RuntimeException {
     /**
      * The rule itself, shared by both channels a diagnostic can arrive through: collected into a list, or
      * carried by a single {@link ReadException} on a fail-fast read. Asking the <em>code</em> is what lets
-     * one rule serve both -- the exception type no longer distinguishes a gap from a verdict, because a read
-     * gap now travels as a {@code NOT_IMPLEMENTED} diagnostic whichever receiver is in use.
+     * one rule serve both -- the exception type does not distinguish a gap from a verdict, because a read gap
+     * travels as a {@code NOT_IMPLEMENTED} diagnostic whichever receiver is in use.
      *
      * @param detail what to say for the 400 case; the two 5xx cases write their own, since theirs is for a log
      * @param cause  the exception this came from, or {@code null} when the diagnostics were collected
@@ -422,9 +421,9 @@ public final class TsonHttpException extends RuntimeException {
      * names nothing, one past the size cap -- in the order they are scanned. They share a status and a type,
      * so the order only decides whose messages the detail quotes; it is {@link Diagnostic.Code}'s.
      *
-     * <p><b>Scanning in a fixed order is what replaced a first-wins pick.</b> The status used to come from
-     * whichever reason was reported first, so a document naming two bad references got an answer that
-     * depended on which one the reader reached first.
+     * <p><b>The scan is in a fixed order, never a first-wins pick.</b> Taking whichever reason was reported
+     * first would make the answer to a document naming two bad references depend on which one the reader
+     * reached first.
      */
     private static final List<Diagnostic.Code> REFERENCE_CODES = List.of(
             Diagnostic.Code.SCHEMA_NOT_PERMITTED, Diagnostic.Code.SCHEMA_NOT_FOUND, Diagnostic.Code.SCHEMA_TOO_LARGE);

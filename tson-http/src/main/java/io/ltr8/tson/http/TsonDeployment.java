@@ -26,9 +26,9 @@ import java.util.Optional;
  *
  * <p>The third artifact kind, beside a schema (what a document must be) and an API description (what an
  * endpoint offers). {@code deployment.tn} carries the argument for why the [TSON-DATA] §8.2 policies can
- * live in neither of the other two, which Revision 37 adopted with the bundled {@code policy.tn} as the
- * policy's vocabulary. A descriptor states a {@code policy.tn} {@code policy}, complete, and {@link #profile}
- * publishes the policy in force in the same shape.
+ * live in neither of the other two, and the bundled {@code policy.tn} is the policy's vocabulary. A descriptor
+ * states a {@code policy.tn} {@code policy}, complete, and {@link #profile} publishes the policy in force in the
+ * same shape.
  *
  * <p><b>Two rules this class exists to enforce by shape rather than by documentation.</b>
  *

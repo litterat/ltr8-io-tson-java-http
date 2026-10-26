@@ -1,9 +1,10 @@
 # The examples
 
-Real documents under [`examples/`](examples/), resolved by `ExamplesProbe` against the sketch on every build, so
-they cannot drift from it. Two entries a governed schema writes, both maps: an `!interface` of methods keyed by
-name, and an `!api` of resources keyed by path, each a map of endpoints keyed by verb -- an `!operation` carrying
-its signature inline, or a `!binding` naming a method's by reference.
+Real documents under [`examples/`](examples/), resolved by `ExamplesProbe` against the shipped `meta-service.tn` on
+every build, so they cannot drift from it. A governed schema writes two kinds of entry, both namespace values: an
+`!interfaces` entry holding an `interface` under its name, a map of methods keyed by name, and an `!apis` entry holding
+an `api`, resources keyed by path, each a map of endpoints keyed by verb -- an `!operation` carrying its signature
+inline, or a `!binding` naming a method's by reference.
 
 | file | which use | what it shows |
 |---|---|---|
@@ -14,12 +15,12 @@ its signature inline, or a `!binding` naming a method's by reference.
 | [`orders-api-1.tn`](examples/orders-api-1.tn) | **both** | an api that `implements` `orders`, every endpoint a `!binding` with its placement |
 | [`orders-wire-1.tn`](examples/orders-wire-1.tn) | wire | `rpc.tn`'s `call`/`return` templates closed once per method of `orders` -- what a generator emits from the interface |
 
-**Both spellings of a map appear, deliberately.** `orders` and both apis write their sole required field
-positionally -- `!interface { place_order => … }` for `!interface { methods: { place_order => … } }`, which
-§5.6 admits because `interface`, `api` and `resource` each have exactly one bare required field -- while
-`orders_v2` writes `methods:` out, because it also sets `extends` and a body is a record or a map, never both.
-The sketch's header `@doc` says what the positional form costs: a second required field on any of those three
-types withdraws it, and every document written that way stops parsing.
+**Both spellings of a record appear, deliberately.** `orders` and both apis write their sole required field
+positionally -- `orders => { place_order => … }` under the `!interfaces` key for `orders => { methods: { place_order
+=> … } }`, which §5.6 admits because `interface`, `api` and `resource` each have exactly one bare required field --
+while `orders_v2` writes `methods:` out, because it also sets `extends` and a body is a record or a map, never both.
+The layer's header `@doc` says what the positional form costs: a second required field on any of those three types
+withdraws it, and every document written that way stops parsing.
 
 ## The placement, for `orders-api-1.tn`
 

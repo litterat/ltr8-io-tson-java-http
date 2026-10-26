@@ -540,12 +540,12 @@ class UpstreamGapsTest {
     }
 
     /**
-     * <b>A Class 1 field name meets all three of [TSON-DATA] §8.2's rules, not only the look-alike one.</b> A
-     * Revision 35 change, and the kind that reads exactly like a test being wrong when it bites: a schemaless
-     * record's field names used to be judged as lexical rather than as names, so only the skeleton rule over
-     * the field <em>set</em> reached them. Now the two per-name rules do as well.
+     * <b>A Class 1 field name meets all three of [TSON-DATA] §8.2's rules, not only the look-alike one.</b> The
+     * kind of rule that reads exactly like a test being wrong when it bites: a schemaless record's field names are
+     * judged as names, so the two per-name rules reach them as well as the skeleton rule over the field
+     * <em>set</em>.
      *
-     * <p>Both halves are pinned because the change moved a code, not a verdict. A within-word homograph now
+     * <p>Both halves are pinned because the rule decides a code, not a verdict. A within-word homograph
      * draws {@code RESTRICTED_SCRIPT} <em>as well as</em> the look-alike refusal it always drew, and the
      * script one is reported first -- which is what decides the problem {@code type} a client is sent to,
      * {@link TsonHttpException} taking the first refusal in the list. Two names each admitted on their own
@@ -589,10 +589,10 @@ class UpstreamGapsTest {
     }
 
     /**
-     * <b>[TSON-DATA] §9.1's nesting bound is enforced, defaults to 64, and is not a verdict.</b> Revision 35
-     * turned a {@code StackOverflowError} that escaped every {@code catch (RuntimeException)} into a
-     * {@code LIMIT_EXCEEDED} diagnostic, which is what lets this project answer it at all --
-     * {@code TsonHttpException} maps it to a 413.
+     * <b>[TSON-DATA] §9.1's nesting bound is enforced, defaults to 64, and is not a verdict.</b> A body past it
+     * is a {@code LIMIT_EXCEEDED} diagnostic, not a {@code StackOverflowError} escaping every {@code catch
+     * (RuntimeException)}, which is what lets this project answer it at all -- {@code TsonHttpException} maps it
+     * to a 413.
      *
      * <p>All three facts are pinned together because each protects a different decision here. The default is
      * what {@code deployment.tn}'s profile publishes when a descriptor states no {@code max_depth}. That it
@@ -824,8 +824,8 @@ class UpstreamGapsTest {
 
     /**
      * <b>A schema naming {@code ipv4} without importing {@code net.tn} is told only that the reference is
-     * unresolved</b> -- which reads like a typo, where the fix is an import. Revision 38 moved the network types
-     * out of core, and Revision 37 trimmed core before it; each move turns a working schema into this message.
+     * unresolved</b> -- which reads like a typo, where the fix is an import. The network types are {@code net.tn}'s,
+     * not core's, so a schema written against a fuller core meets exactly this message.
      * The bundled libraries are fixed and known, so the resolver could say which one declares the name. Fails
      * the day the message names the library.
      */

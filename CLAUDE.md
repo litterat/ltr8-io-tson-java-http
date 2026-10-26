@@ -277,9 +277,9 @@ importer's governing level — a meta layer imports no ordinary library and no o
 both refused at schema load (`UpstreamGapsTest.anImportStandsAtTheImportersGoverningLevel`) — and an ordinary schema
 wanting the same terms declares its own: `problem.tn`'s `status` is an `int32`.
 
-**An entry applying a namespace type is a value, never a type.** Revision 38 retires §4.1's `data` kind (tson-java
-PR #753): a meta layer's vocabulary is records held by namespace types, the kernel's `namespace` being the
-constructor whose instances are maps. Naming such an entry where a type is expected is a resolver error ("a value and
+**An entry applying a namespace type is a value, never a type.** Revision 38 has no `data` kind (§4.1): a meta
+layer's vocabulary is records held by namespace types, the kernel's `namespace` being the constructor whose instances
+are maps. Naming such an entry where a type is expected is a resolver error ("a value and
 not a type"). **A namespace value is the map alone**: it has no fields beside its keys, so a construct carrying both
 — an interface's `extends` beside its methods, an api's `implements` beside its resources — is a record held under a
 key, one level down, which is why a reference spells `orders.orders` (the entry, then its key), and a namespace type
@@ -748,7 +748,7 @@ level plus what only a name has: a unit (`perSegment()`, dividing at the name's 
 `ScriptPolicy`, so a per-segment token policy is *unwritable* rather than refused. **A name is decided by type,
 not position**: an identifier-typed field value, an identifier-keyed map's keys and a unique array of identifiers
 are names and meet all three rules, the key and element sets being look-alike scopes — in a data document and in a
-schema governed by a meta layer alike, where a `data` body's payload and an annotation value are read under the same
+schema governed by a meta layer alike, where a namespace value and an annotation value are read under the same
 policy. `NameRoleProbe` pins both places.
 Over HTTP the once-statement is `deployment.tn`'s acceptance profile at `/.well-known/tson-deployment`. §8.3
 is why any of it matters: all three rules are unstable across Unicode releases, so two conforming processors

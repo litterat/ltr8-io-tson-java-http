@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The documents under {@code experiments/meta-service/examples/} resolve against the sketch, and the two apis
+ * The documents under {@code experiments/meta-service/examples/} resolve against the shipped layer, and the two apis
  * read into route tables -- so an example that stops being true fails the build rather than the reader.
  *
  * <p>Each file is served at the identity its own {@code !!id} declares ({@code TsonDocumentHeader.peek} reads it),
@@ -159,8 +159,8 @@ class ExamplesProbe {
      * The wire schema is stated to be <b>deterministic in the interface</b>, so it is derived here rather than
      * read: for every method of {@code orders}, {@code orders-wire-1.tn} must close {@code call} over its
      * request and {@code return} over its response and its declared error -- {@code return_plain} only where a
-     * method declares none. Resolving the file says nothing about any of that, which is how it carried a return
-     * that could not hold the error its method declares. This is the check a generator makes unnecessary.
+     * method declares none. Resolving the file says nothing about any of that, so a hand-written return that could
+     * not hold its method's error would load clean. This is the check a generator makes unnecessary.
      */
     @Test
     void theWireSchemaIsWhatTheInterfaceDetermines() {

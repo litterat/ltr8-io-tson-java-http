@@ -78,9 +78,8 @@ import java.util.Set;
  * <p>Nothing here requires one process. Routing by declared schema works the same whether the versions are
  * codecs in one server or hosts behind a proxy. A gateway that needs only the routing answer, without a codec,
  * calls {@code Tson.begin} directly and reads the header off the peek it hands back -- the body streaming on
- * from just past it, so a one-shot body survives being looked at. This class used to offer a
- * {@code declaredSchemaOf} for that and it was wrong: it returned the schema and left the caller a body that
- * had been read to the end.
+ * from just past it, so a one-shot body survives being looked at. A helper returning the schema alone would be
+ * wrong: it would leave the caller a body read to the end.
  */
 public final class TsonSchemaVersions {
 

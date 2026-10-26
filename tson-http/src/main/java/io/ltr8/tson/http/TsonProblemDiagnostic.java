@@ -14,7 +14,7 @@ import java.util.Optional;
  * {@code problem.tn}'s own {@code text} fields.
  *
  * <p><b>An absent field is absent, not empty.</b> {@link Diagnostic} spells "nothing to say here" as {@code ""}
- * for {@code schemaId}/{@code expected}/{@code actual}, and now says so once itself --
+ * for {@code schemaId}/{@code expected}/{@code actual}, and says so once itself --
  * {@link Diagnostic#schemaIdIfKnown()}, {@link Diagnostic#expectedIfStated()},
  * {@link Diagnostic#actualIfStated()} -- so this narrows through those rather than repeating the convention.
  * The two RFC 6901 pointers need no narrowing: they are already {@link Optional} at the source, because for a

@@ -28,9 +28,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * checked against the interface's own types ({@code quantity: two} is an {@code int32} violation at
  * {@code /request/order/quantity}); an error arm carries the declared error with its status pin enforced, and
  * where a method declares several the value takes the error's tag; a return has exactly one outcome; and the
- * envelope reads, {@code deadline} as a duration. Nothing here needs {@code unknown} or an in-place
- * {@code !!schema} -- the earlier design did, and the {@code unknown} reader gap now gates only the agent's
- * constants.
+ * envelope reads, {@code deadline} as a duration. Nothing here needs a scope push: the templates type the payload
+ * at the schema, so no packet names its own.
  */
 class RpcProbe {
 

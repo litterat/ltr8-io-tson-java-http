@@ -103,7 +103,7 @@ class OneLevelProbe {
     /**
      * An ordinary schema cannot import the kernel, with core or without: an import stands at the importer's governing
      * level (§2.2.3), so the edge is refused before core's {@code void} collides or the placement rule (§2.2.2) is
-     * reached, and that rule now meets no loaded document.
+     * reached, and that rule meets no loaded document.
      */
     @Test
     void anOrdinarySchemaCannotImportTheKernel() {
@@ -155,8 +155,7 @@ class OneLevelProbe {
     /**
      * <b>A data document can hold a type's name, and it is judged.</b> At a kind-typed field the name must be a member
      * of the kind over the governing schema's closure: a declared type is admitted, an undeclared name is refused, and
-     * so is a constructor. A data document still declares nothing; what it can no longer be said to lack is a checked
-     * name for a type.
+     * so is a constructor. A data document still declares nothing, but it does hold a checked name for a type.
      */
     @Test
     void aDataDocumentCanHoldACheckedTypeName() {

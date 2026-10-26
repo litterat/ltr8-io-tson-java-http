@@ -3,7 +3,7 @@
 !!import:"https://tson.io/2026/38/m/core.tn"
 @doc:"""
   TSON Agent AST — the structured middle representation
-  (draft 2, brought to 2026 Revision 35 in the meta-service experiment).
+  (draft 2, in the meta-service experiment).
 
   Three representations, as in any modern compiler: the PLAN is the
   user grammar — an ordinary TSON map document, `name => !method
@@ -36,18 +36,17 @@
   """
 {
   @doc:"""
-    A name in one of the namespaces a plan borrows -- a step, a method, a field. Not `identifier`, which a
-    user schema cannot reach, and not `text`, which admits anything: the identifier grammar as a pattern.
-    (§8.2's name hygiene does not reach map keys or atom values, so confusable step names are the
-    admission verifier's to refuse.)
+    A name in one of the namespaces a plan borrows -- a step, a method, a field: an identifier family,
+    not `text`, which admits anything. Being an identifier family is what makes it a name, so §8.2's
+    hygiene judges it wherever it stands -- a field's value, a map's key -- and a mixed-script or
+    look-alike step name is refused by the reader rather than left to the admission verifier.
     """
-  name => !text ^ { pattern: "[\\p{L}_][\\p{L}\\p{N}_-]*" }
+  name => !identifier_type { continue_add: "-" }
 
   @doc:"""
-    A constant, of any shape: core's escape hatch. `dynamic` is §7.8's widest scoped instance and the
-    successor to what earlier revisions spelled `unknown` -- the value names its own type, from this
-    schema's namespace or from a foreign one it names with a nested !!schema, and is validated in full
-    against whatever it named. A value naming no type at all is a validation error here, so this is not
+    A constant, of any shape. `dynamic` is §7.8's widest scoped instance: the value names its own type,
+    from this schema's namespace or from a foreign one it names with a nested !!schema, and is validated
+    in full against whatever it named. A value naming no type at all is a validation error here, so this is not
     an `any` that goes unchecked. rpc.tn's payload slot is the same slot.
     """
   constant => dynamic

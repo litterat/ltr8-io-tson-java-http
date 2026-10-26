@@ -11,9 +11,8 @@
   A method's facts ride on its own key, so on an inline operation they sit before the verb: a GET must be
   `@safe`, and the reader refuses one that is not.
 
-  This example used to serve every schema at its identity's path, which is a real endpoint of this project's
-  demos and the one thing this vocabulary cannot describe -- its 200 carries bytes rather than TSON, and
-  `signature.response` names a type. It was replaced rather than fudged; see the README's absent list.
+  Serving a schema at its identity's path answers bytes rather than a TSON value, so it is a `!document`
+  endpoint and not an operation; the demos' own description (demo/schemas/orders-api-1.tn) declares one.
   """
 {
   orders_api => !apis { orders_api => {

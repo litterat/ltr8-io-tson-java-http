@@ -7,12 +7,11 @@
   A deployment descriptor: how ONE INSTANCE is configured, as against what a document must be (a schema)
   or what an endpoint offers (an API description).
 
-  [TSON-DATA] §8.2 introduced a security control with no artifact -- a restriction level and an optional
-  script set over values, and over names a unit and a look-alike switch as well, enforced by default, with
-  nothing said about where the configuration lives. This was the proposal for where, and Revision 37 adopted
-  it: §8.2 now says no document may name, import or otherwise select the policy it is judged under, and the
-  bundled policy.tn declares the policy's vocabulary, imported here. The short form of the argument is that
-  the two obvious homes are both wrong, and for reasons stronger than the decision being orthogonal:
+  [TSON-DATA] §8.2 is a security control -- a restriction level and an optional script set over values, and
+  over names a unit and a look-alike switch as well, enforced by default -- and it says no document may name,
+  import or otherwise select the policy it is judged under. This is where a deployment states that policy, in
+  the vocabulary the bundled policy.tn declares, imported here. The short form of the argument is that the two
+  obvious homes are both wrong, and for reasons stronger than the decision being orthogonal:
 
   A SCHEMA cannot hold it. An artifact that declared its own strictness would choose its own check, and a
   document carrying homographs would simply declare the level that admits them. §3.5 also makes a published

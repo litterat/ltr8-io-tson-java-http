@@ -41,10 +41,10 @@ position in a record, is called a *position* here.
 | `!!import` | a parent slot of the schema object | a constructor argument |
 | imports are transitive | lookup follows parents transitively | (none: no ambient names) |
 | the import collision rule: judged by the declaring schema | the ambiguity rule: same slot by two routes is fine | — |
-| a refinement, `api => ns ^ { of?: = method_map }` | clone the prototype, set a constant slot | subclass, override a slot |
+| a namespace type, `methods => namespace & { key_type: = method_name  value_type: = method }` | clone the prototype, set a constant slot | subclass, override a slot |
 | a composition, `a & b` | copy-down of slots from both | mixin application |
-| a namespace value, walked by `ref<T>` | an object answering its slot names | an object answering messages |
-| `ref<T>`'s qualified path, `orders.methods.place_order` | a chain of sends | a chain of sends |
+| a namespace value, entered by a qualified name | an object answering its slot names | an object answering messages |
+| a `ref<T>`'s qualified name, `orders.orders.methods.place_order` | a chain of sends | a chain of sends |
 | key annotations (`@doc` before a key) | slot annotations | — |
 | a resolved form, read as data under the kernel | a mirror | a mirror |
 | §8.2: no document may select its own policy | — | object capabilities: authority comes from the caller |
@@ -52,8 +52,8 @@ position in a record, is called a *position* here.
 
 Three things stand out.
 - **TSON is already Self-shaped, not class-shaped.** A refinement is a clone with slots changed, which is how Self makes
-  objects and how TSON already makes `api` from `ns`. Nothing in TSON behaves like a class hierarchy that instances are
-  stamped from.
+  objects and how TSON makes a namespace type from `namespace`, pinning its facets. Nothing in TSON behaves like a class
+  hierarchy that instances are stamped from.
 - **Every TSON slot is constant.** §3.5 makes a published schema immutable, and the dependency model has no assignment
   anywhere. That is the first place TSON parts from both languages, and it should.
 - **The data/schema split is the mirror split.** A schema is the base level. Its resolved form is the reflective
@@ -62,28 +62,25 @@ Three things stand out.
 
 ## What the overlay proposes
 
-### Proposal: parent slots on namespaces
+### Proposal: parent slots for `extends`
 
-**The one-level note has a wrinkle and a workaround that are the same thing.**
-- The wrinkle: a namespace kind written as a record template is walked as `orders.entries.get`, and the note proposes a
-  reading-side counterpart of §5.6 so `orders.get` walks too ("Dependent fields and the namespace kind").
-- The workaround: an interface's `extends` names other interfaces whose methods it also has, and the meta-service
-  experiment walks it in Java (`Routes`), refusing a cycle.
+**Revision 38 leaves one workaround that is delegation by another name.** `namespace` is a kernel constructor whose
+instances are maps ([TSON-SCHEMA] §4.1), and a qualified name enters a namespace value key by key (§5.12), so
+`orders.orders.methods.place_order` walks with no special case. What stays outside the resolver is `extends`: an
+interface names other interfaces whose methods it also has, and `TsonApiDescription` walks the list in Java, refusing a
+cycle.
 
-Both are delegation. In Self's terms, `entries` is a parent slot of the namespace record, and `extends` is a list of
-parents. Saying so directly replaces two special cases with one rule:
+In Self's terms `extends` is a list of parents. Saying so directly moves the walk into the resolver:
 
 ```
-ns        => abstract { of: kind<namespace>  entries: of }       -- entries is a parent: lookup falls through to it
-method_ns => ns ^ { of?: = method_map }
-interface => method_ns & { extends?: [ref<interface>] }         -- each extended interface is a parent too
+interface => { extends?: [ref<interface>]  methods: methods }   -- each extended interface is a parent of this one
 ```
 
 The source spelling of "parent" is open. Self writes `p*`; TSON has no such token, and adding lexer syntax is a cost of
-its own. In resolved form it is a facet, `!record_field { type: of  parent: true }`.
+its own. In resolved form it is a facet, `!record_field { type: … parent: true }`.
 
 **The lookup rule, taken whole from Self:**
-- A name not held by a namespace value is looked up in its parents, transitively.
+- A name not held by a value is looked up in its parents, transitively.
 - Two parents supplying *different* values for one name is an error, naming both routes.
 - The same value reached by two routes is not. This is TSON's import collision rule already (a collision is judged by
   the declaring schema's identity, and the probe's `void` case shows two different declarations refused).
@@ -91,12 +88,14 @@ its own. In resolved form it is a facet, `!record_field { type: of  parent: true
 **What it adds to the dependency model.** Lookup edges are a third kind, beside shape → shape and value → shape. A
 parent edge orders nothing while shapes resolve; it is followed when a reference is judged, in the values step. Its
 one rule is that **the parent graph is acyclic**, refused naming the cycle, since a cycle would make lookup loop. That
-is the check `Routes` makes for `extends` today, moved into the resolver.
+is the check `TsonApiDescription` makes for `extends` today, moved into the resolver.
 
-**What it retires:**
-- the reading-side §5.6 walk rule, which was the same idea stated for one field;
-- the Java walk of `extends` and its cycle check;
-- the open question of how a namespace kind is entered by name.
+**What it retires:** the Java walk of `extends` and its cycle check.
+
+**What it is not.** Revision 38 declined `&` over namespace values, composition being over types, and an inherited
+method is named where it is declared. A parent lookup keeps that: the method found through a parent is still the
+declaring interface's, reached by delegation rather than copied down. The register ties revisiting the question to a
+reference in a data document, which is where this proposal would be weighed too.
 
 **And it gives import transitivity a reading.** A schema's imports are its parents, so "imports are transitive" is the
 lookup rule applied at the top level. The one-level design has one namespace per schema; with parents, that namespace
@@ -108,7 +107,8 @@ Not a change, a reading to adopt in the spec's prose. `c ^ { … }` is "clone `c
 (`= v`) is setting a constant slot in the clone. It explains two existing rules better than the class reading does:
 - why a refinement can't move a field from required to omissible: a clone keeps its prototype's slots and only changes
   their values;
-- why `field_map` and `api` are both refinements of `ns`: they are two clones of one prototype.
+- why the kernel's `schema` and `field_map` and a meta layer's `methods` are all `namespace` with `key_type` and
+  `value_type` pinned (§4.1): three clones of one prototype.
 
 ### Reading: the resolved form is the schema's mirror
 
@@ -149,7 +149,8 @@ it or breaks it:
 | ambient authority | Self: yes; Newspeak: no | **no** | §8.2 |
 | branching | yes | **no**, even in plans | a branch makes a later step's type depend on an earlier value |
 
-**Template substitution is the only computation**, and it is the one place a bound has to be stated (README, "Open").
+**Template substitution is the only computation**, and it is the one place a bound has to be stated (§5.10.1's
+regularity rule).
 Everything in the "no" rows would make a shape depend on a value, which is exactly what the model forbids. So the lens
 confirms the model's invariant is not an arbitrary restriction: it is the line itself.
 
@@ -173,8 +174,8 @@ any of those restrictions moves it into the "no" rows above, and needs a differe
 
 ## What this would change in the one-level design
 
-Recorded in `README.md`'s "Open" until decided:
-- **Parent slots replace the reading-side §5.6 rule,** and absorb the `extends` walk.
+Candidates for `README.md`'s "Open":
+- **Parent slots absorb the `extends` walk.**
 - **The dependency model gains lookup edges,** with the parent graph required to be acyclic.
 - **The spec's prose reads refinement as cloning** and states the resolved form as the only mirror.
 

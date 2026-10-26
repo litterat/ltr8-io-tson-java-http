@@ -203,9 +203,8 @@ public final class OrderServer {
      * the meta layer governing it, and its imports transitively -- everything a client needs to resolve the
      * contract it was given. The bundled standard library is excluded; a client already has it.
      *
-     * <p>This used to be five {@code add} calls, and the conformance test asserted they matched what the
-     * description references. Deriving makes the two the same thing, so a schema referenced but not published
-     * is no longer possible rather than merely tested for.
+     * <p>Deriving makes what is published and what the description references the same thing, so a schema
+     * referenced but not published is impossible rather than merely tested for.
      *
      * <p>§3.5 still applies to what goes in: when a published schema is superseded, both versions stay served,
      * because a document that named the old one must go on resolving.

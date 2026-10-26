@@ -150,7 +150,9 @@ grant => {
 
 This lands on threads from the one-level note:
 - A data document holding a checked type name works today (a kind-typed field, measured by `OneLevelProbe`).
-- A reference to a method in a data document is `NOT_IMPLEMENTED` today.
+- A reference to a method can't be typed in a schema that governs data at all: `ref` is declared only in a
+  kernel-governed schema, so `ref<method>` there is an unresolved name (`OneLevelProbe`). A reference in a data
+  document is a Revision 39 question.
 - A grant names methods in the *interface's* namespace, not its own schema's: the same scope problem as an agent plan,
   with the same candidate answers (a derived governing schema, or a §7.8 scope push).
 

@@ -2,32 +2,10 @@
 
 **Status: graduated.** `meta-service.tn` ships in `tson-http` (`tson-http/src/main/resources/meta-service.tn`),
 replacing `meta-http.tn`, and the demos describe themselves with it; `CLAUDE.md`'s "Describing a service" is the
-account of it as it ships. Graduating added three things the demos needed: `path_template` as an RFC 6570 level-2
-template (`{+schemaPath}`), `encodings` on an endpoint, and `!document`, an endpoint answering bytes of a media type.
-What moved, under what name: `Routes` became `TsonApiDescription`, `Placement` became `RequestPlacement`, the bound
-records moved to `io.ltr8.tson.http.api`, `ApiProbe` became `TsonApiDescriptionTest`, and `SupertypeProbe` and
-`MetaServiceSketchProbe` folded into `TsonApiSchemaTest`. The prose below is the design record and keeps the old
-names. What stays here probes the shipped layer from directions its own suite does not: the wire form (`rpc.tn`),
-the agent layers, the examples, and the findings the map design rests on.
-
-**Ported to tson-java PR #753 (merged), which retires `data`.** `interface` and `api` are now records held by two namespace
-types, `interfaces` and `apis`, because each carries fields beside its map (`extends`, `implements`) and a namespace
-value is the map alone; the probes write one namespace entry per interface or api, named as its one key
-(`orders => !interfaces { orders => { … } }`). The prose below still describes them as `data &` constructors. Every
-`!operation` now sits behind a record field (an api's `resources`), and its kind-typed `request` is judged there
-(`UpstreamGapsTest.aKindSlotOnASubtypeBehindARecordFieldIsJudged`).
-
-**Ported to references (tson-java PRs #758 and #760).** What names something is now a reference the resolver judges:
-`extends` and `implements` are `[ref<interface>]`, and a binding's and an exemption's `method` is `ref<method>`, a
-qualified name through the interface's entry, its key, its `methods` field (now the namespace type `methods`) and the
-method's key -- `orders.orders.methods.place_order`. A misspelt method, a reference to the wrong kind of thing, and an
-ambiguous name are refused at load, so `binding.interface` is gone and `not_bound` is a list of `{ method  reason }`
-records, a map key being no reference. `Routes` keeps what relates two things: a bound method belonging to an
-interface the api implements, the `implements` claim, an `extends` cycle, placement, and a verb or status against the
-method. `extends` is a reference and not a composition, so an inherited method is named where it is declared, and the
-doubled `orders.orders` and the `methods` segment stay: `&` over namespace values, which would remove them, is not
-proposed in Revision 38, composition being over types. The prose below predates the port wherever it calls these
-identifiers.
+account of it as it ships, and the layer's own `@doc`s carry its reasoning. The reader is `TsonApiDescription`, the
+bound records are in `io.ltr8.tson.http.api`, and the suites that check the shipped layer are `tson-http`'s
+`TsonApiSchemaTest` and `TsonApiDescriptionTest`. What stays here probes it from directions its own suite does not:
+the wire form (`rpc.tn`), the agent layers, the examples, and the findings the map design rests on.
 
 **Scope: the descriptor, for RPC- and API-style endpoints.** `meta-service.tn` describing an interface, a web
 service over it, and the endpoints of both is the work in hand; `rpc.tn` is its wire form and belongs to that
@@ -38,103 +16,107 @@ below waits on them, and a decision that is the agent's alone is not a reason to
 
 ## The question
 
-`meta-http.tn` describes an HTTP API: a schema governed by it declares `!operation` entries whose `request`
-and `response` are type references the compiler resolves. Underneath an HTTP API there is usually a
-transport-neutral interface -- methods with a request, a response and errors -- and a service may want to
+`meta-http.tn`, the layer this replaced, described an HTTP API: a schema governed by it declared `!operation`
+entries whose `request` and `response` are type references the compiler resolves. Underneath an HTTP API there is
+usually a transport-neutral interface -- methods with a request, a response and errors -- and a service may want to
 declare just that, or just its web service, or both, with an HTTP operation being one *projection* of a method.
 Can one meta layer hold all three, and what does the third actually need?
 
-## The sketch
+## The layer
 
-[`meta-service.tn`](meta-service.tn), with three uses as real documents under [`examples/`](examples/)
-(guide: [`examples.md`](examples.md)). Two entries a governed
-schema writes, and both are **maps**:
+[`meta-service.tn`](../../tson-http/src/main/resources/meta-service.tn), with three uses as real documents under
+[`examples/`](examples/) (guide: [`examples.md`](examples.md)). A governed schema writes two kinds of entry, and both
+are **namespace values** -- [TSON-SCHEMA] §4.1's constructor whose instances are maps keyed by names:
 
-- `interface => data & { extends?: [type_name]  methods: {method_name => method} }` -- a named, documented map
-  of methods. A method is a map *value* under its name, so the name is scoped to its interface (two interfaces
-  may both declare `place_order`), a `@doc` before the key documents it, and the `!method` tag is optional under
-  the typed slot. `extends` names other interfaces whose methods this one also has.
-- `api => data & { implements?: [type_name]  not_bound?: {method_name => text}  resources: {path_template => resource} }`
-  and `resource => data & { endpoints: {http_verb => endpoint} }` -- resources keyed by **path**, each holding
-  endpoints keyed by **verb**: OpenAPI's `paths`, arrived at from the key types. A path key is data, so
-  `/orders/{id}` needs no identifier minted from it and an endpoint needs no invented name.
-- `endpoint => placement & { status ~ 200 }`, with `operation => endpoint & signature` and `binding =>
-  endpoint & { method: method_name  interface?: type_name }` composing it. An `!operation` carries its
-  signature inline, for an api with no interface behind it; a `!binding` borrows a method's. The tag says
-  which, and it is not optional: the base binds to a type with no bare form, so an untagged value is refused
-  naming both subtypes -- the one-or-the-other rule with no reader behind it. The verb and path are the keys an
-  endpoint sits under. (A choice `(operation | binding)` and a field group `( method | signature )` were both
-  measured to work; the supertype won because the base is abstract, shared vocabulary is inherited rather than
-  composed twice, and a new kind of endpoint is one more composition.)
-- **Only `interface` and `api` are `data &` constructors** -- the two entries a governed schema writes, and
-  the only things that may head one (`x => !method { }` is refused: not a constructor). Everything inside them
-  is an ordinary record, because it only ever appears as a map value; `method => signature & {}` takes the empty
-  body to be a type of its own rather than an alias that would be a hop to `signature`. So no `kind: DATA` entry
-  is named at a type slot anywhere in the design, §4.1 has nothing to say about it, and a `resource` needs no
-  tag under its path key. Documentation is annotation on the verb key -- `@summary` the short form, declared here as
-  the kernel
-  declares `documentation`, and `@doc` the long -- not fields: an endpoint is a map value, and a map key carries
-  annotations.
-- `signature` and `placement` are plain records composed into the constructors above. `signature` is the
+- `interfaces => namespace & { key_type: = identifier  value_type: = interface }`, holding
+  `interface => { extends?: [ref<interface>]  methods: methods }`, whose `methods => namespace & { key_type: =
+  method_name  value_type: = method }`. A method is a map *value* under its name, so the name is scoped to its
+  interface (two interfaces may both declare `place_order`), a `@doc` before the key documents it, and the `!method`
+  tag is optional under the typed slot. `extends` names other interfaces whose methods this one also has.
+- `apis => namespace & { key_type: = identifier  value_type: = api }`, holding `api => { implements?:
+  [ref<interface>]  not_bound?: [exemption]  resources: {path_template => resource} }` and `resource => {
+  endpoints: {http_verb => endpoint} }` -- resources keyed by **path**, each holding endpoints keyed by **verb**:
+  OpenAPI's `paths`, arrived at from the key types. A path key is a `path_template`, so `/orders/{id}` needs no
+  identifier minted from it and an endpoint needs no invented name. `resources` and `endpoints` are maps, not
+  namespaces: their keys are not identifiers, so no qualified name enters them, and nothing names an endpoint.
+- **`interface` and `api` are records held one level down, not the namespace types themselves**, because each
+  carries fields beside its map (`extends`, `implements`, `not_bound`) and a namespace value is the map alone. A
+  description writes one namespace entry per interface or api, named as its one key:
+  `orders => !interfaces { orders => { place_order => … } }`. Everything inside is an ordinary record, because it
+  only ever appears as a map value; `method => signature & {}` takes the empty body to be a type of its own rather
+  than an alias that would be a hop to `signature`. An entry applying a namespace type is a value, never a type, so
+  naming `orders` where a type is expected is a resolver error.
+- `endpoint => placement & { status?: status_code ~ 200  encodings?: [encoding] }`, with `operation => endpoint &
+  signature`, `binding => endpoint & { method: ref<method> }` and `document => endpoint & { … media_type: media_type }`
+  composing it. An `!operation` carries its signature inline, for an api with no interface behind it; a `!binding`
+  borrows a method's; a `!document` answers bytes of a media type, as a schema route does. The tag says which, and it
+  is not optional: the base binds to a type with no bare form, so an untagged value is refused naming the subtypes --
+  the one-or-the-other rule with no reader behind it. (A choice and a field group were both measured to work; the
+  supertype won because the base is abstract, shared vocabulary is inherited rather than composed twice, and a new
+  kind of endpoint is one more composition.) Documentation is annotation on the verb key -- `@summary` the short
+  form, declared here as the kernel declares `doc`, and `@doc` the long -- not fields: an endpoint is a map value, and
+  a map key carries annotations.
+- `signature` and `placement` are plain records composed into the records above. `signature` is the
   transport-neutral contract: request, response, errors. What a caller composing calls needs to know beyond that
-  -- `@safe`, `@idempotent` -- is a bare annotation on the method's key, declared here as the kernel declares
-  `annotation`, because it describes the method rather than its request or response; the HTTP projection checks
-  its verb against them and never derives one from the other. `placement` is **where the interface
-  and the web service over it are allowed to look different**: a
-  method has one request record, and the operation distributes its fields -- a `{segment}` in the path binds a
-  field, `query` names query fields, `headers` maps a field to its header, `body` names one field carried
-  unwrapped as the whole body, and the remainder is the body (or the query, for a GET/HEAD or once `body` named
-  a field). Every field lands exactly once, and a field in the path, query or a header must be a scalar. There
-  is no parameter list: a parameter-only endpoint declares a one-field request record and binds it from the
-  path. (gRPC's HTTP transcoding is the precedent.)
+  -- `@safe`, `@idempotent` -- is a bare annotation on the method's key, because it describes the method rather than
+  its request or response; the HTTP projection checks its verb against them and never derives one from the other.
+  `placement` is **where the interface and the web service over it are allowed to look different**: a method has
+  one request record, and the endpoint distributes its fields -- a `{segment}` in the path binds a field, `query`
+  names query fields, `headers` maps a field to its header, `body` names one field carried unwrapped as the whole
+  body, and the remainder is the body (or the query, for a GET/HEAD or once `body` named a field). Every field lands
+  exactly once, and a field in the path, query or a header must be a scalar. There is no parameter list: a
+  parameter-only endpoint declares a one-field request record and binds it from the path. (gRPC's HTTP transcoding
+  is the precedent.)
 - `implements` is a **claim** the reader holds the api to: every method of every implemented interface (through
-  `extends`) has an operation naming it, or an entry in `not_bound` giving the reason -- the
-  `TsonApiCoverage.notServedHere` rule, derived from the description rather than from handler registration.
+  `extends`) has a binding naming it, or an `exemption` in `not_bound` giving the reason -- the
+  `TsonApiCoverage.notServedHere` rule, derived from the description rather than from handler registration. Held per
+  (interface, method), never per name.
 - An error type pins the status it inherits from `problem` (`sku_not_found => problem & { status: = 404 … }`),
-  which is how an operation's `errors` get one without a `responses` list.
+  which is how an endpoint's `errors` get one without a `responses` list.
 
-What names something across the two maps -- a method, an `implements`, an `extends` -- is a reference the resolver
-judges (above). What relates two things -- a `{segment}` to a request field, a method to an interface the api
-implements, the claim itself -- is `Routes` (now `TsonApiDescription`), the reader that checks it: it resolves each
-endpoint's signature, computes its `Placement`, and holds the `implements` claim. The suites that check the shipped
-layer are `tson-http`'s `TsonApiSchemaTest` and `TsonApiDescriptionTest`; the probes that stay here:
+**Naming is the resolver's; relating is the reader's.** What names something is a reference the resolver judges at
+schema load: `extends` and `implements` are `[ref<interface>]`, and a binding's or an exemption's `method` is
+`ref<method>`, a [TSON-SCHEMA] §5.12 qualified name through the interface's entry, its key, its `methods` field and
+the method's key -- `orders.orders.methods.place_order`. A misspelt method, a reference to the wrong kind of thing,
+and an ambiguous name are refused there. `not_bound` is a list of records rather than a map keyed by method, because
+a map key is a name in the map's own key family, never a reference. `extends` is a reference and not a composition,
+so an inherited method is named where it is declared; `&` over namespace values, which would shorten
+`orders.orders.methods`, is not proposed, composition being over types. What relates two things -- a bound method
+belonging to an interface the api implements, the `implements` claim, an `extends` cycle, placement, a verb or status
+against the method -- is `TsonApiDescription`'s, checked when it reads a description.
 
-- `InterfaceMapProbe` -- the finding the map design rests on, below.
-- `ExamplesProbe` -- the documents under `examples/` resolve against the layer and both apis read into routes.
-- `NameRoleProbe` -- what a naming role buys at a map key, and the hygiene gap below.
+The probes that stay here:
+
+- `InterfaceMapProbe` -- the finding the map design rests on: a map of method records resolves, a value under the
+  typed slot needs no tag, a name inside a value is judged at load, and a `@doc` on a key survives the read; and the
+  namespace-only variant, whose entry is the map of methods with nothing beside it.
+- `ExamplesProbe` -- the documents under `examples/` resolve against the layer, both apis read into routes, and the
+  wire schema is derived from the interface rather than read.
+- `NameRoleProbe` -- what a naming role buys at a map key, and that §8.2's hygiene judges a method map's keys.
 - `RpcProbe` -- `rpc.tn` and the wire schema resolve; a call is typed by the interface's own types and a bad
   request is refused at its field; a return carries the declared response or error with its status pin enforced,
   and exactly one outcome.
-- `AgentProbe` -- both agent layers resolve; a plan of references and a compiled agent read, the `@disjoint`
-  instruction tag-free; a constant is the same gap; a malformed step name is refused by the `name` role.
+- `AgentProbe` -- both agent layers resolve; a plan of references and a compiled agent read; a constant names its
+  own type; a malformed or mixed-script step name is refused by the `name` role.
 
-**Two binder facts met on the way**, both worth knowing before writing a bound record for a `data`
-constructor: the binder finds a class by PascalCasing the type name (`interface_of_methods` →
+**Two binder facts met on the way**, both worth knowing before writing a bound record for a meta layer's
+vocabulary: the binder finds a class by PascalCasing the type name (`interface_of_methods` →
 `InterfaceOfMethods`), `@Typename` notwithstanding; and it hands a map's *keys* back as `String` whatever the
 schema's key type, so `{http_verb => endpoint}` binds to `Map<String, Endpoint>` and a `Map<HttpVerb, …>`
-component would hold strings and lie about it. A third: a slot typed by a constructor needs a Java type of that
-name even if nothing constructs it bare -- a sealed interface is the right thing to put there, and it makes the
-base as abstract in Java as it is in the schema.
+component would hold strings and lie about it. A third: a slot typed by a record with no bare form needs a Java type
+of that name even if nothing constructs it bare -- a sealed interface is the right thing to put there, and it makes
+the base as abstract in Java as it is in the schema.
 
-## The real problem, and the two ways it can be modelled today
+## Why a binding refers to a method rather than being one
 
 "Both" in the sense that matters is not one entry carrying method and binding at once. It is `place_order`
 declared once on the interface and a *separate* entry -- possibly in another document -- saying "POST /orders is
-that method". That second entry has to **refer** to the first, and [TSON-SCHEMA] §4.1 makes a `kind: DATA` entry
-something that can be declared and applied but never named: field type, element, variant, argument,
-composition operand, refinement source -- all refused. `operation => method & { … }` is refused for the same
-reason. `ApiProbe` measures the two shapes that work:
+that method". That second entry has to **refer** to the first, and a method is a value inside an interface, not a
+type. `ref<method>` is the reference form, so the binding names the method and the resolver checks the name as it
+checks `request: order`.
 
-**A. Relate by identifier; the reader checks it.** This is what the sketch does: `POST => !operation { method:
-place_order … }` inside an api that `implements: [orders]`. Resolves, reads back, and a typo (`method:
-plaec_order`) loads clean -- the resolver treats a `type_name` slot as data. The check is a lookup in the
-implemented interfaces at startup, the same tier as `TsonApiCoverage`, and `Routes` is that check. Keeps "an
-operation is not a type"; becomes a compiler check the day the kernel has a reference form for data entries.
-That day came: `ref<method>` is the reference form, and the sketch now uses it (the port note at the top).
-The map shape softens the cost: the names being related are keys inside two entries the resolver did build, so
-"is `place_order` a method of `orders`" is one map lookup, not a namespace search.
-
-**B. A method is a type -- the type of its call record.** Under plain `meta.tn`, no meta layer at all:
+The alternative measured on the way, under plain `meta.tn`, makes a method a type -- the type of its call record --
+and an operation IS-A its method:
 
 ```
 method => <Req, Resp> { request: Req  response?: Resp  safe?: boolean ~ false  idempotent?: boolean ~ false }
@@ -144,118 +126,77 @@ place_order  => method<order, order> & { errors?: [sku_not_found] }
 create_order => place_order & http & { verb: = POST  path: = "/orders"  status?: = 201 }
 ```
 
-The operation IS-A its method, the binding reads back as fixed fields, and a plan step is a value of the method
-type -- `!create_order { request: { … }  verb: POST  path: "/orders" }` reads, `verb: GET` on it is refused. Two
-things it taught: `place_order => method<order, order>` alone names an instantiation with no body to compose with
-(give it `& { … }`); and schema facts stated as fields are per-instance. `verb: = POST` pins a field whose name is
-unmarked, which [TSON-SCHEMA] §5.2 makes a *marker* the value must write -- never injected -- so each step
-restates its verb and URL, and a refinement cannot relax the base's required `verb` to an omissible one that
-would inject instead. That cost is what the third option removes.
-
-**C. The spec change.** The kernel's own 2×2 -- record (names → data), schema (names → declarations), map
-(data → data) -- has an empty cell: a keyed set of declarations whose keys are values, `!api { "/orders" => … }`.
-With a namespace as a value, an `!interface { place_order => method<…> }` is a scoped set, an api member is
-keyed by route and needs no invented name, `&`/`^`/`-` already mean extends/tighten/subset on it, and templates
-over interfaces are the CRUD payoff at the right level. Filed as tson-java `SPEC-FEEDBACK.md` *"a namespace
-should be a value -- the kernel's 2×2 has an empty cell"*, with the argument in full.
+It reads, and a plan step is then a value of the method type. Its cost is that schema facts stated as fields are
+per-instance: `verb: = POST` pins a field whose name is unmarked, which [TSON-SCHEMA] §5.2 makes a *marker* the
+value must write -- never injected -- so each call restates its verb and URL, and a refinement cannot relax the
+base's required `verb` to an omissible one that would inject instead. A reference has none of that cost.
 
 ## What the maps are: borrowed namespaces
 
-The observation the design now rests on. A `!schema` describes a namespace -- the type system's, keyed by type
-names under [TSON-DATA] §7.7's identifier grammar. An `!interface` and an `!api` describe namespaces too, and
-**their key types are naming authorities TSON does not own**:
+The observation the design rests on. A schema describes a namespace -- the type system's, keyed by type names under
+[TSON-DATA] §7.7's identifier grammar. An interface and an api describe namespaces too, and **their key types are
+naming authorities TSON does not own**:
 
-| entry | keys are | whose namespace |
+| map | keys are | whose namespace |
 |---|---|---|
-| `!schema` | type names | TSON's own (§7.7) |
-| `!interface` | method names | a procedure-call namespace -- what gRPC and JSON-RPC address as `service.method` |
-| `!api` | URL path templates | RFC 3986's |
-| `!resource` | verbs | RFC 9110's method registry, via IANA |
+| a schema | type names | TSON's own (§7.7) |
+| an interface's `methods` | method names | a procedure-call namespace -- what gRPC and JSON-RPC address as `service.method` |
+| an api's `resources` | URL path templates | RFC 3986's, written as RFC 6570 templates |
+| a resource's `endpoints` | verbs | RFC 9110's method registry, via IANA |
 | a request record | field names | the record's own -- the namespace `placement` maps the URL's segments, query keys and header names onto |
 
 `place_order` is not a type; it is a name in the `orders` namespace that a method description sits at. That is
 plainest in the api, where `"/orders"` is visibly a name in the URL path namespace. The map's key type is how a
-TSON document borrows a namespace it does not govern and says what lives at each name -- which is why
-`http_verb` is an enum copied from a registry and a path key is `text`: the discipline comes from outside.
+TSON document borrows a namespace it does not govern and says what lives at each name -- which is why `http_verb` is
+an enum copied from a registry and a path key is a `path_template`: the discipline comes from outside.
 
-**Separating the names: one naming role per borrowed namespace.** The kernel already shows how: `type_name`,
-`field_name` and `param_name` are each `=> identifier` -- roles over one grammar, so a rule stated on a role
-reaches every position of that kind. The sketch declares one per namespace it borrows and uses it as the map's key
-type (`placement` already used the kernel's `field_name` for the record's; method names were filed under
-`type_name` until this was seen):
+**One naming role per borrowed namespace.** The kernel shows how: `type_name`, `field_name` and `param_name` are
+roles over one identifier grammar, so a rule stated on a role reaches every position of that kind. The layer
+declares one per namespace it borrows and uses it as the map's key type: `method_name => identifier` for an
+interface's methods; for the URL and header namespaces, whose grammars are not TSON's identifier, the authority's
+grammar rides as a `pattern` (I-Regexp, matched against the whole token) on a text family -- `path_template` and
+`header_name`, the second held case-folded as RFC 9110 §5.1 compares it. `NameRoleProbe` measures what a role buys:
+the identifier grammar, enforced, with the refusal naming the role -- *"'method_name': 'place order': U+0020 at index
+5 cannot appear in an identifier"* -- where `type_name` enforces the same grammar while misnaming the namespace, and a
+namespace cannot be keyed by `text` at all, its keys being names. Because a method map's keys are names, §8.2's
+hygiene judges them: a mixed-script key is refused, and two keys that read alike (`pass` and the all-Cyrillic
+`раѕѕ`) are refused at the second, in a data document and in a schema governed by a meta layer alike.
 
-```
-method_name   => identifier                                             an interface's keys
-path_template => !text ^ { pattern: "/([^/{}]+|\\{[A-Za-z_][A-Za-z0-9_]*\\})*" }
-                                                    an api's keys: an RFC 3986 path with {segments}
-header_name   => !text_type { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+"  normalization: NFKC_CASEFOLD }
-                                                    a `headers` value: an RFC 9110 token, held folded
+Three things follow.
 
-interface => data & { extends?: [type_name]  methods: {method_name => method} }
-api       => data & { … resources: {path_template => resource} }
-```
+**It gives a method an identity without inventing one.** A schema is content-addressed by its `!!id`, so a method's
+global name is `(schema identity, qualified name)` -- `…/orders-1.tn` and `orders.orders.methods.place_order` --
+unambiguous across every service, with no `operationId` and no flat-namespace collision. It is what an agent plan
+step should carry and what a route table could key on. Not a fragment: [TSON-DATA] §2.2.1 keeps fragments out of
+identity, and a key is a member, not a second document.
 
-`NameRoleProbe` measures what a role buys at a map key, and `ApiProbe` pins the three in the sketch: the identifier
-grammar, enforced, with the refusal naming the role -- *"'method_name': 'place order': U+0020 at index 5 cannot appear
-in an identifier"* -- where a `text` key accepts anything and `type_name` enforces the same grammar while misnaming
-the namespace. For the URL and header namespaces the authority's grammar rides as a `pattern`, I-Regexp over the whole
-token, the same device `deployment.tn` uses for a script name; a header name is also held case-folded, as RFC 9110
-§5.1 compares it, so `Idempotency-Key` reads back as `idempotency-key` (`ApiProbe.aHeaderNameIsHeldFolded`). What
-stays a `type_name` honestly is the *interface's own* name (`orders`) and `implements`/`extends`: an interface is
-still an entry in the type namespace, which is the seam a `namespace` kind would move ("What a namespace is", below).
+**An api is a namespace by what it does, and a map in TSON.** An endpoint describes an unbounded set of exchanges, so
+it is a declaration, and a URL is a reference to it by key -- `(api, path, verb)`. But its keys are data, two levels
+deep, and a namespace's keys are identifiers (a qualified name's segment is one), so `resources` is a map, no
+qualified name enters it, and a handler claims an endpoint by its verb and declared path (`TsonApiCoverage.serving`).
 
-Four things follow.
+**It leaves two things unfinished**, recorded under "Open questions" below: the URL namespace is hierarchical and a
+resource keyed by full template is flat over it; and a data document can bind only the type namespace (`!!schema`,
+`!name`), so a plan document cannot tag a step `!place_order`.
 
-**It says what the `data` kind was.** `operation => data & { … }` declared "an entry in the type namespace that
-is not a type": a foreign namespace's member filed in the wrong map, which is exactly why it could be declared
-but never referenced -- the type namespace has no reference form for non-types because it should hold none. The
-map shape moves the members out, and they are ordinary records there. What remains under `data` is `orders` and
-`orders_api`, the *namespaces themselves*, held there only because `data` is the one non-type kind there is. `data`
-is meant for an embedded payload a reader already knows how to read; a namespace is something the resolver must
-understand, so it is a kind of its own ("What a namespace is", below).
+## What a namespace is: the test
 
-**It says precisely why the resolver cannot check the relations.** `implements`, `method: place_order`, `{id}` in
-a path, `body: order`, `headers: { idempotency_key => … }` are all *cross-namespace references* -- api to
-interface, interface to type, URL to a record's fields -- and the resolver checks references within the one
-namespace it knows. `Routes` and `Placement` are the checks for the others. A resolver that knew
-namespaces could check `method: place_order` as it checks `request: order`: a namespace has a key type and a member
-bound, and a reference is a (namespace, key) pair whose validity is that namespace's business. That is the
-mechanism behind the spec-feedback proposal, stated.
+"A keyed set" is every map, so the word needs a test. **A namespace is a keyed set of declarations; a map is a keyed
+set of values.** A declaration describes values and has instances of its own; a map's member *is* a value. Two
+tempting tests fail: unique keys (every map has them), and being referenced by key (a foreign key references a table
+row, and a row is a value).
 
-**It gives a method an identity without inventing one.** A type namespace is content-addressed; an interface
-published at its `!!id` is too. A method's global name is therefore `(interface identity, key)` --
-`…/orders-1.tn` and `place_order` -- unambiguous across every service, with no `operationId` and no flat-namespace
-collision. It is what an agent plan step should carry and what a route table could key on. Not a fragment:
-[TSON-DATA] §2.2.1 keeps fragments out of identity, and a key is a member, not a second document.
-
-**It exposes two things as unfinished**, recorded with the other open questions below: the URL namespace is
-hierarchical and a resource keyed by full template is flat over it (the qualified-name question wearing a
-slash); and a data document can bind only the type namespace (`!!schema`, `!name`), so a plan document cannot
-tag a step `!place_order` -- it writes `method: place_order` as data, which is the one-hop rule doing exactly
-what it says.
-
-## What a namespace is: the test, run against everything that looked like one
-
-The section above calls an interface and an api namespaces, and the spec-feedback proposal ("a namespace should be
-a value") wants one as a kernel primitive. Before shaping that primitive, the word needs a test that says what is
-one and what is not, because "a keyed set" is every map.
-
-**A namespace is a keyed set of declarations; a map is a keyed set of values.** A declaration describes values and
-has instances of its own; a map's member *is* a value. Two tempting tests fail: unique keys (every map has them),
-and being referenced by key (a foreign key references a table row, and a row is a value). The key's type is free --
-names or data -- and so is whether the container itself has instances.
-
-| candidate | key | member | each member has instances? | container has instances? | namespace? |
+| candidate | key | member | each member has instances? | container has instances? | a namespace by the test? |
 |---|---|---|---|---|---|
 | schema | `type_name` | a type | values | no | ✓ |
 | interface | `method_name` | a method | calls | implementations | ✓ |
-| record fields | `field_name` (text, under the record-fields proposal) | a field | the values at that key | record values | ✓ |
+| record fields | `field_name`, the record's `name_type` | a field | the values at that key | record values | ✓ |
 | api | path, then verb -- **data** | an endpoint | exchanges at that route | a server | ✓ |
 | database | table name | a table | rows | no | ✓ |
 | table columns | column name | a column | cells | rows | ✓ -- record fields again |
 | table rows | primary key -- data | a row | none: it *is* one | -- | ✗ map |
 | discriminated family ([TSON-SCHEMA] §5.2) | the selector pin -- **data** | a subtype | values | the base's values | ✓ |
-| template parameters | `param_name` | a parameter, typed under #9 | arguments | applications | ✓ -- lexically scoped |
+| template parameters | `param_name` | a parameter | arguments | applications | ✓ -- lexically scoped |
 | problem types | a type URI -- **data** | a problem declaration | problem bodies | -- | ✓ |
 | AsyncAPI channels | a channel address -- **data** | a message declaration | messages | -- | ✓ |
 | agent tools | tool name | a tool | invocations | -- | ✓ -- an interface |
@@ -265,33 +206,10 @@ names or data -- and so is whether the container itself has instances.
 | config, environment | a key | a value | -- | -- | ✗ map |
 
 **The declaration side is a namespace and the instance side a map, every time** -- registry and message, columns and
-rows, schema and document, interface and calls. And **a namespace keyed by data is common and already specified
-once**: §5.2's selector pins, "pairwise distinct as values", are a key-uniqueness rule under value equality over a
-set of subtypes. The cell the proposal calls empty is unnamed rather than empty.
-
-Three things follow, and each moved the spec feedback this project staged on namespaces (since answered: Revision 38
-keeps a namespace's keys names and composition over types):
-
-- **An api is a namespace.** An endpoint describes an unbounded set of exchanges, so it is a declaration, and a URL
-  is a reference to it by key -- `(api, path, verb)`. It is keyed by data and two levels deep, which is what makes it
-  the hard case: a member under a data key cannot be projected with `.` and needs the pointer form (`/orders/POST`),
-  and two levels is either nesting or a compound key, which has no pointer token
-  (`UpstreamGapsTest.aCompoundKeyHasNoPointerTokenAndTheEncodingsDisagree`). What an endpoint member *is* stays
-  open: a binding is the method plus placement and status, and making those fields injects them into every call --
-  so they ride as annotations on the member's key, or the member's body is not IS-A the method.
-- **Having members is a facet, and `namespace` is the kind whose entries are nothing else.** Record fields are a
-  namespace and a record is a product; [TSON-SCHEMA] §5.5 gives an entry one base kind, so members cannot *be* the
-  kind. The table's "container has instances?" column draws the line: with instances, a product with members
-  (`record => product & members & { … }`); without, a `namespace` (`namespace => top & members & {}`, and
-  `interface => namespace & { … }`). A namespace is what a schema document already is -- names registered then
-  bodies resolved, collisions, forward references, a look-alike scope, an `(identity, name)` reference -- at entry
-  level. It is not `data`: `data` is an embedded payload the resolver checks against its vocabulary and otherwise
-  leaves to a reader that knows it, which is what it narrows to, and its motivating case in [TSON-SCHEMA] §4.1 -- an
-  HTTP operation -- becomes a namespace member.
-- **A projection has to name the member, not its type.** Read from [TSON-SCHEMA] §8.2, since projection is not built to
-  measure: a record field's type is a use-site application, and two fields typed `method<order, order>` resolve to one entry,
-  so a projection to the field's type cannot say which method a binding binds. Two *declarations* naming one application are
-  two entries, which is what members-as-declarations gives a method: an identity of its own.
+rows, schema and document, interface and calls. The kernel bears it out: its two namespace types are `schema` and
+`field_map`, the first two rows. What the test admits and Revision 38 does not take is the data-keyed rows -- api,
+discriminated family, problem types, channels: TSON's `namespace` is keyed by an identifier family, so each of those
+is a map in TSON, reached by location rather than by a qualified name.
 
 ## Direction: interface, api, agent
 
@@ -309,10 +227,10 @@ is listed because what it needs of an interface is evidence about the descriptor
   so a packet is `!place_order_call { … }`, a fully typed document whose request the resolver checks against the
   interface's own types. In-process Java dispatch is the first transport: an `Orders` implementation wires to
   the interface once, and everything else translates into a call.
-- **The api is a gateway.** An `!api` describes a translator, not a server: `Routes` is its table, and
-  `Placement` run in reverse -- `id` from the path segment, `order_query` from the query string, `order` from
+- **The api is a gateway.** An api describes a translator, not a server: `TsonApiDescription` is its table, and
+  `RequestPlacement` run in reverse -- `id` from the path segment, `order_query` from the query string, `order` from
   the body beside `Idempotency-Key` -- is its request path, producing a `call`. Which is why a generic gateway
-  process can read an `!api` and an RPC address and need no code per service.
+  process can read an api and an RPC address and need no code per service.
 - **The agent is three layers, as a compiler has** -- [`agent.tn`](agent.tn) and
   [`agent-vm.tn`](agent-vm.tn), below. A plan SOURCE (a surface grammar, still to write) is read to a
   `plan` (the AST: steps in order, references parsed to selectors, constants folded, `or` a field because it
@@ -336,21 +254,18 @@ distinguished from a constant by shape; an argument is an `arg` tree whose canon
 maximally, so `record` and `array` appear only on the spine above a reference; `or` is a step's failure
 substitute, a field because it is executed. `agent-vm.tn` is the lowering: memory slots are step indices, so
 flattening is slot assignment; the pool interns names, constants, types and methods, kind-checked by index; the
-`instruction` choice is `@disjoint` -- a bare mnemonic beside a labelled operand record -- and reads tag-free.
-Admission is one forward pass in both layers: straight-line code has no merge points, so checking and
-inference coincide, and the return's inferred type is the derived response contract, known before execution.
+`instruction` choice is `@disjoint` -- a bare mnemonic beside a labelled operand record. Admission is one forward
+pass in both layers: straight-line code has no merge points, so checking and inference coincide, and the return's
+inferred type is the derived response contract, known before execution.
 
-This is the dataflow design the README argued for by another route -- Cap'n Proto's promised answers as the
-precedent -- arrived at as a compiler rather than a packet, and it supersedes the `plan`/`step` sketch rpc.tn
-briefly carried. `rpc.tn` is now `call` and `return` only.
+This is the dataflow design arrived at as a compiler rather than a packet, with Cap'n Proto's promised answers as the
+precedent; `rpc.tn` is `call` and `return` only.
 
-**Brought to fit, mechanically** (measured by `AgentProbe`): both at Revision 35 under this repo's identities,
-`…/io/ltr8/http/agent.tn` and `agent-vm.tn`, with no placeholder pins -- a malformed `?sha256=` is refused
-outright; `token`, which is not in core, replaced by a `name` role declared once in `agent.tn` (the identifier
-grammar as a pattern, since a user schema cannot reach `identifier`) and imported by the VM; the inline
-`filter` record at a group-member position named, as §5.2 requires; `value`, which is the kernel's and not
-core's, replaced by `constant => dynamic`; and the AST's top type renamed `plan`, since the VM imports the AST
-and two `agent`s collide in a flat namespace.
+Both resolve under this repo's identities, `…/io/ltr8/http/agent.tn` and `agent-vm.tn`. `name` is an identifier
+family declared once in `agent.tn` and imported by the VM, so §8.2's hygiene judges a step name wherever it stands; a
+constant is `constant => dynamic`, §7.8's widest scoped instance, so a literal names its own type -- from this
+schema or from a foreign one through a nested `!!schema` -- and is validated in full, and a value naming no type is
+refused. The AST's top type is `plan`, since the VM imports the AST and two `agent`s would collide.
 
 **Decisions this leaves, in the order I would take them:**
 
@@ -368,8 +283,6 @@ and two `agent`s collide in a flat namespace.
    One hazard to design out: a schemaless read resolves built-ins first, so a method named `date`, `uuid` or
    `text` would be parsed as the built-in, not preserved. The surface needs to reserve those or qualify method
    names.
-5. `name` is a pattern over `text`, so §8.2's hygiene does not reach it (nor would it reach a map key); the
-   admission verifier refuses confusable step names, as `agent.tn` now says.
 
 **What the precedents contributed.** gRPC: the closed set of transport-level statuses, the deadline, and
 frames-plus-end-status for a stream -- but no self-contained packet, its outcome in HTTP/2 trailers. JSON-RPC
@@ -384,151 +297,59 @@ method ids -- the identity URI plus key carries more for the same purpose.
 envelope with no per-service code: `rpc.tn` imports no service's types, the wire schema closes its templates
 over them, and the packet is checked end to end by the resolver -- `quantity: two` in a call is an `int32`
 violation at `/request/order/quantity`, an error's fixed `status` is enforced, and where a method declares several
-errors the value carries the error's tag. (An earlier draft scoped the payload in place with `!!schema` at an
-`unknown` slot -- which Revision 35 makes readable as `dynamic`; the templates are still better, being typed at
-the schema rather than by each document.) And a method's address is a
-content-addressed identity -- versioned, unambiguous across every service a gateway fronts, with no registry.
+errors the value carries the error's tag. A scope push at a `dynamic` slot would also type the payload, but the
+templates type it at the schema rather than by each document. And a method's address is a content-addressed
+identity -- versioned, unambiguous across every service a gateway fronts, with no registry.
 
 **Where it lives.** The packet, dispatch and the processor are transport-neutral; `tson-http` is the wrong home.
 A `tson-service` module (or repo) for interface + packet + dispatch + agent, with `tson-http`'s adapters
-becoming the api gateway over it -- and the RPC transport over HTTP is then itself one `!api` with a single
+becoming the api gateway over it -- and the RPC transport over HTTP is then itself one api with a single
 endpoint, described in the same vocabulary.
 
-**Order:** swap the meta layer (the decisions below first) → packet schema and in-process dispatch, the
-`Orders` interface and implementation, a Java method-naming rule, errors as thrown bound classes with fixed
-statuses → the JDK adapter as api gateway, hand-written handlers gone → remote RPC over HTTP and the other two
-adapters. `plan` and the processor come after all of that, if at all; they are not part of this scope and
-nothing earlier in the order waits on them.
-
-## Before the swap
-
-A review of the sketch against the order above. What was unambiguous was fixed in place -- the wire example's
-`cancel_order_return` dropped the error its method declares, `Placement` let a non-record request fall through
-to an empty field set, the `placement` `@doc` claimed every method has a request record where `signature` makes
-it optional, and the positional form the examples are written in was undocumented. What is left is a decision,
-and each is cheaper now than once `tson-http` depends on the layer.
-
-**An endpoint has no name, and coverage claims by one.** The map design's whole point is that an endpoint needs
-no invented name -- it is a value under a verb under a path. But `TsonApiCoverage.serving(name)` claims a
-*declared operation by name*, and `CLAUDE.md` argues at length that claiming by name rather than by path is what
-keeps the check framework-agnostic: "comparing paths would need a translation table per framework, and a wrong
-entry there is a route that silently never matches". Under this layer a `!binding` can be claimed by
-`(interface, method)`, which is a better name than today's. An inline `!operation` has nothing, so its claim has
-to be `(verb, declared path template)` -- still not path *equality*, since the handler claims the string the
-description wrote and the framework's registered path stays free to differ, but a two-part claim, and the
-argument in `CLAUDE.md` has to be rewritten around it. **This decides the reader's public surface, so it comes
-first.**
-
-**The RPC address names a document, not an interface.** `rpc.tn`'s `call` addresses `(interface: uri, method:
-text)`, and this README calls that pair unambiguous across every service. It is not: `examples/orders-1.tn`
-declares two interfaces at one `!!id`, and two unrelated ones declaring `place_order` would be
-indistinguishable in a call. The wire schema has the same flaw a layer up -- `place_order_call` is a flat type
-name, so two interfaces per document collide there too. Either the address carries the interface's entry name,
-or one interface per document becomes a rule and `orders_v2` moves to its own file. Dispatch is the next item in
-the order, and this is what it dispatches on.
-
-**Still wanted:** the transport's own 400 is not declared per endpoint and should be stated somewhere once.
-
-### Done in the same pass
-
-Each was a decision with one answer, so it was taken rather than listed.
-
-- **Coverage is per (interface, method).** `Routes.Bound` is the unit throughout: two implemented interfaces may
-  both declare `list_orders`, and binding one says nothing about the other. `not_bound` is a list of `exemption`
-  records, each a `ref<method>` and a required `reason`, so an exemption names exactly the method it covers: a
-  misspelt one is refused at load, and one naming a method of an interface the api does not implement is refused
-  by the reader.
-- **A query parameter or a header may repeat**, so either admits an array of scalars; a path segment carries
-  exactly one. An array of records still has no spelling anywhere.
-- **A verb is checked against what its method claims** -- GET, HEAD and OPTIONS safe; PUT and DELETE
-  idempotent; `@safe` implying `@idempotent` -- and a response-less endpoint must answer 204, 205 or 304
-  rather than the default 200.
-- **The wire schema is derived, not read.** `ExamplesProbe.theWireSchemaIsWhatTheInterfaceDetermines` closes
-  each of `orders`' methods over `call` and `return` itself and holds the file to it, reading which template an
-  entry closed and over what from the resolved schema rather than from the generated name. It fails on the
-  return type this review found wrong, and is the check a generator makes unnecessary.
-- **The inline example no longer serves schemas at their identity path.** That endpoint answers with bytes, and
-  `signature.response` names a type: the vocabulary cannot describe it, so the example says so and demonstrates
-  a nested path instead. Which is the absent-list item below, met in practice.
-
-**Recorded, not acted on.** `http_verb` is a closed enum, so no custom or WebDAV verb can be described. Two of
-an endpoint's errors may pin the same status, which is fine on the wire -- the value carries the error's tag --
-but means the gateway must set `type` rather than relying on the status to discriminate. And a route answering
-with something other than TSON has no spelling at all -- `signature.response` names a type, so serving a schema
-document at its identity path, which all three demos do, cannot be described. That is the
-"multi-media-type negotiation" exclusion, and it is a real endpoint of this project rather than a corner.
-
-**Not a gap, but part of the swap:** `referencedSchemas()` and `boundClasses()` need equivalents on this layer.
-`Interface.references()` and `Api.references()` already hand every reference up to the linker, so both derive.
+**Order:** packet schema and in-process dispatch, the `Orders` interface and implementation, a Java method-naming
+rule, errors as thrown bound classes with fixed statuses → the JDK adapter as api gateway, hand-written handlers gone
+→ remote RPC over HTTP and the other two adapters. `plan` and the processor come after all of that, if at all; they
+are not part of this scope and nothing earlier in the order waits on them.
 
 ## Open questions, kept here
 
-**Closed: constants read.** This was the one library ask on the list -- `constant => unknown` had no compiled
-reader, so any literal in a plan or an agent reported `NOT_IMPLEMENTED`. Revision 35 removed `unknown` and put
-§7.8's scoped family in its place, and `dynamic` is its named successor: the value carries its own type, a bare
-`!type-ref` resolved in the governing schema or a nested `!!schema` plus a type-ref resolved there, and is
-validated in full against whatever it named. A value naming *no* type is a validation error, so this is not an
-unchecked `any`. `AgentProbe` now reads a plan whose literal argument is an `!order` from a foreign schema, and
-asserts the untyped spelling is still refused. The generic-plan problem the gap posed is gone with it: a plan
-schema does not have to be closed per plan, because the type travels with the value.
-
+**The RPC address names a document, not an interface.** `rpc.tn`'s `call` addresses `(interface: uri, method:
+text)`, and that pair is not unambiguous: `examples/orders-1.tn` declares two interfaces at one `!!id`, and two
+unrelated ones declaring `place_order` would be indistinguishable in a call. The wire schema has the same flaw a layer
+up -- `place_order_call` is a flat type name, so two interfaces per document collide there too. Either the address
+carries the qualified name (`orders.orders.methods.place_order`), or one interface per document becomes a rule and
+`orders_v2` moves to its own file. Dispatch is the next item in the order, and this is what it dispatches on.
 
 **Which namespace may a document bind?** `!!schema` binds the type namespace and `!name` resolves against it,
 one hop. A plan or batch document wants to bind an *interface* -- to say `!place_order { request: { … } }` and
 have the step checked against the method -- and cannot: `place_order` is a key inside `orders`, not a type
-name. `method: place_order` as data is the workaround. Whether a document may bind a namespace of another kind,
-or more than one, is a spec question; the URL namespace being hierarchical (`/orders/{id}/items` under
-`/orders/{id}`) while a resource key is a flat template is the same question as `orders.place_order`, and one
+name, and a qualified name stands only at a `ref<T>` slot in a schema. A reference in a data document is open,
+with the one-level work (`experiments/one-level/README.md`, "The reference atom"); the URL namespace being hierarchical
+(`/orders/{id}/items` under `/orders/{id}`) while a resource key is a flat template is the same question, and one
 answer should serve both.
-
 
 **A disjoint choice with an enum variant is not read tag-free.** `agent-vm.tn`'s `instruction => ( simple_op
 | op )` is `@disjoint` -- string class beside brace class -- and the resolver accepts the assertion, but the
 reader refuses a bare `RET` at that position and asks for a tag. Measured precisely in `AgentProbe`: `(text |
 integer)` reads untagged, so tag-free dispatch exists; an enum variant is what it does not cover. Until it
 does, a compiled agent writes `!simple_op RET` and `!op { make: 0 }`, and the VM's "tag-free" claim describes
-the schema rather than the implementation. **Not filed** -- a library ask, and now the only one on this list.
+the schema rather than the implementation. **Not filed** -- a library ask.
 
-**Streams are not modelled, until a use arrives.** An earlier sketch carried `request_stream`/`response_stream`
-on the signature, meaning a *sequence* of documents of the declared type -- count unknown, each complete as it
-arrives -- a property of the call, not of the type, and so not `[order]`. Removed because nothing here uses
-them and the format has no framing for a sequence of documents (a document is one value; readers reject
+**Streams are not modelled, until a use arrives.** A stream is a *sequence* of documents of the declared type --
+count unknown, each complete as it arrives -- a property of the call, not of the type, and so not `[order]`. Nothing
+here uses one, and the format has no framing for a sequence of documents (a document is one value; readers reject
 trailing content). When a use arrives, the framing question comes with it: `application/tson-seq` on RFC 7464's
 model (an error mid-stream is a `problem` document in the sequence, so `errors` apply per element) over SSE,
 multipart, or a lazily-read array; and a `shape: UNARY | SERVER_STREAM | CLIENT_STREAM | BIDI` beats two booleans
 that admit the bidirectional shape by accident of encoding.
 
-**A `data` constructor as a map's value type is admitted, and §4.1 reads as if it should not.** No longer
-relied on -- the sketch's inner types are records now -- but still measured in `InterfaceMapProbe` on a probe-only
-`{type_name => data_method}`, because it is a live question for the spec: [TSON-SCHEMA] §4.1 refuses "naming a
-`kind: DATA` entry" as an element type, and a map's value type is one; the implementation admits the DATA
-*constructor* there and refuses only an *instance*. The kernel's own `top`-typed slots hold DATA instances, so the
-implementation is consistent with the kernel; whether "entry" was meant to include a constructor is what to ask.
-"What a namespace is", above, makes it moot for an interface rather than answering it: under a
-`namespace` kind, methods are members and not map values. **Not filed** -- confined here with the rest.
-
-**Closed: name hygiene reaches identifier-keyed maps, in data and in a governed schema.** An interface's method map
-is a naming scope in every sense [TSON-DATA] §8.2 means, and once methods live in maps rather than as declarations,
-the spoofing surface §8.2 exists for moves with them. Both places the map can sit now judge its keys as names, under
-a role over `identifier` as under `identifier` itself: a mixed-script key is refused, and two keys that read alike
-(`pass` and the all-Cyrillic `раѕѕ`) are refused at the second. That holds in a *data* document and in a *schema
-governed by a meta layer* -- where an interface's methods are written -- alike, as it does for two fields of a
-record or two declarations of a schema. `NameRoleProbe` pins both, `aDataDocumentsIdentifierKeysAreNames` and
-`aGovernedSchemasIdentifierKeysAreNamesToo`.
+**Recorded, not acted on.** `http_verb` is a closed enum, so no custom or WebDAV verb can be described. Two of an
+endpoint's errors may pin the same status, which is fine on the wire -- the value carries the error's tag -- but
+means the gateway must set `type` rather than relying on the status to discriminate.
 
 ## Files
 
 - `meta-service.tn` -- graduated: `tson-http/src/main/resources/meta-service.tn`, its reasoning in its own `@doc`s.
-- `REFERENCES.md` -- the proposal for `ref<T>`, qualified names and a `namespace` kind, so a binding names its
-  method and the resolver checks it as it checks a request record. Landed in Revision 38 in a
-  different shape, which the sketch now runs on (the port note at the top).
-- `RECORD-TEMPLATES.md` -- a proposal for a follow-on to tson-java PR #725: a record template is a type hiding
-  inside `template`, so it collapses into `record` with optional parameters and no template text.
-- `PR-724-REVIEW.md` -- a review of tson-java PR #724 (qualified names at record-typed positions), drafted and not
-  posted, one round per head, newest first: the consumer trial against each, and the findings each round left for
-  the next.
-- `PR-725-REVIEW.md` -- a review of tson-java PR #725 (a schema map's entry is its value), drafted and not posted:
-  one round per head, newest first: the consumer trial against each, and the findings each round left for the next.
 - `rpc.tn` -- the wire form: `call` and `return` as templates; the direction above, in its own `@doc`s.
 - `examples/orders-wire-1.tn` -- the templates closed per method of the orders interface: what a generator emits.
 - `agent.tn`, `agent-vm.tn` -- the plan (AST) and the agent (bytecode) it compiles to; the section above.

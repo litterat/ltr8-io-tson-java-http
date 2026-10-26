@@ -14,11 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * <b>A namespace type, measured against what the record-template workaround could do.</b> Before tson-java made
- * {@code namespace} a constructor, a namespace was written as {@code ns => <M> { entries: M }} closed over a
- * namespace map, and walked as {@code orders.entries.get}. Now {@code iface => namespace & { … }} is the map itself:
- * written as the bare map, the names inside it judged, and walked by {@code ref<T>} as {@code orders.get} -- the
- * short path the one-level note asked for, with no reading-side rule needed.
+ * <b>A namespace type is the map itself</b> ([TSON-SCHEMA] §4.1): {@code iface => namespace & { … }} is written as
+ * the bare map, the names inside it judged, and entered by a qualified name key by key (§5.12), so {@code ref<T>}
+ * reaches a member as {@code orders.get} with no reading-side rule. A record template closed over a map,
+ * {@code ns => <M> { entries: M }}, would put a field between the entry and its keys ({@code orders.entries.get}).
  */
 class NamespaceTemplateProbe {
 

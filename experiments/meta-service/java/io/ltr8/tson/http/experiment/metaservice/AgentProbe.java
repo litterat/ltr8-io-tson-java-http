@@ -22,12 +22,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The agent's two resolved layers -- {@code agent.tn}, the plan a surface grammar reads to, and
- * {@code agent-vm.tn}, the agent it compiles to -- resolve at Revision 35 and read, up to one gap.
+ * {@code agent-vm.tn}, the agent it compiles to -- resolve and read, up to one gap.
  *
  * <p>Read here: a plan whose arguments are references only ({@code arg} recursing through {@code record} to a
  * {@code selector}); a compiled agent whose pool holds names, a type and a method, and whose {@code code} mixes
  * bare mnemonics with labelled operands -- the {@code @disjoint} choice read tag-free, an enum beside a record.
- * And a constant, which Revision 35 closed: {@code constant => dynamic} is [TSON-DATA] §7.8's scope push, so a
+ * And a constant: {@code constant => dynamic} is [TSON-SCHEMA] §7.8's scope push, so a
  * literal argument names its own type -- from this schema's namespace, or from a foreign one it names with a
  * nested {@code !!schema} -- and is validated in full against whatever it named. The same slot serves
  * {@code rpc.tn}'s payload.
@@ -136,9 +136,8 @@ class AgentProbe {
     /**
      * A constant -- an `or`, a CONST pool entry, a literal argument -- reads, and the interesting half is that
      * the type it names is a foreign schema's. {@code constant => dynamic} admits both scopes, so the value
-     * carries a nested {@code !!schema} and a {@code !order} resolved there ([TSON-DATA] §7.8), and is checked
-     * against that record in full. Earlier revisions spelled this slot {@code unknown} and had no reader for
-     * it; the plan is unchanged, only the constant's spelling.
+     * carries a nested {@code !!schema} and a {@code !order} resolved there ([TSON-SCHEMA] §7.8), and is checked
+     * against that record in full.
      */
     @Test
     void aConstantNamesItsOwnTypeAcrossSchemas() {
@@ -178,7 +177,7 @@ class AgentProbe {
                 () -> "" + problems.diagnostics());
     }
 
-    /** A malformed step name is refused by the `name` role -- the identifier grammar as a pattern. */
+    /** A malformed step name is refused by the `name` role, an identifier family. */
     @Test
     void aNameThatIsNotAnIdentifierIsRefused() {
         String plan = """
@@ -188,5 +187,20 @@ class AgentProbe {
                     return: { ref: { step: x } } }""".formatted(PLAN_ID, ORDERS_ID);
         List<Diagnostic> problems = tson().validate(plan);
         assertTrue(problems.stream().anyMatch(d -> d.path().orElse("").equals("/steps/0/name")), () -> "" + problems);
+    }
+
+    /**
+     * A step name is a name, so [TSON-DATA] §8.2's hygiene judges it: {@code pаy}, with a Cyrillic {@code а}, is
+     * refused by the reader under the default identifier policy, before any admission verifier sees the plan.
+     */
+    @Test
+    void aMixedScriptStepNameIsRefusedByNameHygiene() {
+        String plan = """
+            !!schema:"%s"
+            !plan { interface: "%s"
+                    steps: [ { name: pаy  method: get_order  input: { id => { ref: { step: x } } } } ]
+                    return: { ref: { step: x } } }""".formatted(PLAN_ID, ORDERS_ID);
+        assertTrue(tson().validate(plan).stream().anyMatch(d -> d.code() == Diagnostic.Code.RESTRICTED_SCRIPT),
+                () -> "" + tson().validate(plan));
     }
 }
