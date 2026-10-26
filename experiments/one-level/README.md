@@ -468,7 +468,7 @@ member). The spec refuses `ref<record>`
 4. **The ladder makes half the vocabulary dead and the index wrong.** A reference's first segment names an entry
    holding a value, and under the import-level rule (PR #755) a namespace type, the only thing that puts a value in an
    entry, exists only in a kernel-governed schema. So `ref<T>` in a schema governed by meta.tn, which is where data
-   lives, admits no value at all: an empty atom, which #756 (open) removes from core.tn. And `kind_type.members`, the derived
+   lives, admits no value at all: an empty atom, which tson-java PR #760 removed from core.tn (#756). And `kind_type.members`, the derived
    index in resolved output, is computed over the *declaring* schema's closure, while the names at the slot resolve in
    the *holding* document's. For a kind declared at level 2 and held at level 1 the index lists level-2 types, and the
    linker rightly ignores it; it is honest only when declaring and judging closure coincide, a level-1 kind on level-0
@@ -514,7 +514,7 @@ spelling and a lying index. A design that is right tends to show the same simpli
 
 **Not for Revision 38.** Writing `reference` while `of` resolves in two stores would put the store choice in a field
 name (`{ name | of | kind }`) and carry the ladder inside the atom. Under the ladder the honest Revision 38 kernel is the
-one it has, with `ref` confined to kernel-governed schemas (#756, open).
+one it has, with `ref` confined to kernel-governed schemas (PR #760).
 
 ### Templates and dependent fields: one mechanism
 
@@ -554,7 +554,7 @@ strong form of that is already untrue:
 | user schema imports core, declares `pick => { t: kind<type> }`; data writes `!pick { t: order }` | admitted |
 | the same, `t: no_such` | refused: "'no_such' is not a member of this kind" |
 | the same, `t: record`, a constructor | refused: not a member |
-| the same schema adds `rpick => { m: ref<order> }` through core's `ref`; data writes `!rpick { m: whatever }` | resolves; the read is `NOT_IMPLEMENTED`, though the closure holds no value entry to name (#756, open, removes core's `ref`) |
+| the same schema adds `rpick => { m: ref<order> }` | refused: "has an unresolved reference 'ref'" -- core declares no `ref` since tson-java PR #760, the closure holding no value entry to name |
 | data governed by `meta.tn`: `!record { fields: { sku => { type: no_such } } }` | admitted: grammar and shape judged, membership not |
 
 **A data document can hold a checked name for a type today.** Membership is judged over the governing schema's
@@ -736,7 +736,7 @@ Not edited; recorded here until the direction is decided.
   The restatement above ("exports a namespace" versus "refers into one") is the candidate.
 - **The import-level rule** tson-java PR #755 added would be withdrawn under one level: it is a ladder rule. A data
   document's kinds reach it through core today and through the one namespace then.
-- **The reference rule** tson-java #756 (open) proposes (core.tn declares no `ref`; a reference is declared only in a
+- **The reference rule** tson-java PR #760 landed (core.tn declares no `ref`; a reference is declared only in a
   kernel-governed schema) is withdrawn with it: under one level a schema that governs data has value entries, so
   `ref<T>` is valid everywhere and core.tn needs no sibling of anything.
 - **The "Describing an API" section's** argument that "the meta layer owns the vocabulary its constructors use" is a

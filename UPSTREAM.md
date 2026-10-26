@@ -78,10 +78,12 @@ constructor whose instances are maps" and "A reference to a value is the kind's 
 
 **Where it stands.** PR #753 landed on the Revision 38 proposal: `namespace` is a constructor under `top`, a namespace
 type composes it, a value of one is a map (`Namespace`), the schema map and a record's fields are two of them, and
-`data` is retired. A `ref<T>` slot reaches a value by a qualified name through namespace keys (`orders.get`), and a
-`kind<C>` slot holds a type's name; both are judged by the slot's declared type, at any depth and under any host. A
-namespace type declares only its facets, so a construct with fields beside its map is a record held under a key.
-`meta-http.tn`'s `api` and the meta-service probes run on all of it.
+`data` is retired. A `ref<T>` slot reaches a value by a qualified name through namespace keys and record values'
+fields (`orders.get`, `i.orders.methods.place`, PR #758), and a `kind<C>` slot holds a type's name; both are judged by
+the slot's declared type, at any depth and under any host. A reference is declared only in a kernel-governed schema
+(PR #760), since only there can an entry hold a value. A namespace type declares only its facets, so a construct with
+fields beside its map is a record held under a key. `meta-http.tn`'s `api` and the meta-service probes run on all of
+it.
 
 **Kind:** consumer evidence. Each item is something the meta-service experiment does in its reader today
 (`Routes`) because the schema cannot say it, with the probe that changes state when it can.
@@ -92,31 +94,17 @@ namespace type declares only its facets, so a construct with fields beside its m
    merging member sets, `orders => reads & { … }` would have `reads`' methods and its own, a collision refused as
    between two composed records' fields, and the extra level would go. An inherited member should not be copied:
    a method composed into several interfaces stays one value with one identity.
-2. **A reference through a record value's field** (upstream's `BACKLOG.md`, "A value reached through a record value's
-   field"). An interface held under a key keeps its methods in a field, `methods: {method_name => method}`, a plain
-   map no qualified name enters. Made a namespace type, `orders.orders.methods.place_order` would pass a record
-   field, which upstream's walk judges by type and reports as a gap rather than delivering. So `binding.method` stays
-   an identifier `Routes` checks, and coverage per (interface, method) is the reader's. Item 1 would also remove the
-   need, by putting the methods directly under the interface's key.
-3. **Data keys.** An api is keyed by path, then verb, and a namespace's `key_type` is an identifier family, so a
+2. **Data keys.** An api is keyed by path, then verb, and a namespace's `key_type` is an identifier family, so a
    text-keyed namespace is refused (`NameRoleProbe.aNamespaceCannotBeKeyedByText`) and the experiment's `resources`
    is a plain map that no qualified name enters. A key that is not a name also needs a reach other than `.`: the
    pointer form the "formats" entry below stages, `/orders/POST`, where a compound `[path, verb]` key has no pointer
    token today (`UpstreamGapsTest.aCompoundKeyHasNoPointerTokenAndTheEncodingsDisagree`).
-4. **A reference in a data document — a Revision 39 question, with the one-level work.** It is what would let a plan
-   document bind a method (`agent.tn`), or a delegation name the methods it grants (`experiments/one-level/IDENTITY.md`),
-   against the interface's namespace rather than as text. Under the ladder it cannot exist: a reference names an entry
-   holding a value, only a kernel-governed schema can declare the namespace type that puts one there, and a schema that
-   governs data imports no kernel-governed one (PR #755), so its closure has nothing to name. tson-java #756 (open)
-   removes core's `ref` on that ground. Under one level a schema that governs data holds value entries and the question
-   returns, with the kind's rule as the candidate (the name resolves in the closure of the document's `!!schema`):
-   `experiments/one-level/README.md`, "The reference atom".
 
 **Out of scope, deliberately:** the `(schema identity, root type name)` pair this project reassembles at every call
 site (`describing`, `readObjectAs`, the `TSON-Schema` header plus a route-supplied type). It exists because a data
 document cannot hold a reference to a type, and nothing above changes that.
 
-**Priority:** item 1 first. It is the one the experiment's shape is waiting on, and it removes most of item 2.
+**Priority:** item 1 first. It is the one the experiment's shape is waiting on.
 
 ### To file: formats this project needs and the vocabulary cannot state — two types, by strength of evidence
 
@@ -225,7 +213,9 @@ artifact, which Revision 37 closed with the bundled `policy.tn`; naming a schema
 four on 2026-09-01), the last since landed on the Revision 38 proposal as the `namespace` constructor; and
 `identifier` as a text family with `enum` stating its type, adopted in Revision 37. From this project's review,
 tson-java also filed and built on `r2026-38-proposal`: `hostname` and `host`, a non-ASCII identity's host as one
-identity in either label form (SPEC-FEEDBACK #4), `media_type` in `net.tn` (#8), and an import standing at the
-importer's governing level (#25, PR #755). Prose in
+identity in either label form (SPEC-FEEDBACK #4), `media_type` in `net.tn` (#8), an import standing at the
+importer's governing level (#25, PR #755), a reference delivered through a record value's field (PR #758), and a
+reference declared only in a kernel-governed schema (PR #760). A reference in a data document is a Revision 39
+question, with the one-level work (`experiments/one-level/README.md`, "The reference atom"). Prose in
 this repo names each by its subject, not its number. A new finding goes here in the same shape: a `### To file:`
 heading naming the spec sections, the gap, what this project does meanwhile, and a priority.

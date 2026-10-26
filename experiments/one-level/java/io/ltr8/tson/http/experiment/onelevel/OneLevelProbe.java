@@ -141,21 +141,14 @@ class OneLevelProbe {
     /** An ordinary schema types a field by a kind through core's own {@code kind}. */
     static final String NAMING = head(ID, META, CORE) + "{ order => { sku: text }  pick => { t: kind<type> } }";
 
-    /** The same, typing a field by a reference through core's own {@code ref}, which tson-java #756 removes. */
+    /** The same, typing a field by a reference: core declares no {@code ref}, so nothing here resolves it. */
     static final String REFERRING = head(ID, META, CORE) + "{ order => { sku: text }  rpick => { m: ref<order> } }";
 
     static List<Diagnostic> readUnderNaming(String body) {
-        return readUnder(NAMING, body);
-    }
-
-    /** Reads {@code body} under {@code schema}, served at {@link #ID}, once the schema has resolved soundly. */
-    static List<Diagnostic> readUnder(String schema, String body) {
         Map<String, String> documents = new LinkedHashMap<>();
-        documents.put(ID, schema);
+        documents.put(ID, NAMING);
         Tson tson = tson(documents);
-        List<Diagnostic> problems = tson.validateSchema(schema);
-        assertEquals(List.of(), problems, () -> "the schema no longer resolves; for REFERRING that is tson-java #756 "
-                + "landing, which the one-level README's reference section expects: " + problems);
+        assertEquals(List.of(), tson.validateSchema(NAMING));
         return tson.validate("!!schema:\"" + ID + "\"\n" + body);
     }
 
@@ -177,19 +170,17 @@ class OneLevelProbe {
     }
 
     /**
-     * <b>A reference in an ordinary schema resolves and names nothing.</b> Core's {@code ref} reaches an ordinary
-     * schema, but a reference names an entry holding a value, and only a kernel-governed schema can declare the
-     * namespace type that puts one there, so the closure of a schema that governs data has nothing to name. The read
-     * is reported as a gap. tson-java #756 (open) removes core's {@code ref} on that ground, and the day it lands
-     * {@link #REFERRING} stops resolving and this fails; the kind half ({@link #aDataDocumentCanHoldACheckedTypeName})
-     * does not depend on it.
+     * <b>A reference is declared only in a kernel-governed schema.</b> A reference names an entry holding a value, and
+     * only a kernel-governed schema can declare the namespace type that puts one there, so a schema that governs data
+     * has nothing to name. Core declares no {@code ref}, and the kernel's is out of an ordinary schema's reach (an
+     * import stands at the importer's governing level), so {@code ref<order>} there is an unresolved name. The kind
+     * half ({@link #aDataDocumentCanHoldACheckedTypeName}) is unaffected; under one level the question returns (the
+     * README's "The reference atom").
      */
     @Test
-    void aReferenceInAnOrdinarySchemaResolvesAndNamesNothing() {
-        List<Diagnostic> problems = readUnder(REFERRING, "!rpick { m: whatever }");
-        assertEquals(List.of(Diagnostic.Code.NOT_IMPLEMENTED), problems.stream().map(Diagnostic::code).toList());
-        assertTrue(problems.getFirst().message().contains("a data document has no link"),
-                problems.getFirst().message());
+    void aReferenceIsDeclaredOnlyInAKernelGovernedSchema() {
+        String message = onlyMessage(tson(new LinkedHashMap<>(Map.of(ID, REFERRING))).validateSchema(REFERRING));
+        assertTrue(message.contains("has an unresolved reference 'ref'"), message);
     }
 
     /**
