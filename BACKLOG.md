@@ -33,25 +33,71 @@ Prose inside a live entry follows the same rule: say what is left to do and what
 
 ## Integration surface
 
-- [ ] **A startup facade in `tson-http`** — Each demo's `start` repeats the same page of ceremony, in an order that
-  matters: the schema map, `TsonBindings.of`, `TsonApiSchema.metaNameBinder()`, resolving the application schema and
-  then the description, `TsonApiSchema.describedBy`, `prepareToWrite` over `boundClasses`, `TsonApiCoverage.of`. One
-  builder taking the description source, the application schemas and the bindings, and handing back the codec, the
-  description, the coverage and the catalog, makes the startup rule (`CLAUDE.md`, "The startup rule") impossible to get
-  wrong and reduces an adapter demo to its handlers. The catalog helper and the resource-loading helper each demo
-  carries belong in it.
+- [ ] **A startup facade in `tson-http`** — Each demo's `start` repeats the same page of ceremony, in an order that matters:
+  the schema map, `TsonBindings.of`, `TsonApiSchema.metaNameBinder()`, resolving the application schema and then the
+  description, `TsonApiSchema.describedBy`, `prepareToWrite` over `boundClasses`, `TsonApiCoverage.of`. One builder taking
+  the description source, the application schemas and the bindings, and handing back the codec, the description, the coverage
+  and the catalog, makes the startup rule (`CLAUDE.md`, "The startup rule") impossible to get wrong and reduces an adapter
+  demo to its handlers. The facade spans the split ("The module split", below): the service side (schemas, bindings, the
+  description, the join) and the HTTP side (the codec, the catalog), so a projection other than HTTP reuses the first half.
+  The catalog helper and the resource-loading helper each demo carries belong in it. The facade must not require an
+  `!interface`; an `!api` of operations alone is complete.
 - [ ] **Read a request by its route** — A handler chooses between `readObject` and `readObjectAs(schema, type)` by
   sniffing `Content-Type` for JSON, with the route's declared request type as the JSON binding. The route already knows
   its request type and its encodings, so an exchange-level `read(route, Class)` makes that one call and removes the
   branch from every handler. The same for the response: `respondDescribed` takes a status, a schema identity and a type
   name the route already holds.
-- [ ] **Register routes from the description** — A handler claims a declared endpoint with
-  `TsonApiCoverage.serving(verb, path)` and registers its own path. The adapter should instead take a map from
-  `InterfaceMethod` (or verb and template) to handler and register every declared endpoint itself, so coverage is
-  structural rather than claimed and `requireComplete()` has nothing left to catch. Constraint: the per-framework path
-  translation that claim-by-template avoids (`design/service-description.md`, "An endpoint has no name") becomes the
-  adapter's job, once, where a wrong entry is a route that silently never matches; each adapter's suite must prove every
-  declared template is reachable.
+- [ ] **Register routes from the description** — A handler claims a declared endpoint with `TsonApiCoverage.serving(verb,
+  path)` and registers its own path. The adapter should instead register every declared endpoint itself, so coverage is
+  structural rather than claimed and `requireComplete()` has nothing left to catch. A handler attaches two ways: directly by
+  verb and template for an `!operation`, and through the service's join ("The module split", below) for a `!binding`, so a
+  server with no `!interface` is a first-class case. Constraint: the per-framework path translation that claim-by-template
+  avoids (`design/service-description.md`, "An endpoint has no name") becomes the adapter's job, once, where a wrong entry is
+  a route that silently never matches; each adapter's suite must prove every declared template is reachable.
+
+## The module split
+
+The four entries are in build order.
+
+- [ ] **`tson-invoke`, the language side** — A new Gradle sub-project and JPMS module (`io.ltr8.tson.invoke`) depending on
+  Java alone, as `ltr8-bind` in the sibling depends on nothing but the language. It holds a descriptor for a Java interface
+  built by analysis: one method descriptor per Java method with its parameter and return classes, an invoker `MethodHandle`
+  taking a target and a request and returning the outcome, and a `java.lang.reflect.Proxy` for the other direction, turning a
+  Java call into a request and the outcome back. It holds `Class` and `MethodHandle` and nothing else, knows no schema and so
+  checks nothing: the check is a join, and the join is the layer above. Constraints: dispatch through `java.lang.invoke`,
+  never reflective invoke; Java 25, a real `module-info.java` named for its root package, no external runtime dependency. The
+  name is `invoke` because `interface` is a Java keyword and a module is named for its package.
+- [ ] **`tson-service`, the description** — A new sub-project (`io.ltr8.tson.service`) depending on `tson-invoke` and
+  tson-java. `meta-service.tn` moves here whole, so `!interface` and `!api` stay one layer and no reference crosses a meta
+  import. So does the `io.ltr8.tson.http.api` package (`TsonApiSchema`, `TsonApiDescription`, `TsonApiCoverage`, `Route`,
+  `InterfaceMethod`, the bound records), with `OrdersExamples`, its fixtures and their tests, and `TsonBindings`, which binds
+  schema types to classes with startup semantics and is not HTTP's. The join lives here: a resolved `!interface` held against
+  an invoke descriptor at startup, by naming convention (`place_order` to `placeOrder`, as `TsonApiSchema.metaNameBinder()`
+  maps type names). Startup fails on a Java method with no schema method, a schema method with no Java method, a parameter or
+  return bound to a record other than the method's request or response, or an outcome that is not the response or a declared
+  error, as `prepareToRead` fails a bound-class mismatch. The outcome is a union of the response and the errors, so whether a
+  projection throws or writes an error is the projection's choice and the interface layer makes none. The other direction
+  lives here too: an `!interface` document written from an invoke descriptor, so an `!api` can be built over an interface or
+  object that already exists; `@safe` and `@idempotent` have no Java counterpart and must come from somewhere the writer
+  reads. The rpc wire form (`call` and `return` documents addressed by `InterfaceMethod`, and the code taking a call to an
+  invocation and the outcome to a return) is a capability of the service, not a module of its own; `experiments/rpc/` is its
+  draft. One HTTP fact stays in this reader on purpose: a business error's pinned `status`, read by field name from the error
+  type, is the `!api` projection's rule and needs no import of `problem.tn`. Constraint: this layer resembles the sibling's
+  `tson-schema`, a meta layer plus a reader over what resolves, and may one day move there in part or whole; so it takes no
+  dependency on `tson-http`, mirrors `tson-schema`'s shapes where one fits, and keeps its vocabulary free of anything HTTP
+  beyond the `!api` projection itself.
+- [ ] **`tson-http` becomes the HTTP projection** — What remains is the codec, the media types and headers,
+  `TsonHttpException`, `problem.tn`, the catalog, the deployment descriptor, and the code taking an HTTP call to a route and
+  through the service to an invocation. It depends on `tson-service`; the three adapters are unchanged above it. One new
+  endpoint kind in `meta-service.tn`: a record composing `endpoint` that names an interface rather than a method, so one POST
+  route accepts call documents for a whole interface. It is the simplest agent-facing surface beside REST, since an LLM tool
+  call is a method name and arguments and nothing else. `UpstreamGapsTest` pins gaps for both layers; it stays in
+  `tson-http`, which sees everything, until a pin concerns `tson-service` alone.
+- [ ] **A gRPC projection as a peer of `tson-http`** — Its own module depending on `tson-service` alone, so neither
+  projection knows the other exists. gRPC's marshaller is pluggable per method, so a `ServerServiceDefinition` is built at
+  startup from the `!interface` with no protobuf: one `MethodDescriptor` per `InterfaceMethod`, its full name in gRPC's
+  `package.Service/Method` form, and the service's wire serialisation for the request and outcome. The first external
+  dependency on the service side, stopping at that module.
 
 ## Adapters
 
@@ -68,11 +114,17 @@ Prose inside a live entry follows the same rule: say what is left to do and what
 
 ## Client
 
-- [ ] **A client built from the description** — A client that reads a description, builds a request from a request
-  record by reversing `RequestPlacement` (path variables, query, headers, body), sends it with the right `Content-Type`
-  and `TSON-Accept-Schema`, and validates the reply by the schema it names is the other half of the contract, which is
-  proven from the server side only. `TsonApiConformanceTest` holds that logic against the demo; extract it into a
-  reusable client and make the conformance test a consumer of it.
+- [ ] **A client built from the description** — For an agent or any LLM-driven caller the client surface is REST, which is
+  the published description, the self-describing responses and the deployment descriptor; a Java client built from the
+  description is therefore a conformance and testing tool. It reads a description, reverses `RequestPlacement` to build a
+  request from a record (path variables, query, headers, body), sends it with the right `Content-Type` and
+  `TSON-Accept-Schema`, and validates the reply by the schema it names, which is the other half of the contract, proven from
+  the server side only. `TsonApiConformanceTest` holds that logic against the demo; extract it into a reusable client and
+  make the conformance test its consumer.
+- [ ] **A tool manifest derived from an `!api`** — An LLM tool or function definition per endpoint, derived from the
+  description's routes, request records and summaries, as a projection of the description like the gRPC front-end is of the
+  interface. Constraint: `experiments/agent/` is future work the layer is not built toward (`design/service-description.md`),
+  and this item derives from the description only; it decides nothing for the agent.
 
 ## The description
 
