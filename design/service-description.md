@@ -1,10 +1,9 @@
 # Describing a service (`meta-service.tn`, `io.ltr8.tson.http.api`)
 
-Why a service description is a schema and not a document, what the meta layer declares, what the reader checks, and how
-a server is held to the description at startup. Current form only. The orders examples under
-`tson-http/src/test/resources/io/ltr8/tson/http/api/orders/` are one real document per use of the layer, reached
-through `OrdersExamples`, and the experiments that build on the interface (`experiments/rpc/`, `experiments/agent/`)
-read them from there.
+Why a service description is a schema, what the meta layer declares, what the reader checks, and how a server is held
+to it at startup. The orders examples under `tson-http/src/test/resources/io/ltr8/tson/http/api/orders/` are one real
+document per use of the layer, reached through `OrdersExamples`; `experiments/rpc/` and `experiments/agent/` read
+them there too.
 
 **Invariants**
 
@@ -44,13 +43,12 @@ Two consequences:
 
 ## Describing a service (`meta-service.tn`, `io.ltr8.tson.http.api`)
 
-An OpenAPI-shaped description of a service whose payloads are TSON — minus the part OpenAPI mostly is. OpenAPI
-embeds a schema language because JSON has none; TSON already has published, identity-addressed schemas, so an
-endpoint **references** one. And it describes the interface underneath as well as the HTTP over it: methods
-grouped into interfaces, and apis whose endpoints bind them.
+An OpenAPI-shaped description of a service whose payloads are TSON, minus the embedded schema language OpenAPI needs
+because JSON has none: an endpoint **references** a published, identity-addressed schema. It describes the interface
+underneath as well as the HTTP over it — methods grouped into interfaces, and apis whose endpoints bind them.
 
 **The description is a schema, not a document governed by one.** `meta-service.tn` is a meta layer whose two
-constructors are namespace types, `interfaces` and `apis`; a service's description is a schema governed by it:
+constructors are namespace types, `interfaces` and `apis`; a service's description is governed by it:
 
 ```
 orders     => !interfaces { orders => { place_order => { request: order  response: order  errors: [sku_not_found] } } }
@@ -60,72 +58,61 @@ orders_api => !apis { orders_api => { implements: [orders.orders]
 ```
 
 Methods are keys inside their interface, endpoints are values under a path and then a verb, so neither is a global
-entry and nothing needs an invented operationId. That is what makes `request: order` a *type reference the compiler
-resolves* and `orders.orders.methods.place_order` a *reference to a value it resolves* — the property no data-shaped
-design can have, because a data document can name a schema but cannot hold a reference. `demo/schemas/orders-api-1.tn`
-is the both-shapes demo (an interface and an api binding it); `validate-api-1.tn` is web-service-only, every endpoint
-an inline `!operation` or a `!document`; `OrdersExamples` holds the interface-only, web-service-only and both forms
-beside each other.
+entry and nothing needs an invented operationId. `demo/schemas/orders-api-1.tn` binds an interface in an api;
+`validate-api-1.tn` is web-service-only, every endpoint an inline `!operation` or `!document`; `OrdersExamples` holds
+all three forms.
 
-**The maps borrow namespaces TSON does not own.** A schema describes a namespace — the type system's, keyed by type
-names under [TSON-DATA] §7.7's identifier grammar. An interface's `methods` is keyed by method names, a
-procedure-call namespace (what gRPC and JSON-RPC address as `service.method`); an api's `resources` by URL path
-templates (RFC 3986's, written as RFC 6570 templates); a resource's `endpoints` by verbs (RFC 9110's registry); a
-request record's fields are the namespace `placement` maps the URL's segments, query keys and header names onto.
-`place_order` is not a type; it is a name in the `orders` namespace that a method description sits at. The map's key
-type is how a document borrows a namespace it does not govern, and the discipline comes from outside: `http_verb` is
-an enum copied from the registry, a path key is a `path_template`. **One naming role per borrowed namespace**, as the
-kernel declares `type_name`, `field_name` and `param_name` over one identifier grammar: `method_name => identifier`
-keys an interface's methods, and for the URL and header namespaces, whose grammars are not TSON's identifier, the
-authority's grammar rides as a `pattern` on a text family — `path_template`, and `header_name` held case-folded as
-RFC 9110 §5.1 compares it. A role enforces the grammar *and names the namespace in the refusal* (`NameRoleTest`),
-where `type_name` would enforce the same grammar while misnaming it; a namespace cannot be keyed by `text` at all;
-and because a method map's keys are names, §8.2's hygiene refuses a mixed-script or confusable key in a governed
-schema as in data. Two things follow. A method has an identity without inventing one: `(schema identity, qualified
-name)` — `…/orders-1.tn` and `orders.orders.methods.place_order` — unambiguous across every service, with no
-`operationId`. And `resources` is a map rather than a namespace: a namespace's keys are identifiers, a path is data,
-so no qualified name enters an api and an endpoint is reached by location.
+**The maps borrow namespaces TSON does not own.** A schema's own namespace is keyed by type names under [TSON-DATA]
+§7.7's identifier grammar; an interface's `methods` by method names, a procedure-call namespace; an api's `resources`
+by URL path templates; a resource's `endpoints` by RFC 9110's verbs; and a request record's fields are the namespace
+`placement` maps URL segments, query keys and header names onto. A map's key type is how a document borrows a
+namespace it does not govern, with the discipline from outside (`http_verb` is the registry's enum), and **one naming
+role per borrowed namespace**, as the kernel has `type_name`, `field_name` and `param_name` over one grammar:
+`method_name => identifier`, and where the authority's grammar is not TSON's identifier, a `pattern` on a text family
+— `path_template`, and `header_name` held case-folded as RFC 9110 §5.1 compares it. A role enforces the grammar *and
+names the namespace in the refusal* (`NameRoleTest`), where `type_name` would misname it; a namespace cannot be keyed
+by `text`; and §8.2's hygiene refuses a mixed-script or confusable method key in a governed schema as in data. So
+`place_order` is not a type but a name in the `orders` namespace, and a method's identity is
+`(schema identity, qualified name)` — `…/orders-1.tn` and `orders.orders.methods.place_order` — unambiguous across
+every service.
 
-**What a namespace is, since "a keyed set" is every map: a keyed set of *declarations*, where a map is a keyed set of
-*values*.** A declaration describes values and has instances of its own; a map's member *is* a value (unique keys and
-being referenced by key both fail as tests: every map has unique keys, and a foreign key references a row, which is a
-value). The declaration side is a namespace and the instance side a map, every time — schema and document, interface
-and calls, columns and rows, registry and message — and the kernel's `schema` and `field_map` are the first two. What
-the test admits and Revision 38 does not take is a data-keyed namespace — an api, a discriminated family, problem
-types — each a map in TSON, reached by location rather than by a qualified name.
+**What a namespace is: a keyed set of *declarations*, where a map is a keyed set of *values*.** A declaration
+describes values and has instances of its own; a map's member *is* one (unique keys and reference by key fail as
+tests — every map has unique keys, and a foreign key references a row). The pair recurs — schema and document,
+interface and calls, columns and rows, registry and message, the kernel's `schema` and `field_map`. What the test
+admits and Revision 38 does not take is a data-keyed namespace — an api's paths, a discriminated family, problem
+types — each a map in TSON, so no qualified name enters an api and an endpoint is reached by location.
 
-**A binding refers to a method rather than being one.** The alternative, under plain `meta.tn`, makes a method a type
-— the type of its call record — and an operation IS-A its method (`create_order => place_order & http & { verb: = POST
-… }`). It reads, and a plan step is then a value of the method type. Its cost is that schema facts stated as fields
-are per-instance: `verb: = POST` pins a field whose name is unmarked, which [TSON-SCHEMA] §5.2 makes a *marker* the
-value must write, never injected, so each call restates its verb and URL, and a refinement cannot relax the base's
-required `verb` to an omissible one. A reference has none of that cost.
+**A binding refers to a method rather than being one.** A method could be a type under plain `meta.tn` (its call
+record's), with an operation refining it, but a schema fact stated as a field is per-instance: `verb: = POST` pins an
+unmarked field, which [TSON-SCHEMA] §5.2 makes a *marker* each value must write, never injected, so every call
+restates its verb and URL, and a refinement cannot relax the base's required `verb`. A reference has no such cost.
 
-**And it is at the schema level by design, not only by necessity.** Data is the projection of a schema; a request
-and its data are the projection of an API — so an API's definition belongs at the schema level, above the documents
-that project it. A `type_reference` value type in data was weighed as a way to write a description as data and avoid
-the meta layer's restrictions, and set aside for that reason: the restrictions come with the level and are accepted.
-**The meta layer owns the vocabulary its constructors use** — `http_verb`, `status_code`, `path_template`,
-`header_name` and `media_type` are declared in `meta-service.tn` itself, not imported, since an import stands at the
-importer's governing level — a meta layer imports no ordinary library and no ordinary schema imports a meta layer,
-both refused at schema load (`UpstreamGapsTest.anImportStandsAtTheImportersGoverningLevel`) — and an ordinary schema
-wanting the same terms declares its own: `problem.tn`'s `status` is an `int32`.
+**And it is at the schema level by design, not only by necessity.** Data projects a schema and a request projects an
+API, so an API's definition belongs above its documents; a `type_reference` value type, to write a description as
+data and escape the meta layer's restrictions, was set aside — the restrictions come with the level. **The meta layer
+owns the vocabulary its constructors use** — `http_verb`, `status_code`, `path_template`, `header_name` and
+`media_type` are declared in `meta-service.tn`, not imported: an import stands at the importer's governing level, so
+a meta layer imports no ordinary library and no ordinary schema imports a meta layer, both refused at schema load
+(`UpstreamGapsTest.anImportStandsAtTheImportersGoverningLevel`). An ordinary schema wanting those terms declares its
+own: `problem.tn`'s `status` is an `int32`.
 
-**An entry applying a namespace type is a value, never a type.** Revision 38 has no `data` kind (§4.1): a meta
-layer's vocabulary is records held by namespace types, the kernel's `namespace` being the constructor whose instances
-are maps. Naming such an entry where a type is expected is a resolver error ("a value and
-not a type"). **A namespace value is the map alone**: it has no fields beside its keys, so a construct carrying both
-— an interface's `extends` beside its methods, an api's `implements` beside its resources — is a record held under a
-key, one level down, which is why a reference spells `orders.orders` (the entry, then its key), and a namespace type
-declaring such a field is refused (`UpstreamGapsTest.aNamespaceTypeDeclaresOnlyItsFacets`). The records inside —
-`interface`, `api`, `method`, `resource`, `operation`, `binding`, `document` — are ordinary records and head no entry.
+**An entry applying a namespace type is a value, never a type.** Revision 38 has no `data` kind (§4.1); the kernel's
+`namespace` is the constructor whose instances are maps, and a meta layer's vocabulary is records they hold. Naming
+one where a type is expected is a resolver error ("a value and not a type"). **A namespace value is the map alone**:
+it has no fields beside its keys, so a construct carrying both — an interface's `extends` beside its methods, an
+api's `implements` beside its resources — is a record held under a key, one level down, which is why a reference
+spells `orders.orders` (the entry, then its key), and a namespace type declaring such a field is refused
+(`UpstreamGapsTest.aNamespaceTypeDeclaresOnlyItsFacets`). The records inside — `interface`, `api`, `method`,
+`resource`, `operation`, `binding`, `document` — are ordinary records and head no entry.
 
 **Naming is the resolver's; relating is the reader's.** `request`, `response` and `errors` are typed `type_kind`,
-`extends` and `implements` are `[ref<interface>]`, and a binding's or an exemption's `method` is `ref<method>` —
-so a type nothing declares, a reference to the wrong kind of thing, and a method key an interface does not hold are
-refused at schema load, with nothing declared by the bound classes, and a qualified name says which interface it
-means, so no name is ambiguous. What relates two things is `TsonApiDescription`'s, checked when it reads a
-description, and **an unsound description has no model** — a startup failure, as an undeclared type is:
+`extends` and `implements` are `[ref<interface>]`, and a binding's or an exemption's `method` is `ref<method>` — so a
+type nothing declares, a reference to the wrong kind of thing, and a method key an interface does not hold are
+refused at schema load, with nothing declared by the bound classes; a qualified name says which interface it means,
+so no name is ambiguous and nothing re-resolves bare names against an import list. What relates two things is
+`TsonApiDescription`'s, checked when it reads a description, and **an unsound description has no model** — a startup
+failure, as an undeclared type is, rather than a published contract no client can act on:
 
 - a binding's method belongs to an interface its api implements, through `extends`;
 - the `implements` claim holds — every method of every implemented interface is bound, or exempted in `not_bound`
@@ -146,80 +133,60 @@ description, and **an unsound description has no model** — a startup failure, 
   discriminate;
 - no two endpoints share a verb and a path, across every api a description holds.
 
-What a data-shaped predecessor did instead — resolving bare names against an import list, which reimplemented an
-upstream namespace bug twice — is exactly what the references remove; what is left is relational, and stays in one
-reader rather than in every consumer.
-
 **The wiring is three things**: this schema reachable from the `schemaSource` (`TsonApiSchema.publishedById()`), the
 bound classes in `io.ltr8.tson.http.api`, and `TsonApiSchema.metaNameBinder()` on the config — **not** `bindings`,
-which binds the data a schema describes. A meta layer's vocabulary is a separate namespace on purpose. The binder
+which binds the data a schema describes; a meta layer's vocabulary is a separate namespace on purpose. The binder
 finds a class by PascalCasing the schema type's name in that package, `@Typename` notwithstanding, so a public class
-there named like a schema record binds to it whether meant to or not — which is why the computed placement is
-`RequestPlacement` and not `Placement`. Two more binder facts a bound record for a meta layer's vocabulary meets: a
-map's *keys* come back as `String` whatever the schema's key type, so `{http_verb => endpoint}` binds to
-`Map<String, Endpoint>` and a `Map<HttpVerb, …>` component would hold strings and lie about it; and a slot typed by a
-record with no bare form needs a Java type of that name even if nothing constructs it bare — a sealed interface is the
-right thing there, and it makes the base as abstract in Java as it is in the schema.
+there named like a schema record binds to it, meant or not — hence `RequestPlacement`, not `Placement`. Map keys bind
+as `String` whatever the key type, so `{http_verb => endpoint}` is `Map<String, Endpoint>`, never a
+`Map<HttpVerb, …>` holding strings. A slot typed by a record with no bare form still needs a Java type of that name:
+a sealed interface, as abstract in Java as the base is in the schema.
 
-**Resolving the description is a startup check**, which is why each demo calls `tson.resolve(API)` and then
-`TsonApiSchema.describedBy`: an unsound description fails the server's startup rather than being published as a
-contract no client can act on. And because it is a schema, the catalog serves it like any other — no bespoke route.
+**What a server publishes and warms comes from the description**, not a document beside it:
 
-**The description is the source of truth for what a server publishes and warms**, not a document beside it:
-
-- `referencedSchemas()` — itself, its meta layer, and its imports transitively, minus the bundled standard
-  library. That *is* the catalog, so a referenced-but-unpublished schema is impossible rather than merely tested for.
+- `referencedSchemas()` — itself, its meta layer, and its imports transitively, minus the bundled standard library:
+  the catalog, so the description needs no bespoke route and a referenced-but-unpublished schema is impossible, not
+  merely tested for.
 - `boundClasses(bindings)` — what to `prepareToWrite`, from every request, response and error the endpoints name.
-  Hand-listing is how a response type added to a description never gets warmed: nothing connects the two lists, and
-  the omission costs only latency, so nothing reports it.
+  Hand-listing lets a new response type go unwarmed, which costs only latency, so nothing reports it.
 
 **`TsonApiCoverage` holds a server to that contract at startup.** `serving(verb, path)` claims a declared endpoint
-and hands back its `Route` — so the path and the encodings come from the description wherever the framework can take
-them — and `requireComplete()` fails if anything declared went unclaimed. Both directions are caught: an endpoint the
-description does not declare is refused where the handler is written, and a declared one with no handler fails
-startup rather than 404ing for a client that read the contract and believed it. Whether every *method* has an
-endpoint is a different question, about the description rather than the server, and the reader answers it.
+and hands back its `Route`, so the path and encodings come from the description wherever the framework can take them;
+an undeclared endpoint is refused where the handler is written, and `requireComplete()` fails startup on a declared
+one left unclaimed rather than 404ing for a client that believed the contract.
 
-**A claim names the declared verb and path, and that is what keeps it framework-agnostic.** An endpoint has no name
-of its own, so a handler claims it by both, spelled as the description wrote them. That is a claim on the
-description's template string, not a comparison with the path the framework registers, which may differ and often
-must — the JDK demo serves `/{+schemaPath}` from a `createContext("/")` prefix, Javalin needs `/<path>` because an
-identity path has slashes that only the angle form matches across, and Helidon uses `any()`. Comparing registered
-paths would need a translation table per framework, and a wrong entry there is a route that silently never matches:
-a worse failure than the one being prevented.
+**An endpoint has no name, so a claim names the description's verb and template string**, which keeps it
+framework-agnostic: the registered path may differ and often must — the JDK demo serves `/{+schemaPath}` from a
+`createContext("/")` prefix, Javalin needs `/<path>` because an identity path has slashes only the angle form matches
+across, and Helidon uses `any()`. Comparing registered paths would need a per-framework translation table — the seam
+only the unbuilt route table, registering from the description, would need — where a wrong entry is a route that
+silently never matches, a worse failure than the one prevented.
 
-**The opinion has a way out.** "Everything declared is served" is an opinion, and a fixed one would be the wrong kind
-of helper — an endpoint documented ahead of being built, or served by another process behind the same proxy, are
-real cases, and a check that cannot express them gets switched off wholesale, taking the endpoints it was right about
-with it. `notServedHere(verb, path, reason)` is the way out and the reason is required: an exemption somebody has to
-justify in a greppable string is a decision, where a boolean is a hole. Readable back through `exemptions()`, and
-`requireComplete()`'s failure message names the method, so the way out is discoverable from the error rather than
-the Javadoc. The description's own `not_bound` is the same rule one level up, for a method an api implements and
-does not bind.
-
-**This is the shape to copy for any future helper here**, and it is upstream's: `TsonBindings.of` is opinionated but
-`withDataBindContext` still takes a context you built yourself, and `SchemaMetaNameBinder.extendedWith` is public so
-`metaNameBinder` is not a black box. The way out is a *named position with a rationale*, not a flag meaning "be
-sloppy". An opinionated helper is fine. A fixed opinion is not.
+**"Everything declared is served" has a way out, and the reason is required.** An endpoint documented before it is
+built, or served by another process behind the proxy, is real; a check that cannot say so gets switched off
+wholesale. `notServedHere(verb, path, reason)` makes the exemption a greppable, justified decision where a boolean
+would be a hole; `exemptions()` reads it back, and `requireComplete()`'s failure names the method, so the way out is
+found from the error. `not_bound` is the same rule one level up. Future helpers here take this shape, as upstream's
+do (`TsonBindings.of` still takes your own `withDataBindContext`; `SchemaMetaNameBinder.extendedWith` is public): a
+*named position with a rationale*, never a flag meaning "be sloppy".
 
 **A path is a URI template.** A resource key is `path_template` — RFC 6570 levels 1 and 2, absolute, checked at
-schema load — so `{+schemaPath}`, the reserved expansion an identity path with slashes in it needs, is what the demos
-declare, where `{schemaPath}` would percent-encode the slashes. The fragment operator is not admitted, since a server
-never receives a fragment. Its variables are fields of the endpoint's request record, so a parameter-only endpoint
-declares a one-field record (`schema_ref => { schemaPath: text }`) and places it from the path: there is no parameter
-list, and a URL segment carrying a record is refused rather than stated as a limit.
+schema load — so the demos declare `{+schemaPath}`, the reserved expansion an identity path with slashes needs, where
+`{schemaPath}` would percent-encode them. No fragment operator: a server never receives a fragment. Its variables are
+fields of the endpoint's request record, so a parameter-only endpoint declares a one-field record
+(`schema_ref => { schemaPath: text }`) placed from the path: there is no parameter list, and a URL segment carrying a
+record is refused rather than stated as a limit.
 
-**An endpoint whose body is not a TSON value is a `!document`**: the schema route (schema documents served as the
-bytes they were published as) and the validator's page. It states a `media_type` where an operation states a response
-type, may still take a request record to place and name business errors, and its success is labelled, not judged.
+**An endpoint whose body is not a TSON value is a `!document`**: the schema route (schema documents served as
+published bytes) and the validator's page. It states a `media_type` where an operation states a response type, may
+still take a request record to place and name business errors, and its success is labelled, not judged.
 
-**An endpoint says which encodings it speaks** — `encodings?: [encoding]`, `encoding => !enum [TSON JSON]`, absent
-meaning TSON alone and a list read beside TSON, which every endpoint speaks. An *encoding* and not a media type,
-because that is the contract: `application/tson+json` and `application/json` are two labels for the one JSON
-encoding, and which a reply carries is `Accept`'s to negotiate. It covers both directions, since a codec built
-`acceptingJson` admits JSON and answers in it. `Route.speaksJson()` is what a demo builds the route's codec from, so
-the description stays the one statement; `TsonApiConformanceTest.everyEndpointSpeaksTheEncodingsItDeclares` holds
-the running server to it both ways.
+**An endpoint says which encodings it speaks** — `encodings?: [encoding]`, `encoding => !enum [TSON JSON]`; absent
+means TSON alone, and a list is read beside TSON, which every endpoint speaks. The contract is an *encoding*, not a
+media type: `application/tson+json` and `application/json` label one JSON encoding, `Accept` negotiates which a reply
+carries, and a codec built `acceptingJson` admits JSON and answers in it. A demo builds the route's codec from
+`Route.speaksJson()`, keeping the description the one statement;
+`TsonApiConformanceTest.everyEndpointSpeaksTheEncodingsItDeclares` holds the server to it both ways.
 
 **Documentation is annotation on a key.** `@summary` (the short form, declared in the layer) and `@doc` before a verb
 key document that endpoint; a method's sit before its key in the interface, and a binding falls back to them —
@@ -247,21 +214,17 @@ closed enum), and a declaration of the transport's own refusals — every endpoi
 answers each with a `problem`. `security` is the one that would disqualify this for a real service. Adding any is an
 edit in place until this is published, and a new identity after.
 
-**The description is checked, not just written.** `TsonApiConformanceTest` fetches it **from the running server**,
-resolves it through a schema source that fetches from that same server — which proves in one step that every
-referenced schema is published and every payload type exists — and then holds the server to what no compiler can
-know: that a reply at the success status carries the response type (or, for a document, its media type), one at a
-business error's fixed status carries that error, and any other is a 4xx or 5xx `problem`.
-
-Still not built: the route table proper (registering from the description rather than claiming against it), which
-is where that per-adapter path seam would finally have to exist.
+**The description is checked, not just written.** `TsonApiConformanceTest` resolves it through a schema source
+fetching from the running server, proving in one step that every referenced schema is published and every payload
+type exists, then holds the server to what no compiler can know: a reply at the success status carries the response
+type (a document, its media type), one at a business error's fixed status that error, and any other is a 4xx or 5xx
+`problem`.
 
 **What builds on the interface, and is not built.** `experiments/rpc/` is its wire form — `call` and `return` as
-templates closed per method, whose address (a document and a method) is still an open question there — next in the
-order of work and homed outside `tson-http` when it lands. `experiments/agent/` is a plan of calls and the agent it
-compiles to, **future work** kept to press on the interface layer from a direction that is not HTTP, so that the
-layer is shaped by more than one consumer. Do not build toward it, and do not let a decision that is the agent's
-alone move the descriptor.
+templates closed per method, their address (a document and a method) still open — next in the order of work, outside
+`tson-http` once it lands. `experiments/agent/` is a plan of calls and the agent it compiles to: **future work**,
+kept so the layer is shaped by a consumer that is not HTTP. Do not build toward it, and do not let a decision that is
+the agent's alone move the descriptor.
 
 ## Business errors compose `problem`
 
@@ -279,5 +242,3 @@ envelope, the service owns "SKU not found". One rule that costs time otherwise:
   shared dependency twice is redundant rather than an error.
 - **`errors` stays data-level.** A business failure carries `errors: []` and its own fields. They never
   co-occur anyway — validation is a gate, so business logic is not reached on a document that failed it.
-
-
