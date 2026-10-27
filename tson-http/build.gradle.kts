@@ -19,7 +19,8 @@ dependencies {
 // files a reader wants (a schema, its examples, a README) live at the repo root under experiments/<name>/,
 // and each experiment's probe tests join this module's test source set from there, on the demo/schemas
 // pattern. An experiment is not a commitment: see experiments/README.md.
-sourceSets["test"].java.srcDir(rootProject.file("experiments/meta-service/java"))
+sourceSets["test"].java.srcDir(rootProject.file("experiments/rpc/java"))
+sourceSets["test"].java.srcDir(rootProject.file("experiments/agent/java"))
 sourceSets["test"].java.srcDir(rootProject.file("experiments/one-level/java"))
 tasks.test {
     systemProperty("experiments.dir", rootProject.file("experiments").path)

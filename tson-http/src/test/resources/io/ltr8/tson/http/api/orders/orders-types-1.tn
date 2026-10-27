@@ -1,4 +1,4 @@
-!!id:"https://schemas.example.com/2026/38/experiment/meta-service/orders-types-1.tn"
+!!id:"https://schemas.example.com/2026/38/orders/orders-types-1.tn"
 !!meta:"https://tson.io/2026/38/m/meta.tn"
 !!import:"https://tson.io/2026/38/m/core.tn"
 @doc:"""

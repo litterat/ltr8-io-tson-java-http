@@ -190,7 +190,7 @@ level plus what only a name has: a unit (`perSegment()`, dividing at the name's 
 not position**: an identifier-typed field value, an identifier-keyed map's keys and a unique array of identifiers
 are names and meet all three rules, the key and element sets being look-alike scopes — in a data document and in a
 schema governed by a meta layer alike, where a namespace value and an annotation value are read under the same
-policy. `NameRoleProbe` pins both places.
+policy. `NameRoleTest` pins both places.
 Over HTTP the once-statement is `deployment.tn`'s acceptance profile at `/.well-known/tson-deployment`. §8.3
 is why any of it matters: all three rules are unstable across Unicode releases, so two conforming processors
 may legitimately disagree about one name and the version is what explains it.

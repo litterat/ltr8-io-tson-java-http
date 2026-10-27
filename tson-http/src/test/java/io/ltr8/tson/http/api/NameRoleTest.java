@@ -1,4 +1,4 @@
-package io.ltr8.tson.http.experiment.metaservice;
+package io.ltr8.tson.http.api;
 
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.Diagnostic;
@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * reaches an identifier-keyed map in a data document and a namespace in a schema governed by a meta layer alike,
  * under any role, {@code type_name} included -- the second being where an interface's methods are written.
  */
-class NameRoleProbe {
+class NameRoleTest {
 
     static final String META_ID = "https://tson.io/2026/38/io/ltr8/http/meta-probe-n.tn";
     static final String DOC_ID = "https://schemas.example.com/2026/38/app/probe-n-1.tn";
@@ -53,7 +53,7 @@ class NameRoleProbe {
         Map<String, String> lib = new LinkedHashMap<>();
         lib.put(META_ID, META);
         lib.put(DOC_ID, doc);
-        Tson tson = Tson.of(Experiment.bindVocabulary(ProcessorConfig.defaults()
+        Tson tson = Tson.of(OrdersExamples.bindVocabulary(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))));
         List<Diagnostic> meta = tson.validateSchema(META);
         assertEquals(List.of(), meta, () -> "the probe meta itself: " + meta);
@@ -94,7 +94,7 @@ class NameRoleProbe {
         String meta = META.replace("  by_method_name => namespace",
                 "  by_text => namespace & { key_type: = text  value_type: = method }\n"
                 + "          by_method_name => namespace");
-        Tson tson = Tson.of(Experiment.bindVocabulary(ProcessorConfig.defaults()
+        Tson tson = Tson.of(OrdersExamples.bindVocabulary(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(Map.of())))));
         String refused = only(tson.validateSchema(meta));
         assertTrue(refused.contains("by_text") && refused.contains("text"), refused);

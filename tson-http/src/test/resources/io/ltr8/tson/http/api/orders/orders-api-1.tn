@@ -1,6 +1,6 @@
-!!id:"https://schemas.example.com/2026/38/experiment/meta-service/orders-api-1.tn"
+!!id:"https://schemas.example.com/2026/38/orders/orders-api-1.tn"
 !!meta:"https://tson.io/2026/38/io/ltr8/http/meta-service.tn"
-!!import:"https://schemas.example.com/2026/38/experiment/meta-service/orders-1.tn"
+!!import:"https://schemas.example.com/2026/38/orders/orders-1.tn"
 @doc:"""
   Both: the interface of orders-1.tn, and the api that implements it. Every endpoint is a `!binding`
   naming a method and borrowing its signature. The method is a reference the resolver judges, a qualified

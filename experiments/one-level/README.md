@@ -996,7 +996,7 @@ work around the ladder to do it.
 - each applies an interface's method like a constructor;
 - `login.user.id` is a qualified name into an earlier step's response.
 
-Today the surface "reads schemaless, method names as preserved unknown type refs", the meta-service README's decision
+Today the surface "reads schemaless, method names as preserved unknown type refs", the agent experiment's decision
 4. That sidesteps the ladder, with the hazard that a method named `date` parses as the built-in.
 
 **Its typing is read-defer-resolve, one step at a time.**
@@ -1035,7 +1035,7 @@ documents.
       `orders-wire-1.tn` uses for RPC packets; or
     - `steps` carries a §7.8 scope push naming the interface.
 
-  Both fit decision 1 of the meta-service README (one interface per plan, reached through `extends`). Both retire
+  Both fit decision 1 of the agent experiment's README (one interface per plan, reached through `extends`). Both retire
   `interface: uri` as a field.
 
 ## Order of work

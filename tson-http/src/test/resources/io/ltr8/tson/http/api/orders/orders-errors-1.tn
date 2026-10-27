@@ -1,4 +1,4 @@
-!!id:"https://schemas.example.com/2026/38/experiment/meta-service/orders-errors-1.tn"
+!!id:"https://schemas.example.com/2026/38/orders/orders-errors-1.tn"
 !!meta:"https://tson.io/2026/38/m/meta.tn"
 !!import:"https://tson.io/2026/38/m/core.tn"
 !!import:"https://tson.io/2026/38/io/ltr8/http/problem.tn"

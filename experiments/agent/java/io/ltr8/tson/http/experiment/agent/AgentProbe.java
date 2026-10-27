@@ -1,4 +1,4 @@
-package io.ltr8.tson.http.experiment.metaservice;
+package io.ltr8.tson.http.experiment.agent;
 
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.Diagnostic;
@@ -6,6 +6,7 @@ import io.ltr8.tson.base.DiagnosticsReceiver;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
+import io.ltr8.tson.http.api.OrdersExamples;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.Test;
 
@@ -29,21 +30,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * bare mnemonics with labelled operands -- the {@code @disjoint} choice read tag-free, an enum beside a record.
  * And a constant: {@code constant => dynamic} is [TSON-SCHEMA] §7.8's scope push, so a
  * literal argument names its own type -- from this schema's namespace, or from a foreign one it names with a
- * nested {@code !!schema} -- and is validated in full against whatever it named. The same slot serves
- * {@code rpc.tn}'s payload.
+ * nested {@code !!schema} -- and is validated in full against whatever it named. The same slot serves the
+ * payload of {@code rpc.tn}, the wire form each CALL compiles to ({@code experiments/rpc}). The interface a plan
+ * calls is {@code tson-http}'s own {@link OrdersExamples}.
  */
 class AgentProbe {
 
     static final String PLAN_ID = "https://tson.io/2026/38/io/ltr8/http/agent.tn";
     static final String AGENT_ID = "https://tson.io/2026/38/io/ltr8/http/agent-vm.tn";
-    static final String ORDERS_ID = "https://schemas.example.com/2026/38/experiment/meta-service/orders-1.tn";
-    static final String ORDER_TYPES_ID =
-            "https://schemas.example.com/2026/38/experiment/meta-service/orders-types-1.tn";
+    static final String ORDERS_ID = OrdersExamples.id("orders-1.tn");
+    static final String ORDER_TYPES_ID = OrdersExamples.id("orders-types-1.tn");
 
     static String read(String file) {
         try {
             return Files.readString(Path.of(System.getProperty("experiments.dir", "../experiments"))
-                    .resolve("meta-service").resolve(file));
+                    .resolve("agent").resolve(file));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -54,7 +55,7 @@ class AgentProbe {
         lib.put(PLAN_ID, read("agent.tn"));
         lib.put(AGENT_ID, read("agent-vm.tn"));
         // A constant may name a foreign type, so the schema declaring it has to be reachable from here.
-        lib.put(ORDER_TYPES_ID, read("examples/orders-types-1.tn"));
+        lib.put(ORDER_TYPES_ID, OrdersExamples.source("orders-types-1.tn"));
         return Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib))));
     }
 

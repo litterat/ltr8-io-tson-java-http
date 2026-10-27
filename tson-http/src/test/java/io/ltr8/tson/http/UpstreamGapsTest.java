@@ -482,8 +482,8 @@ class UpstreamGapsTest {
      * <b>A {@code ref<T>} name past a record value's field is judged and delivered</b>, as a key-only walk is. An
      * interface held under a key keeps its methods in a namespace-typed field, so {@code i.orders.methods.place} walks
      * an entry, a key, a field and a key; the walk reads the field through the descriptor that bound the host. A key
-     * missing past the field is refused. This is the shape the meta-service experiment wanted for {@code
-     * binding.method}, which it keeps as an identifier its reader checks. Pinned so a regression to a gap fails here.
+     * missing past the field is refused. {@code meta-service.tn} depends on it: a binding's and an exemption's
+     * {@code method} is a {@code ref<method>}. Pinned so a regression to a gap fails here.
      */
     @Test
     void aReferenceThroughARecordValuesFieldIsJudged() {

@@ -1,4 +1,4 @@
-package io.ltr8.tson.http.experiment.metaservice;
+package io.ltr8.tson.http.api;
 
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.Diagnostic;
@@ -7,9 +7,6 @@ import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.schema.meta.Namespace;
 import io.ltr8.tson.schema.meta.Top;
-import io.ltr8.tson.http.api.Interface;
-import io.ltr8.tson.http.api.Method;
-import io.ltr8.tson.http.api.Signature;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -25,19 +22,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * tag; an unresolved reference inside a value is caught at load, because the slot is typed by a kind; and a {@code @doc}
  * written before a map key survives into {@code AnnotatedMap.getAnnotations}.
  *
- * <p>Measured on the sketch's own {@code interface}, a record held under a key of an {@code interfaces} entry, and on
- * a probe-only variant that is the namespace itself: {@code interface_of_signatures => namespace & { … }}, whose
- * entry is the map of methods with nothing beside it. The variant is the shape tson-java's own corpus fixture uses;
- * the sketch keeps the record because an interface carries {@code extends} beside its methods, and a value of a
- * namespace type is the map alone.
+ * <p>The finding the map design rests on, measured on the layer's own {@code interface}, a record held under a key of
+ * an {@code interfaces} entry, and on a test-only variant that is the namespace itself: {@code interface_of_signatures
+ * => namespace & { … }}, whose entry is the map of methods with nothing beside it. The variant is the shape tson-java's
+ * own corpus fixture uses; the layer keeps the record because an interface carries {@code extends} beside its methods,
+ * and a value of a namespace type is the map alone.
  */
-class InterfaceMapProbe {
+class InterfaceMapTest {
 
     static final String PROBE_META_ID = "https://tson.io/2026/38/io/ltr8/http/meta-probe.tn";
     static final String DOC_ID = "https://schemas.example.com/2026/38/app/probe-1.tn";
 
-    /** The sketch, plus one probe-only namespace type. */
-    static final String META = Experiment.metaServiceSource()
+    /** The layer, plus one test-only namespace type. */
+    static final String META = TsonApiSchema.source()
             .replace("https://tson.io/2026/38/io/ltr8/http/meta-service.tn", PROBE_META_ID)
             .replace("\n  api => {",
                     "\n  interface_of_signatures => namespace & { key_type: = method_name  value_type: = signature }\n"
@@ -59,7 +56,7 @@ class InterfaceMapProbe {
         Map<String, String> lib = new LinkedHashMap<>();
         lib.put(PROBE_META_ID, META);
         lib.put(DOC_ID, doc);
-        return Tson.of(Experiment.bindVocabulary(ProcessorConfig.defaults()
+        return Tson.of(OrdersExamples.bindVocabulary(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))));
     }
 
@@ -76,7 +73,7 @@ class InterfaceMapProbe {
         return assertInstanceOf(Interface.class, assertInstanceOf(Namespace.class, resolvedEntry(entries)).get("orders"));
     }
 
-    /** The sketch's own interface: a map of {@code method} records, tagged or not. */
+    /** The layer's own interface: a map of {@code method} records, tagged or not. */
     @Test
     void aMapOfMethodRecordsResolves() {
         var orders = resolvedInterface(

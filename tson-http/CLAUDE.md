@@ -9,7 +9,7 @@ are touching:
 | `TsonHttpException`, `TsonProblem*`, `problem.tn` | `status-classification.md`, `schema-authoring.md` |
 | `TsonSchemaVersions`, `TsonDocumentPeek` use | `schema-versions.md` |
 | `TsonBindings` | `binding.md` |
-| `api/` (`TsonApiSchema`, `TsonApiDescription`, `TsonApiCoverage`, the bound records), `meta-service.tn` | `service-description.md` |
+| `api/` (`TsonApiSchema`, `TsonApiDescription`, `TsonApiCoverage`, the bound records), `meta-service.tn`, the `OrdersExamples` fixtures | `service-description.md` |
 | `TsonDeployment`, `deployment.tn` | `deployment-descriptor.md` |
 | `probe/`, `UpstreamGapsTest` | `tson-api-surface.md`; `experiments/CLAUDE.md` for the probes that live there |
 

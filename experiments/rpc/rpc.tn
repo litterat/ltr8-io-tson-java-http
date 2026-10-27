@@ -13,7 +13,7 @@
   request and response are checked against the interface's own types by the resolver, an error arm is one
   of the method's declared errors with its status fixed, and this schema imports no service's types. The
   wire schema is deterministic in the interface, so it is generated, published at its own identity, and
-  fetched like any other; examples/orders-wire-1.tn is one written by hand to show the shape.
+  fetched like any other; orders-wire-1.tn beside this file is one written by hand to show the shape.
 
   Both gateways translate INTO this. An api gateway turns an HTTP request into a call by the binding's
   placement run in reverse; an agent processor executes a compiled agent (agent-vm.tn), each of whose

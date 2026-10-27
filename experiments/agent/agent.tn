@@ -3,7 +3,7 @@
 !!import:"https://tson.io/2026/38/m/core.tn"
 @doc:"""
   TSON Agent AST — the structured middle representation
-  (draft 2, in the meta-service experiment).
+  (draft 2; the agent experiment, experiments/agent).
 
   Three representations, as in any modern compiler: the PLAN is the
   user grammar — an ordinary TSON map document, `name => !method

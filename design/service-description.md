@@ -1,8 +1,10 @@
 # Describing a service (`meta-service.tn`, `io.ltr8.tson.http.api`)
 
 Why a service description is a schema and not a document, what the meta layer declares, what the reader checks, and how
-a server is held to the description at startup. Current form only. The experiment it came from is
-`experiments/meta-service/`.
+a server is held to the description at startup. Current form only. The orders examples under
+`tson-http/src/test/resources/io/ltr8/tson/http/api/orders/` are one real document per use of the layer, reached
+through `OrdersExamples`, and the experiments that build on the interface (`experiments/rpc/`, `experiments/agent/`)
+read them from there.
 
 **Invariants**
 
@@ -62,7 +64,42 @@ entry and nothing needs an invented operationId. That is what makes `request: or
 resolves* and `orders.orders.methods.place_order` a *reference to a value it resolves* — the property no data-shaped
 design can have, because a data document can name a schema but cannot hold a reference. `demo/schemas/orders-api-1.tn`
 is the both-shapes demo (an interface and an api binding it); `validate-api-1.tn` is web-service-only, every endpoint
-an inline `!operation` or a `!document`.
+an inline `!operation` or a `!document`; `OrdersExamples` holds the interface-only, web-service-only and both forms
+beside each other.
+
+**The maps borrow namespaces TSON does not own.** A schema describes a namespace — the type system's, keyed by type
+names under [TSON-DATA] §7.7's identifier grammar. An interface's `methods` is keyed by method names, a
+procedure-call namespace (what gRPC and JSON-RPC address as `service.method`); an api's `resources` by URL path
+templates (RFC 3986's, written as RFC 6570 templates); a resource's `endpoints` by verbs (RFC 9110's registry); a
+request record's fields are the namespace `placement` maps the URL's segments, query keys and header names onto.
+`place_order` is not a type; it is a name in the `orders` namespace that a method description sits at. The map's key
+type is how a document borrows a namespace it does not govern, and the discipline comes from outside: `http_verb` is
+an enum copied from the registry, a path key is a `path_template`. **One naming role per borrowed namespace**, as the
+kernel declares `type_name`, `field_name` and `param_name` over one identifier grammar: `method_name => identifier`
+keys an interface's methods, and for the URL and header namespaces, whose grammars are not TSON's identifier, the
+authority's grammar rides as a `pattern` on a text family — `path_template`, and `header_name` held case-folded as
+RFC 9110 §5.1 compares it. A role enforces the grammar *and names the namespace in the refusal* (`NameRoleTest`),
+where `type_name` would enforce the same grammar while misnaming it; a namespace cannot be keyed by `text` at all;
+and because a method map's keys are names, §8.2's hygiene refuses a mixed-script or confusable key in a governed
+schema as in data. Two things follow. A method has an identity without inventing one: `(schema identity, qualified
+name)` — `…/orders-1.tn` and `orders.orders.methods.place_order` — unambiguous across every service, with no
+`operationId`. And `resources` is a map rather than a namespace: a namespace's keys are identifiers, a path is data,
+so no qualified name enters an api and an endpoint is reached by location.
+
+**What a namespace is, since "a keyed set" is every map: a keyed set of *declarations*, where a map is a keyed set of
+*values*.** A declaration describes values and has instances of its own; a map's member *is* a value (unique keys and
+being referenced by key both fail as tests: every map has unique keys, and a foreign key references a row, which is a
+value). The declaration side is a namespace and the instance side a map, every time — schema and document, interface
+and calls, columns and rows, registry and message — and the kernel's `schema` and `field_map` are the first two. What
+the test admits and Revision 38 does not take is a data-keyed namespace — an api, a discriminated family, problem
+types — each a map in TSON, reached by location rather than by a qualified name.
+
+**A binding refers to a method rather than being one.** The alternative, under plain `meta.tn`, makes a method a type
+— the type of its call record — and an operation IS-A its method (`create_order => place_order & http & { verb: = POST
+… }`). It reads, and a plan step is then a value of the method type. Its cost is that schema facts stated as fields
+are per-instance: `verb: = POST` pins a field whose name is unmarked, which [TSON-SCHEMA] §5.2 makes a *marker* the
+value must write, never injected, so each call restates its verb and URL, and a refinement cannot relax the base's
+required `verb` to an omissible one. A reference has none of that cost.
 
 **And it is at the schema level by design, not only by necessity.** Data is the projection of a schema; a request
 and its data are the projection of an API — so an API's definition belongs at the schema level, above the documents
@@ -104,7 +141,9 @@ description, and **an unsound description has no model** — a startup failure, 
 - the verb agrees with what the method says about itself — `@safe` and `@idempotent` on the method's key, GET safe,
   PUT and DELETE idempotent — and a response-less endpoint answers a status that carries no body;
 - each business error fixes its status (`sku_not_found => problem & { status: = 404 … }`), which is how a client tells
-  an error from the response by status alone;
+  an error from the response by status alone — two errors of one endpoint may pin the same status, which is fine on
+  the wire since the value carries the error's tag, so a gateway sets `type` rather than relying on the status to
+  discriminate;
 - no two endpoints share a verb and a path, across every api a description holds.
 
 What a data-shaped predecessor did instead — resolving bare names against an import list, which reimplemented an
@@ -114,8 +153,13 @@ reader rather than in every consumer.
 **The wiring is three things**: this schema reachable from the `schemaSource` (`TsonApiSchema.publishedById()`), the
 bound classes in `io.ltr8.tson.http.api`, and `TsonApiSchema.metaNameBinder()` on the config — **not** `bindings`,
 which binds the data a schema describes. A meta layer's vocabulary is a separate namespace on purpose. The binder
-finds a class by the schema type's name in that package, so a public class there named like a schema record binds
-to it whether meant to or not — which is why the computed placement is `RequestPlacement` and not `Placement`.
+finds a class by PascalCasing the schema type's name in that package, `@Typename` notwithstanding, so a public class
+there named like a schema record binds to it whether meant to or not — which is why the computed placement is
+`RequestPlacement` and not `Placement`. Two more binder facts a bound record for a meta layer's vocabulary meets: a
+map's *keys* come back as `String` whatever the schema's key type, so `{http_verb => endpoint}` binds to
+`Map<String, Endpoint>` and a `Map<HttpVerb, …>` component would hold strings and lie about it; and a slot typed by a
+record with no bare form needs a Java type of that name even if nothing constructs it bare — a sealed interface is the
+right thing there, and it makes the base as abstract in Java as it is in the schema.
 
 **Resolving the description is a startup check**, which is why each demo calls `tson.resolve(API)` and then
 `TsonApiSchema.describedBy`: an unsound description fails the server's startup rather than being published as a
@@ -198,10 +242,10 @@ application's entry*, so `orders` is itself the namespace value with the argumen
 `UpstreamGapsTest.aTemplatedApiIsAppliedByName`.
 
 **Deliberately absent**, each a decision: security schemes, response headers, links, callbacks, examples, tags,
-servers, multi-media-type negotiation, more than one success response, and a declaration of the transport's own
-refusals — every endpoint has those, and the error boundary answers each with a `problem`. `security` is the one
-that would disqualify this for a real service. Adding any is an edit in place until this is published, and a new
-identity after.
+servers, multi-media-type negotiation, more than one success response, custom and WebDAV verbs (`http_verb` is a
+closed enum), and a declaration of the transport's own refusals — every endpoint has those, and the error boundary
+answers each with a `problem`. `security` is the one that would disqualify this for a real service. Adding any is an
+edit in place until this is published, and a new identity after.
 
 **The description is checked, not just written.** `TsonApiConformanceTest` fetches it **from the running server**,
 resolves it through a schema source that fetches from that same server — which proves in one step that every
@@ -212,12 +256,12 @@ business error's fixed status carries that error, and any other is a 4xx or 5xx 
 Still not built: the route table proper (registering from the description rather than claiming against it), which
 is where that per-adapter path seam would finally have to exist.
 
-**The experiment it came from.** `experiments/meta-service/` keeps what probes the layer from directions the shipped
-suite does not: `rpc.tn`, the interface's wire form (whose address — a document and a method — is still an open
-question there), the agent layers, and the findings the map design rests on. **The agent sketches are future work**:
-`agent.tn` and `agent-vm.tn` are there to press on the interface layer from a direction that is not HTTP, so that the
-layer is shaped by more than one consumer; they are kept resolved and probed for that and nothing else. Do not build
-toward them, and do not let a decision that is the agent's alone move the descriptor.
+**What builds on the interface, and is not built.** `experiments/rpc/` is its wire form — `call` and `return` as
+templates closed per method, whose address (a document and a method) is still an open question there — next in the
+order of work and homed outside `tson-http` when it lands. `experiments/agent/` is a plan of calls and the agent it
+compiles to, **future work** kept to press on the interface layer from a direction that is not HTTP, so that the
+layer is shaped by more than one consumer. Do not build toward it, and do not let a decision that is the agent's
+alone move the descriptor.
 
 ## Business errors compose `problem`
 
