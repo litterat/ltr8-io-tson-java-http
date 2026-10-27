@@ -31,10 +31,10 @@ Each under ~20 KB and opening with its invariants. Pick by what you are about to
 | `deployment.tn`, `TsonDeployment`, `/.well-known/tson-deployment`, `policy.tn` | `deployment-descriptor.md` |
 | `OrderServer`, `demo/schemas/`, `ValidatorServer`, the throughput harnesses | `demos.md` |
 
-Other root documents: `UPSTREAM.md` (changes wanted in tson-java and spec feedback staged for its `SPEC-FEEDBACK.md`;
-holds only what is open), `SCHEMA-HEADER.md` (the design record behind [TSON-JSON] §3.5; cite §3.5 for the rules),
-`experiments/README.md` (design explorations kept compiling), and the consumer-facing `README.md`, which `ReadmeTest`
-executes against the real demo.
+Other root documents: `BACKLOG.md` (outstanding work), `UPSTREAM.md` (changes wanted in tson-java and spec feedback
+staged for its `SPEC-FEEDBACK.md`; holds only what is open), `SCHEMA-HEADER.md` (the design record behind [TSON-JSON]
+§3.5; cite §3.5 for the rules), `experiments/README.md` (design explorations kept compiling), and the consumer-facing
+`README.md`, which `ReadmeTest` executes against the real demo.
 
 ## Project
 
@@ -52,8 +52,7 @@ without compatibility guarantees, so a `git pull` of the sibling can move the wh
 **Status.** All four modules are built and tested, each adapter with a runnable demo server and a concurrency suite
 driving it under load. Responses are self-describing in both directions, every adapter proves the serve-then-fetch loop,
 and a service publishes a description of itself (`meta-service.tn`) from which it derives what to publish and warm.
-What remains is polish and the open questions in `UPSTREAM.md`. Still not built: a route table registered from the
-description rather than claimed against it.
+What remains is polish, the open questions in `UPSTREAM.md`, and the outstanding work in `BACKLOG.md`.
 
 **Hard constraints:**
 - Java 25 only (matches tson-java).
