@@ -1,7 +1,6 @@
 !!id:"https://schemas.example.com/2026/38/app/orders-api-1.tn"
 !!meta:"https://tson.io/2026/38/io/ltr8/http/meta-service.tn"
 !!import:"https://schemas.example.com/2026/38/app/order-1.tn"
-!!import:"https://schemas.example.com/2026/38/app/orders-errors-1.tn"
 !!import:"https://tson.io/2026/38/io/ltr8/http/problem.tn"
 !!import:"https://tson.io/2026/38/m/core.tn"
 {

@@ -36,16 +36,11 @@ import java.util.Optional;
  */
 public final class OrderServer {
 
-    /** The schema this server governs orders by. Its identity names a host; where it is served is separate. */
+    /** The identity of the order schema. It names a host; where it is served is separate. */
     public static final String SCHEMA_ID = "https://schemas.example.com/2026/38/app/order-1.tn";
 
-    public static final String SCHEMA = schema("order-1.tn");
-
-    /** The identity of this service's business-error schema. */
-    public static final String ERRORS_ID = "https://schemas.example.com/2026/38/app/orders-errors-1.tn";
-
     /**
-     * This service's business errors, composed on the transport-level problem schema.
+     * The schema this server governs orders by, and the business errors it answers with.
      *
      * <p>{@code sku_not_found} composes {@code problem} (§5.8), so it carries RFC 9457's members and adds its
      * own. A record is closed under its type (§7.2), so the extension is <em>declared</em> rather than assumed
@@ -56,7 +51,7 @@ public final class OrderServer {
      * that uses a name should say where it comes from. A collision is judged by the declaring schema's own
      * identity, so naming a shared dependency twice is redundant rather than an error.
      */
-    public static final String ERRORS = schema("orders-errors-1.tn");
+    public static final String SCHEMA = schema("order-1.tn");
 
     /**
      * A description of this service, as a schema governed by {@code meta-service.tn} -- published, resolved at
@@ -125,7 +120,7 @@ public final class OrderServer {
      */
     public static Javalin start(int port) {
         Map<String, Class<?>> bindings = Map.of("order", Order.class, "sku_not_found", SkuNotFound.class);
-        Map<String, String> schemas = new HashMap<>(Map.of(SCHEMA_ID, SCHEMA, ERRORS_ID, ERRORS,
+        Map<String, String> schemas = new HashMap<>(Map.of(SCHEMA_ID, SCHEMA,
                 TsonProblemSchema.ID, TsonProblemSchema.source(), API_ID, API));
         schemas.putAll(TsonApiSchema.publishedById());
         // metaNameBinder, not bindings: one binds the data a schema describes, the other a governing meta's
@@ -135,7 +130,6 @@ public final class OrderServer {
                 .withDataBindContext(TsonBindings.of(bindings))
                 .withMetaNameBinder(TsonApiSchema.metaNameBinder()));
         tson.resolve(SCHEMA);
-        tson.resolve(ERRORS);
         // Resolving the description is what checks it: a payload type nothing declares fails startup here,
         // rather than being published as a contract no client can act on.
         tson.resolve(API);
@@ -176,7 +170,7 @@ public final class OrderServer {
             if (UNSTOCKED_SKU.equals(order.sku())) {
                 // A business error is written, not thrown: it composes problem and carries fields no problem
                 // has, so the boundary -- which only knows how to render a problem -- could not produce it.
-                tsonContext.respondDescribed(404, SkuNotFound.of(order.sku()), ERRORS_ID, "sku_not_found");
+                tsonContext.respondDescribed(404, SkuNotFound.of(order.sku()), SCHEMA_ID, "sku_not_found");
                 return;
             }
             // Self-describing: the reply names the schema governing it -- in band and in the header as TSON, in

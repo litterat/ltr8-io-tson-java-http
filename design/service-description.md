@@ -236,7 +236,7 @@ These types belong in the **application's** schema, importing `problem.tn` — `
 envelope, the service owns "SKU not found". One rule that costs time otherwise:
 
 - **Imports are transitive, but name what you use anyway.** A name reaches you through what you import, so
-  `orders-errors-1.tn` would get `text` through `problem.tn` without saying so. Name `core.tn` too: a
+  `order-1.tn` would get `text` through `problem.tn` without saying so. Name `core.tn` too: a
   collision is judged by the *declaring schema's identity*, not by how many routes reach it, so naming a
   shared dependency twice is redundant rather than an error.
 - **`errors` stays data-level.** A business failure carries `errors: []` and its own fields. They never

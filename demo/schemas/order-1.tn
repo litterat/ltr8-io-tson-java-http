@@ -1,6 +1,10 @@
 !!id:"https://schemas.example.com/2026/38/app/order-1.tn"
 !!meta:"https://tson.io/2026/38/m/meta.tn"
 !!import:"https://tson.io/2026/38/m/core.tn"
+!!import:"https://tson.io/2026/38/io/ltr8/http/problem.tn"
 {
     order => { sku: text  quantity: int32 }
+
+    @doc:"A business error: the request was schema-valid, and the domain still said no."
+    sku_not_found => problem & { status: = 404  sku: text }
 }

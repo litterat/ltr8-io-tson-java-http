@@ -141,12 +141,10 @@ class OrderServerTest {
     void identitiesMatchTheConstants() {
         assertTrue(OrderServer.SCHEMA.startsWith("!!id:\"" + OrderServer.SCHEMA_ID + "\""),
                 OrderServer.SCHEMA.lines().findFirst().orElse(""));
-        assertTrue(OrderServer.ERRORS.startsWith("!!id:\"" + OrderServer.ERRORS_ID + "\""),
-                OrderServer.ERRORS.lines().findFirst().orElse(""));
         assertTrue(OrderServer.API.startsWith("!!id:\"" + OrderServer.API_ID + "\""),
                 OrderServer.API.lines().findFirst().orElse(""));
 
-        assertTrue(OrderServer.ERRORS.contains("!!import:\"" + TsonProblemSchema.ID + "\""),
+        assertTrue(OrderServer.SCHEMA.contains("!!import:\"" + TsonProblemSchema.ID + "\""),
                 "the error schema composes the CURRENT problem schema");
         assertTrue(OrderServer.API.contains("!!meta:\"" + TsonApiSchema.ID + "\""),
                 "the description is governed by the CURRENT meta layer");
