@@ -53,25 +53,23 @@ class TsonApiSchemaTest {
             {
               schema_ref => { schemaPath: text }
 
-              orders => !interfaces { orders => {
+              orders => !interface {
                 @doc:"Accept an order and confirm it, with the quantity doubled."
                 place_order => { request: order  response: order  errors: [sku_not_found] }
-              } }
+              }
 
-              orders_api => !apis { orders_api => {
-                implements: [orders.orders]
-                resources: {
-                  "/orders" => !resource {
-                    @summary:"Place an order"
-                    POST => !binding { method: orders.orders.methods.place_order  status: 201 }
-                  }
-                  "/{+schemaPath}" => !resource {
-                    @safe
-                    @summary:"Fetch a published schema"
-                    GET => !document { request: schema_ref  media_type: "application/tson" }
-                  }
+              @implements:[orders]
+              orders_api => !api {
+                "/orders" => {
+                  @summary:"Place an order"
+                  POST => !binding { method: orders.place_order  status: 201 }
                 }
-              } }
+                "/{+schemaPath}" => {
+                  @safe
+                  @summary:"Fetch a published schema"
+                  GET => !document { request: schema_ref  media_type: "application/tson" }
+                }
+              }
             }""";
 
     private static Tson tson(String api) {
@@ -114,7 +112,7 @@ class TsonApiSchemaTest {
         assertEquals(Set.of("GET /{+schemaPath}", "POST /orders"), keys(api), "an endpoint is its verb and path");
 
         Route create = api.route(HttpVerb.POST, "/orders").orElseThrow();
-        assertEquals(Optional.of(new InterfaceMethod("orders.orders", "place_order")), create.method());
+        assertEquals(Optional.of(new InterfaceMethod("orders", "place_order")), create.method());
         assertEquals("order", create.request().orElseThrow().name(), "borrowed from the method");
         assertEquals("order", create.response().orElseThrow().name());
         assertEquals(201, create.status());
@@ -142,16 +140,16 @@ class TsonApiSchemaTest {
         assertTrue(refused.contains("ordr"), refused);
     }
 
-    /** An entry holding interfaces or apis is a value, never a type, so it cannot be used where one belongs. */
+    /** An entry applying {@code interface} or {@code api} is a value, never a type, so it cannot be used as one. */
     @Test
-    void anInterfacesEntryCannotBeUsedWhereATypeBelongs() {
+    void anInterfaceEntryCannotBeUsedWhereATypeBelongs() {
         String refused = only(API.replace("\n}", "\n  holder => { s: orders }\n}"));
         assertTrue(refused.contains("a value and not a type"), refused);
     }
 
     /**
-     * And the records inside are records, not constructors: none may head a schema entry. Only {@code interfaces}
-     * and {@code apis} are applied at entry level.
+     * And the records inside are records, not constructors: none may head a schema entry. Only {@code interface}
+     * and {@code api} are applied at entry level.
      */
     @Test
     void anInnerRecordCannotHeadAnEntry() {
@@ -186,16 +184,20 @@ class TsonApiSchemaTest {
 
     /**
      * <b>A path is a URI template, checked by its shape at schema load</b>: levels 1 and 2, absolute. {@code
-     * {+schemaPath}} -- reserved expansion, what a path with slashes in it needs -- is admitted; the fragment
-     * operator, a level-3 form, an unclosed brace, a space and a path not starting with {@code /} are not.
+     * {+schemaPath}} -- reserved expansion, what a path with slashes in it needs -- is admitted, as are a dot, a
+     * percent-encoded octet and RFC 3986's other path characters; the fragment operator, a level-3 form, an
+     * unclosed or stray brace, a broken percent-encoding, a space and a path not starting with {@code /} are not.
+     * The character set is the identifier family's and the structure its {@code pattern}'s, and either refusal
+     * names the role.
      */
     @Test
     void aPathIsAUriTemplateCheckedAtSchemaLoad() {
-        for (String admitted : List.of("/{schemaPath}", "/{+schemaPath}", "/schemas/{+schemaPath}")) {
+        for (String admitted : List.of("/{schemaPath}", "/{+schemaPath}", "/schemas/{+schemaPath}",
+                "/v1.2/{+schemaPath}", "/a%2Fb/{schemaPath}", "/x:y@z/{schemaPath}")) {
             assertTrue(described(withSchemaPath(admitted)).route(HttpVerb.GET, admitted).isPresent(), admitted);
         }
-        for (String refused : List.of("/{#schemaPath}", "/{?schemaPath}", "/{schemaPath", "/a b/{schemaPath}",
-                "{+schemaPath}")) {
+        for (String refused : List.of("/{#schemaPath}", "/{?schemaPath}", "/{schemaPath", "/a}/{schemaPath}",
+                "/a%zz/{schemaPath}", "/a b/{schemaPath}", "{+schemaPath}")) {
             String message = only(withSchemaPath(refused));
             assertTrue(message.contains("path_template"), refused + ": " + message);
         }
@@ -259,8 +261,8 @@ class TsonApiSchemaTest {
     void twoEndpointsCannotShareAVerbAndPath() {
         String refused = assertThrows(IllegalArgumentException.class, () -> described(API.replace("\n}", """
 
-                  again => !apis { again => { "/{+schemaPath}" => !resource {
-                    @safe GET => !document { request: schema_ref  media_type: "text/plain" } } } }
+                  again => !api { "/{+schemaPath}" => {
+                    @safe GET => !document { request: schema_ref  media_type: "text/plain" } } }
                 }"""))).getMessage();
         assertTrue(refused.contains("'GET /{+schemaPath}' is declared twice"), refused);
     }
@@ -283,8 +285,8 @@ class TsonApiSchemaTest {
               page       => <T> { items: [T]  next?: uri  total: int32 }
               order_page => page<order>
 
-              orders_api => !apis { orders_api => { "/orders" => !resource {
-                @safe GET => !operation { response: %s } } } }
+              orders_api => !api { "/orders" => {
+                @safe GET => !operation { response: %s } } }
             }""";
 
     /**

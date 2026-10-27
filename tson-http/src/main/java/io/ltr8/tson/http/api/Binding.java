@@ -9,7 +9,7 @@ import java.util.Optional;
 
 /**
  * An endpoint whose signature is a method's, named by a reference the resolver judged -- held as the qualified name
- * written ({@code orders.orders.methods.place_order}).
+ * written, the interface's entry and then the method's key ({@code orders.place_order}).
  */
 @Typename(name = "binding")
 public record Binding(List<String> query, Map<String, String> headers, Optional<String> body, int status,

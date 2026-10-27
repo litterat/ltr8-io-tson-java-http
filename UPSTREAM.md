@@ -62,6 +62,26 @@ names the library.
 
 ---
 
+## 3. A reference inside an annotation's value is not judged, and arrives in two shapes
+
+**Hit:** `meta-service.tn` declares `implements => @annotation [ref<interface>]` and `not_bound => @annotation
+[exemption]`, the `exemption` record holding `method: ref<method>`. The resolver checks the annotation value's shape
+(`@implements:42` is refused) but no name in it: an unknown interface and a method key the interface does not hold both
+load clean. The two positions also deliver differently: a `[ref<interface>]` element arrives as a plain `String`, a
+`ref<method>` inside the record as a `TypeRef` nobody resolved. No name grammar is applied either, so `method: 42`
+loads as `TypeRef[name=42]`.
+
+**The change:** one delivery for a `ref<T>` wherever it sits in an annotation value, its name held to the
+qualified-name grammar; and, if the spec question below is answered that way, the resolver judging it as it judges a
+binding's `method`.
+
+**Workaround in place:** `TsonApiDescription` checks both names when it reads a description, accepting either host
+shape (`TsonApiDescriptionTest.anImplementsNamingNoInterfaceIsRefusedByTheReader`,
+`anExemptionNamingNoMethodIsRefusedByTheReader`). Pinned by `UpstreamGapsTest.aReferenceInsideAnAnnotationValueIsNotJudged`,
+whose clean load flips when it is fixed.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. That register renumbers from #1
@@ -154,6 +174,41 @@ constructor in `meta` beside `uri_type`, which reserves no name, with no instanc
 
 **Priority:** medium-high, since the library emits values its own schemas cannot describe.
 
+### To file: whether a `ref<T>` inside an annotation's value is resolved
+
+**Sections:** [TSON-SCHEMA] §5.12 (a name at a `ref<T>` slot resolved in the schema's scope), §6 (annotations).
+
+**Kind:** ambiguity. §6 says an annotation in a schema document is resolved and validated against its declared type,
+and also that annotation values are data values. If the first governs, a `ref<T>` in the annotation's type reaches
+§5.12 and a name nothing declares is a schema error; if the second, the name is an inert token, as a type name in any
+data value is. The spec does not say which, and the answer decides whether a meta layer can state a relation in an
+annotation and have it checked. tson-java takes the second reading (library item above, "A reference inside an
+annotation's value is not judged").
+
+**What this project does meanwhile:** `@implements` and an exemption's `method` keep their `ref<…>` typing to say what
+they mean, and `TsonApiDescription` checks the names.
+
+**Priority:** medium: it decides where a meta layer's relation checks live.
+
+### To file: a namespace value with declared fields beside its keys
+
+**Sections:** [TSON-SCHEMA] §4.1 (namespace types), §6 (annotations); the meta-kernel's `namespace`.
+
+**Kind:** request for a later revision. A value of a namespace type is the map alone, and a namespace type declaring
+a field beside its facets is refused (`UpstreamGapsTest.aNamespaceTypeDeclaresOnlyItsFacets`). So a fact about a
+namespace as a whole has nowhere to sit. `meta-service.tn`'s `api` carries its claims, `implements` and `not_bound`,
+as annotations on its entry, where the references in them go unjudged (above). The alternative, a record held one key
+down, doubles every qualified name (`orders.orders.methods.place_order`). A namespace value admitting declared fields
+beside its keys would make `@implements` a field, judged like any other.
+
+**Related, already decided:** a text-keyed namespace and `&` over namespace values are not proposed ("Already
+filed", below); this request leaves both standing. The key-type rule has a consequence here worth weighing in any
+revisit: a namespace is keyed by an identifier family
+(`UpstreamGapsTest.aNamespaceKeyTypeMustBeAnIdentifierFamily`), so `path_template` is an `identifier_type` widened to
+a path's characters, and §8.2's name hygiene reaches a path key.
+
+**Priority:** low: the annotation form works.
+
 ---
 
 **Already filed.** Five entries staged here have gone to `SPEC-FEEDBACK.md` and left this file: §8.2's policy has no
@@ -163,7 +218,8 @@ four on 2026-09-01), the last since landed in Revision 38 as the `namespace` con
 family with `enum` stating its type, adopted in Revision 37. Two more were answered by decision in Revision 38: an
 identity as a value is text in its canonical form, with no atom of its own (`problem.tn`'s `schema_id` says so); and a
 text-keyed namespace and `&` over namespace values are not proposed, composition being over types, to be revisited
-with a reference in a data document (`CLAUDE.md`, "Describing a service"). From this project's review, tson-java also
+with a reference in a data document (`design/service-description.md`, "Naming is the resolver's; relating is the
+reader's"). From this project's review, tson-java also
 filed and built for Revision 38: `hostname` and `host`, a non-ASCII identity's host as one identity in either label
 form, `media_type` in `net.tn`, an import standing at the importer's governing level, a reference delivered through a
 record value's field, and a reference declared only in a kernel-governed schema. A reference in a data document is a

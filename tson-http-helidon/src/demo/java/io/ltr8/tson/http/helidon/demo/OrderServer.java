@@ -66,7 +66,7 @@ public final class OrderServer {
      * startup, and checked by a conformance test.
      *
      * <p><b>The payload types and the method a binding names are references, not strings.</b> {@code request:
-     * order} and {@code orders.orders.methods.place_order} are resolved when this schema loads, so a description
+     * order} and {@code orders.place_order} are resolved when this schema loads, so a description
      * naming a type or a method nothing declares does not start this server.
      */
     public static final String API_ID = "https://schemas.example.com/2026/38/app/orders-api-1.tn";

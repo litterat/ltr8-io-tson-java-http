@@ -8,24 +8,22 @@
   @doc:"Where a published schema is: the path component of its own !!id."
   schema_ref => { schemaPath: text }
 
-  orders => !interfaces { orders => {
+  orders => !interface {
     @doc:"Accept an order and confirm it with the quantity doubled."
     place_order => { request: order  response: order  errors: [sku_not_found] }
-  } }
+  }
 
-  orders_api => !apis { orders_api => {
-    implements: [orders.orders]
-    resources: {
-      "/orders" => !resource {
-        @summary:"Place an order"
-        POST => !binding { method: orders.orders.methods.place_order  status: 201  encodings: [JSON] }
-      }
-      "/{+schemaPath}" => !resource {
-        @safe
-        @summary:"Fetch a published schema"
-        @doc:"Every schema this service names is served at its own identity's path."
-        GET => !document { request: schema_ref  media_type: "application/tson" }
-      }
+  @implements:[orders]
+  orders_api => !api {
+    "/orders" => {
+      @summary:"Place an order"
+      POST => !binding { method: orders.place_order  status: 201  encodings: [JSON] }
     }
-  } }
+    "/{+schemaPath}" => {
+      @safe
+      @summary:"Fetch a published schema"
+      @doc:"Every schema this service names is served at its own identity's path."
+      GET => !document { request: schema_ref  media_type: "application/tson" }
+    }
+  }
 }

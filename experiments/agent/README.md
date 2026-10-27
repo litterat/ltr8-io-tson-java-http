@@ -43,8 +43,8 @@ collide.
 ## Decisions this leaves, in the order to take them
 
 1. **One interface per plan, or several?** Both layers carry one `interface: uri`, where an agent is expected to call
-   across interfaces. The reconciliation that changes nothing here: the gateway publishes an interface that `extends`
-   the ones it fronts, and a plan names that. `extends` was built for exactly this.
+   across interfaces. The layer has no inheritance between interfaces, so a gateway fronting several either declares
+   one interface of its own holding their methods, which a plan names, or a plan names several and this is decided.
 2. **Business errors.** A failed call without `or` aborts with `agent_error`, whose `detail` is text. The interface
    declared that call's errors as typed values composing `problem`; the abort should carry the one that occurred, and
    `agent_error` should compose `problem` like every other error here, so the api gateway and the agent processor

@@ -18,27 +18,20 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * An interface as a map of methods: the values are built; a value under the typed slot needs no {@code !method}
- * tag; an unresolved reference inside a value is caught at load, because the slot is typed by a kind; and a {@code @doc}
- * written before a map key survives into {@code AnnotatedMap.getAnnotations}.
- *
- * <p>The finding the map design rests on, measured on the layer's own {@code interface}, a record held under a key of
- * an {@code interfaces} entry, and on a test-only variant that is the namespace itself: {@code interface_of_signatures
- * => namespace & { … }}, whose entry is the map of methods with nothing beside it. The variant is the shape tson-java's
- * own corpus fixture uses; the layer keeps the record because an interface carries {@code extends} beside its methods,
- * and a value of a namespace type is the map alone.
+ * An interface as a map of methods, measured on the layer's own {@code interface}: an entry applying it is the map
+ * itself, read back as a {@code Namespace} of {@link Method}s; a value under the typed slot needs no {@code !method}
+ * tag; an unresolved reference inside a value is caught at load, because the slot is typed by a kind; and the
+ * annotations written before a method's key survive into {@code Namespace.getAnnotations}, which is where a reader
+ * finds a method's documentation and facts.
  */
 class InterfaceMapTest {
 
     static final String PROBE_META_ID = "https://tson.io/2026/38/io/ltr8/http/meta-probe.tn";
     static final String DOC_ID = "https://schemas.example.com/2026/38/app/probe-1.tn";
 
-    /** The layer, plus one test-only namespace type. */
+    /** The layer, served under a probe identity. */
     static final String META = TsonApiSchema.source()
-            .replace("https://tson.io/2026/38/io/ltr8/http/meta-service.tn", PROBE_META_ID)
-            .replace("\n  api => {",
-                    "\n  interface_of_signatures => namespace & { key_type: = method_name  value_type: = signature }\n"
-                    + "\n  api => {");
+            .replace("https://tson.io/2026/38/io/ltr8/http/meta-service.tn", PROBE_META_ID);
 
     static String doc(String entries) {
         return """
@@ -60,41 +53,40 @@ class InterfaceMapTest {
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))));
     }
 
-    static Top resolvedEntry(String entries) {
+    /** The entry {@code orders}, which applies {@code interface}: the map of methods itself. */
+    static Namespace<?> resolvedInterface(String entries) {
         String doc = doc(entries);
         Tson tson = tson(doc);
         List<Diagnostic> problems = tson.validateSchema(doc);
         assertEquals(List.of(), problems, () -> "" + problems);
-        return tson.schemaRegistry().get(DOC_ID).orElseThrow().schema().entries().get("orders");
+        Top entry = tson.schemaRegistry().get(DOC_ID).orElseThrow().schema().entries().get("orders");
+        return assertInstanceOf(Namespace.class, entry);
     }
 
-    /** The interface the {@code interfaces} entry {@code orders} holds under its key {@code orders}. */
-    static Interface resolvedInterface(String entries) {
-        return assertInstanceOf(Interface.class, assertInstanceOf(Namespace.class, resolvedEntry(entries)).get("orders"));
-    }
-
-    /** The layer's own interface: a map of {@code method} records, tagged or not. */
+    /** The entry is the map of methods, with nothing beside it: its keys are the methods, in written order. */
     @Test
-    void aMapOfMethodRecordsResolves() {
-        var orders = resolvedInterface(
-                "  orders => !interfaces { orders => { place_order => !method { request: order  response: order } } }");
+    void anInterfaceIsTheMapOfMethodsItself() {
+        Namespace<?> orders = resolvedInterface("""
+                  orders => !interface { place_order  => !method { request: order  response: order }
+                                         cancel_order => !method { request: order_ref } }""");
 
-        Method place = orders.methods().get("place_order");
-        assertEquals("order", place.request().orElseThrow().name());
+        assertEquals("interface", orders.type());
+        assertEquals(List.of("place_order", "cancel_order"), List.copyOf(orders.keySet()));
+        assertEquals("order", assertInstanceOf(Method.class, orders.get("place_order")).request().orElseThrow().name());
     }
 
     /** The slot's type supplies the record, so the tag is optional -- as at any typed position. */
     @Test
     void aValueUnderAMethodTypedSlotNeedsNoTag() {
-        var orders = resolvedInterface("  orders => !interfaces { orders => { place_order => { request: order } } }");
+        Namespace<?> orders = resolvedInterface("  orders => !interface { place_order => { request: order } }");
 
-        assertInstanceOf(Method.class, orders.methods().get("place_order"));
+        assertInstanceOf(Method.class, orders.get("place_order"));
     }
 
     /** A name inside a map value is judged at load: the slot is typed by a kind, so the read records it. */
     @Test
     void anUnresolvedReferenceInsideAMapValueIsCaughtAtLoad() {
-        String doc = doc("  orders => !interfaces { orders => { place_order => !method { request: no_such } } }");
+        String doc = doc("  orders => !interface { place_order => !method { request: no_such } }");
         List<Diagnostic> problems = tson(doc).validateSchema(doc);
 
         assertEquals(1, problems.size(), () -> "" + problems);
@@ -102,25 +94,16 @@ class InterfaceMapTest {
                 problems.getFirst().message());
     }
 
-    /** The namespace variant: the entry IS the map of methods, read as a {@code Namespace} of signatures. */
+    /**
+     * A method can be documented where it is declared: a {@code @doc} and a bare marker before the key survive the
+     * read, on the namespace's own key annotations.
+     */
     @Test
-    void aNamespaceOfSignaturesIsTheMapItself() {
-        Namespace<?> orders = assertInstanceOf(Namespace.class, resolvedEntry("""
-                  orders => !interface_of_signatures { place_order  => { request: order  response: order }
-                                                       cancel_order => { request: order_ref } }"""));
+    void anAnnotationOnAMethodKeySurvivesIntoTheNamespace() {
+        Namespace<?> orders = resolvedInterface(
+                "  orders => !interface { @safe @doc:\"Fetch it.\" get_order => { request: order_ref } }");
 
-        assertEquals("interface_of_signatures", orders.type());
-        assertEquals(List.of("place_order", "cancel_order"), List.copyOf(orders.keySet()));
-        assertTrue(assertInstanceOf(Signature.class, orders.get("cancel_order")).request().isPresent());
-    }
-
-    /** A method can be documented where it is declared: a {@code @doc} before the key survives the read. */
-    @Test
-    void aDocOnAMapKeySurvivesIntoTheBoundValue() {
-        var orders = resolvedInterface("  orders => !interfaces { orders => {"
-                + " methods: { @doc:\"Place it.\" place_order => { request: order } } } }");
-
-        assertEquals("Place it.",
-                orders.methods().getAnnotations("place_order").value("doc", String.class).orElseThrow());
+        assertEquals("Fetch it.", orders.getAnnotations("get_order").value("doc", String.class).orElseThrow());
+        assertTrue(orders.getAnnotations("get_order").has("safe"));
     }
 }

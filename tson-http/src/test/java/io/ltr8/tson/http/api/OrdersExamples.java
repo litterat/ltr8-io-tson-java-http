@@ -28,19 +28,17 @@ import java.util.Map;
  * <li>{@code orders-errors-1.tn} (shared) -- business errors composing {@code problem} and pinning {@code status},
  * which is how an endpoint's {@code errors} get one.</li>
  * <li>{@code orders-1.tn} (interface only) -- {@code orders} as a map of methods with a {@code @doc} per method, and
- * {@code orders_v2} extending it.</li>
+ * {@code orders_v2} beside it declaring only {@code refund}.</li>
  * <li>{@code orders-api-inline-1.tn} (web service only) -- an api with no interface behind it, every endpoint an
  * {@code !operation} with its signature inline; a parameter-only endpoint as a one-field record placed from the
  * path.</li>
- * <li>{@code orders-api-1.tn} (both) -- an api that {@code implements} {@code orders}, every endpoint a
+ * <li>{@code orders-api-1.tn} (both) -- an api whose entry claims {@code @implements:[orders]}, every endpoint a
  * {@code !binding} with its placement.</li>
  * </ul>
  *
- * <p>Both spellings of a record appear, deliberately. {@code orders} and both apis write their sole required field
- * positionally -- {@code orders => { place_order => … }} under the {@code !interfaces} key for {@code orders => {
- * methods: { place_order => … } }}, which [TSON-SCHEMA] §5.6 admits because {@code interface}, {@code api} and
- * {@code resource} each have exactly one bare required field -- while {@code orders_v2} writes {@code methods:} out,
- * because it also sets {@code extends} and a body is a record or a map, never both.
+ * <p>Both spellings of a resource appear, deliberately: most write their one required field positionally -- {@code
+ * "/orders" => { POST => … }} for {@code "/orders" => { endpoints: { POST => … } }}, which [TSON-SCHEMA] §5.6 admits
+ * because {@code resource} has exactly one bare required field -- and one is tagged {@code !resource}.
  *
  * <p>Each file is served at the identity its own {@code !!id} declares, so the examples name each other the way
  * published documents do, literally.
@@ -97,15 +95,14 @@ public final class OrdersExamples {
     }
 
     /**
-     * Every value held under a key of an entry applying the namespace type {@code constructor} -- {@code interfaces}
-     * or {@code apis} -- by its key. An interface or an api is a record under a key, not an entry, so this is how a
-     * reader finds one by name.
+     * Every entry applying the namespace type {@code constructor} -- {@code interface} or {@code api} -- by its name,
+     * each as the {@code Namespace} it is: an interface's keys are its methods, an api's its paths.
      */
-    public static <T> Map<String, T> held(Namespace<Top> entries, String constructor, Class<T> type) {
-        Map<String, T> found = new LinkedHashMap<>();
-        entries.values().forEach(value -> {
+    public static Map<String, Namespace<?>> applying(Namespace<Top> entries, String constructor) {
+        Map<String, Namespace<?>> found = new LinkedHashMap<>();
+        entries.forEach((name, value) -> {
             if (value instanceof Namespace<?> namespace && namespace.type().equals(constructor)) {
-                namespace.forEach((key, held) -> found.put(key, type.cast(held)));
+                found.put(name, namespace);
             }
         });
         return found;

@@ -697,7 +697,7 @@ as one rule:
   and `type_kind` (`kind<type>`) have today's members.
 - **For an ordinary type it is new.** `kind<operation>` names the operation entries: today's one-segment
   `ref<operation>`.
-- **`ref<T>` is the qualified form,** reaching through namespace values (`orders.methods.place_order`). The one-segment
+- **`ref<T>` is the qualified form,** reaching through namespace values (`orders.place_order`). The one-segment
   cases of the two merge.
 - **The slot's meaning comes from `T`, not from the spelling.** If `T` is in the `type` family the name is a type
   reference: it takes part in structural identity and is delivered as a `TypeRef`. Otherwise it names a value.
@@ -1035,8 +1035,8 @@ documents.
       `orders-wire-1.tn` uses for RPC packets; or
     - `steps` carries a §7.8 scope push naming the interface.
 
-  Both fit decision 1 of the agent experiment's README (one interface per plan, reached through `extends`). Both retire
-  `interface: uri` as a field.
+  Both fit decision 1 of the agent experiment's README (one interface per plan). Both retire `interface: uri` as a
+  field.
 
 ## Order of work
 

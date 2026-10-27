@@ -25,17 +25,18 @@ import java.util.Set;
  * !!meta:"https://tson.io/2026/38/io/ltr8/http/meta-service.tn"
  * !!import:"https://schemas.example.com/2026/38/app/order-1.tn"
  * {
- *   orders => !interfaces { orders => { place_order => { request: order  response: order } } }
- *   orders_api => !apis { orders_api => { implements: [orders.orders]
- *     "/orders" => !resource { POST => !binding { method: orders.orders.methods.place_order  status: 201 } } } }
+ *   orders => !interface { place_order => { request: order  response: order } }
+ *
+ *   @implements:[orders]
+ *   orders_api => !api { "/orders" => { POST => !binding { method: orders.place_order  status: 201 } } }
  * }
  * }</pre>
  *
- * <p><b>{@code order} there is a type reference, not a string, and {@code orders.orders.methods.place_order} is a
- * reference to a value.</b> The compiler resolves both and refuses a name nothing declares — which is the whole
- * reason to describe a service at the schema layer. A description written as data can name a schema but cannot
- * hold a reference, so it carries bare names and every consumer needs its own resolver for them — in every
- * language that reads it.
+ * <p><b>{@code order} there is a type reference, not a string, and {@code orders.place_order} is a reference to a
+ * value</b> -- the interface's entry, then the method's key. The compiler resolves both and refuses a name nothing
+ * declares — which is the whole reason to describe a service at the schema layer. A description written as data can
+ * name a schema but cannot hold a reference, so it carries bare names and every consumer needs its own resolver for
+ * them — in every language that reads it.
  *
  * <h2>Wiring</h2>
  *
@@ -86,9 +87,9 @@ public final class TsonApiSchema {
     }
 
     /**
-     * The binder for this meta layer's own vocabulary — {@code interface}, {@code api} and the records they hold,
-     * mapped to the classes in this package. {@code interfaces}, {@code apis} and {@code methods} need no class: a
-     * value of a namespace type is a {@code Namespace}, or the map its host declares.
+     * The binder for this meta layer's own vocabulary — the records {@code interface} and {@code api} hold, and the
+     * {@code exemption} an api's {@code @not_bound} lists, mapped to the classes in this package. {@code interface}
+     * and {@code api} need no class: a value of a namespace type is a {@code Namespace}.
      *
      * <p>Pass it to {@code ProcessorConfig.metaNameBinder}, which composes it over the kernel's own vocabulary
      * rather than replacing it. A schema governed by this meta layer will not resolve without it: the

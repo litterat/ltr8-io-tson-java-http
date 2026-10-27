@@ -3,15 +3,15 @@
 !!import:"https://schemas.example.com/2026/38/orders/orders-types-1.tn"
 !!import:"https://schemas.example.com/2026/38/orders/orders-errors-1.tn"
 @doc:"""
-  Interface only: nothing HTTP in the document. An interface is a map of methods keyed by name -- a
-  method's name is the key it sits under, scoped to its interface, and a `@doc` before the key documents
-  it. The `!method` tag is optional under the typed slot. `extends` names other interfaces whose methods
-  this one also has, by references the resolver judges (`orders.orders`: the entry, then its key); the reader
-  walks them, not `!!import`. A method stays the interface's that declares it, and a binding names it there.
+  Interface only: nothing HTTP in the document. An interface is an entry applying `interface`, a map of
+  methods keyed by name -- a method's name is the key it sits under, scoped to its interface, and a `@doc`
+  before the key documents it. The `!method` tag is optional under the typed slot. A method's qualified name
+  is the interface's entry and then its key (`orders.place_order`). An interface lists its methods and
+  nothing more: `orders_v2` declares only what it adds, and an api offering both implements both.
   """
 {
   @doc:"The orders interface."
-  orders => !interfaces { orders => {
+  orders => !interface {
     @summary:"Place an order."
     @doc:"Accept an order and confirm it with the quantity doubled."
     place_order  => { request: new_order    response: order       errors: [sku_not_found] }
@@ -24,14 +24,11 @@
     @idempotent
     @doc:"Cancel an order. Cancelling twice is the same as cancelling once."
     cancel_order => { request: order_ref    errors: [order_not_found] }
-  } }
+  }
 
-  @doc:"Everything orders has, and a refund."
-  orders_v2 => !interfaces { orders_v2 => {
-    extends: [orders.orders]
-    methods: {
-      @idempotent
-      refund => { request: order_ref }
-    }
-  } }
+  @doc:"Refunds, offered beside orders."
+  orders_v2 => !interface {
+    @idempotent
+    refund => { request: order_ref }
+  }
 }

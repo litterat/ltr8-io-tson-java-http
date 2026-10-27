@@ -117,7 +117,7 @@ class TsonApiConformanceTest {
         assertEquals(Set.of("POST /orders", "GET /{+schemaPath}"), keys);
 
         Route post = api.route(HttpVerb.POST, "/orders").orElseThrow();
-        assertEquals(Optional.of(new InterfaceMethod("orders.orders", "place_order")), post.method());
+        assertEquals(Optional.of(new InterfaceMethod("orders", "place_order")), post.method());
         assertEquals("order", post.request().orElseThrow().name(), "a resolved reference, borrowed from the method");
         assertEquals(Optional.of("Place an order"), post.summary());
         assertEquals(Optional.of("Accept an order and confirm it with the quantity doubled."), post.doc(),

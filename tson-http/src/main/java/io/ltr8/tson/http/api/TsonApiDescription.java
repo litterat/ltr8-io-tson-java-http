@@ -20,24 +20,28 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * The service a schema describes, read back from its resolved entries: every endpoint of every {@code api}, each
- * resolved into a {@link Route}.
+ * The service a schema describes, read back from its resolved entries: every endpoint of every entry applying {@code
+ * api}, each resolved into a {@link Route}.
  *
  * <h2>What the resolver checked, and what this does</h2>
  *
- * <p>Naming is the resolver's, and it is done before this class sees anything: a payload type nothing declares, an
- * {@code implements} or {@code extends} naming no interface, a binding's method the interface does not hold -- each
- * is refused at schema load, because {@code meta-service.tn} types those slots {@code type_kind}, {@code
- * ref<interface>} and {@code ref<method>}. A qualified name says which interface it means, so no name is ambiguous.
+ * <p>Naming is the resolver's where it can judge a name, and it is done before this class sees anything: a payload
+ * type nothing declares, or a binding's method the interface does not hold, is refused at schema load, because
+ * {@code meta-service.tn} types those slots {@code type_kind} and {@code ref<method>}. A qualified name says which
+ * interface it means ({@code orders.place_order}: the entry, then the key), so no name is ambiguous.
  *
- * <p>What relates two things is this class's, and it is checked when a description is read, so an unsound
+ * <p>An api's {@code @implements} and {@code @not_bound} are annotations on its entry, since a value of a namespace
+ * type is the map alone, and the resolver does not judge a reference inside an annotation's value. So naming there is
+ * this class's: each {@code @implements} name must be an entry of the description applying {@code interface}, and
+ * each exemption's method a key of an interface the api implements.
+ *
+ * <p>What relates two things is this class's too, and it is checked when a description is read, so an unsound
  * description has no model -- a startup failure, as a payload type nothing declares is:
  *
  * <ul>
- *   <li>a binding's method belongs to an interface its api implements, through {@code extends};</li>
- *   <li>the {@code implements} claim holds -- every method of every implemented interface is bound, or exempted in
- *       {@code not_bound} with a reason -- held per {@link InterfaceMethod}, never per name;</li>
- *   <li>{@code extends} has no cycle, the one thing a reference cannot rule out;</li>
+ *   <li>a binding's method belongs to an interface its api implements;</li>
+ *   <li>the {@code @implements} claim holds -- every method of every implemented interface is bound, or exempted in
+ *       {@code @not_bound} with a reason -- held per {@link InterfaceMethod}, never per name;</li>
  *   <li>each request record's fields are placed over the path, query, headers and body exactly once
  *       ({@link RequestPlacement});</li>
  *   <li>the verb agrees with what the method says about itself (GET safe, PUT and DELETE idempotent), and a
@@ -72,11 +76,11 @@ public final class TsonApiDescription {
         var compiled = tson.schemaRegistry().get(schemaId).orElseThrow(() -> new IllegalArgumentException(
                 "'" + schemaId + "' is not resolved -- resolve the description before reading it"));
         Namespace<Top> entries = compiled.schema().entries();
-        Map<String, Interface> interfaces = held(entries, "interfaces", Interface.class);
+        Map<String, Namespace<?>> interfaces = applying(entries, "interface");
         List<Route> routes = new ArrayList<>();
         Map<String, Route> byKey = new LinkedHashMap<>();
-        held(entries, "apis", Api.class).forEach((name, api) -> {
-            for (Route route : read(name, api, interfaces, entries::get)) {
+        applying(entries, "api").forEach((name, api) -> {
+            for (Route route : read(name, api, entries.getAnnotations(name), interfaces, entries::get)) {
                 Route earlier = byKey.putIfAbsent(route.key(), route);
                 if (earlier != null) {
                     throw new IllegalArgumentException("'" + route.key() + "' is declared twice, and a server serves "
@@ -89,78 +93,78 @@ public final class TsonApiDescription {
     }
 
     /**
-     * Every value held under a key of an entry applying the namespace type {@code constructor}, keyed by the
-     * qualified name a reference spells -- the entry, then the key ({@code orders.orders}).
+     * Every entry applying the namespace type {@code constructor}, by its name -- which is what a qualified name
+     * spells first ({@code orders} in {@code orders.place_order}).
      */
-    private static <T> Map<String, T> held(Namespace<Top> entries, String constructor, Class<T> type) {
-        Map<String, T> found = new LinkedHashMap<>();
+    private static Map<String, Namespace<?>> applying(Namespace<Top> entries, String constructor) {
+        Map<String, Namespace<?>> found = new LinkedHashMap<>();
         entries.forEach((entry, value) -> {
             if (value instanceof Namespace<?> namespace && namespace.type().equals(constructor)) {
-                namespace.forEach((key, held) -> found.put(entry + "." + key, type.cast(held)));
+                found.put(entry, namespace);
             }
         });
         return found;
     }
 
-    private static List<Route> read(String apiName, Api api, Map<String, Interface> declared,
-                                    Function<String, Top> entries) {
-        Map<String, Interface> interfaces = new LinkedHashMap<>();
-        for (TypeRef implemented : api.implemented()) {
-            collect(apiName, implemented.name(), declared, interfaces, new LinkedHashSet<>());
-        }
+    private static List<Route> read(String apiName, Namespace<?> api, Annotations claims,
+                                    Map<String, Namespace<?>> declared, Function<String, Top> entries) {
+        Map<String, Namespace<?>> interfaces = implemented(apiName, claims, declared);
         List<Route> routes = new ArrayList<>();
         Set<InterfaceMethod> bound = new LinkedHashSet<>();
-        api.resources().forEach((path, resource) -> resource.endpoints().forEach((verbKey, endpoint) -> {
-            String label = apiName + " " + verbKey + " " + path;
-            HttpVerb verb = HttpVerb.valueOf(verbKey);
-            Annotations onVerb = resource.endpoints().getAnnotations(verbKey);
-            Optional<InterfaceMethod> method = Optional.empty();
-            Optional<TypeRef> request;
-            Optional<TypeRef> response = Optional.empty();
-            List<TypeRef> errors;
-            Optional<String> mediaType = Optional.empty();
-            Annotations facts = onVerb;
-            Annotations docs = onVerb;
-            switch (endpoint) {
-                case Operation op -> {
-                    request = op.request();
-                    response = op.response();
-                    errors = op.errors();
+        api.forEach((path, held) -> {
+            Resource resource = (Resource) held;
+            resource.endpoints().forEach((verbKey, endpoint) -> {
+                String label = apiName + " " + verbKey + " " + path;
+                HttpVerb verb = HttpVerb.valueOf(verbKey);
+                Annotations onVerb = resource.endpoints().getAnnotations(verbKey);
+                Optional<InterfaceMethod> method = Optional.empty();
+                Optional<TypeRef> request;
+                Optional<TypeRef> response = Optional.empty();
+                List<TypeRef> errors;
+                Optional<String> mediaType = Optional.empty();
+                Annotations facts = onVerb;
+                Annotations docs = onVerb;
+                switch (endpoint) {
+                    case Operation op -> {
+                        request = op.request();
+                        response = op.response();
+                        errors = op.errors();
+                    }
+                    case Document doc -> {
+                        request = doc.request();
+                        errors = doc.errors();
+                        mediaType = Optional.of(doc.mediaType());
+                    }
+                    case Binding b -> {
+                        InterfaceMethod named = implementedMethod(label, b, interfaces);
+                        Namespace<?> owner = interfaces.get(named.owner());
+                        Method m = (Method) owner.get(named.name());
+                        method = Optional.of(named);
+                        bound.add(named);
+                        request = m.request();
+                        response = m.response();
+                        errors = m.errors();
+                        // A method's facts are its own; its documentation is its own unless the verb key says more.
+                        facts = owner.getAnnotations(named.name());
+                        docs = facts;
+                    }
                 }
-                case Document doc -> {
-                    request = doc.request();
-                    errors = doc.errors();
-                    mediaType = Optional.of(doc.mediaType());
+                RequestPlacement placement = RequestPlacement.of(label, verb, path, endpoint.query(),
+                        endpoint.headers(), endpoint.body(), request, entries);
+                requireVerbAgrees(label, verb, facts);
+                if (mediaType.isEmpty()) {
+                    requireStatusAgrees(label, endpoint.status(), response);
                 }
-                case Binding b -> {
-                    InterfaceMethod named = implementedMethod(label, b, interfaces);
-                    Interface owner = interfaces.get(named.owner());
-                    Method m = owner.methods().get(named.name());
-                    method = Optional.of(named);
-                    bound.add(named);
-                    request = m.request();
-                    response = m.response();
-                    errors = m.errors();
-                    // A method's facts are its own; its documentation is its own unless the verb key says more.
-                    facts = owner.methods().getAnnotations(named.name());
-                    docs = facts;
-                }
-            }
-            RequestPlacement placement = RequestPlacement.of(label, verb, path, endpoint.query(), endpoint.headers(),
-                    endpoint.body(), request, entries);
-            requireVerbAgrees(label, verb, facts);
-            if (mediaType.isEmpty()) {
-                requireStatusAgrees(label, endpoint.status(), response);
-            }
-            Set<Encoding> encodings = new LinkedHashSet<>(List.of(Encoding.TSON));
-            encodings.addAll(endpoint.encodings());
-            Annotations fallback = docs;
-            routes.add(new Route(verb, path, method, request, response, errorStatuses(label, errors, entries),
-                    endpoint.status(), mediaType, encodings, placement,
-                    text(onVerb, "summary").or(() -> text(fallback, "summary")),
-                    text(onVerb, "doc").or(() -> text(fallback, "doc"))));
-        }));
-        requireComplete(apiName, api, interfaces, bound);
+                Set<Encoding> encodings = new LinkedHashSet<>(List.of(Encoding.TSON));
+                encodings.addAll(endpoint.encodings());
+                Annotations fallback = docs;
+                routes.add(new Route(verb, path, method, request, response, errorStatuses(label, errors, entries),
+                        endpoint.status(), mediaType, encodings, placement,
+                        text(onVerb, "summary").or(() -> text(fallback, "summary")),
+                        text(onVerb, "doc").or(() -> text(fallback, "doc"))));
+            });
+        });
+        requireComplete(apiName, claims, interfaces, bound);
         return routes;
     }
 
@@ -169,31 +173,30 @@ public final class TsonApiDescription {
     }
 
     /**
-     * The implemented interfaces, through {@code extends}. Each name is a reference the resolver judged, so a
-     * missing one is an interface outside this description's namespace rather than an author's typo.
+     * The interfaces an api's {@code @implements} names, each of which must be an entry of this description applying
+     * {@code interface}. The resolver does not judge a reference inside an annotation's value, so a name nothing
+     * declares, or one naming an entry of another kind, reaches this check rather than failing at schema load.
      */
-    private static void collect(String apiName, String name, Map<String, Interface> declared,
-                                Map<String, Interface> into, Set<String> walking) {
-        if (into.containsKey(name)) {
-            return;
+    private static Map<String, Namespace<?>> implemented(String apiName, Annotations claims,
+                                                         Map<String, Namespace<?>> declared) {
+        Map<String, Namespace<?>> interfaces = new LinkedHashMap<>();
+        for (List<?> names : claims.values("implements", List.class)) {
+            for (Object element : names) {
+                String name = element instanceof TypeRef reference ? reference.name() : String.valueOf(element);
+                Namespace<?> iface = declared.get(name);
+                if (iface == null) {
+                    throw new IllegalArgumentException("'" + apiName + "' implements '" + name + "', which is no "
+                            + "entry of the description applying interface -- interfaces: " + declared.keySet());
+                }
+                interfaces.put(name, iface);
+            }
         }
-        if (!walking.add(name)) {
-            throw new IllegalArgumentException("'" + apiName + "': interface '" + name + "' extends itself through "
-                    + walking);
-        }
-        Interface iface = declared.get(name);
-        if (iface == null) {
-            throw new IllegalStateException("'" + apiName + "' reaches interface '" + name + "', which is not held "
-                    + "by an entry of the description's namespace: " + declared.keySet());
-        }
-        for (TypeRef parent : iface.extended()) {
-            collect(apiName, parent.name(), declared, into, walking);
-        }
-        into.put(name, iface);
+        return interfaces;
     }
 
     /** The method a binding names, which must belong to an interface its api implements. */
-    private static InterfaceMethod implementedMethod(String label, Binding binding, Map<String, Interface> interfaces) {
+    private static InterfaceMethod implementedMethod(String label, Binding binding,
+                                                     Map<String, Namespace<?>> interfaces) {
         InterfaceMethod named = InterfaceMethod.of(binding.method());
         if (!interfaces.containsKey(named.owner())) {
             throw new IllegalArgumentException("'" + label + "' binds '" + named + "', a method of an interface this "
@@ -204,27 +207,29 @@ public final class TsonApiDescription {
 
     /**
      * Every method of every implemented interface is bound or exempted. An exemption is held as hard as a binding:
-     * one naming a method of an interface the api does not implement exempts nothing it claims, so it is refused.
+     * one naming no method of an interface the api implements -- another interface's, or a key no interface holds --
+     * exempts nothing it claims, so it is refused.
      */
-    private static void requireComplete(String apiName, Api api, Map<String, Interface> interfaces,
+    private static void requireComplete(String apiName, Annotations claims, Map<String, Namespace<?>> interfaces,
                                         Set<InterfaceMethod> bound) {
         Set<InterfaceMethod> claimed = new LinkedHashSet<>();
-        interfaces.forEach((name, iface) ->
-                iface.methods().keySet().forEach(m -> claimed.add(new InterfaceMethod(name, m))));
+        interfaces.forEach((name, iface) -> iface.keySet().forEach(m -> claimed.add(new InterfaceMethod(name, m))));
         Set<InterfaceMethod> exempt = new LinkedHashSet<>();
-        for (Exemption exemption : api.notBound()) {
-            InterfaceMethod method = InterfaceMethod.of(exemption.method());
-            if (!claimed.contains(method)) {
-                throw new IllegalArgumentException("'" + apiName + "' exempts '" + method + "', which is not a "
-                        + "method of an interface it implements -- claimed: " + claimed);
+        for (List<?> exemptions : claims.values("not_bound", List.class)) {
+            for (Object element : exemptions) {
+                InterfaceMethod method = InterfaceMethod.of(((Exemption) element).method());
+                if (!claimed.contains(method)) {
+                    throw new IllegalArgumentException("'" + apiName + "' exempts '" + method + "', which is not a "
+                            + "method of an interface it implements -- claimed: " + claimed);
+                }
+                exempt.add(method);
             }
-            exempt.add(method);
         }
         List<InterfaceMethod> missing = claimed.stream().filter(m -> !bound.contains(m) && !exempt.contains(m))
                 .toList();
         if (!missing.isEmpty()) {
             throw new IllegalArgumentException("'" + apiName + "' implements interfaces declaring " + missing
-                    + " but has no binding for them; bind each, or exempt it in not_bound with a reason");
+                    + " but has no binding for them; bind each, or exempt it in @not_bound with a reason");
         }
     }
 

@@ -273,8 +273,8 @@ class UpstreamGapsTest {
 
     /**
      * <b>The CRUD-family payoff, restated for a namespace.</b> An endpoint is a value held two maps down in an api,
-     * so it is no entry and cannot be applied on its own; what a template can hold is a whole {@code !apis} value.
-     * {@code fetching => <T> !apis { … }} stands for every fetch-by-id family, and {@code orders =>
+     * so it is no entry and cannot be applied on its own; what a template can hold is a whole {@code !api} value.
+     * {@code fetching => <T> !api { … }} stands for every fetch-by-id family, and {@code orders =>
      * fetching<order>} names its application. [TSON-SCHEMA] §8.2 makes a declaration naming an application that
      * application's entry, so {@code orders} <em>is</em> the materialised namespace value, under the author's name,
      * with the argument substituted into its endpoints.
@@ -289,11 +289,11 @@ class UpstreamGapsTest {
                   order     => { sku: text }
                   order_ref => { id: text }
                   order_put => { id: text  sku: text }
-                  fetching  => <T> !apis { fetch => { "/orders/{id}" => !resource {
-                    @safe GET => !operation { request: order_ref  response: T } } } }
+                  fetching  => <T> !api { "/orders/{id}" => {
+                    @safe GET => !operation { request: order_ref  response: T } } }
                   orders    => fetching<order>
-                  writes    => !apis { writes => { "/orders/{id}" => !resource {
-                    @idempotent PUT => !operation { request: order_put  response: order } } } }""";
+                  writes    => !api { "/orders/{id}" => {
+                    @idempotent PUT => !operation { request: order_put  response: order } } }""";
 
         var described = TsonApiSchema.describedBy(resolveAgainstApiMeta(template), API_ID);
 
@@ -305,19 +305,21 @@ class UpstreamGapsTest {
     }
 
     /**
-     * <b>An endpoint's path is content, not a name</b> -- kept because an HTTP path is the case that found it and
+     * <b>A templated api mints no name from its paths</b> -- kept because an HTTP path is the case that found it and
      * would be the first to regress. A templated operation with a path {@code "/x"} once minted a name holding
      * {@code /}, which §8.2 makes a MUST violation ("an internal name is a valid identifier") and which surfaced as
      * a name-hygiene refusal on {@code U+002F} -- a refusal on a name nobody wrote and nobody could edit. A
-     * declaration naming the application mints no name at all, and a path is a key of a map keyed by text, so every
-     * path resolves -- including one in Cyrillic, which the default identifier policy would refuse for its script
-     * were it judged as a name.
+     * declaration naming the application mints no name at all, so every path resolves under the template.
+     *
+     * <p>A path key is a name of its own now, in the URL namespace's grammar ({@code path_template}, an identifier
+     * family), so §8.2's hygiene judges the key the author wrote: a single-script path in Cyrillic resolves, and a
+     * mixed-script one is refused, naming the key written rather than a name minted from it.
      */
     @Test
-    void anEndpointsPathIsNotJudgedByNameHygiene() {
+    void aTemplatedApisPathMintsNoName() {
         String body = """
                   order    => { sku: text }
-                  fetching => <T> !apis { fetch => { "%s" => !resource { @safe GET => !operation { response: T } } } }
+                  fetching => <T> !api { "%s" => { @safe GET => !operation { response: T } } }
                   orders   => fetching<order>""";
 
         for (String path : List.of("/", "/x", "/orders/42", "/путь")) {
@@ -325,6 +327,9 @@ class UpstreamGapsTest {
                     resolveAgainstApiMeta(body.formatted(path)), API_ID), path);
             assertTrue(described.route(io.ltr8.tson.http.api.HttpVerb.GET, path).isPresent(), path);
         }
+        String mixed = assertThrows(RuntimeException.class,
+                () -> resolveAgainstApiMeta(body.formatted("/pаth"))).getMessage();
+        assertTrue(mixed.contains("'/pаth' mixes the scripts"), mixed);
     }
 
     /**
@@ -420,8 +425,9 @@ class UpstreamGapsTest {
 
     /**
      * A namespace type declares its facets and nothing else: a value of it is the map alone, so a field beside {@code
-     * key_type} and {@code value_type} has nowhere to be written and the meta layer is refused. That is why the
-     * experiment's {@code interface} and {@code api}, which carry fields beside their maps, are records held under a key.
+     * key_type} and {@code value_type} has nowhere to be written and the meta layer is refused. That is why what
+     * {@code meta-service.tn}'s {@code api} says about the interfaces behind it -- the claims {@code implements} and
+     * {@code not_bound} -- is annotation on the api's entry rather than fields beside its paths.
      */
     @Test
     void aNamespaceTypeDeclaresOnlyItsFacets() {
@@ -437,6 +443,93 @@ class UpstreamGapsTest {
                 problems.getFirst().message());
     }
 
+    // ── open: a reference inside an annotation's value is not judged ─────────────────────────────
+
+    /**
+     * <b>The resolver does not judge a reference inside an annotation's value.</b> A meta layer may declare an
+     * annotation whose value holds references -- {@code implements => @annotation [ref<interface>]}, or a record
+     * carrying a {@code ref<method>} -- and the value's <em>shape</em> is checked ({@code @implements:42} is refused),
+     * but no name in it is: an unknown interface and a method key the interface does not hold both load clean. The
+     * {@code [ref<interface>]} elements arrive as plain {@code String}s, and the record's {@code ref<method>} as a
+     * {@code TypeRef} nobody resolved.
+     *
+     * <p>{@code meta-service.tn} writes an api's {@code @implements} and {@code @not_bound} exactly this way, so
+     * {@code TsonApiDescription} checks both itself: each name is an entry applying {@code interface}, each exemption
+     * a key of an interface the api implements. The layer keeps the {@code ref<…>} typing so the declaration says
+     * what it means; when this is fixed, the clean load below flips and the reader's checks become a second net.
+     */
+    @Test
+    void aReferenceInsideAnAnnotationValueIsNotJudged() {
+        String metaSource = meta("""
+                  method      => { request?: type_kind }
+                  method_name => identifier
+                  interface   => namespace & { key_type: = method_name  value_type: = method }
+                  exemption   => { method: ref<method>  reason: text }
+                  implements  => @annotation [ref<interface>]
+                  not_bound   => @annotation [exemption]""");
+        String unsound = governed("""
+                  order  => { sku: text }
+                  orders => !interface { place => { request: order } }
+                  @implements:[no_such]
+                  @not_bound:[ { method: orders.no_such  reason: "later" } ]
+                  holder => { a: text }""");
+        Tson tson = tson(metaSource, unsound, "io.ltr8.tson.http.probe.annotation");
+
+        assertEquals(List.of(), tson.validateSchema(unsound), "neither name is judged");
+
+        var annotations = tson.schemaRegistry().get(API_ID).orElseThrow().schema().entries().getAnnotations("holder");
+        assertEquals(List.of("no_such"), annotations.value("implements", List.class).orElseThrow(),
+                "a [ref<interface>] element arrives as a String");
+        var exemption = assertInstanceOf(io.ltr8.tson.http.probe.annotation.Exemption.class,
+                annotations.value("not_bound", List.class).orElseThrow().getFirst());
+        assertEquals("orders.no_such", exemption.method().name(), "a ref<method> arrives as an unresolved TypeRef");
+
+        String misshapen = governed("  @implements:42\n  holder => { a: text }");
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR),
+                tson(metaSource, misshapen, "io.ltr8.tson.http.probe.annotation").validateSchema(misshapen).stream()
+                        .map(Diagnostic::code).toList(),
+                "the value's shape is checked");
+    }
+
+    // ── a constraint: a namespace is keyed by an identifier family ───────────────────────────────
+
+    /**
+     * <b>Revision 38 keys a namespace by names: its {@code key_type} must be an identifier family.</b> A {@code
+     * text_type} with a {@code pattern} is refused as a key type where the meta layer declares it, since {@code
+     * key_type} is an {@code identifier_kind}. An {@code identifier_type} widened with {@code start_add} and {@code
+     * continue_add} is admitted, and still carries a {@code pattern} that is enforced at the key.
+     *
+     * <p>{@code meta-service.tn}'s {@code api} is keyed this way: {@code path_template} is an {@code identifier_type}
+     * starting with {@code /}, its {@code pattern} holding a URI template's structure, and §8.2's name hygiene
+     * reaches a path key as it reaches any name.
+     */
+    @Test
+    void aNamespaceKeyTypeMustBeAnIdentifierFamily() {
+        String textKeyed = meta("""
+                  method => { request?: type_kind }
+                  path   => !text_type { pattern: "/[a-z]*" }
+                  paths  => namespace & { key_type: = path  value_type: = method }""");
+        List<Diagnostic> refused = tson(textKeyed, governed("  y => { a: text }")).validateSchema(textKeyed);
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), refused.stream().map(Diagnostic::code).toList(),
+                () -> "" + refused);
+        assertTrue(refused.getFirst().message().contains("is declared 'identifier_kind'"),
+                refused.getFirst().message());
+
+        String identifierKeyed = meta("""
+                  method => { request?: type_kind }
+                  path   => !identifier_type { start: NONE  start_add: "/"  continue_add: "/"  pattern: "/[a-z/]*" }
+                  paths  => namespace & { key_type: = path  value_type: = method }""");
+        String sound = governed("  order => { sku: text }\n  p => !paths { \"/orders\" => { request: order } }");
+        assertEquals(List.of(), tson(identifierKeyed, sound, "io.ltr8.tson.http.probe.annotation")
+                .validateSchema(sound));
+        String unmatched = governed("  order => { sku: text }\n  p => !paths { \"/Orders\" => { request: order } }");
+        List<Diagnostic> problems = tson(identifierKeyed, unmatched, "io.ltr8.tson.http.probe.annotation")
+                .validateSchema(unmatched);
+        assertEquals(1, problems.size(), () -> "" + problems);
+        assertTrue(problems.getFirst().message().contains("does not match the required pattern"),
+                problems.getFirst().message());
+    }
+
     // ── fixed upstream: a kind-typed slot on a tagged subtype is judged at any depth ─────────────────
 
     /**
@@ -446,9 +539,8 @@ class UpstreamGapsTest {
      * and {@code !op { request: no_such }} is refused naming the full path. The reader built from the slot's
      * declaration records its type beside the name, so the linker never walks declared types back to it.
      *
-     * <p>This is the shape retiring {@code data} forces on anything with fields beside its map -- the experiment's
-     * {@code api}, with {@code implements} and {@code resources}, is a record under a key of {@code apis} -- so every
-     * {@code !operation} in it sits behind a field. Pinned because a gap here stops a sound schema resolving.
+     * <p>{@code meta-service.tn} holds every {@code !operation} this way, in a {@code resource}'s map field under a
+     * path key of an {@code api}. Pinned because a gap here stops a sound schema resolving.
      */
     @Test
     void aKindSlotOnASubtypeBehindARecordFieldIsJudged() {
@@ -480,10 +572,11 @@ class UpstreamGapsTest {
 
     /**
      * <b>A {@code ref<T>} name past a record value's field is judged and delivered</b>, as a key-only walk is. An
-     * interface held under a key keeps its methods in a namespace-typed field, so {@code i.orders.methods.place} walks
-     * an entry, a key, a field and a key; the walk reads the field through the descriptor that bound the host. A key
-     * missing past the field is refused. {@code meta-service.tn} depends on it: a binding's and an exemption's
-     * {@code method} is a {@code ref<method>}. Pinned so a regression to a gap fails here.
+     * interface held under a key that keeps its methods in a namespace-typed field is reached as {@code
+     * i.orders.methods.place}, walking an entry, a key, a field and a key; the walk reads the field through the
+     * descriptor that bound the host. A key missing past the field is refused. {@code meta-service.tn}'s own
+     * {@code ref<method>} walks an entry and a key alone; this pins the longer walk so a regression to a gap fails
+     * here.
      */
     @Test
     void aReferenceThroughARecordValuesFieldIsJudged() {

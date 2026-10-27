@@ -160,8 +160,9 @@ One line each; the note carries the why. Read the note before touching the code 
   (`schema-authoring.md`)
 - `problem.tn`'s `diagnostic_code` is a hand-written copy of `Diagnostic.Code`; `TsonProblemSchemaTest` is the only check.
   (`schema-authoring.md`)
-- An entry applying a namespace type is a value, never a type; `interface`, `api` and `resource` each have exactly one
-  bare required field, and a second one breaks every document written positionally. (`service-description.md`)
+- An entry applying a namespace type is a value, never a type, and the map alone: an api's `@implements` and
+  `@not_bound` are annotations on its entry, whose names the reader checks. Only `resource` has the positional form,
+  and a second required field breaks every document written in it. (`service-description.md`)
 - An entry has two annotation positions that land in different places; reading only one looks like a library bug. (same)
 - `TsonHandler.install` is not optional with Helidon's `TsonMediaSupport`. (`tson-http-helidon/CLAUDE.md`)
 - A descriptor states its policy whole; an absent policy is not a permissive one. (`deployment-descriptor.md`)

@@ -4,9 +4,9 @@
 @doc:"""
   Both: the interface of orders-1.tn, and the api that implements it. Every endpoint is a `!binding`
   naming a method and borrowing its signature. The method is a reference the resolver judges, a qualified
-  name through the interface's entry, its key and its methods -- `orders.orders.methods.place_order` -- so a
-  misspelt method fails at load. What a binding adds is the placement of that method's one request record
-  over the HTTP request, which is where the two views are allowed to look different:
+  name through the interface's entry and its key -- `orders.place_order` -- so a misspelt method fails at
+  load. What a binding adds is the placement of that method's one request record over the HTTP request,
+  which is where the two views are allowed to look different:
 
     POST   /orders        new_order   { order  idempotency_key }  order unwrapped as the body,
                                                                   idempotency_key as Idempotency-Key
@@ -14,28 +14,26 @@
     GET    /orders        order_query { status  page  page_size } all three in the query (a GET's remainder)
     DELETE /orders/{id}   order_ref   { id }                      id from the path; nothing left over
 
-  `implements: [orders.orders]` is a claim the reader holds this api to: every method of `orders` has a
-  binding here, or an entry in `not_bound` giving the reason it does not.
+  `@implements:[orders]`, written before the api's entry, is a claim the reader holds this api to: every
+  method of `orders` has a binding here, or an entry in `@not_bound` giving the reason it does not.
   """
 {
-  orders_api => !apis { orders_api => {
-    implements: [orders.orders]
-    resources: {
-      "/orders" => !resource {
-        @summary:"Place an order."
-        @doc:"""
-          Accepts a new order and confirms it. Repeating the request with the same Idempotency-Key returns the
-          original confirmation rather than placing a second order.
-          """
-        POST => !binding { method: orders.orders.methods.place_order  status: 201
-                           body: order  headers: { idempotency_key => "Idempotency-Key" } }
-        @summary:"Search orders."
-        GET  => !binding { method: orders.orders.methods.list_orders }
-      }
-      "/orders/{id}" => !resource {
-        GET    => !binding { method: orders.orders.methods.get_order }
-        DELETE => !binding { method: orders.orders.methods.cancel_order  status: 204 }
-      }
+  @implements:[orders]
+  orders_api => !api {
+    "/orders" => {
+      @summary:"Place an order."
+      @doc:"""
+        Accepts a new order and confirms it. Repeating the request with the same Idempotency-Key returns the
+        original confirmation rather than placing a second order.
+        """
+      POST => !binding { method: orders.place_order  status: 201
+                         body: order  headers: { idempotency_key => "Idempotency-Key" } }
+      @summary:"Search orders."
+      GET  => !binding { method: orders.list_orders }
     }
-  } }
+    "/orders/{id}" => {
+      GET    => !binding { method: orders.get_order }
+      DELETE => !binding { method: orders.cancel_order  status: 204 }
+    }
+  }
 }

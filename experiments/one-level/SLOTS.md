@@ -41,10 +41,10 @@ position in a record, is called a *position* here.
 | `!!import` | a parent slot of the schema object | a constructor argument |
 | imports are transitive | lookup follows parents transitively | (none: no ambient names) |
 | the import collision rule: judged by the declaring schema | the ambiguity rule: same slot by two routes is fine | — |
-| a namespace type, `methods => namespace & { key_type: = method_name  value_type: = method }` | clone the prototype, set a constant slot | subclass, override a slot |
+| a namespace type, `interface => namespace & { key_type: = method_name  value_type: = method }` | clone the prototype, set a constant slot | subclass, override a slot |
 | a composition, `a & b` | copy-down of slots from both | mixin application |
 | a namespace value, entered by a qualified name | an object answering its slot names | an object answering messages |
-| a `ref<T>`'s qualified name, `orders.orders.methods.place_order` | a chain of sends | a chain of sends |
+| a `ref<T>`'s qualified name, `orders.place_order` | a chain of sends | a chain of sends |
 | key annotations (`@doc` before a key) | slot annotations | — |
 | a resolved form, read as data under the kernel | a mirror | a mirror |
 | §8.2: no document may select its own policy | — | object capabilities: authority comes from the caller |
@@ -62,19 +62,22 @@ Three things stand out.
 
 ## What the overlay proposes
 
-### Proposal: parent slots for `extends`
+### Proposal: parent slots, should `extends` return
 
-**Revision 38 leaves one workaround that is delegation by another name.** `namespace` is a kernel constructor whose
+**A parent slot is how inheritance between interfaces would come back.** `namespace` is a kernel constructor whose
 instances are maps ([TSON-SCHEMA] §4.1), and a qualified name enters a namespace value key by key (§5.12), so
-`orders.orders.methods.place_order` walks with no special case. What stays outside the resolver is `extends`: an
-interface names other interfaces whose methods it also has, and `TsonApiDescription` walks the list in Java, refusing a
-cycle.
+`orders.place_order` walks with no special case. `meta-service.tn` holds no `extends`: an interface lists its own
+methods, and an api implementing several names each. If an interface naming others whose methods it also has returns,
+the walk belongs in the resolver, not in a Java walk in `TsonApiDescription` refusing a cycle.
 
-In Self's terms `extends` is a list of parents. Saying so directly moves the walk into the resolver:
+In Self's terms `extends` is a list of parents. Saying so directly puts the walk in the resolver:
 
 ```
 interface => { extends?: [ref<interface>]  methods: methods }   -- each extended interface is a parent of this one
 ```
+
+A namespace value is the map alone, so this needs either a field beside a namespace's keys (`UPSTREAM.md`, "a
+namespace value with declared fields beside its keys") or the parent as a facet of the namespace type.
 
 The source spelling of "parent" is open. Self writes `p*`; TSON has no such token, and adding lexer syntax is a cost of
 its own. In resolved form it is a facet, `!record_field { type: … parent: true }`.
@@ -88,9 +91,9 @@ its own. In resolved form it is a facet, `!record_field { type: … parent: true
 **What it adds to the dependency model.** Lookup edges are a third kind, beside shape → shape and value → shape. A
 parent edge orders nothing while shapes resolve; it is followed when a reference is judged, in the values step. Its
 one rule is that **the parent graph is acyclic**, refused naming the cycle, since a cycle would make lookup loop. That
-is the check `TsonApiDescription` makes for `extends` today, moved into the resolver.
+is the check a Java walk of `extends` would make, held by the resolver instead.
 
-**What it retires:** the Java walk of `extends` and its cycle check.
+**What it avoids:** a Java walk of `extends` and its cycle check in `TsonApiDescription`.
 
 **What it is not.** Revision 38 declined `&` over namespace values, composition being over types, and an inherited
 method is named where it is declared. A parent lookup keeps that: the method found through a parent is still the
@@ -175,7 +178,7 @@ any of those restrictions moves it into the "no" rows above, and needs a differe
 ## What this would change in the one-level design
 
 Candidates for `README.md`'s "Open":
-- **Parent slots absorb the `extends` walk.**
+- **Parent slots carry `extends`, should inheritance between interfaces return.**
 - **The dependency model gains lookup edges,** with the parent graph required to be acyclic.
 - **The spec's prose reads refinement as cloning** and states the resolved form as the only mirror.
 

@@ -73,9 +73,10 @@ waits on them.
 **The RPC address names a document, not an interface.** `call` addresses `(interface: uri, method: text)`, and that
 pair is not unambiguous: `orders-1.tn` declares two interfaces at one `!!id`, and two unrelated ones declaring
 `place_order` would be indistinguishable in a call. The wire schema has the same flaw a layer up --
-`place_order_call` is a flat type name, so two interfaces per document collide there too. Either the address carries
-the qualified name (`orders.orders.methods.place_order`), or one interface per document becomes a rule and
-`orders_v2` moves to its own file. Dispatch is the next item in the order, and this is what it dispatches on.
+`place_order_call` is a flat type name, so two interfaces in one document declaring one method name collide there too.
+Either the address carries the qualified name (`orders.place_order`, the interface's entry and then its key), or one
+interface per document becomes a rule and `orders_v2` moves to its own file. Dispatch is the next item in the order,
+and this is what it dispatches on.
 
 **Streams are not modelled, until a use arrives.** A stream is a *sequence* of documents of the declared type --
 count unknown, each complete as it arrives -- a property of the call, not of the type, and so not `[order]`. Nothing

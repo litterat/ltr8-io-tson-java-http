@@ -6,54 +6,60 @@
   and how HTTP exposes that (an api of endpoints). A schema governed by this one is a service description,
   and `TsonApiDescription` reads it.
 
-  One vocabulary, two constructors -- and only two. `interfaces` and `apis` are the entries a governed
-  schema writes, so they are namespace types (§4.1): an entry applying one is a map from a name to a
-  value, and a value, never a type. Everything inside them -- `interface`, `api`, `method`, `endpoint`,
-  `operation`, `binding`, `document`, `resource` -- is an ordinary RECORD, because it only ever appears as
-  a map value. A record composes (`operation => endpoint & signature`), is admitted as a subtype where its
-  base is expected (§7.2), and is never a constructor anyone applies at entry level.
+  One vocabulary, two constructors -- and only two. `interface` and `api` are the entries a governed schema
+  writes, so they are namespace types (§4.1): an entry applying one is a map from a name to a value, and a
+  value, never a type. An interface maps method names to methods; an api maps path templates to resources.
+  Everything inside them -- `method`, `resource`, `endpoint`, `operation`, `binding`, `document`, `exemption`
+  -- is an ordinary RECORD, because it only ever appears as a map value. A record composes (`operation =>
+  endpoint & signature`), is admitted as a subtype where its base is expected (§7.2), and is never a
+  constructor anyone applies at entry level.
 
-  `interface` and `api` are records held one level down, under a key of a namespace, rather than being
-  the namespace types themselves, because each carries fields beside its map -- `extends`, `implements`,
-  `not_bound` -- and a value of a namespace type is the map alone, with no fields of its own. A description
-  writes one namespace entry per interface or api, named as its one key:
+    orders => !interface {
+      @safe get_order => { request: order_ref  response: order  errors: [order_not_found] }
+      place_order     => { request: new_order  response: order  errors: [sku_not_found] }
+    }
 
-    orders     => !interfaces { orders => { place_order => { request: order  response: order } } }
-    orders_api => !apis { orders_api => { implements: [orders.orders]
-                          resources: { "/orders" => !resource {
-                            POST => !binding { method: orders.orders.methods.place_order  status: 201 } } } } }
+    @implements:[orders]
+    orders_api => !api {
+      "/orders"      => { POST => !binding { method: orders.place_order  status: 201 } }
+      "/orders/{id}" => { GET  => !binding { method: orders.get_order } }
+    }
 
-  Methods are keys inside their interface, and endpoints are values two maps down -- keyed by path,
-  then by verb -- so neither is a global entry: two interfaces may both declare `place_order`, an api
-  needs no invented operation names, and an interface is one entry with a name, a `@doc` and an `extends`.
+  Methods are keys inside their interface, and endpoints are values two maps down -- keyed by path, then
+  by verb -- so neither is a global entry: two interfaces may both declare `get_order`, and an api needs no
+  invented operation names. A method's qualified name is its interface's entry, then its key.
+
+  What an api claims about the interfaces behind it is ANNOTATION on its entry, written before the name:
+  `@implements` and `@not_bound`. A value of a namespace type is the map alone, with no fields beside its
+  keys, so a fact about the api as a whole has nowhere else to be written. An interface lists its methods and
+  nothing more; there is no inheritance between interfaces, and an api implementing two names both.
 
   Three ways to use it:
     interface only    an `interface`; nothing HTTP in the document.
     web service only  an `api` of `!operation`s, each carrying its signature INLINE.
-    both              an `interface`, and an `api` that `implements` it with `!binding`s naming its methods.
+    both              an `interface`, and an `api` that `@implements` it with `!binding`s naming its methods.
   An endpoint whose body is not a TSON value -- a schema document served as bytes, a page -- is a
   `!document`, stating its media type where the others state a response type.
 
-  THE POSITIONAL FORM, AND WHAT IT COSTS. `interface`, `api` and `resource` each have exactly one bare
-  REQUIRED field, so §5.6 lets the map stand in for it: `orders => { place_order => ... }` is
-  `orders => { methods: { place_order => ... } }`, and `"/orders" => !resource { GET => ... }` is the
-  same trick one level down. It reads far better and the examples use it. The cost is a versioning one and
-  it is the reason this is written down: adding a SECOND required field to any of the three withdraws the
-  positional form from that type, and every document written in it stops parsing. So the deliberately-absent
-  list on `endpoint` is not only a §3.5 question about a new version -- for these three types it decides
-  whether existing documents survive at all, and a new field here is optional or it is a new type.
+  THE POSITIONAL FORM, AND WHAT IT COSTS. `resource` has exactly one bare REQUIRED field, so §5.6 lets
+  the map stand in for it: `"/orders" => { GET => ... }` is `"/orders" => { endpoints: { GET => ... } }`,
+  and the tag is optional under the path key. It reads far better and the examples use it. The cost is a
+  versioning one and it is the reason this is written down: adding a SECOND required field to `resource`
+  withdraws the positional form from it, and every document written in it stops parsing. So a new field
+  there is optional or it is a new type.
 
-  WHAT THE RESOLVER CHECKS, AND WHAT THE READER DOES. A relation that names something is a reference the
-  resolver judges at schema load: `extends` and `implements` are `ref<interface>`, and a binding's or an
-  exemption's `method` is `ref<method>`, a qualified name walking an entry, its key, the interface's
-  `methods` field and the method's key -- `orders.orders.methods.place_order`. A name nothing declares, one
-  naming the wrong kind of thing (an interface where a method is wanted), or a method key the interface does
-  not hold is refused there, and a qualified name says which interface it means, so no name is ambiguous.
-  What relates two things beyond naming one is `TsonApiDescription`'s, when it reads a description, and an
-  unsound description has no model: a binding's method belonging to an interface the api implements, the
-  `implements` claim, an `extends` cycle, the placement of a request record over a path, a verb or a status
-  against what the method declares, and an error type fixing its status. `extends` is a reference and not a
-  composition, so an inherited method is named at the interface that declares it.
+  WHAT THE RESOLVER CHECKS, AND WHAT THE READER DOES. A relation that names something is a reference.
+  A binding's `method` is a `ref<method>` the resolver judges at schema load: a qualified name walking an
+  entry and its key -- `orders.place_order` -- so a name nothing declares, one naming the wrong kind of thing,
+  or a method key the interface does not hold is refused there, and the qualified name says which interface
+  it means. The resolver does not judge a reference inside an annotation's value, so `@implements` and an
+  exemption's `method` are typed as references here, saying what they mean, and `TsonApiDescription` checks
+  them itself: each `@implements` name is an entry applying `interface`, and each exemption names a method an
+  implemented interface holds. What relates two things beyond naming one is the reader's too, when it reads a
+  description, and an unsound description has no model: a binding's method belonging to an interface the api
+  implements, the `@implements` claim, the placement of a request record over a path, a verb or a status
+  against what the method declares, an error type fixing its status, and no two endpoints sharing a verb and
+  a path.
   """
 {
   @doc:"""
@@ -80,27 +86,13 @@
   method => signature & {}
 
   @doc:"""
-    An interface: a named, documented map of methods. A method is a map VALUE under its name, so its
-    name is scoped to the interface and a `@doc` written before the key documents it.
-
-    `extends` names other interfaces, whose methods this one also has: references the resolver judges, so
-    each names an interface, and the reader walks them and refuses a cycle. It is not `!!import`: importing a
-    document brings its entries into the namespace, where extending an interface says whose methods are also
-    mine. Nor is it a composition: an inherited method stays the declaring interface's, and is named there.
+    An interface: methods keyed by name, and nothing else. A namespace type, so an entry applying it is the
+    map of methods itself, and a qualified name enters it -- a `ref<method>` reaches a method as
+    `orders.place_order`, the entry and then the key. A method is a map VALUE under its name, so its name is
+    scoped to the interface, and annotations written before the key -- `@doc`, `@summary`, `@safe`,
+    `@idempotent` -- document it and state its facts.
     """
-  interface => {
-    extends?: [ref<interface>]
-    methods:  methods
-  }
-
-  @doc:"""
-    An interface's methods, keyed by name: a namespace type, so a qualified name enters it and a
-    `ref<method>` reaches a method as `orders.orders.methods.place_order`.
-    """
-  methods => namespace & { key_type: = method_name  value_type: = method }
-
-  @doc:"The entry a governed schema writes for interfaces: each `interface` under its name."
-  interfaces => namespace & { key_type: = identifier  value_type: = interface }
+  interface => namespace & { key_type: = method_name  value_type: = method }
 
   @doc:"Verb, not method: `method` is the constructor above, and `{ method: POST }` helps nobody."
   http_verb => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
@@ -110,11 +102,13 @@
 
   @doc:"""
     The naming roles of the namespaces this layer borrows -- one per namespace, as the kernel declares
-    `type_name`, `field_name` and `param_name` over `identifier`. A map keyed by a role enforces that
-    namespace's grammar at the key and names the namespace in the refusal ("'method_name': 'place order':
-    U+0020 cannot appear in an identifier"), where a `text` key would accept anything and `type_name` would
-    misname the namespace doing the refusing. Where the authority's grammar is not TSON's identifier, it
-    rides as a `pattern`: I-Regexp, matched against the whole token, so no anchors.
+    `type_name`, `field_name` and `param_name` over `identifier`. A key typed by a role enforces that
+    namespace's grammar and names the namespace in the refusal ("'method_name': 'place order': U+0020 cannot
+    appear in an identifier"), where `type_name` would misname the namespace doing the refusing. A namespace
+    type's key is a name, so its role is an identifier family: where the authority's grammar is wider than
+    TSON's identifier, the role is an `identifier_type` widened with `start_add` and `continue_add`, as
+    `path_template` is. A map field's key may still be a text family carrying a `pattern`, as `header_name`
+    is; a `pattern` is I-Regexp, matched against the whole token, so no anchors.
 
     A method's name: an identifier in its interface's namespace, not a type name.
     """
@@ -127,14 +121,24 @@
     The fragment operator is not admitted, since a server never receives a fragment, and nor are levels 3 and
     4 -- several variables to an expression, query forms, prefixes and explode -- which describe expansion
     rather than a route a server can match. A variable name is ASCII letters, digits and `_`.
+
+    An identifier family, because it keys a namespace: it starts with `/`, and continues with identifier
+    characters and RFC 3986's other path characters -- unreserved, sub-delimiters but `'`, `:`, `@`, a
+    percent-encoded octet -- plus a template's braces and `+`. The `pattern` holds the structure the
+    character set cannot: braces paired around one variable, and `%` followed by two hex digits. Being a
+    name, a path key meets [TSON-DATA] §8.2's name hygiene too, so a mixed-script path is refused.
     """
-  path_template => !text_type {
-    pattern: "/([^\\p{Cc} \"'%<>\\\\^`{|}]|%[0-9A-Fa-f]{2}|\\{[+]?[A-Za-z0-9_]+\\})*"
+  path_template => !identifier_type {
+    start:        NONE
+    start_add:    "/"
+    continue_add: "/{}+%-._~!$&()*,;=:@"
+    pattern:      "/([^%{}]|%[0-9A-Fa-f]{2}|\\{[+]?[A-Za-z0-9_]+\\})*"
   }
 
   @doc:"""
     A header field name: an RFC 9110 token, compared without case as RFC 9110 §5.1 has it -- held folded, so
-    `Idempotency-Key` is `idempotency-key`, the form HTTP/2 and HTTP/3 put on the wire.
+    `Idempotency-Key` is `idempotency-key`, the form HTTP/2 and HTTP/3 put on the wire. It keys a map field
+    rather than a namespace, so it is a text family with a `pattern`.
     """
   header_name => !text_type { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+"  normalization: NFKC_CASEFOLD }
 
@@ -244,17 +248,18 @@
 
   @doc:"""
     An endpoint whose signature is a METHOD's -- the two-declaration form. `method` is a reference the
-    resolver judges, its qualified name saying which interface declares it
-    (`orders.orders.methods.get_order`), so no binding is ambiguous between two interfaces declaring one name.
-    That the interface is one the api implements is the reader's check.
+    resolver judges, its qualified name saying which interface declares it (`orders.get_order`, the
+    interface's entry and then the method's key), so no binding is ambiguous between two interfaces declaring
+    one name. That the interface is one the api implements is the reader's check.
     """
   binding => endpoint & {
     method: ref<method>
   }
 
   @doc:"""
-    One path: its endpoints, keyed by verb. A record, so the tag is optional under the path key --
-    `"/orders" => { POST => !binding { ... } }` and `"/orders" => !resource { ... }` read alike.
+    One path: its endpoints, keyed by verb. A record with one bare required field, so the map stands in
+    for it and the tag is optional under the path key -- `"/orders" => { POST => !binding { ... } }` and
+    `"/orders" => !resource { endpoints: { ... } }` read alike.
     """
   resource => {
     endpoints: {http_verb => endpoint}
@@ -263,10 +268,12 @@
   @doc:"""
     Why a claimed method has no endpoint here: a method documented ahead of being built, or served by another
     process behind the same proxy. `reason` is required, because an exemption somebody has to justify in a
-    greppable string is a decision where a boolean is a hole. `method` is a reference, as a binding's is, so
-    an exemption names exactly the method it covers and can never quietly cover a second interface's method
-    of the same name. A list of records rather than a map keyed by method: a map key is a name in the map's own
-    key family, never a reference the resolver judges.
+    greppable string is a decision where a boolean is a hole. `method` names exactly the method it covers, as
+    a binding's does -- `orders.refund` -- so it can never quietly cover a second interface's method of the
+    same name. Typed `ref<method>` for what it means; held inside an annotation's value, it is not judged by
+    the resolver, so `TsonApiDescription` refuses one naming no method of an interface the api implements.
+    A list of records rather than a map keyed by method: a map key is a name in the map's own key family,
+    never a reference.
     """
   exemption => {
     method: ref<method>
@@ -274,24 +281,29 @@
   }
 
   @doc:"""
-    A web service: resources keyed by path template, each holding operations keyed by verb -- the shape
-    OpenAPI's `paths` has, arrived at from the key types rather than copied. A path key is DATA -- a `path_template`,
-    the URL namespace's own grammar -- which is why an operation needs no invented name and why
-    `/orders/{id}` needs no identifier minted from it.
+    A web service: resources keyed by path template, each holding endpoints keyed by verb -- the shape
+    OpenAPI's `paths` has, arrived at from the key types rather than copied. A namespace type, so an entry
+    applying it is the map of paths itself. A path key is the URL namespace's own grammar -- a
+    `path_template` -- which is why an endpoint needs no invented name and why `/orders/{id}` needs no
+    identifier minted from it. Nothing references an endpoint, so no qualified name walks a path key.
 
-    `implements` names the interfaces this api binds -- references, so each is an interface -- and is a CLAIM
-    the reader checks: every method of every implemented interface (through `extends`) has a `binding` naming
-    it, or an `exemption` in `not_bound` giving the reason it does not. The claim is held per (interface,
-    method), not per name: two implemented interfaces may both declare `get_order`, and binding one of them
-    says nothing about the other. An api with no `implements` is a web service on its own terms, its endpoints
-    `!operation`s.
+    What the api claims about the interfaces behind it is written as annotations before its entry's name,
+    `@implements:[orders] @not_bound:[{ method: orders.refund  reason: "..." }] orders_api => !api { ... }`,
+    because a value of a namespace type is the map alone.
     """
-  api => {
-    implements?: [ref<interface>]
-    not_bound?:  [exemption]
-    resources:   {path_template => resource}
-  }
+  api => namespace & { key_type: = path_template  value_type: = resource }
 
-  @doc:"The entry a governed schema writes for web services: each `api` under its name."
-  apis => namespace & { key_type: = identifier  value_type: = api }
+  @doc:"""
+    The interfaces an api binds, and a CLAIM the reader holds it to: every method of every interface named
+    has a `binding` naming it, or an `exemption` in `@not_bound` giving the reason it does not. The claim is
+    held per (interface, method), not per name: two implemented interfaces may both declare `get_order`, and
+    binding one of them says nothing about the other. An api with no `@implements` is a web service on its
+    own terms, its endpoints `!operation`s. Typed `ref<interface>` for what it means; held in an annotation's
+    value, it is not judged by the resolver, so `TsonApiDescription` refuses a name that is no entry applying
+    `interface`.
+    """
+  implements => @annotation [ref<interface>]
+
+  @doc:"The methods an api's `@implements` claims and does not bind, each with the reason why."
+  not_bound => @annotation [exemption]
 }

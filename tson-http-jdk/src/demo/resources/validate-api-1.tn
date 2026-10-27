@@ -8,8 +8,8 @@
   @doc:"Where a published schema is: the path component of its own !!id."
   schema_ref => { schemaPath: text }
 
-  validator => !apis { validator => {
-    "/validate" => !resource {
+  validator => !api {
+    "/validate" => {
       @summary:"Validate a document against a schema"
       @doc:"""
         Check a document against a schema and report every problem in one pass.
@@ -23,14 +23,14 @@
       POST => !operation { request: validation_request  response: validation_result }
     }
 
-    "/" => !resource {
+    "/" => {
       @safe
       @summary:"The validator page"
       @doc:"The page itself: two editors, the scenarios, and the diagnostics."
       GET => !document { media_type: "text/html" }
     }
 
-    "/.well-known/tson-deployment" => !resource {
+    "/.well-known/tson-deployment" => {
       @safe
       @summary:"What this deployment will accept"
       @doc:"""
@@ -48,11 +48,11 @@
       GET => !operation { response: acceptance_profile }
     }
 
-    "/{+schemaPath}" => !resource {
+    "/{+schemaPath}" => {
       @safe
       @summary:"Fetch a published schema"
       @doc:"Every schema this service names is served at its own identity's path."
       GET => !document { request: schema_ref  media_type: "application/tson" }
     }
-  } }
+  }
 }

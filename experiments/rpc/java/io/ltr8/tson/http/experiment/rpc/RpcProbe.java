@@ -2,7 +2,7 @@ package io.ltr8.tson.http.experiment.rpc;
 
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.Diagnostic;
-import io.ltr8.tson.http.api.Interface;
+import io.ltr8.tson.http.api.Method;
 import io.ltr8.tson.http.api.OrdersExamples;
 import io.ltr8.tson.schema.TsonSchema;
 import io.ltr8.tson.schema.meta.RecordBody;
@@ -139,11 +139,12 @@ class RpcProbe {
         // The wire schema does not import the interface -- it is derived from it -- so both are resolved here.
         assertEquals(List.of(), tson.validateSchema(OrdersExamples.source("orders-1.tn")));
         assertEquals(List.of(), tson.validateSchema(read("orders-wire-1.tn")));
-        var iface = OrdersExamples.held(tson.schemaRegistry().get(ORDERS_ID).orElseThrow().schema().entries(),
-                "interfaces", Interface.class).get("orders");
+        var iface = OrdersExamples.applying(tson.schemaRegistry().get(ORDERS_ID).orElseThrow().schema().entries(),
+                "interface").get("orders");
         var wire = tson.schemaRegistry().get(WIRE_ID).orElseThrow().schema();
 
-        iface.methods().forEach((name, method) -> {
+        iface.forEach((name, held) -> {
+            Method method = (Method) held;
             Map<String, String> call = closedOver(wire, name + "_call", "call");
             assertEquals(method.request().map(TypeRef::name).orElse("void"), call.get("request"),
                     name + "_call closes call over the wrong request");

@@ -3,24 +3,27 @@
 !!import:"https://schemas.example.com/2026/38/orders/orders-types-1.tn"
 !!import:"https://schemas.example.com/2026/38/orders/orders-errors-1.tn"
 @doc:"""
-  Web service only: an api on its own terms, with no interface behind it, so every endpoint is an
-  `!operation` carrying its signature inline. The verb and the path are the keys an endpoint sits under;
-  a path key is data, so `/orders/{id}` needs no identifier minted from it. A parameter-only endpoint is a
-  one-field request record placed from the path.
+  Web service only: an api on its own terms, with no interface behind it and no `@implements`, so every
+  endpoint is an `!operation` carrying its signature inline. The verb and the path are the keys an endpoint
+  sits under; a path key is a name in the URL's own grammar, so `/orders/{id}` needs no identifier minted
+  from it. A parameter-only endpoint is a one-field request record placed from the path.
 
   A method's facts ride on its own key, so on an inline operation they sit before the verb: a GET must be
   `@safe`, and the reader refuses one that is not.
 
   Serving a schema at its identity's path answers bytes rather than a TSON value, so it is a `!document`
   endpoint and not an operation; the demos' own description (demo/schemas/orders-api-1.tn) declares one.
+
+  A resource is written either way: positionally, its map of verbs standing in for its one field, or tagged
+  `!resource`, as the last one is.
   """
 {
-  orders_api => !apis { orders_api => {
-    "/orders" => !resource {
+  orders_api => !api {
+    "/orders" => {
       @doc:"Place an order. The whole body is the order."
       POST => !operation { request: order  response: order  errors: [sku_not_found]  status: 201 }
     }
-    "/orders/{id}" => !resource {
+    "/orders/{id}" => {
       @safe
       @doc:"One order, by the id in the path."
       GET => !operation { request: order_ref  response: order  errors: [order_not_found] }
@@ -34,5 +37,5 @@
         """
       GET => !operation { request: order_ref  response: order_page }
     }
-  } }
+  }
 }
