@@ -27,6 +27,7 @@ Each under ~20 KB and opening with its invariants. Pick by what you are about to
 | `TsonSchemaVersions`, `TSON-Accept-Schema`, `@Profile`, two versions of one schema | `schema-versions.md` |
 | `allowHost`/`mapHost`, `SchemaSource.ofMap`, a `!!schema` URL in a request body | `schema-sources.md` |
 | `meta-service.tn`, `io.ltr8.tson.http.api`, `TsonApiDescription`, `TsonApiCoverage`, business errors | `service-description.md` |
+| The interface layer, `tson-invoke`, the join (backlog) | `invoke.md` |
 | A `.tn` file this project owns, a `!!id`, `problem.tn`, a revision bump, a field spelling | `schema-authoring.md` |
 | `deployment.tn`, `TsonDeployment`, `/.well-known/tson-deployment`, `policy.tn` | `deployment-descriptor.md` |
 | `OrderServer`, `demo/schemas/`, `ValidatorServer`, the throughput harnesses | `demos.md` |

@@ -61,12 +61,16 @@ The four entries are in build order.
 
 - [ ] **`tson-invoke`, the language side** — A new Gradle sub-project and JPMS module (`io.ltr8.tson.invoke`) depending on
   Java alone, as `ltr8-bind` in the sibling depends on nothing but the language. It holds a descriptor for a Java interface
-  built by analysis: one method descriptor per Java method with its parameter and return classes, an invoker `MethodHandle`
-  taking a target and a request and returning the outcome, and a `java.lang.reflect.Proxy` for the other direction, turning a
-  Java call into a request and the outcome back. It holds `Class` and `MethodHandle` and nothing else, knows no schema and so
-  checks nothing: the check is a join, and the join is the layer above. Constraints: dispatch through `java.lang.invoke`,
-  never reflective invoke; Java 25, a real `module-info.java` named for its root package, no external runtime dependency. The
-  name is `invoke` because `interface` is a Java keyword and a module is named for its package.
+  built by analysis: each method described in the data view, as a request shape and an outcome union of the response and the
+  declared errors, with the language's forms (a parameter list, a return type, a thrown exception) bridged in as
+  `ltr8-bind`'s `DataClassBridge` bridges a class; an invoker `MethodHandle` taking a target and a request and returning the
+  outcome; and a `java.lang.reflect.Proxy` for the other direction, turning a Java call into a request and the outcome back.
+  It holds `Class` and `MethodHandle` and nothing else, knows no schema and so checks nothing: the check is a join, and the
+  join is the layer above. Constraints: dispatch through `java.lang.invoke`, never reflective invoke; a method taking its
+  request's fields spread across parameters binds them by name, which Java keeps only under the `-parameters` compiler flag,
+  so a spread form compiled without it is refused; Java 25, a real `module-info.java` named for its root package, no external
+  runtime dependency. The name is `invoke` because `interface` is a Java keyword and a module is named for its package. The
+  paradigm is `design/invoke.md`.
 - [ ] **`tson-service`, the description** — A new sub-project (`io.ltr8.tson.service`) depending on `tson-invoke` and
   tson-java. `meta-service.tn` moves here whole, so `!interface` and `!api` stay one layer and no reference crosses a meta
   import. So does the `io.ltr8.tson.http.api` package (`TsonApiSchema`, `TsonApiDescription`, `TsonApiCoverage`, `Route`,
@@ -128,6 +132,18 @@ The four entries are in build order.
 
 ## The description
 
+- [ ] **Rename the layer's constructors for the paradigm, before publication** — `api` names the whole description where
+  it is one projection among several, so it becomes `http`, named for its protocol as a gRPC projection would be;
+  `tson-http` then implements `!http`. `interface` names the host language's construct where the layer takes the
+  protocol's side (`design/invoke.md`): a named set of exchanges, each a request record, a response record and error
+  records. The candidate is `protocol` holding `exchange`s, Avro's term for exactly this (a protocol is a named set of
+  messages, each with request, response and errors), with `exchange` as the value type where `method` is now,
+  `ref<exchange>` in a binding, `InterfaceMethod` renamed to match, and the qualified name unchanged
+  (`orders.place_order`). `interface_name`-style roles and `@implements` follow the chosen noun. An edit in place while
+  nothing is published, a new identity after; the Java bound records, the fixtures, the notes and the module
+  `CLAUDE.md`s follow in the same change. Constraints: `operation` already names the inline endpoint, so it is not
+  available for the exchange; and `service` names the description layer and its module, so it is not available for the
+  protocol.
 - [ ] **A security scheme** — `design/service-description.md` lists `security` as the one deliberate absence that would
   disqualify the layer for a real service. Even a declared scheme name per endpoint or per api, with the reader checking
   it names a declared scheme, closes it. Constraint: an edit in place until `meta-service.tn` is published, a new
