@@ -8,9 +8,9 @@ import java.util.Optional;
 
 /**
  * What sits under a verb in a {@link Resource}: an {@link Operation} carrying its signature inline, a {@link
- * Binding} borrowing a method's, or a {@link Document} answering bytes of a media type. A sealed interface, so the
- * binder has a target for an {@code endpoint}-typed slot and a bare {@code !endpoint} has nothing to construct --
- * the schema alone would admit one, and this binding is what makes the base abstract.
+ * Binding} borrowing an exchange's, or a {@link Document} answering bytes of a media type it lists. A sealed
+ * interface, so the binder has a target for an {@code endpoint}-typed slot and a bare {@code !endpoint} has nothing
+ * to construct -- the schema alone would admit one, and this binding is what makes the base abstract.
  */
 @Typename(name = "endpoint")
 public sealed interface Endpoint permits Operation, Binding, Document {
@@ -27,6 +27,9 @@ public sealed interface Endpoint permits Operation, Binding, Document {
     /** The success status. */
     int status();
 
-    /** The encodings spoken beside TSON, which every endpoint speaks. */
-    List<Encoding> encodings();
+    /**
+     * The media types listed, as written: what an endpoint speaks beside {@code application/tson}, or the whole
+     * contract of a {@link Document}'s body. {@link Route#mediaTypes()} is the resolved set.
+     */
+    List<String> mediaTypes();
 }

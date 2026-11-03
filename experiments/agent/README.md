@@ -1,13 +1,13 @@
 # The agent -- a plan of calls, and the agent it compiles to
 
 **Status: future work, kept for what it says about the descriptor.** An agent executing a plan of calls is the
-consumer that presses hardest on an interface -- it needs a method addressable, its request and response typed, and
-its errors declared -- so sketching it is how `meta-service.tn`'s interface layer gets tested against something that
+consumer that presses hardest on a protocol -- it needs an exchange addressable, its request and response typed, and
+its errors declared -- so sketching it is how `meta-service.tn`'s protocol layer gets tested against something that
 is not HTTP, in the way a second implementation says whether an API holds up. The two layers are kept resolved and
 probed for that reason and no other. **Do not build toward them, and do not let a decision that is the agent's alone
 move the descriptor.** Nothing in `experiments/rpc/`'s order of work waits on them.
 
-The interface a plan calls is the orders example that ships as `tson-http`'s test fixture (`OrdersExamples`); each
+The protocol a plan calls is the orders example that ships as `tson-http`'s test fixture (`OrdersExamples`); each
 CALL an agent executes is one `call` of `rpc.tn` (`experiments/rpc/`). `experiments/one-level/` reads these layers as
 evidence for its own direction: a plan is a one-level document, and the VM's admission is the resolver's algorithm
 (`one-level/COMPUTATION.md`, `SLOTS.md`, and the agent section of its README).
@@ -16,8 +16,8 @@ evidence for its own direction: a plan is a one-level document, and the VM's adm
 
 A plan SOURCE (a surface grammar, still to write) is read to a `plan` -- [`agent.tn`](agent.tn), the AST -- which
 compiles deterministically to an `agent` -- [`agent-vm.tn`](agent-vm.tn), the bytecode -- that a server admits,
-verifies in one forward pass against the pinned interface, and executes. The likely deployment is a gateway agent
-processor whose calls are RPC to the box hosting each interface; the api gateway does the same for one call.
+verifies in one forward pass against the pinned protocol, and executes. The likely deployment is a gateway agent
+processor whose calls are RPC to the box hosting each protocol; the http gateway does the same for one call.
 
 `agent.tn` is the plan, resolved -- named as a resolved schema is named against its source: the surface is plan
 source, this is the plan, and an `agent` is what it compiles to. Everything the surface leaves implicit is
@@ -35,19 +35,19 @@ precedent; `rpc.tn` stays `call` and `return` only.
 
 Both resolve under this repo's identities, `…/io/ltr8/http/agent.tn` and `agent-vm.tn`. `name` is an identifier
 family declared once in `agent.tn` and imported by the VM, so [TSON-DATA] §8.2's hygiene judges a step name wherever
-it stands; a constant is `constant => dynamic`, [TSON-SCHEMA] §7.8's widest scoped instance, so a literal names its
-own type -- from this schema or from a foreign one through a nested `!!schema` -- and is validated in full, and a
-value naming no type is refused. The AST's top type is `plan`, since the VM imports the AST and two `agent`s would
-collide.
+it stands; a constant is `constant => meta.declared`, the kernel's widest declared type, so a literal names its own
+type -- from this schema or from one the document imports, a nested directive being a parse error -- and is
+validated in full, and a value naming no type is refused. The AST's top type is `plan`, since the VM imports the AST
+and two `agent`s would collide.
 
 ## Decisions this leaves, in the order to take them
 
-1. **One interface per plan, or several?** Both layers carry one `interface: uri`, where an agent is expected to call
-   across interfaces. The layer has no inheritance between interfaces, so a gateway fronting several either declares
-   one interface of its own holding their methods, which a plan names, or a plan names several and this is decided.
-2. **Business errors.** A failed call without `or` aborts with `agent_error`, whose `detail` is text. The interface
+1. **One protocol per plan, or several?** Both layers carry one `interface: uri`, where an agent is expected to call
+   across protocols. The layer has no inheritance between protocols, so a gateway fronting several either declares
+   one protocol of its own holding their exchanges, which a plan names, or a plan names several and this is decided.
+2. **Business errors.** A failed call without `or` aborts with `agent_error`, whose `detail` is text. The protocol
    declared that call's errors as typed values composing `problem`; the abort should carry the one that occurred, and
-   `agent_error` should compose `problem` like every other error here, so the api gateway and the agent processor
+   `agent_error` should compose `problem` like every other error here, so the http gateway and the agent processor
    answer failures in one shape.
 3. **`version: uint8 = 2`** on the agent duplicates what the identity `agent-vm.tn` already says ([TSON-JSON] §3.5);
    keep it only if the binary form wants a magic byte, and say so.
@@ -58,10 +58,10 @@ collide.
 
 ## Open questions
 
-**Which namespace may a document bind?** `!!schema` binds the type namespace and `!name` resolves against it, one
-hop. A plan or batch document wants to bind an *interface* -- to say `!place_order { request: { … } }` and have the
-step checked against the method -- and cannot: `place_order` is a key inside `orders`, not a type name, and a
-qualified name stands only at a `ref<T>` slot in a schema. A reference in a data document is open, with the
+**Which namespace may a document bind?** `!!import` binds the type namespace and `!name` resolves against it, one
+hop. A plan or batch document wants to bind a *protocol* -- to say `!place_order { request: { … } }` and have the
+step checked against the exchange -- and cannot: `place_order` is a key inside `orders`, not a type name, and a
+qualified name stands only at a `meta.ref<T>` slot in a schema. A reference in a data document is open, with the
 one-level work (`experiments/one-level/README.md`, "The reference atom"); the URL namespace being hierarchical
 (`/orders/{id}/items` under `/orders/{id}`) while a resource key in `meta-service.tn` is a flat template is the same
 question, and one answer should serve both.

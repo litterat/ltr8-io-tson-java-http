@@ -5,19 +5,27 @@ validator demo. Current form only. The adapter contract is `design/adapters.md`.
 
 **Invariants**
 
-- The three order servers are the same server: same routes, same schemas, same behaviour, one copy of the schemas in
+- The order servers are the same server: same routes, same schemas, same behaviour, one copy of the schemas in
   `demo/schemas/`. Each adapter's `OrderServerTest` drives the real demo and asserts what its printed `curl` commands
   claim.
 - A `com.sun.net.httpserver` with no executor is serial; the JDK demo sets a virtual-thread executor, not a pool.
 - The validator takes the schema from the request, so it builds a fresh `Tson` per request, fetches nothing, answers a
   non-conforming document 200, and applies its descriptor's policy to the probe and not to the envelope.
 - The validator is JDK-only on purpose: it tests the library, not the adapters.
+- Each server builds one bind context, `TsonBindings.of(TsonApiSchema.bindingsWith(bindings))`: its description's
+  value entries and its orders bind through the same map.
 
 ## Demo servers
 
 Each adapter has an order server, and they are the same server: same routes, same schema, same behaviour, so
-the same `curl` commands work against all three. Starting one prints what to try. The validator below is a
+the same `curl` commands work against each. Starting one prints what to try. The validator below is a
 second demo, on the JDK adapter only.
+
+**One bind context, the description's and the application's.** A server publishes a description of itself
+(`orders-api-1.tn`, importing `meta-service.tn`), and the `Tson` that resolves it binds the description's value
+entries with the same context it binds an order with (`design/binding.md`). So each demo merges its own bindings
+with the vocabulary's, `TsonBindings.of(TsonApiSchema.bindingsWith(bindings))`, and hands that one context to
+`ProcessorConfig.withDataBindContext`; the validator does the same for `validate-api-1.tn`.
 
 ```
 ./gradlew :tson-http-jdk:runDemo
@@ -66,7 +74,11 @@ the enum by `ValidatorServerTest.thePagesUndeterminedSetMatchesTheEnum`.
 other identity, because a reference in an untrusted document is an untrusted URL and an endpoint that followed
 one would be a request forger for anyone who could reach it.
 
-**It runs under a deployment descriptor, and the policy applies to the probe and not to the envelope.** That
+**It runs under a deployment descriptor, and the policy applies to the probe and not to the envelope.**
+`validator-deployment.tn` is a data document: it imports `deployment.tn` and its root is `!deployment { … }`. It
+states its policy whole, every `limits` member written out at `policy.tn`'s default so that no limit rests on a
+default the file does not show, and the profile it publishes at `/.well-known/tson-deployment` writes every limit,
+from the policy in force (`design/deployment-descriptor.md`). That
 split is forced by what a validator is: a descriptor states one process's policies, but applying the token
 policy to the envelope would refuse a request whose `data` field merely *contains* a mixed-script value — so
 the one service that exists to give a verdict on such a document could never be asked about one. Text a

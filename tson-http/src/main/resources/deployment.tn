@@ -1,8 +1,6 @@
-!!id:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
-!!meta:"https://tson.io/2026/38/m/meta.tn"
-!!import:"https://tson.io/2026/38/m/core.tn"
-!!import:"https://tson.io/2026/38/m/policy.tn"
-!!import:"https://tson.io/2026/38/m/net.tn"
+!!id:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
+!!import:"https://tson.io/2026/39/m/core.tn"
+!!import:"https://tson.io/2026/39/m/policy.tn"
 @doc:"""
   A deployment descriptor: how ONE INSTANCE is configured, as against what a document must be (a schema)
   or what an endpoint offers (an API description).
@@ -41,13 +39,13 @@
   Rule 2 is why `acceptance_profile` below is a separate type rather than this one served as-is: what a
   counterparty may see is a PROJECTION, derived from what the processor enforces, never the descriptor.
 
-  The policy a descriptor states is policy.tn's `policy`, COMPLETE, and applied exactly as written: what is
+  The policy a descriptor states is policy.tn's `policy.processor`, COMPLETE, and applied exactly as written: what is
   in the file is what runs. There are no partial overrides falling back to the library's defaults, because a
   default is the library's to move, and a security setting whose effect can shift under a library upgrade
   with no diff to the descriptor is the silent relaxation §8.2 exists to prevent. A descriptor that states
   no policy leaves the library's defaults alone; one that states a policy states all of it.
   """
-{
+!schema {
   @doc:"""
     Where this instance listens. Absent members leave the caller's own defaults alone.
 
@@ -84,7 +82,7 @@
   deployment => {
     name:          text
     listener?:     listener
-    policy?:       policy
+    policy?:       policy.processor
     schema_hosts?: set<host>
   }
 
@@ -113,6 +111,6 @@
     """
   acceptance_profile => {
     name:   text
-    policy: policy
+    policy: policy.processor
   }
 }

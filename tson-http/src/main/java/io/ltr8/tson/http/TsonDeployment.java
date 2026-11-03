@@ -27,8 +27,8 @@ import java.util.Optional;
  * <p>The third artifact kind, beside a schema (what a document must be) and an API description (what an
  * endpoint offers). {@code deployment.tn} carries the argument for why the [TSON-DATA] §8.2 policies can
  * live in neither of the other two, and the bundled {@code policy.tn} is the policy's vocabulary. A descriptor
- * states a {@code policy.tn} {@code policy}, complete, and {@link #profile} publishes the policy in force in the
- * same shape.
+ * states a {@code policy.processor}, complete, and {@link #profile} publishes the policy in force in the same
+ * shape.
  *
  * <p><b>Two rules this class exists to enforce by shape rather than by documentation.</b>
  *
@@ -53,7 +53,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
                              @Field("schema_hosts") List<String> schemaHosts) {
 
     /** The schema a descriptor names. Published like any other, unlike the descriptors it governs. */
-    public static final String ID = "https://tson.io/2026/38/io/ltr8/http/deployment.tn";
+    public static final String ID = "https://tson.io/2026/39/io/ltr8/http/deployment.tn";
 
     private static final String SOURCE = readResource("/deployment.tn");
 
@@ -61,11 +61,11 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
             "deployment", TsonDeployment.class,
             "acceptance_profile", AcceptanceProfile.class,
             "listener", Listener.class,
-            "restriction_level", RestrictionLevel.class,
-            "policy", Policy.class,
-            "identifier_policy", Policy.Identifiers.class,
-            "script_policy", Policy.Scripts.class,
-            "limits", Policy.Limits.class);
+            "policy.restriction_level", RestrictionLevel.class,
+            "policy.processor", Policy.class,
+            "policy.identifier_policy", Policy.Identifiers.class,
+            "policy.script_policy", Policy.Scripts.class,
+            "policy.limits", Policy.Limits.class);
 
     /**
      * An optional list a document omits arrives as {@code null}, and the binder does not normalise it — the
@@ -89,27 +89,27 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
     }
 
     /**
-     * A processor's whole policy, in the shape the bundled {@code policy.tn} declares — the shape {@code tson
+     * A processor's whole policy, {@code policy.tn}'s {@code policy.processor} — the shape {@code tson
      * policy} and the CLI's report state one in, so a descriptor, a profile and a report are one format.
      *
      * <p><b>Complete.</b> Every part is stated, a default as much as a setting: a descriptor because what is in
      * the file is what runs, and a profile because a counterparty cannot be expected to know what any library
      * defaults to.
      */
-    @Typename(name = "policy")
+    @Typename(name = "policy.processor")
     public record Policy(@Field("identifier_policy") Identifiers identifierPolicy,
                          @Field("token_policy") Scripts tokenPolicy,
                          @Field("unicode_data_version") Optional<String> unicodeDataVersion,
                          Limits limits) {
 
-        /** {@code policy} as this processor enforces it, data version included. */
+        /** {@code policy.processor} as this processor enforces it, data version included. */
         public static Policy of(ProcessorPolicy policy) {
             IdentifierPolicy identifiers = policy.identifierPolicy();
             return new Policy(
                     new Identifiers(identifiers.scripts().level(), identifiers.isPerSegment(),
                             identifiers.appliesSkeletonDistinctness(), aliases(identifiers.scripts())),
                     new Scripts(policy.tokenPolicy().level(), aliases(policy.tokenPolicy())),
-                    Optional.of(policy.unicodeDataVersion()), new Limits(policy.limits().maxDepth()));
+                    Optional.of(policy.unicodeDataVersion()), Limits.of(policy.limits()));
         }
 
         /** This policy as the library's own type, stamped with the data version this processor carries. */
@@ -121,14 +121,14 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
             }
             return ProcessorPolicy.of(identifiers.withSkeletonDistinctness(identifierPolicy.skeletonDistinctness()),
                     scriptPolicy(tokenPolicy.level(), tokenPolicy.permitting()),
-                    LimitsPolicy.defaults().withMaxDepth(limits.maxDepth()));
+                    limits.toLimitsPolicy());
         }
 
         /**
-         * {@code policy.tn}'s {@code identifier_policy}: a level, whether it applies to each segment of a name,
-         * the look-alike rule's own switch, and the script combinations admitted over the level.
+         * {@code policy.tn}'s {@code policy.identifier_policy}: a level, whether it applies to each segment of a
+         * name, the look-alike rule's own switch, and the script combinations admitted over the level.
          */
-        @Typename(name = "identifier_policy")
+        @Typename(name = "policy.identifier_policy")
         public record Identifiers(RestrictionLevel level, @Field("per_segment") boolean perSegment,
                                   @Field("skeleton_distinctness") boolean skeletonDistinctness,
                                   List<List<String>> permitting) {
@@ -139,11 +139,11 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
         }
 
         /**
-         * {@code policy.tn}'s {@code script_policy}: a level and the script combinations admitted over it. It
-         * has no unit because a value has no segments — {@code _} and {@code -} separate a name's words and are
-         * ordinary characters in a value — which the library makes unwritable rather than refused.
+         * {@code policy.tn}'s {@code policy.script_policy}: a level and the script combinations admitted over it.
+         * It has no unit because a value has no segments — {@code _} and {@code -} separate a name's words and
+         * are ordinary characters in a value — which the library makes unwritable rather than refused.
          */
-        @Typename(name = "script_policy")
+        @Typename(name = "policy.script_policy")
         public record Scripts(RestrictionLevel level, List<List<String>> permitting) {
             /** @throws IllegalArgumentException if {@code permitting} names something that is not a script */
             public Scripts {
@@ -152,12 +152,63 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
         }
 
         /**
-         * {@code policy.tn}'s {@code limits}: [TSON-DATA] §9.1's resource limits, what this processor will
-         * <em>spend</em> reading a document where the two policies are what it will <em>admit</em>. {@code
-         * max_depth} is the only member because it is the only limit the library enforces.
+         * {@code policy.tn}'s {@code policy.limits}: [TSON-DATA] §9.1's resource limits and §11.5's resolution
+         * bounds, what this processor will <em>spend</em> reading a document where the two policies are what it
+         * will <em>admit</em>. One component per member, in the library's {@link LimitsPolicy} order.
+         *
+         * <p><b>Every component is a {@code long}</b>, because every member is a {@code policy.limit}, an {@code
+         * int64} from 1 to 2<sup>63</sup>-1, and this record must hold whatever a valid descriptor states.
+         * {@link LimitsPolicy} holds a size as a {@code long} and a count or depth as an {@code int}, so the
+         * conversion is lossless both ways for a size, and {@link #toLimitsPolicy} caps a count or depth past
+         * {@link Integer#MAX_VALUE} at {@link Integer#MAX_VALUE}, as the library holds such a limit: the widest
+         * this processor counts it in. A profile states the limit in force, so a capped limit is published as
+         * the cap.
          */
-        @Typename(name = "limits")
-        public record Limits(@Field("max_depth") int maxDepth) {
+        @Typename(name = "policy.limits")
+        public record Limits(@Field("max_depth") long maxDepth,
+                             @Field("max_token_length") long maxTokenLength,
+                             @Field("max_text_length") long maxTextLength,
+                             @Field("max_numeric_literal_length") long maxNumericLiteralLength,
+                             @Field("max_binary_size") long maxBinarySize,
+                             @Field("max_document_size") long maxDocumentSize,
+                             @Field("max_elements") long maxElements,
+                             @Field("max_entries") long maxEntries,
+                             @Field("max_fields") long maxFields,
+                             @Field("max_annotations") long maxAnnotations,
+                             @Field("max_values") long maxValues,
+                             @Field("max_import_closure") long maxImportClosure,
+                             @Field("max_schema_entries") long maxSchemaEntries,
+                             @Field("max_alias_chain") long maxAliasChain,
+                             @Field("max_supertype_chain") long maxSupertypeChain,
+                             @Field("max_materialisation_depth") long maxMaterialisationDepth,
+                             @Field("max_wait_depth") long maxWaitDepth) {
+
+            /** {@code limits} as this record, every value as the library holds it. */
+            public static Limits of(LimitsPolicy limits) {
+                return new Limits(limits.maxDepth(), limits.maxTokenLength(), limits.maxTextLength(),
+                        limits.maxNumericLiteralLength(), limits.maxBinarySize(), limits.maxDocumentSize(),
+                        limits.maxElements(), limits.maxEntries(), limits.maxFields(), limits.maxAnnotations(),
+                        limits.maxValues(), limits.maxImportClosure(), limits.maxSchemaEntries(), limits.maxAliasChain(),
+                        limits.maxSupertypeChain(), limits.maxMaterialisationDepth(), limits.maxWaitDepth());
+            }
+
+            /**
+             * This record as the library's own type, a count or depth past {@link Integer#MAX_VALUE} capped there.
+             *
+             * @throws IllegalArgumentException if a limit is below 1, which no descriptor read against {@code
+             *                                  policy.limit} states
+             */
+            public LimitsPolicy toLimitsPolicy() {
+                return new LimitsPolicy(capped(maxDepth), maxTokenLength, maxTextLength,
+                        capped(maxNumericLiteralLength), maxBinarySize, maxDocumentSize, capped(maxElements),
+                        capped(maxEntries), capped(maxFields), capped(maxAnnotations), capped(maxValues),
+                        capped(maxImportClosure), capped(maxSchemaEntries), capped(maxAliasChain),
+                        capped(maxSupertypeChain), capped(maxMaterialisationDepth), capped(maxWaitDepth));
+            }
+
+            private static int capped(long limit) {
+                return Math.clamp(limit, Integer.MIN_VALUE, Integer.MAX_VALUE);
+            }
         }
 
         /** Each admitted combination as UAX #24 aliases, sorted so two policies compare as text. */

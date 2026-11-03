@@ -1,47 +1,46 @@
 # Naming the governing schema in an HTTP header
 
-A proposal, written up for the spec author. **Implemented in this repo** — see §6 for what it took.
+The design record behind [TSON-JSON] §3.5. **Implemented in this repo**; §6 says what it took and how the
+implementation reads each rule.
 
-**Adopted in 2026 Revision 36.** [TSON-JSON] §3.5 defines `TSON-Schema` for every TSON-carrying body, and
-[TSON-DATA] §7.1 points there: an RFC 9651 String Item holding a schema reference, a projection of the
-document's binding rather than an alternative to it, agreement with an in-band binding by canonical identity
-with disagreement an error rather than a precedence question, a sender's claim and never a receiver's
-instruction — and `TSON-Accept-Schema` (§7 below) as the reverse direction, a List of Strings weighted by `q`.
-Those are the rules this document settled, and the implementation here already obeys them; the spec now cites
-its own section for each, and so should anything new in this repo.
+**The spec's rules.** [TSON-JSON] §3.5 defines `TSON-Schema` for every TSON-carrying body, and [TSON-DATA] §7.1
+points there. The field is an RFC 9651 **List of Strings**, each member a schema reference exactly as an `!!import`
+and each element of a JSON body's `$import` hold one; a List of one String serialises exactly as a single String Item,
+so the common one-schema message is spelt the same either way. It is a projection of the document's binding, not an
+alternative to it. Where it and an in-band binding (`$import`, or a text body's `!!import`s) are both present they
+MUST agree **as sets of canonical identities** (§3.4's terms; [TSON-DATA] §2.2.1), and disagreement is an error, never
+a precedence question. It is a sender's claim and never a receiver's instruction. `TSON-Accept-Schema` (§7 below) is
+the reverse direction, a List of Strings weighted by `q`. Cite §3.5 for each rule; this document keeps the argument
+for them.
 
-**One seam remains, and it is upstream's.** Part 3's JSON encoding travels as `application/tson+json` and is
-read here by tson-java's JSON reader (`TsonHttpCodec.acceptingJson()`), through §3.4's out-of-band route: the
-schema from this header, the root type from the route. The in-band route — `$schema`/`$type` on the root object
-— is not built in that reader yet, so rule 3's agreement check has nothing to compare against for a JSON body,
-and a body carrying both is refused rather than checked. `UPSTREAM.md` carries it.
-
-The rest of this document is kept as the design record: the argument for each rule, and what building it took.
+**One seam is upstream's.** A JSON body is read here by tson-java's JSON reader (`TsonHttpCodec.acceptingJson()`)
+through §3.4's out-of-band route: the schema from this header, the root type from the route. The in-band route — a
+root annotation object led by `$import` and `$type` — is declined by that reader as `NOT_IMPLEMENTED`, so the
+agreement check has nothing to compare against for a JSON body. `UPSTREAM.md` carries it.
 
 **Decided:**
 
 - **A schemaless body stays valid TSON over HTTP.** The requirement is endpoint policy, not a format rule: *a
   schema-governed endpoint MUST reject a document naming no schema.* Class 1 remains sendable as
   `application/tson`.
-- **The field is `TSON-Schema`, and its value is an RFC 9651 sf-string** — quoted. Which matches `!!schema`,
-  whose argument must also be quoted: §7.1 now lists "URIs with a scheme" among the content kinds whose
-  quoting rule is *always*, never a per-character scan. One rule, both ends.
-
-- **The header and the directive may both appear, and must then agree** (§3.2). A message can be routable and
+- **The field is `TSON-Schema`, and its members are RFC 9651 sf-strings** — quoted. Which matches `!!import`,
+  whose argument must also be quoted: §7.1 lists "URIs with a scheme" among the content kinds whose quoting rule
+  is *always*, never a per-character scan. One rule, both ends.
+- **The header and the body's binding may both appear, and must then agree** (§3.2). A message can be routable and
   self-contained at once.
 - **The header is defined for any body, not only `application/tson`** (§3.3) — which is what gives a JSON
-  payload a way to name its governing schema at all.
+  payload an out-of-band carrier.
 
 **The rules, settled:**
 
-1. `TSON-Schema` is an RFC 9651 structured field: an Item whose bare-item is an **sf-string** carrying a schema
-   reference. Quoted, always.
+1. `TSON-Schema` is an RFC 9651 structured field whose members are **sf-strings** carrying schema references.
+   Quoted, always.
 2. It may appear on a request or a response, and on a body of any media type.
-3. If the body carries `!!schema` and the header is present, their **canonical identities** ([TSON-DATA] §2.2.1
-   — scheme and any `?sha256=` pin do not count) MUST be equal. A mismatch is an error, never a precedence
-   question.
-4. Where the body cannot carry a directive — JSON — the header is the only channel and is authoritative. Rule 3
-   simply has nothing to compare against.
+3. If the body binds schemas too (`!!import`, `$import`) and the header is present, the two MUST name the same
+   **set of canonical identities** ([TSON-DATA] §2.2.1 — scheme and any `?sha256=` pin do not count, nor do order
+   and repetition). A mismatch is an error, never a precedence question.
+4. Where the body carries no binding the header is the only channel and is authoritative. Rule 3 has nothing to
+   compare against.
 5. A body naming no schema by either channel is schemaless (Class 1) and still valid TSON. **A schema-governed
    endpoint MUST reject it**; that is endpoint policy, not a property of the media type.
 
@@ -50,18 +49,18 @@ The rest of this document is kept as the design record: the argument for each ru
 A header carrying the identity of the schema that governs the message body:
 
 ```
-TSON-Schema: "https://schemas.example.com/2026/38/app/order-1.tn"
+TSON-Schema: "https://schemas.example.com/2026/39/app/order-1.tn"
 ```
 
-**It is a projection of `!!schema`, not an alternative to it.** That framing is the whole proposal. The body
-directive stays the format's own mechanism; the header exists so that things which cannot or should not parse a
-body can still act on what governs it.
+**It is a projection of the body's binding, not an alternative to it.** That framing is the whole proposal. The
+body's `!!import` stays the format's own mechanism; the header exists so that things which cannot or should not
+parse a body can still act on what governs it.
 
-The case for it was weak when this project first considered it, and two things changed:
+The case for it was weak when this project first considered it, and two things made it stronger:
 
-- **`describing()` landed**, so a TSON response now names its own schema in-band. That removed one of the two
-  original arguments outright — and removed it *better* than a header would have.
-- **Version routing was built**, which produced a stronger argument than either original one. See §2.
+- **`describing()`**, so a TSON response names its own schema in band. That answers one of the two original
+  arguments outright — and answers it *better* than a header would have.
+- **Version routing**, which produced a stronger argument than either original one. See §2.
 
 ## 2. Routing is the argument
 
@@ -79,8 +78,8 @@ is a job for a gateway, and:
   performed only to decide where the body goes. A header removes the need for it in the routing path.
 
 **Honest limit: a header does not save the origin server from peeking.** If header and body can disagree, the
-endpoint must still read the directive to check. The saving is at the network, not at the server — except for a
-JSON body, where the header is the only possible source and there is nothing to check against.
+endpoint must still read the body's `!!import`s to check. The saving is at the network, not at the server — except for a
+JSON body, where the header is the only source this implementation reads.
 
 **Precedent.** CloudEvents does exactly this. `dataschema` is a context attribute, and the HTTP binding maps
 every context attribute to a `ce-`-prefixed header in binary content mode — so `ce-dataschema` carries a schema
@@ -90,9 +89,9 @@ URI in a header precisely so intermediaries can handle a message without opening
 
 As proposed:
 
-1. If the header is present, the body MUST NOT carry `!!schema`.
+1. If the header is present, the body MUST NOT carry its own binding directive (`!!import`).
 2. Both directions: requests and responses.
-3. If the header is absent, then for `application/tson` the `!!schema` directive MUST be present.
+3. If the header is absent, then for `application/tson` the body MUST carry one.
 4. If both are present they MUST match, or it is an error.
 
 Rules 2 and 4 are straightforwardly right. Rule 4 matches what [TSON-DATA] §2.2.1 already does for conflicting
@@ -152,20 +151,19 @@ find out they are wrong.
 
 Not in the original rule set, and it is where the header earns the most.
 
-A JSON body cannot carry `!!schema` at all: directive syntax is not valid JSON, and §6's JSON reader defines a
-mapping from JSON's constructs to this model without adding one for a directive.
-So for `Content-Type: application/json`, the header is not a projection of anything — it is the **only**
-channel, and the only way a JSON payload can say which TSON schema governs it. That is the structured-output
-case the format is aimed at.
+A JSON body has no directive syntax. [TSON-JSON] gives it an in-band binding of its own, a root annotation object
+led by `$import`, but the expected production route is §3.4's out-of-band one: a bare value, its binding supplied
+from outside. So for `Content-Type: application/json`, the header is usually not a projection of anything in the
+body — it is the **only** channel, and the only way a JSON payload says which TSON schema governs it. That is the
+structured-output case the format is aimed at.
 
 Defined only for `application/tson`, that case would have no answer and implementations would each invent one.
-Defined for any body, §3.2's matching rule simply never applies to JSON — there is nothing in the body to match
-against — and the header is authoritative by necessity rather than by choice.
+Defined for any body, §3.2's matching rule applies to JSON exactly where the body carries `$import`, and otherwise
+the header is authoritative by necessity rather than by choice.
 
-A consequence worth stating in the spec: this makes `TSON-Schema` the JSON-compatibility story's missing half.
-§6 says a JSON reader validates on the same terms as this notation, under a schema; this is how a JSON body
-says *which* schema that is. Revision 36 settled it the same way: [TSON-JSON] §3.4 names out-of-band binding
-as the JSON encoding's expected production route, and §3.5 makes this header its HTTP carrier.
+This makes `TSON-Schema` the JSON-compatibility story's missing half: a JSON reader validates on the same terms
+as this notation, under a schema, and this is how a JSON body says *which* schema that is. [TSON-JSON] §3.4 names
+out-of-band binding as the JSON encoding's expected production route, and §3.5 makes this header its HTTP carrier.
 
 ## 4. Naming, and how one is meant to be named
 
@@ -183,7 +181,7 @@ There is a defined procedure, and three RFCs govern it.
 
 | Name | For | Against |
 |---|---|---|
-| `TSON-Schema` | Specific; obviously scoped; one name for the same concept as `!!schema`; registerable without claiming general territory. Reads correctly for a JSON body too — it names a *TSON schema*, whatever the body is. | Needs registration (as does any of these). |
+| `TSON-Schema` | Specific; obviously scoped; one name for the concept a body's `!!import` states; registerable without claiming general territory. Reads correctly for a JSON body too — it names a *TSON schema*, whatever the body is. | Needs registration (as does any of these). |
 | `Content-Schema` | Pleasing symmetry with `Content-Type`; format-neutral, so it could carry a JSON Schema URL too. Semantically it *is* representation metadata, which is what `Content-*` means. | Claims a general-purpose name for a whole-industry concern — a much bigger ask at registration, and a much bigger thing to get wrong. |
 | `ce-dataschema` | Already exists and is already routed on by CloudEvents-aware infrastructure. | The `ce-` prefix means "this message is a CloudEvent", which a plain TSON request is not. Borrowing it misrepresents the message. |
 
@@ -192,13 +190,14 @@ field name alongside it is coherent rather than extra machinery.
 
 ## 5. Syntax — and a trap that only shows up later
 
-Define it as an RFC 9651 structured field: an **Item** whose bare-item is an **sf-string**.
+Define it as an RFC 9651 structured field whose members are **sf-strings**: a List, which for one schema is
+spelt exactly as a single String Item.
 
 ```
-TSON-Schema: "https://schemas.example.com/2026/38/app/order-1.tn"
+TSON-Schema: "https://schemas.example.com/2026/39/app/order-1.tn"
 ```
 
-**DECIDED: sf-string, so the quotes are mandatory.** Which also matches the directive: `!!schema`'s argument
+**DECIDED: sf-string, so the quotes are mandatory.** Which also matches the directive: `!!import`'s argument
 must be quoted too, because a URI contains `:` and `/` and falls outside §7.1's unquoted-token profile. Same
 rule at both ends, for the same reason.
 
@@ -217,21 +216,39 @@ never happens.
 
 ## 6. What it took
 
-- **`TsonSchemaHeader`** — the field name, a strict sf-string parse and format, and `resolve(body, fieldValue)`,
-  which reads both channels and enforces rule 3. Everything about the header in one place.
-- **`TsonSchemaVersions.route(body, fieldValue)`** — routes on whichever channel names a schema.
+- **`TsonSchemaHeader`** — the field name, a strict parse of an RFC 9651 List of Strings and its format, and
+  `resolve(peek, fieldValue)`, which reads the header against the peeked body's `header().imports()`. Everything
+  about the header in one place.
+- **`TsonSchemaVersions.route(body, fieldValue, contentType)`** — routes on whichever channel names a schema; a JSON
+  body on the header alone, unpeeked.
 - **`TsonHttpCodec.acceptingJson()`** — a derived codec that also admits `application/json`. Opt-in, because
-  "reads TSON" and "reads JSON" are different promises and an endpoint wanting only the first should go on
-  answering 415 (it does, by default, and a test pins that).
-- **`TsonDocumentPeek` stays.** Verification needs it, and so does any endpoint the header does not reach.
+  "reads TSON" and "reads JSON" are different promises and an endpoint wanting only the first goes on answering
+  415 (it does, by default, and a test pins that).
+- **`TsonDocumentPeek`** — verification needs it, and so does any endpoint the header does not reach.
 
-**A JSON body is now readable, which it never was before.** The header names the schema; the root type comes
-from the route, because a JSON body carries no type-ref either — the same two-part requirement as writing a
-self-describing document, for the same reason. `{"sku": "ABC-1", "quantity": 3, "currency": "AUD"}` posted with
-a `TSON-Schema` header validates against `order-2.tn`, and an incomplete one comes back 400 with every
-diagnostic. Before this, JSON appeared in this repo only as something to answer 415 to.
+**How the implementation reads §3.5.**
 
-**The honest limit held.** `route` still peeks: a header cannot be trusted over a directive that contradicts
+- **The field is a List.** `TsonSchemaHeader.parse` reads an RFC 9651 List of Strings, members separated by commas
+  and each a quoted sf-string. A member carrying a parameter, an empty member, and a present field holding no member
+  are each a 400 `malformed-schema-header`; a blank field is an absent one, as RFC 9651 serialises an empty List by
+  leaving the field out. `TSON-Accept-Schema` shares the List parsing and differs only in admitting `q`.
+- **Agreement is set equality.** Where header and body are both present, `resolve` compares their canonical
+  identities as sets, scheme, pin, order and repetition carrying nothing. Equal sets govern, spelt as the body spells
+  them; any difference, one import more or one fewer, is a 400 `conflicting-schema` listing both sides. One side alone
+  governs as its set; neither is a schemaless body. `TsonHttpCodec.readObjectAs`/`readTreeAs` hold the schemas a route
+  states to the same rule, and read under several through the reader's `withImports`.
+- **The version is a member of the set.** `TsonSchemaVersions.route` takes the one member of the governing set this
+  endpoint serves as the version, and refuses a set naming none of its versions or two of them; the other members are
+  schemas the body also uses.
+- **A response writes the List.** The adapters set the field through `TsonSchemaHeader.format`, which writes a List of
+  one exactly as the single String.
+
+**A JSON body is readable.** The header names the schema; the root type comes from the route, because a bare JSON
+value carries no type-ref either — the same two-part requirement as writing a self-describing document, for the
+same reason. `{"sku": "ABC-1", "quantity": 3, "currency": "AUD"}` posted with a `TSON-Schema` header validates
+against `order-2.tn`, and an incomplete one comes back 400 with every diagnostic.
+
+**The honest limit held.** `route` still peeks: a header cannot be trusted over an `!!import` that contradicts
 it, so verification costs the same read it always did. What the header buys is that whatever routed the request
 *here* — a gateway, which will not parse a body and cannot parse a compressed one — never had to.
 
@@ -255,8 +272,8 @@ to hold one. Something has to say which version the reply is in, and only the cl
 as `Accept`'s quality values:
 
 ```
-TSON-Accept-Schema: "https://schemas.example.com/2026/38/app/order-2.tn",
-                    "https://schemas.example.com/2026/38/app/order-1.tn";q=0.5
+TSON-Accept-Schema: "https://schemas.example.com/2026/39/app/order-2.tn",
+                    "https://schemas.example.com/2026/39/app/order-1.tn";q=0.5
 ```
 
 The rules, each pinned by a test in `TsonSchemaVersionsTest`:
@@ -274,7 +291,7 @@ The rules, each pinned by a test in `TsonSchemaVersionsTest`:
    mistyped should hear about it rather than receive whatever the server preferred.
 
 **The reply needs no new field.** It names what was chosen in its own `TSON-Schema` and in the body's
-`!!schema`, so a response stays self-describing — `Accept` → `Content-Type`, exactly.
+`!!import`, so a response stays self-describing — `Accept` → `Content-Type`, exactly.
 
 **What is still open**, and is the reason this is a note rather than a proposal: how a client learns which
 versions exist before asking. An error naming them is the honest floor, and any advertisement can be stale

@@ -1,6 +1,7 @@
 package io.ltr8.tson.http;
 
 import io.ltr8.bind.DataBindContext;
+import io.ltr8.bind.DataBindException;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.CanonicalIdentity;
@@ -11,6 +12,7 @@ import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.compiler.TsonDocumentPeek;
 import io.ltr8.tson.compiler.TsonObjectWriter;
 import io.ltr8.tson.compiler.TsonTreeWriter;
+import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
 import io.ltr8.tson.json.Json;
 import io.ltr8.tson.json.JsonObjectWriter;
 import io.ltr8.tson.json.tree.JsonValue;
@@ -19,7 +21,9 @@ import io.ltr8.tson.tree.TsonValue;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -40,7 +44,7 @@ import java.util.function.Supplier;
  * See {@code CLAUDE.md}.
  *
  * <p><b>An error body says what governs it.</b> {@link #writeProblem} writes through a {@code describing}
- * writer, so a problem carries {@code !!schema:"…/problem.tn"} and reads back with no out-of-band knowledge --
+ * writer, so a problem carries {@code !!import:"…/problem.tn"} and reads back with no out-of-band knowledge --
  * and this project's own schema handler publishes that document, so the URL in it resolves. Every other write
  * is bare unless a caller asks otherwise, because the codec cannot know what governs an arbitrary object; the
  * overloads taking a schema and root type are how an application says.
@@ -84,7 +88,7 @@ public final class TsonHttpCodec {
         this.treeWriter = tson.treeWriter();
         // Built once: an error body always names problem.tn and its root type, so there is nothing per-call
         // to decide. Both arguments are required -- a bound record writes no type-ref of its own, so a
-        // !!schema without one produces a document a reader cannot select a type from.
+        // !!import without one produces a document a reader cannot select a type from.
         this.problemWriter = objectWriter.describing(TsonProblemSchema.ID, "problem");
         // Warm-up, not a correctness measure. writeProblem runs when something has already gone wrong, often
         // for many requests at once, and resolving a descriptor for the first time on that path adds latency
@@ -135,7 +139,7 @@ public final class TsonHttpCodec {
 
     /**
      * Reads a request body into a queryable tree, validating it against whatever schema applies -- the
-     * {@code !!schema} the document names, or none, in which case it is checked against base syntax and the
+     * {@code !!import} the document names, or none, in which case it is checked against base syntax and the
      * built-in type vocabulary alone.
      *
      * @param body        the request body; read incrementally and not closed here, matching {@code Tson.validate}
@@ -153,7 +157,7 @@ public final class TsonHttpCodec {
      * know what a document declares <b>before</b> choosing how to read it, on a body that cannot be read twice.
      *
      * <p>Nothing is buffered and re-fed: the header is the stream's first event, so a read handed the peek
-     * carries on from just past it. That is what makes routing on {@code !!schema} cost a request body nothing.
+     * carries on from just past it. That is what makes routing on {@code !!import} cost a request body nothing.
      *
      * <p><b>Open it here rather than through {@code Tson.begin} directly.</b> A peek belongs to the processor
      * policy it was opened under, and a reader that disagrees is refused; taking it from the codec that will
@@ -180,11 +184,13 @@ public final class TsonHttpCodec {
      * request thread. Passing an unregistered {@code schemaUri} is a server configuration error, not a client
      * error, and surfaces as a 500.
      *
-     * <p><b>A body that names a schema of its own must name this one.</b> The reader lets a stated schema
-     * override a document's {@code !!schema} and leaves the comparison to the caller, so this makes it: the body
-     * is peeked, and a {@code !!schema} disagreeing with {@code schemaUri} by canonical identity (§2.2.1 --
-     * scheme and pin do not count) is a 400 rather than a document validated against a schema it never claimed.
-     * A body naming none is read against {@code schemaUri}, which is what stating one is for.
+     * <p><b>A body that imports schemas of its own must import this one and no other.</b> The reader lets a
+     * stated schema override a document's {@code !!import}s and leaves the comparison to the caller, so this
+     * makes it: the body is peeked, and imports that are not {@code schemaUri} as a set of canonical identities
+     * (§2.2.1 -- scheme and pin do not count, nor does repetition) are a 400 rather than a document validated
+     * against a binding it never claimed. One more import than the stated schema is refused too, since the body
+     * would be read under a wider namespace than the one stated ([TSON-JSON] §3.4). A body importing nothing is
+     * read against {@code schemaUri}, which is what stating one is for.
      *
      * @throws TsonHttpException 415 if the body is not TSON, 400 if it is TSON but invalid or names another schema
      */
@@ -196,13 +202,23 @@ public final class TsonHttpCodec {
     /**
      * {@link #readTreeAs(InputStream, String, String, String)} continuing a peek this codec opened -- the shape
      * a {@code TSON-Schema} header takes, where the schema comes from the field and the root type from the
-     * route. The peek's {@code !!schema}, if it has one, must agree with {@code schemaUri}.
+     * route. The peek's {@code !!import}s, if it has any, must be {@code schemaUri} alone.
      */
     public TsonValue readTreeAs(TsonDocumentPeek body, String contentType, String schemaUri, String typeName) {
+        return readTreeAs(body, contentType, List.of(schemaUri), typeName);
+    }
+
+    /**
+     * {@link #readTreeAs(TsonDocumentPeek, String, String, String)} under several schemas, read as one namespace
+     * over their closures as a document importing all of them is ([TSON-JSON] §3.4) -- the shape a {@code
+     * TSON-Schema} List of several takes. The peek's {@code !!import}s, if it has any, must name the same set.
+     */
+    public TsonValue readTreeAs(TsonDocumentPeek body, String contentType, List<String> schemaUris,
+                                String typeName) {
         requirePeekable(contentType);
-        requireAgreement(body, schemaUri);
+        requireAgreement(body, schemaUris);
         DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
-        return require(read(() -> tson.treeReader().withSchema(schemaUri).withDiagnostics(problems)
+        return require(read(() -> tson.treeReader().withImports(schemaUris).withDiagnostics(problems)
                 .readAs(body, typeName)), problems);
     }
 
@@ -263,8 +279,8 @@ public final class TsonHttpCodec {
 
     /**
      * {@link #readObject} against a stated schema and root type -- the route's, or a {@code TSON-Schema}
-     * header's. Same requirements as {@link #readTreeAs}, including that a TSON body naming a schema of its own
-     * names this one. A JSON body names none, so it is read from the stream.
+     * header's. Same requirements as {@link #readTreeAs}, including that a TSON body importing schemas of its own
+     * imports this one and no other. A JSON body names none, so it is read from the stream.
      *
      * @throws TsonHttpException 415 if the body is not TSON, 400 if it is TSON but invalid or names another schema
      */
@@ -281,42 +297,59 @@ public final class TsonHttpCodec {
     /**
      * {@link #readObjectAs(InputStream, String, String, String, Class)} continuing a peek this codec opened -- a
      * TSON body whose header has been read, bound against a stated type with the body read once. The peek's
-     * {@code !!schema}, if it has one, must agree with {@code schemaUri}.
+     * {@code !!import}s, if it has any, must be {@code schemaUri} alone.
      */
     public <T> T readObjectAs(TsonDocumentPeek body, String contentType, String schemaUri, String typeName,
                               Class<T> targetClass) {
+        return readObjectAs(body, contentType, List.of(schemaUri), typeName, targetClass);
+    }
+
+    /**
+     * {@link #readObjectAs(TsonDocumentPeek, String, String, String, Class)} under several schemas, read as one
+     * namespace over their closures as a document importing all of them is ([TSON-JSON] §3.4). The peek's
+     * {@code !!import}s, if it has any, must name the same set.
+     */
+    public <T> T readObjectAs(TsonDocumentPeek body, String contentType, List<String> schemaUris, String typeName,
+                              Class<T> targetClass) {
         requirePeekable(contentType);
-        requireAgreement(body, schemaUri);
+        requireAgreement(body, schemaUris);
         DiagnosticsCollector problems = DiagnosticsReceiver.collecting();
-        return require(read(() -> tson.objectReader().withSchema(schemaUri).withDiagnostics(problems)
+        return require(read(() -> tson.objectReader().withImports(schemaUris).withDiagnostics(problems)
                 .readAs(body, typeName, targetClass)), problems);
     }
 
     /**
-     * A 400 where a TSON body's own {@code !!schema} names a schema other than the one stated for it. Both are
-     * a claim about what governs the body, and silent precedence is how a document is validated against a schema
-     * nobody chose -- the posture [TSON-JSON] §3.5 takes for the header, applied to the route's statement too.
-     * A header that failed to read names no schema, so it is left to the read, which reports the failure with
-     * the rest.
+     * A 400 where a TSON body imports schemas and they are not the set stated for it, compared as sets of
+     * canonical identities (§2.2.1 -- scheme and pin do not count, nor do order and repetition). A body's imports
+     * are its claim about what governs it, and silent precedence is how a document is validated against a schema
+     * nobody chose -- the posture [TSON-JSON] §3.4 and §3.5 take for an out-of-band binding, applied to the
+     * route's statement too. The sets are compared whole: a body importing one schema more than was stated would
+     * be read under a wider namespace than the one agreed. A body importing none is read against the stated
+     * schemas, which is what stating them is for. A header that failed to read imports nothing, so it is left to
+     * the read, which reports the failure with the rest.
      */
-    private static void requireAgreement(TsonDocumentPeek body, String schemaUri) {
-        body.header().schema().ifPresent(named -> {
-            if (!sameIdentity(named, schemaUri)) {
-                throw new TsonHttpException(TsonHttpException.BAD_REQUEST,
-                        TsonHttpException.TYPES + "conflicting-schema", "Conflicting schema",
-                        "this body is read as '" + schemaUri + "' and its !!schema names '" + named
-                                + "'; at most one of them governs it", List.of(), null);
-            }
-        });
+    private static void requireAgreement(TsonDocumentPeek body, List<String> stated) {
+        List<String> imports = body.header().imports();
+        if (imports.isEmpty() || identities(imports).equals(identities(stated))) {
+            return;
+        }
+        throw new TsonHttpException(TsonHttpException.BAD_REQUEST,
+                TsonHttpException.TYPES + "conflicting-schema", "Conflicting schema",
+                "this body is read as " + TsonSchemaHeader.quoted(stated) + " and it imports "
+                        + TsonSchemaHeader.quoted(imports) + "; at most one of them governs it", List.of(), null);
     }
 
-    /** Equal canonical identities; a reference that is not an identity agrees with nothing. */
-    private static boolean sameIdentity(String named, String stated) {
-        try {
-            return CanonicalIdentity.canonicalize(named).equals(CanonicalIdentity.canonicalize(stated));
-        } catch (RuntimeException notAnIdentity) {
-            return false;
+    /** Canonical identities, as a set; a reference that is no identity stands for itself and agrees with nothing. */
+    private static Set<String> identities(List<String> references) {
+        Set<String> identities = new HashSet<>();
+        for (String reference : references) {
+            try {
+                identities.add(CanonicalIdentity.canonicalize(reference));
+            } catch (RuntimeException notAnIdentity) {
+                identities.add(reference);
+            }
         }
+        return identities;
     }
 
     /**
@@ -342,11 +375,11 @@ public final class TsonHttpCodec {
 
     /**
      * A bound object as a <b>self-describing</b> response body: the document names {@code schemaUri} in a
-     * {@code !!schema} directive and {@code rootTypeName} as its root type-ref, so a client reads it back
+     * {@code !!import} directive and {@code rootTypeName} as its root type-ref, so a client reads it back
      * without being told either out of band.
      *
      * <p>Both are required and neither is guessed. A bound record writes no type-ref of its own, so a
-     * {@code !!schema} alone yields a document whose reader cannot select a type -- half self-describing is not
+     * {@code !!import} alone yields a document whose reader cannot select a type -- half self-describing is not
      * self-describing.
      */
     public byte[] write(Object value, String schemaUri, String rootTypeName) {
@@ -561,7 +594,7 @@ public final class TsonHttpCodec {
      * [TSON-JSON] §3.4 has two routes, and tson-java builds only the out-of-band one: the schema comes from the
      * {@code TSON-Schema} header ({@link TsonSchemaHeader}) and the root type from the route, so reading one
      * against a schema is {@link #readObjectAs} or {@link #readJsonTreeAs}. The in-band route, a root annotation
-     * object carrying {@code $schema} and {@code $type}, is refused by that reader today.
+     * object led by {@code $import}, is declined by that reader today.
      *
      * <p><b>Bind mode serves both encodings; tree mode is one per encoding.</b> {@link #readObject} and
      * {@link #readObjectAs} read whichever the {@code Content-Type} names. A tree is the encoding's own model --
@@ -575,8 +608,35 @@ public final class TsonHttpCodec {
     public TsonHttpCodec acceptingJson() {
         return new TsonHttpCodec(tson, Json.of(ProcessorConfig.defaults()
                         .withProcessorPolicy(tson.processorPolicy())
-                        .withDataBindContext(tson.dataBindContext()))
+                        .withDataBindContext(withoutKernelVocabulary(tson.dataBindContext())))
                 .withSchemas(tson.schemaRegistry()));
+    }
+
+    /**
+     * {@code composed} with the kernel's own vocabulary left unbound, for the JSON encoding. {@code
+     * Tson.dataBindContext()} binds every kernel record to the schema model, and the JSON bind registry, given such
+     * a context, checks those records against their classes when it compiles a closure and refuses each one --
+     * every closure holds the kernel, so no JSON body would bind at all. {@code UpstreamGapsTest} pins that gap.
+     * The JSON reader needs the application's names only, which are the ones the vocabulary does not answer.
+     */
+    private static DataBindContext withoutKernelVocabulary(DataBindContext composed) {
+        DataNameBinder names = composed.nameBinder();
+        return composed.toBuilder().nameBinder(name -> {
+            if (isKernelVocabulary(name)) {
+                throw new DataBindException("'" + name + "' is the kernel's own vocabulary, which a JSON body "
+                        + "does not bind");
+            }
+            return names.resolve(name);
+        }).build();
+    }
+
+    private static boolean isKernelVocabulary(String name) {
+        try {
+            SchemaMetaNameBinder.INSTANCE.resolve(name);
+            return true;
+        } catch (DataBindException notVocabulary) {
+            return false;
+        }
     }
 
     /** The {@code Content-Type} every response body from this codec carries. */

@@ -1,4 +1,4 @@
-!!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
+!!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
 @doc:"""
   The validator demo's own deployment descriptor.
 
@@ -7,9 +7,9 @@
   policy this configures by TsonDeployment.profile. That is deployment.tn's rule 2, and this file is where it
   would be broken if it were going to be.
 
-  The policy is stated whole, as policy.tn's `policy`, and runs exactly as written. Two parts are the
-  library's defaults written out -- the identifier policy and the nesting bound -- and that is the point of
-  stating them: a library upgrade that moved a default would not move this deployment.
+  The policy is stated whole, as policy.tn's `policy.processor`, and runs exactly as written. Two parts are the
+  defaults written out -- the identifier policy, and every limit -- and that is the point of stating them: a
+  library or policy.tn upgrade that moved a default would not move this deployment.
 
   `token_policy` is set to something visibly strict so the demo demonstrates a deployment decision rather
   than describing one: submit a document with a mixed-script value and this deployment refuses it. Lower it
@@ -42,16 +42,35 @@
       { level: SINGLE_SCRIPT  permitting: [] }
 
     limits: @doc:"""
-        [TSON-DATA] §9.1's resource limits at the library's own default. A validator is exactly the service
-        that should bound what it reads -- both the schema and the document come from the request -- so the
-        posture is worth writing down even where it changes nothing.
+        [TSON-DATA] §9.1's resource limits and [TSON-SCHEMA] §11.5's, every one written out at policy.tn's
+        default. A validator is exactly the service that should bound what it reads -- both the schema and the
+        document come from the request -- so the posture is worth writing down even where it changes nothing,
+        and written whole so that no limit is left to a default this file does not show.
 
-        64 and not less, deliberately. This demo is a conformance tool: it runs the same scenarios the
-        TypeScript implementation runs in a browser so the two verdicts can be compared, and a bound tighter
-        than §9.1's default would make them disagree about a deep document for a reason that is this
+        The defaults and not less, deliberately. This demo is a conformance tool: it runs the same scenarios
+        the TypeScript implementation runs in a browser so the two verdicts can be compared, and a bound
+        tighter than the spec's default would make them disagree about a document for a reason that is this
         deployment's and not the format's.
         """
-      { max_depth: 64 }
+      {
+        max_depth:                  64
+        max_token_length:           1048576
+        max_text_length:            1048576
+        max_numeric_literal_length: 4096
+        max_binary_size:            16777216
+        max_document_size:          16777216
+        max_elements:               1048576
+        max_entries:                1048576
+        max_fields:                 65536
+        max_annotations:            64
+        max_values:                 16777216
+        max_import_closure:         64
+        max_schema_entries:         65536
+        max_alias_chain:            64
+        max_supertype_chain:        64
+        max_materialisation_depth:  64
+        max_wait_depth:             64
+      }
   }
 
   schema_hosts: @doc:"Empty, and a real posture: this service resolves only the schema sent with a request." []

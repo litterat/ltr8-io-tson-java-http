@@ -41,10 +41,10 @@ position in a record, is called a *position* here.
 | `!!import` | a parent slot of the schema object | a constructor argument |
 | imports are transitive | lookup follows parents transitively | (none: no ambient names) |
 | the import collision rule: judged by the declaring schema | the ambiguity rule: same slot by two routes is fine | — |
-| a namespace type, `interface => namespace & { key_type: = method_name  value_type: = method }` | clone the prototype, set a constant slot | subclass, override a slot |
+| a namespace type, `interface => !meta.namespace { key_type: method_name  value_type: method }` | clone the prototype, set a constant slot | subclass, override a slot |
 | a composition, `a & b` | copy-down of slots from both | mixin application |
 | a namespace value, entered by a qualified name | an object answering its slot names | an object answering messages |
-| a `ref<T>`'s qualified name, `orders.place_order` | a chain of sends | a chain of sends |
+| a `meta.ref<T>`'s qualified name, `orders.place_order` | a chain of sends | a chain of sends |
 | key annotations (`@doc` before a key) | slot annotations | — |
 | a resolved form, read as data under the kernel | a mirror | a mirror |
 | §8.2: no document may select its own policy | — | object capabilities: authority comes from the caller |
@@ -58,14 +58,14 @@ Three things stand out.
   anywhere. That is the first place TSON parts from both languages, and it should.
 - **The data/schema split is the mirror split.** A schema is the base level. Its resolved form is the reflective
   description, a data document under the kernel. A data document can't declare, so it can't reflect on itself; it can
-  only hold names (`kind<T>`, `ref<T>`), the way a program holds a mirror without becoming one.
+  only hold names (`meta.type_ref`, `meta.ref<T>`), the way a program holds a mirror without becoming one.
 
 ## What the overlay proposes
 
 ### Proposal: parent slots, should `extends` return
 
-**A parent slot is how inheritance between interfaces would come back.** `namespace` is a kernel constructor whose
-instances are maps ([TSON-SCHEMA] §4.1), and a qualified name enters a namespace value key by key (§5.12), so
+**A parent slot is how inheritance between interfaces would come back.** `namespace` is a kernel constructor, a refinement
+of map, whose instances are maps ([TSON-SCHEMA] §4.1), and a qualified name enters a namespace value key by key (§5.12), so
 `orders.place_order` walks with no special case. `meta-service.tn` holds no `extends`: an interface lists its own
 methods, and an api implementing several names each. If an interface naming others whose methods it also has returns,
 the walk belongs in the resolver, not in a Java walk in `TsonApiDescription` refusing a cycle.

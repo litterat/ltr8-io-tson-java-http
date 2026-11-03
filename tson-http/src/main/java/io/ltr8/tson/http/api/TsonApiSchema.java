@@ -1,6 +1,5 @@
 package io.ltr8.tson.http.api;
 
-import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.ProcessorConfig;
 
@@ -8,56 +7,60 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
- * {@code meta-service.tn} — the meta layer a schema names to describe a service — as source text a server can
- * publish, and as the binder that makes it usable.
+ * {@code meta-service.tn} — the vocabulary a schema imports to describe a service — as source text a server can
+ * publish, and as the bindings that make it usable.
  *
  * <h2>What this is for</h2>
  *
- * <p>A schema governed by this one declares interfaces of methods, and apis whose endpoints bind them, carry a
- * signature inline, or answer a document:
+ * <p>A schema importing this one declares protocols of exchanges, and http projections whose endpoints bind them,
+ * carry a signature inline, or answer a document:
  *
  * <pre>{@code
- * !!meta:"https://tson.io/2026/38/io/ltr8/http/meta-service.tn"
- * !!import:"https://schemas.example.com/2026/38/app/order-1.tn"
- * {
- *   orders => !interface { place_order => { request: order  response: order } }
+ * !!import:"https://tson.io/2026/39/io/ltr8/http/meta-service.tn"
+ * !!import:"https://schemas.example.com/2026/39/app/order-1.tn"
+ * !schema {
+ *   orders => !protocol { place_order => { request: order  response: order } }
  *
- *   @implements:[orders]
- *   orders_api => !api { "/orders" => { POST => !binding { method: orders.place_order  status: 201 } } }
+ *   @binds:[orders]
+ *   orders_http => !http { "/orders" => { POST => !binding { exchange: orders.place_order  status: 201 } } }
  * }
  * }</pre>
  *
  * <p><b>{@code order} there is a type reference, not a string, and {@code orders.place_order} is a reference to a
- * value</b> -- the interface's entry, then the method's key. The compiler resolves both and refuses a name nothing
+ * value</b> -- the protocol's entry, then the exchange's key. The compiler resolves both and refuses a name nothing
  * declares — which is the whole reason to describe a service at the schema layer. A description written as data can
  * name a schema but cannot hold a reference, so it carries bare names and every consumer needs its own resolver for
  * them — in every language that reads it.
  *
  * <h2>Wiring</h2>
  *
- * <p>Three things, and there is nothing else: this schema reachable from the {@code schemaSource}, the bound
- * classes in this package, and {@link #metaNameBinder()} on the config — <em>not</em> the data bind context,
- * which binds the data a schema describes. A meta layer's own vocabulary is a separate namespace, because one
- * holding both would collide the first time a schema type and a constructor shared a name.
+ * <p>Two things, and there is nothing else: this schema reachable from the {@code schemaSource}, and the bound
+ * classes in this package in the config's one bind context, beside the application's own. One context binds a
+ * schema's value entries and a data document's values alike, so {@link #bindingsWith} merges the two maps.
  *
  * <pre>{@code
  * Tson tson = Tson.of(ProcessorConfig.defaults()
  *         .withSchemaAccess(SchemaAccess.of(source))
- *         .withMetaNameBinder(TsonApiSchema.metaNameBinder()));
+ *         .withDataBindContext(TsonBindings.of(TsonApiSchema.bindingsWith(Map.of("order", Order.class)))));
  * tson.resolve(description);
  * }</pre>
  */
 public final class TsonApiSchema {
 
-    /** This meta layer's identity — the {@code !!id} it declares and the URL it is served at. */
-    public static final String ID = "https://tson.io/2026/38/io/ltr8/http/meta-service.tn";
+    /** This schema's identity — the {@code !!id} it declares and the URL it is served at. */
+    public static final String ID = "https://tson.io/2026/39/io/ltr8/http/meta-service.tn";
 
     private static final String SOURCE = readResource("/meta-service.tn");
+
+    private static final Map<String, Class<?>> BINDINGS = Map.of("exchange", Exchange.class, "signature",
+            Signature.class, "endpoint", Endpoint.class, "operation", Operation.class, "binding", Binding.class,
+            "document", Document.class, "resource", Resource.class, "exemption", Exemption.class, "http_verb",
+            HttpVerb.class);
 
     private TsonApiSchema() {
     }
@@ -78,8 +81,8 @@ public final class TsonApiSchema {
     }
 
     /**
-     * The published history keyed by identity -- what a schema source needs to resolve a description governed by
-     * this meta layer, and what a server publishing one serves beside it. One entry today; wiring this rather
+     * The published history keyed by identity -- what a schema source needs to resolve a description importing
+     * this schema, and what a server publishing one serves beside it. One entry today; wiring this rather
      * than {@link #source()} keeps a call site right when the history grows.
      */
     public static Map<String, String> publishedById() {
@@ -87,22 +90,40 @@ public final class TsonApiSchema {
     }
 
     /**
-     * The binder for this meta layer's own vocabulary — the records {@code interface} and {@code api} hold, and the
-     * {@code exemption} an api's {@code @not_bound} lists, mapped to the classes in this package. {@code interface}
-     * and {@code api} need no class: a value of a namespace type is a {@code Namespace}.
+     * This vocabulary's records by name, mapped to the classes in this package: what {@code protocol} and {@code
+     * http} hold, and the {@code exemption} an http projection's {@code @not_bound} lists. {@code protocol} and
+     * {@code http} need no class: a value of a namespace type is a {@code Namespace}. The map is explicit, so a
+     * class in this package binds only by being named here, and a record no class binds -- {@code placement},
+     * folded into each endpoint -- is not listed.
      *
-     * <p>Pass it to {@code ProcessorConfig.metaNameBinder}, which composes it over the kernel's own vocabulary
-     * rather than replacing it. A schema governed by this meta layer will not resolve without it: the
-     * constructor is declared, and nothing can build the value it constructs.
+     * <p>A description will not read without them: an entry no class binds is held as a tree, and {@link
+     * #describedBy} reads bound records.
      */
-    public static DataNameBinder metaNameBinder() {
-        return new DataNameBinder.DefaultDataNameBinder(Set.of("io.ltr8.tson.http.api"), Map.of());
+    public static Map<String, Class<?>> bindings() {
+        return BINDINGS;
+    }
+
+    /**
+     * {@code application}'s bindings and this vocabulary's, as the one map a bind context is built from.
+     *
+     * @throws IllegalArgumentException if {@code application} binds a name this vocabulary binds: within one
+     *                                  closure a name means one thing
+     */
+    public static Map<String, Class<?>> bindingsWith(Map<String, Class<?>> application) {
+        Map<String, Class<?>> merged = new LinkedHashMap<>(application);
+        BINDINGS.forEach((name, bound) -> {
+            if (merged.putIfAbsent(name, bound) != null) {
+                throw new IllegalArgumentException("'" + name + "' is bound by the application and by "
+                        + "meta-service.tn's vocabulary; within one closure a name means one thing");
+            }
+        });
+        return Map.copyOf(merged);
     }
 
     /**
      * Reads the service a resolved schema describes, checking what the resolver could not.
      *
-     * @param tson     a {@code Tson} built with {@link #metaNameBinder()}, with {@code schemaId} resolved
+     * @param tson     a {@code Tson} binding {@link #bindings()}, with {@code schemaId} resolved
      * @param schemaId the identity of the description schema
      * @throws IllegalArgumentException if {@code schemaId} is not resolved in {@code tson}, or the description is
      *                                  unsound in a way only a reader can see ({@link TsonApiDescription})

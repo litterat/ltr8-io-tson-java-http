@@ -41,9 +41,9 @@ import java.util.Set;
  * with fewer components that discards the field. For an order, that is the wrong currency rather than a
  * rejected request.
  *
- * <p>So {@link #route} refuses a document naming a schema this endpoint does not serve, and refuses one naming
- * none, rather than letting either fall through to a codec that will quietly do the wrong thing. That refusal
- * is the whole point.
+ * <p>So {@link #route} refuses a document whose schemas include no version this endpoint serves, one naming no
+ * schema at all, and one naming two of its versions, rather than letting any of them fall through to a codec that
+ * will quietly do the wrong thing. That refusal is the whole point.
  *
  * <h2>Two ways to model the Java side</h2>
  *
@@ -141,14 +141,16 @@ public final class TsonSchemaVersions {
     public static final class Routed {
 
         private final String schemaId;
+        private final List<String> schemas;
         private final TsonHttpCodec codec;
         private final TsonDocumentPeek peek;
         private final InputStream json;
         private final String contentType;
 
-        private Routed(String schemaId, TsonHttpCodec codec, TsonDocumentPeek peek, InputStream json,
-                       String contentType) {
+        private Routed(String schemaId, List<String> schemas, TsonHttpCodec codec, TsonDocumentPeek peek,
+                       InputStream json, String contentType) {
             this.schemaId = schemaId;
+            this.schemas = List.copyOf(schemas);
             this.codec = codec;
             this.peek = peek;
             this.json = json;
@@ -158,6 +160,15 @@ public final class TsonSchemaVersions {
         /** The registered identity of the version this was routed to. */
         public String schemaId() {
             return schemaId;
+        }
+
+        /**
+         * The binding the body is read under: {@link #schemaId()} and every other schema the message named beside
+         * it, one per canonical identity, the others spelt as the message spelt them. A message naming the version
+         * alone, or none and taking the default, has the version alone.
+         */
+        public List<String> schemas() {
+            return schemas;
         }
 
         /** The codec for that version. */
@@ -184,9 +195,12 @@ public final class TsonSchemaVersions {
 
         /**
          * Reads the body into {@code targetClass} through this version's codec, whichever encoding it arrived in,
-         * at {@code rootTypeName} against {@link #schemaId()} -- a JSON body from its stream, a TSON one continuing
-         * the peek. So a TSON body that named its version only in the header is still read against that version's
-         * schema, where reading it by its own binding would read it schemaless.
+         * at {@code rootTypeName} under {@link #schemas()} -- a JSON body from its stream, a TSON one continuing
+         * the peek. So a TSON body that named its schemas only in the header is still read under them, where
+         * reading it by its own binding would read it schemaless.
+         *
+         * <p>A JSON body is read against {@link #schemaId()} alone: the JSON reader states one schema, so a header
+         * naming others beside the version adds nothing to the namespace a JSON body is read in.
          *
          * @throws TsonHttpException 400 if the body is invalid, 415 if it is JSON and this version's codec does not
          *                           admit JSON
@@ -195,7 +209,7 @@ public final class TsonSchemaVersions {
             if (json != null) {
                 return codec.readObjectAs(json, contentType, schemaId, rootTypeName, targetClass);
             }
-            return codec.readObjectAs(peek, contentType, schemaId, rootTypeName, targetClass);
+            return codec.readObjectAs(peek, contentType, schemas, rootTypeName, targetClass);
         }
     }
 
@@ -248,43 +262,98 @@ public final class TsonSchemaVersions {
     /**
      * Routes {@code body} to the codec for the version that governs it -- the request stream read once, forwards.
      *
-     * <p><b>A TSON body is peeked.</b> Its schema comes from the {@code TSON-Schema} header, its own {@code
-     * !!schema}, or both -- and where both are present they must agree, which {@link TsonSchemaHeader#resolve}
-     * enforces. A header cannot be trusted over a directive that contradicts it, so verification costs the same
-     * read it always did; the header's value is to whatever routed the request <em>here</em> -- a gateway that
-     * will not parse a body, and cannot parse a compressed one.
+     * <p><b>A TSON body is peeked.</b> Its binding comes from the {@code TSON-Schema} header, its own {@code
+     * !!import}s, or both -- and where both are present they must name the same set of schemas, which {@link
+     * TsonSchemaHeader#resolve} enforces. A header cannot be trusted over a directive that contradicts it, so
+     * verification costs the same read it always did; the header's value is to whatever routed the request
+     * <em>here</em> -- a gateway that will not parse a body, and cannot parse a compressed one.
      *
-     * <p><b>A JSON body is not.</b> It can carry no directive, so the header is its only channel and there is
-     * nothing to agree with; see the class note.
+     * <p><b>The version is the member of that binding this endpoint serves.</b> A binding is a set of schemas, of
+     * which the version is one; the others are schemas the body also uses, and are not the version question. So
+     * the binding must name exactly one served version: none is a 400 ({@code unsupported-schema-version}, or
+     * {@code no-schema-declared} for a message naming no schema at all, where a configured default answers
+     * instead), and two is a 400 {@code conflicting-schema}, since two versions of one schema cannot be read as
+     * one namespace.
+     *
+     * <p><b>A JSON body is not peeked.</b> It carries no directive this reads, so the header is its only channel
+     * and there is nothing to agree with; see the class note.
      *
      * @param body        the message body
      * @param fieldValue  the {@code TSON-Schema} header value, or {@code null}
      * @param contentType the {@code Content-Type} header value, or {@code null} -- which is read as TSON
      * @throws TsonHttpException 400 if nothing names a schema and no default is configured, if the header and the
-     *                           body disagree, or if the schema named is one this endpoint does not serve
+     *                           body disagree, or if the binding names no version this endpoint serves, or two
      */
     public Routed route(InputStream body, String fieldValue, String contentType) {
         if (TsonMediaType.namesJson(contentType)) {
-            String schemaId = governingSchema(TsonSchemaHeader.parse(fieldValue));
-            return new Routed(declaredIds.get(identityOf(schemaId)), codecFor(schemaId), null, body, contentType);
+            List<String> named = TsonSchemaHeader.distinct(TsonSchemaHeader.parse(fieldValue));
+            String schemaId = servedVersion(named);
+            return new Routed(schemaId, readUnder(named, schemaId), byIdentity.get(identityOf(schemaId)), null,
+                    body, contentType);
         }
         // Any registered codec may open the peek: every version this builder makes shares one processor
         // policy, and a caller registering their own codec is held to the same by the read that continues.
         TsonSchemaHeader.Governing governing =
                 TsonSchemaHeader.resolve(peekWith().begin(body), fieldValue);
-        String schemaId = governingSchema(governing.schema());
-        // The registered id, not what the message spelled -- see Routed's own note.
-        return new Routed(declaredIds.get(identityOf(schemaId)), codecFor(schemaId), governing.body(), null,
-                contentType);
+        String schemaId = servedVersion(governing.schemas());
+        return new Routed(schemaId, readUnder(governing.schemas(), schemaId), byIdentity.get(identityOf(schemaId)),
+                governing.body(), null, contentType);
     }
 
-    /** The schema a message names, else the default, else the 400 that says both were missing. */
-    private String governingSchema(Optional<String> named) {
-        return named.or(() -> defaultSchemaId).orElseThrow(() -> new TsonHttpException(
-                TsonHttpException.BAD_REQUEST, TsonHttpException.TYPES + "no-schema-declared", "No schema declared",
-                "this endpoint serves several schema versions, so a message must name the one that governs it "
-                        + "-- in a " + TsonSchemaHeader.NAME + " header or a !!schema directive; it serves "
-                        + schemaIds(), List.of(), null));
+    /**
+     * The registered id of the one member of {@code named} this endpoint serves, else the default for a message
+     * naming nothing, else the 400 that says which was wrong. The registered id, not what the message spelled --
+     * see {@link Routed}'s own note.
+     */
+    private String servedVersion(List<String> named) {
+        if (named.isEmpty()) {
+            return defaultSchemaId.map(id -> declaredIds.get(identityOf(id))).orElseThrow(() -> new TsonHttpException(
+                    TsonHttpException.BAD_REQUEST, TsonHttpException.TYPES + "no-schema-declared",
+                    "No schema declared", "this endpoint serves several schema versions, so a message must name the "
+                            + "one that governs it -- in a " + TsonSchemaHeader.NAME + " header or an !!import "
+                            + "directive; it serves " + schemaIds(), List.of(), null));
+        }
+        List<String> served = named.stream().map(TsonSchemaVersions::identityOrNull)
+                .filter(identity -> identity != null && byIdentity.containsKey(identity)).map(declaredIds::get)
+                .toList();
+        if (served.isEmpty()) {
+            if (named.size() == 1) {
+                identityOf(named.getFirst()); // a reference that is no identity says so
+            }
+            throw new TsonHttpException(TsonHttpException.BAD_REQUEST,
+                    TsonHttpException.TYPES + "unsupported-schema-version", "Unsupported schema version",
+                    "this endpoint does not serve " + TsonSchemaHeader.quoted(named) + "; it serves " + schemaIds(),
+                    List.of(), null);
+        }
+        if (served.size() > 1) {
+            throw new TsonHttpException(TsonHttpException.BAD_REQUEST,
+                    TsonHttpException.TYPES + "conflicting-schema", "Conflicting schema",
+                    "this message names " + TsonSchemaHeader.quoted(served) + ", several versions this endpoint "
+                            + "serves; at most one of them governs it", List.of(), null);
+        }
+        return served.getFirst();
+    }
+
+    /**
+     * What a routed body is read under: {@code named} with its served version written as the registered id, or
+     * the version alone where the message named nothing and the default answered.
+     */
+    private static List<String> readUnder(List<String> named, String schemaId) {
+        if (named.isEmpty()) {
+            return List.of(schemaId);
+        }
+        String version = identityOf(schemaId);
+        return named.stream().map(reference -> version.equals(identityOrNull(reference)) ? schemaId : reference)
+                .toList();
+    }
+
+    /** Canonical identity, or {@code null} for a reference that is no identity -- which no version is. */
+    private static String identityOrNull(String reference) {
+        try {
+            return CanonicalIdentity.canonicalize(reference);
+        } catch (RuntimeException notAnIdentity) {
+            return null;
+        }
     }
 
     private TsonHttpException unknownSchema(String schemaId) {
@@ -387,7 +456,8 @@ public final class TsonSchemaVersions {
         }
 
         /**
-         * The version to assume for a document that declares no {@code !!schema}.
+         * The version to assume for a message naming no schema, in a {@code TSON-Schema} header or an {@code
+         * !!import}. A message naming schemas none of which is a version served here is refused, not defaulted.
          *
          * <p>Off by default, and worth leaving off. A document that names no version is one whose author has
          * not said which contract they are writing to, and picking for them is how a v2 client silently gets

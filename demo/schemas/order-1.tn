@@ -1,8 +1,7 @@
-!!id:"https://schemas.example.com/2026/38/app/order-1.tn"
-!!meta:"https://tson.io/2026/38/m/meta.tn"
-!!import:"https://tson.io/2026/38/m/core.tn"
-!!import:"https://tson.io/2026/38/io/ltr8/http/problem.tn"
-{
+!!id:"https://schemas.example.com/2026/39/app/order-1.tn"
+!!import:"https://tson.io/2026/39/m/core.tn"
+!!import:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
+!schema {
     order => { sku: text  quantity: int32 }
 
     @doc:"A business error: the request was schema-valid, and the domain still said no."

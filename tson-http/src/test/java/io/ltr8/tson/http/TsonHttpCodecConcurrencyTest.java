@@ -53,13 +53,12 @@ class TsonHttpCodecConcurrencyTest {
     private static final int THREADS = Math.max(8, Runtime.getRuntime().availableProcessors() * 2);
     private static final int ITERATIONS = 150;
 
-    private static final String SCHEMA_ID = "https://schemas.example.com/2026/38/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/38/app/order-1.tn"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            {
+            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema {
                 order => { sku: text  quantity: int32 }
             }""";
 
@@ -98,7 +97,7 @@ class TsonHttpCodecConcurrencyTest {
 
     private static String order(String sku, int quantity) {
         return """
-                !!schema:"%s"
+                !!import:"%s"
                 !order { sku: "%s"  quantity: %d }""".formatted(SCHEMA_ID, sku, quantity);
     }
 
@@ -226,7 +225,7 @@ class TsonHttpCodecConcurrencyTest {
     void collectsDiagnosticsPerThreadNotGlobally() throws Exception {
         hammer((thread, i) -> {
             String invalid = """
-                    !!schema:"%s"
+                    !!import:"%s"
                     !order { }""".formatted(SCHEMA_ID);
             try {
                 codec.readTree(body(invalid), "application/tson");

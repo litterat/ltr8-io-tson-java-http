@@ -1,14 +1,14 @@
-!!id:"https://schemas.example.com/2026/38/orders/orders-api-inline-1.tn"
-!!meta:"https://tson.io/2026/38/io/ltr8/http/meta-service.tn"
-!!import:"https://schemas.example.com/2026/38/orders/orders-types-1.tn"
-!!import:"https://schemas.example.com/2026/38/orders/orders-errors-1.tn"
+!!id:"https://schemas.example.com/2026/39/orders/orders-api-inline-1.tn"
+!!import:"https://tson.io/2026/39/io/ltr8/http/meta-service.tn"
+!!import:"https://schemas.example.com/2026/39/orders/orders-types-1.tn"
+!!import:"https://schemas.example.com/2026/39/orders/orders-errors-1.tn"
 @doc:"""
-  Web service only: an api on its own terms, with no interface behind it and no `@implements`, so every
+  Web service only: an http projection on its own terms, with no protocol behind it and no `@binds`, so every
   endpoint is an `!operation` carrying its signature inline. The verb and the path are the keys an endpoint
   sits under; a path key is a name in the URL's own grammar, so `/orders/{id}` needs no identifier minted
   from it. A parameter-only endpoint is a one-field request record placed from the path.
 
-  A method's facts ride on its own key, so on an inline operation they sit before the verb: a GET must be
+  An exchange's facts ride on its own key, so on an inline operation they sit before the verb: a GET must be
   `@safe`, and the reader refuses one that is not.
 
   Serving a schema at its identity's path answers bytes rather than a TSON value, so it is a `!document`
@@ -17,8 +17,8 @@
   A resource is written either way: positionally, its map of verbs standing in for its one field, or tagged
   `!resource`, as the last one is.
   """
-{
-  orders_api => !api {
+!schema {
+  orders_http => !http {
     "/orders" => {
       @doc:"Place an order. The whole body is the order."
       POST => !operation { request: order  response: order  errors: [sku_not_found]  status: 201 }

@@ -1,17 +1,18 @@
-!!id:"https://schemas.example.com/2026/38/orders/orders-1.tn"
-!!meta:"https://tson.io/2026/38/io/ltr8/http/meta-service.tn"
-!!import:"https://schemas.example.com/2026/38/orders/orders-types-1.tn"
-!!import:"https://schemas.example.com/2026/38/orders/orders-errors-1.tn"
+!!id:"https://schemas.example.com/2026/39/orders/orders-1.tn"
+!!import:"https://tson.io/2026/39/io/ltr8/http/meta-service.tn"
+!!import:"https://schemas.example.com/2026/39/orders/orders-types-1.tn"
+!!import:"https://schemas.example.com/2026/39/orders/orders-errors-1.tn"
 @doc:"""
-  Interface only: nothing HTTP in the document. An interface is an entry applying `interface`, a map of
-  methods keyed by name -- a method's name is the key it sits under, scoped to its interface, and a `@doc`
-  before the key documents it. The `!method` tag is optional under the typed slot. A method's qualified name
-  is the interface's entry and then its key (`orders.place_order`). An interface lists its methods and
-  nothing more: `orders_v2` declares only what it adds, and an api offering both implements both.
+  Protocol only: nothing HTTP in the document. A protocol is an entry applying `protocol`, a map of
+  exchanges keyed by name -- an exchange's name is the key it sits under, scoped to its protocol, and a
+  `@doc` before the key documents it. The `!exchange` tag is optional under the typed slot. An exchange's
+  qualified name is the protocol's entry and then its key (`orders.place_order`). A protocol lists its
+  exchanges and nothing more: `orders_v2` declares only what it adds, and an http projection offering both
+  binds both.
   """
-{
-  @doc:"The orders interface."
-  orders => !interface {
+!schema {
+  @doc:"The orders protocol."
+  orders => !protocol {
     @summary:"Place an order."
     @doc:"Accept an order and confirm it with the quantity doubled."
     place_order  => { request: new_order    response: order       errors: [sku_not_found] }
@@ -27,7 +28,7 @@
   }
 
   @doc:"Refunds, offered beside orders."
-  orders_v2 => !interface {
+  orders_v2 => !protocol {
     @idempotent
     refund => { request: order_ref }
   }

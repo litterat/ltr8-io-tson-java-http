@@ -34,25 +34,31 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonSchemaVersionsTest {
 
-    private static final String V1_ID = "https://schemas.example.com/2026/38/app/order-1.tn";
-    private static final String V2_ID = "https://schemas.example.com/2026/38/app/order-2.tn";
+    private static final String V1_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
+    private static final String V2_ID = "https://schemas.example.com/2026/39/app/order-2.tn";
 
     private static final String V1 = """
-            !!id:"https://schemas.example.com/2026/38/app/order-1.tn"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            { order => { sku: text  quantity: int32 } }""";
+            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema { order => { sku: text  quantity: int32 } }""";
 
     private static final String V2 = """
-            !!id:"https://schemas.example.com/2026/38/app/order-2.tn"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            { order => { sku: text  quantity: int32  currency: text } }""";
+            !!id:"https://schemas.example.com/2026/39/app/order-2.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema { order => { sku: text  quantity: int32  currency: text } }""";
 
     private static final String V1_PROFILE = "orders-1";
     private static final String V2_PROFILE = "orders-2";
 
-    private static final Map<String, String> SCHEMAS = Map.of(V1_ID, V1, V2_ID, V2);
+    /** A schema a body imports beside its version: a helper, not a version, and never served as one. */
+    private static final String MONEY_ID = "https://schemas.example.com/2026/39/app/money.tn";
+
+    private static final String MONEY = """
+            !!id:"https://schemas.example.com/2026/39/app/money.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema { amount => { value: int32  currency: text } }""";
+
+    private static final Map<String, String> SCHEMAS = Map.of(V1_ID, V1, V2_ID, V2, MONEY_ID, MONEY);
     private static final SchemaSource SOURCE = SchemaSource.ofMap(SCHEMAS);
 
     /** v1's shape exactly. */
@@ -100,7 +106,7 @@ class TsonSchemaVersionsTest {
     }
 
     private static String order(String schemaId, String fields) {
-        return "!!schema:\"" + schemaId + "\"\n!order " + fields;
+        return "!!import:\"" + schemaId + "\"\n!order " + fields;
     }
 
     @Test
@@ -159,7 +165,7 @@ class TsonSchemaVersionsTest {
     /** And the guard: routing refuses before that can happen. */
     @Test
     void routingRefusesAVersionThisEndpointDoesNotServe() {
-        String unknown = "https://schemas.example.com/2026/38/app/order-3.tn";
+        String unknown = "https://schemas.example.com/2026/39/app/order-3.tn";
         TsonHttpException refused = assertThrows(TsonHttpException.class,
                 () -> versions.route(body(order(unknown, "{ sku: \"A\" quantity: 1 }"))));
         assertEquals(TsonHttpException.BAD_REQUEST, refused.status());
@@ -173,7 +179,7 @@ class TsonSchemaVersionsTest {
         TsonHttpException refused = assertThrows(TsonHttpException.class,
                 () -> versions.route(body("!order { sku: \"A\" quantity: 1 }")));
         assertEquals(TsonHttpException.BAD_REQUEST, refused.status());
-        assertTrue(refused.getMessage().contains("!!schema"), refused.getMessage());
+        assertTrue(refused.getMessage().contains("!!import"), refused.getMessage());
     }
 
     /**
@@ -201,6 +207,80 @@ class TsonSchemaVersionsTest {
         assertEquals(TsonHttpException.BAD_REQUEST, refused.status());
         assertEquals(List.of(Diagnostic.Code.UNKNOWN_TYPE_REF),
                 refused.diagnostics().stream().map(Diagnostic::code).toList());
+    }
+
+    // ── a binding of several schemas: the version is the member this endpoint serves ──────────────────────
+
+    private static String orderWithMoney(String version, String fields) {
+        return "!!import:\"" + version + "\"\n!!import:\"" + MONEY_ID + "\"\n!order " + fields;
+    }
+
+    /**
+     * <b>A body importing its version and another schema routes on the version.</b> The binding is a set, and the
+     * version is its one member this endpoint serves; the other is a schema the body also uses, read in the same
+     * namespace, and is not the version question.
+     */
+    @Test
+    void aBodyImportingItsVersionAndAnotherSchemaRoutesOnTheVersion() {
+        var routed = versions.route(body(orderWithMoney(V1_ID, "{ sku: \"A\" quantity: 1 }")));
+        assertEquals(V1_ID, routed.schemaId());
+        assertEquals(List.of(V1_ID, MONEY_ID), routed.schemas());
+        assertEquals(new OrderV1("A", 1), routed.readObjectAs("order", OrderV1.class));
+
+        var headed = versions.route(body(orderWithMoney(V2_ID, "{ sku: \"B\" quantity: 2 currency: \"AUD\" }")),
+                TsonSchemaHeader.format(List.of(MONEY_ID, V2_ID)));
+        assertEquals(V2_ID, headed.schemaId());
+        assertEquals(new OrderV2("B", 2, "AUD"), headed.readObjectAs("order", OrderV2.class));
+    }
+
+    /** The same set named by the header alone is read under all of it, the version written as registered. */
+    @Test
+    void aHeaderOfSeveralGovernsABodyNamingNone() {
+        String http = MONEY_ID.replace("https://", "http://");
+        var routed = versions.route(body("!order { sku: \"A\" quantity: 1 }"),
+                TsonSchemaHeader.format(List.of(http, V1_ID.replace("https://", "http://"))));
+        assertEquals(V1_ID, routed.schemaId());
+        assertEquals(List.of(http, V1_ID), routed.schemas());
+        assertEquals(new OrderV1("A", 1), routed.readObjectAs("order", OrderV1.class));
+    }
+
+    /** Two versions of one schema in one binding cannot be one namespace, and neither is chosen. */
+    @Test
+    void aBindingNamingTwoServedVersionsIsRefused() {
+        TsonHttpException refused = assertThrows(TsonHttpException.class, () -> versions.route(
+                body("!!import:\"" + V1_ID + "\"\n!!import:\"" + V2_ID + "\"\n!order { sku: \"A\" quantity: 1 }")));
+        assertEquals(TsonHttpException.BAD_REQUEST, refused.status());
+        assertEquals(TsonHttpException.TYPES + "conflicting-schema", refused.problem().type().orElseThrow());
+        assertTrue(refused.getMessage().contains("order-1") && refused.getMessage().contains("order-2"),
+                refused.getMessage());
+    }
+
+    /**
+     * A binding naming schemas, none of them a version served here, is refused -- and the default does not
+     * answer it, because the message did name its binding and the version is not in it.
+     */
+    @Test
+    void aBindingNamingNoServedVersionIsRefusedEvenWithADefault() {
+        TsonSchemaVersions withDefault = TsonSchemaVersions.builder()
+                .version(V1_ID, V1, SOURCE, Map.of("order", OrderV1.class))
+                .version(V2_ID, V2, SOURCE, Map.of("order", OrderV2.class))
+                .defaultVersion(V1_ID)
+                .build();
+        TsonHttpException refused = assertThrows(TsonHttpException.class, () -> withDefault.route(
+                body("!!import:\"" + MONEY_ID + "\"\n!order { sku: \"A\" quantity: 1 }")));
+        assertEquals(TsonHttpException.TYPES + "unsupported-schema-version", refused.problem().type().orElseThrow());
+        assertTrue(refused.getMessage().contains("money.tn"), refused.getMessage());
+    }
+
+    /** A JSON body's header of several routes the same way, on the member this endpoint serves. */
+    @Test
+    void aJsonBodysHeaderOfSeveralRoutesOnTheServedMember() {
+        var routed = versions.route(body("{\"sku\": \"A\", \"quantity\": 1}"),
+                TsonSchemaHeader.format(List.of(MONEY_ID, V1_ID)), "application/json");
+        assertEquals(V1_ID, routed.schemaId());
+        assertEquals(TsonHttpException.TYPES + "conflicting-schema", assertThrows(TsonHttpException.class,
+                () -> versions.route(body("{}"), TsonSchemaHeader.format(List.of(V1_ID, V2_ID)), "application/json"))
+                .problem().type().orElseThrow());
     }
 
     /**
@@ -407,7 +487,7 @@ class TsonSchemaVersionsTest {
     @Test
     void anUnknownVersionDoesNotSpoilTheRest() {
         assertEquals(V1_ID, versions.chooseResponseVersion(
-                "\"https://schemas.example.com/2026/38/app/order-9.tn\", \"" + V1_ID + "\""));
+                "\"https://schemas.example.com/2026/39/app/order-9.tn\", \"" + V1_ID + "\""));
     }
 
     /**
@@ -418,7 +498,7 @@ class TsonSchemaVersionsTest {
     @Test
     void nothingAcceptableIs406() {
         TsonHttpException refused = assertThrows(TsonHttpException.class, () -> versions.chooseResponseVersion(
-                "\"https://schemas.example.com/2026/38/app/order-9.tn\""));
+                "\"https://schemas.example.com/2026/39/app/order-9.tn\""));
 
         assertEquals(TsonHttpException.NOT_ACCEPTABLE, refused.status());
         assertTrue(refused.getMessage().contains("order-1"), refused.getMessage());

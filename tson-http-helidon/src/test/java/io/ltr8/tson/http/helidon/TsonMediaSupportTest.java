@@ -39,13 +39,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonMediaSupportTest {
 
-    private static final String SCHEMA_ID = "https://schemas.example.com/2026/38/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/38/app/order-1.tn"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            {
+            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema {
                 order => { sku: text  quantity: int32 }
             }""";
 
@@ -124,7 +123,7 @@ class TsonMediaSupportTest {
         }));
 
         HttpResponse<String> response = post("/orders", """
-                !!schema:"%s"
+                !!import:"%s"
                 !order { sku: "ABC-1"  quantity: 3 }""".formatted(SCHEMA_ID));
 
         assertEquals(201, response.statusCode());
@@ -171,7 +170,7 @@ class TsonMediaSupportTest {
                 response.status(201).send(request.content().as(Order.class))));
 
         HttpResponse<String> response = post("/orders", """
-                !!schema:"%s"
+                !!import:"%s"
                 !order { }""".formatted(SCHEMA_ID));
 
         assertEquals(400, response.statusCode());
@@ -187,7 +186,7 @@ class TsonMediaSupportTest {
                 response.send(request.content().as(Order.class))));
 
         HttpResponse<String> response = post("/orders", """
-                !!schema:"%s"
+                !!import:"%s"
                 !order { sku: "ABC-1"  quantity: 3 }""".formatted(SCHEMA_ID));
 
         assertEquals(new String(codec.write(new Order("ABC-1", 3)), StandardCharsets.UTF_8), response.body());

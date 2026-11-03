@@ -1,14 +1,14 @@
-!!id:"https://schemas.example.com/2026/38/app/validate-api-1.tn"
-!!meta:"https://tson.io/2026/38/io/ltr8/http/meta-service.tn"
-!!import:"https://schemas.example.com/2026/38/app/validate-1.tn"
-!!import:"https://tson.io/2026/38/io/ltr8/http/problem.tn"
-!!import:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
-!!import:"https://tson.io/2026/38/m/core.tn"
-{
+!!id:"https://schemas.example.com/2026/39/app/validate-api-1.tn"
+!!import:"https://tson.io/2026/39/io/ltr8/http/meta-service.tn"
+!!import:"https://schemas.example.com/2026/39/app/validate-1.tn"
+!!import:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
+!!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
+!!import:"https://tson.io/2026/39/m/core.tn"
+!schema {
   @doc:"Where a published schema is: the path component of its own !!id."
   schema_ref => { schemaPath: text }
 
-  validator => !api {
+  validator => !http {
     "/validate" => {
       @summary:"Validate a document against a schema"
       @doc:"""
@@ -27,7 +27,7 @@
       @safe
       @summary:"The validator page"
       @doc:"The page itself: two editors, the scenarios, and the diagnostics."
-      GET => !document { media_type: "text/html" }
+      GET => !document { media_types: ["text/html"] }
     }
 
     "/.well-known/tson-deployment" => {
@@ -52,7 +52,7 @@
       @safe
       @summary:"Fetch a published schema"
       @doc:"Every schema this service names is served at its own identity's path."
-      GET => !document { request: schema_ref  media_type: "application/tson" }
+      GET => !document { request: schema_ref  media_types: ["application/tson"] }
     }
   }
 }

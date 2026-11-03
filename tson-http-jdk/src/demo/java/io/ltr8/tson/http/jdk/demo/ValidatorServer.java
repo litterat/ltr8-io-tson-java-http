@@ -58,12 +58,12 @@ import java.util.concurrent.Executors;
 public final class ValidatorServer {
 
     /** The envelope this service reads and writes. */
-    public static final String VALIDATE_ID = "https://schemas.example.com/2026/38/app/validate-1.tn";
+    public static final String VALIDATE_ID = "https://schemas.example.com/2026/39/app/validate-1.tn";
 
     public static final String VALIDATE = schema("validate-1.tn");
 
     /** This service's own description, published and resolved at startup like any other schema. */
-    public static final String API_ID = "https://schemas.example.com/2026/38/app/validate-api-1.tn";
+    public static final String API_ID = "https://schemas.example.com/2026/39/app/validate-api-1.tn";
 
     public static final String API = schema("validate-api-1.tn");
 
@@ -142,13 +142,13 @@ public final class ValidatorServer {
      *
      * <p>A per-request instance has neither problem: it is confined to the thread that made it and is
      * discarded with the response, so no two callers can see each other's schemas at all. It costs the
-     * standard-library bootstrap — meta-kernel, {@code meta.tn} and {@code core.tn}, around 18 ms — against
+     * standard-library bootstrap — {@code meta.tn} and {@code core.tn}, around 18 ms — against
      * roughly 1 ms of actual validation. That ratio is why {@code elapsed_ms} times the validation and not the
      * request: reporting the bootstrap would make every implementation comparison a measurement of this
      * decision instead of the validator.
      *
-     * <p><b>The schema source serves the submitted schema and nothing else.</b> A {@code !!schema} or
-     * {@code !!import} naming anything the caller did not paste is refused as {@code SCHEMA_NOT_PERMITTED}
+     * <p><b>The schema source serves the submitted schema and nothing else.</b> An {@code !!import}
+     * naming anything the caller did not paste is refused as {@code SCHEMA_NOT_PERMITTED}
      * -- {@code ofMap} refuses a miss by contract, the map being this service's whole configuration -- and the
      * document is {@code REJECTED}. That is deliberate and it is the security boundary: the identity in a
      * submitted document is an untrusted URL, and an endpoint that fetched it would be a request forger for
@@ -233,8 +233,7 @@ public final class ValidatorServer {
         schemas.putAll(TsonApiSchema.publishedById());
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(schemas)))
-                .withDataBindContext(TsonBindings.of(bindings))
-                .withMetaNameBinder(TsonApiSchema.metaNameBinder()));
+                .withDataBindContext(TsonBindings.of(TsonApiSchema.bindingsWith(bindings))));
         tson.resolve(VALIDATE);
         tson.resolve(API);
         TsonHttpCodec codec = new TsonHttpCodec(tson);
@@ -399,8 +398,8 @@ public final class ValidatorServer {
 
                 The schemas it publishes:
 
-                  curl -s http://localhost:%d/2026/38/app/validate-1.tn
-                  curl -s http://localhost:%d/2026/38/io/ltr8/http/deployment.tn
+                  curl -s http://localhost:%d/2026/39/app/validate-1.tn
+                  curl -s http://localhost:%d/2026/39/io/ltr8/http/deployment.tn
                 """.formatted(bound, bound, bound, bound, bound));
     }
 }

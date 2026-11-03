@@ -5,12 +5,14 @@ import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
+import io.ltr8.tson.http.TsonBindings;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.api.RequestPlacement.Location;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -22,52 +24,51 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The shipping service-description layer: interfaces and apis declared in a schema governed by {@code
- * meta-service.tn}, with payload types and method references the compiler resolves, read back by {@link
+ * The shipping service-description layer: protocols and http projections declared in a schema importing {@code
+ * meta-service.tn}, with payload types and exchange references the compiler resolves, read back by {@link
  * TsonApiDescription} and held to a server by {@link TsonApiCoverage}. The reader's relational checks are {@link
  * TsonApiDescriptionTest}'s.
  */
 class TsonApiSchemaTest {
 
-    private static final String ORDER_ID = "https://schemas.example.com/2026/38/app/order-1.tn";
-    private static final String API_ID = "https://schemas.example.com/2026/38/app/orders-api-1.tn";
+    private static final String ORDER_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
+    private static final String API_ID = "https://schemas.example.com/2026/39/app/orders-api-1.tn";
 
     private static final String ORDER = """
-            !!id:"https://schemas.example.com/2026/38/app/order-1.tn"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            !!import:"https://tson.io/2026/38/io/ltr8/http/problem.tn"
-            {
+            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!import:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
+            !schema {
               non_empty_text => !text ^ { min_length: 1 }
               order          => { sku: non_empty_text  quantity: int32 }
               sku_not_found  => problem & { status: = 404  sku: text }
             }""";
 
-    /** An interface, an api binding it, and the schema route as a document. */
+    /** A protocol, an http projection binding it, and the schema route as a document. */
     private static final String API = """
-            !!id:"https://schemas.example.com/2026/38/app/orders-api-1.tn"
-            !!meta:"https://tson.io/2026/38/io/ltr8/http/meta-service.tn"
-            !!import:"https://schemas.example.com/2026/38/app/order-1.tn"
-            !!import:"https://tson.io/2026/38/io/ltr8/http/problem.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            {
+            !!id:"https://schemas.example.com/2026/39/app/orders-api-1.tn"
+            !!import:"https://tson.io/2026/39/io/ltr8/http/meta-service.tn"
+            !!import:"https://schemas.example.com/2026/39/app/order-1.tn"
+            !!import:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema {
               schema_ref => { schemaPath: text }
 
-              orders => !interface {
+              orders => !protocol {
                 @doc:"Accept an order and confirm it, with the quantity doubled."
                 place_order => { request: order  response: order  errors: [sku_not_found] }
               }
 
-              @implements:[orders]
-              orders_api => !api {
+              @binds:[orders]
+              orders_http => !http {
                 "/orders" => {
                   @summary:"Place an order"
-                  POST => !binding { method: orders.place_order  status: 201 }
+                  POST => !binding { exchange: orders.place_order  status: 201 }
                 }
                 "/{+schemaPath}" => {
                   @safe
                   @summary:"Fetch a published schema"
-                  GET => !document { request: schema_ref  media_type: "application/tson" }
+                  GET => !document { request: schema_ref  media_types: ["application/tson"] }
                 }
               }
             }""";
@@ -80,7 +81,7 @@ class TsonApiSchemaTest {
         lib.put(API_ID, api);
         return Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))
-                .withMetaNameBinder(TsonApiSchema.metaNameBinder()));
+                .withDataBindContext(TsonBindings.of(TsonApiSchema.bindings())));
     }
 
     private static Tson resolved(String api) {
@@ -112,18 +113,19 @@ class TsonApiSchemaTest {
         assertEquals(Set.of("GET /{+schemaPath}", "POST /orders"), keys(api), "an endpoint is its verb and path");
 
         Route create = api.route(HttpVerb.POST, "/orders").orElseThrow();
-        assertEquals(Optional.of(new InterfaceMethod("orders", "place_order")), create.method());
-        assertEquals("order", create.request().orElseThrow().name(), "borrowed from the method");
+        assertEquals(Optional.of(new ExchangeName("orders", "place_order")), create.exchange());
+        assertEquals("order", create.request().orElseThrow().name(), "borrowed from the exchange");
         assertEquals("order", create.response().orElseThrow().name());
         assertEquals(201, create.status());
         assertEquals("sku_not_found", create.errorFor(404).orElseThrow().name(), "by the status its type fixes");
         assertEquals(Optional.of("Place an order"), create.summary(), "the verb key's @summary");
         assertEquals(Optional.of("Accept an order and confirm it, with the quantity doubled."), create.doc(),
-                "the method's @doc, since the verb key carries none");
+                "the exchange's @doc, since the verb key carries none");
         assertEquals(List.of("sku", "quantity"), create.placement().at(Location.BODY), "a POST's remainder");
 
         Route schema = api.route(HttpVerb.GET, "/{+schemaPath}").orElseThrow();
-        assertEquals(Optional.of("application/tson"), schema.mediaType());
+        assertTrue(schema.document());
+        assertEquals(Set.of("application/tson"), schema.mediaTypes());
         assertEquals(Optional.empty(), schema.response(), "a document's body is labelled, not typed");
         assertEquals(Map.of("schemaPath", Location.PATH), schema.placement().fields(),
                 "reserved expansion places one field, which may carry slashes");
@@ -140,23 +142,29 @@ class TsonApiSchemaTest {
         assertTrue(refused.contains("ordr"), refused);
     }
 
-    /** An entry applying {@code interface} or {@code api} is a value, never a type, so it cannot be used as one. */
+    /** An entry applying {@code protocol} or {@code http} is a value, never a type, so it cannot be used as one. */
     @Test
-    void anInterfaceEntryCannotBeUsedWhereATypeBelongs() {
+    void aProtocolEntryCannotBeUsedWhereATypeBelongs() {
         String refused = only(API.replace("\n}", "\n  holder => { s: orders }\n}"));
         assertTrue(refused.contains("a value and not a type"), refused);
     }
 
     /**
-     * And the records inside are records, not constructors: none may head a schema entry. Only {@code interface}
-     * and {@code api} are applied at entry level.
+     * The records inside are records, not constructors, so an entry tagged with one is a value of it (§4.1): judged
+     * as a value of the record, as a data document's would be, and read into no route -- a description's routes are
+     * the values of {@code http} alone.
      */
     @Test
-    void anInnerRecordCannotHeadAnEntry() {
-        for (String record : List.of("method", "resource", "operation", "binding", "document")) {
+    void anInnerRecordHeadsAnEntryAsAValueOfIt() {
+        for (String record : List.of("exchange", "operation", "document")) {
+            String api = API.replace("\n}", "\n  x => !" + record + " { }\n}");
+            assertEquals(List.of(), tson(api).validateSchema(api), record);
+            assertEquals(described(API).routes(), described(api).routes(), record + " adds no route");
+        }
+        for (String record : List.of("resource", "binding")) {
             String refused = only(API.replace("\n}", "\n  x => !" + record + " { }\n}"));
-            assertTrue(refused.contains("'!" + record + "' is not applicable") && refused.contains("not IS-A 'top'"),
-                    refused);
+            assertTrue(refused.contains("the body is no value of the type '" + record + "'")
+                    && refused.contains("missing required field"), refused);
         }
     }
 
@@ -175,7 +183,7 @@ class TsonApiSchemaTest {
         assertEquals(List.of(TsonApiSchema.source()), TsonApiSchema.publishedSources());
     }
 
-    // ── paths, encodings, documents and errors ──
+    // ── paths, media types, documents and errors ──
 
     /** {@link #API} with the schema route's path replaced. */
     private static String withSchemaPath(String path) {
@@ -204,33 +212,64 @@ class TsonApiSchemaTest {
     }
 
     /**
-     * <b>An endpoint says which encodings it speaks</b>, because a client reading the description has no other way
-     * to know it takes JSON. Absent is TSON alone; a list is read beside TSON, which every endpoint speaks.
+     * <b>An endpoint lists the media types it speaks</b>, because a client reading the description has no other way
+     * to know it takes JSON. Absent is {@code application/tson} alone; a list is read beside it, and a JSON label is
+     * listed, never implied: either label alone speaks the JSON encoding, and Accept chooses among what is listed.
      */
     @Test
-    void anEndpointDeclaresTheEncodingsItSpeaks() {
-        TsonApiDescription api = described(API.replace("status: 201 }", "status: 201  encodings: [JSON] }"));
+    void anEndpointListsTheMediaTypesItSpeaks() {
+        TsonApiDescription plain = described(API);
+        Route tsonOnly = plain.route(HttpVerb.POST, "/orders").orElseThrow();
+        assertEquals(Set.of("application/tson"), tsonOnly.mediaTypes(), "absent is application/tson alone");
+        assertFalse(tsonOnly.speaksJson());
 
-        Route create = api.route(HttpVerb.POST, "/orders").orElseThrow();
-        assertTrue(create.speaksJson());
-        assertEquals(Set.of(Encoding.TSON, Encoding.JSON), create.encodings());
+        for (String label : List.of("application/json", "application/tson+json", "Application/JSON")) {
+            TsonApiDescription api = described(API.replace("status: 201 }",
+                    "status: 201  media_types: [\"" + label + "\"] }"));
+            Route create = api.route(HttpVerb.POST, "/orders").orElseThrow();
+            assertTrue(create.speaksJson(), label);
+            assertEquals(List.of("application/tson", label.toLowerCase(Locale.ROOT)),
+                    List.copyOf(create.mediaTypes()), "application/tson first, then what is listed, folded");
+        }
 
-        Route schema = api.route(HttpVerb.GET, "/{+schemaPath}").orElseThrow();
-        assertEquals(Set.of(Encoding.TSON), schema.encodings(), "absent is TSON alone");
+        Route schema = plain.route(HttpVerb.GET, "/{+schemaPath}").orElseThrow();
         assertFalse(schema.speaksJson());
     }
 
-    /** An encoding is checked when the description loads, like everything else in it. */
+    /**
+     * <b>A media type no codec here can speak is refused at startup</b>, the shape of {@code prepareToRead}: an
+     * endpoint answering a TSON value can be written only in an encoding a codec holds, so a description naming
+     * another fails to read and never answers 500. A document's body is bytes, so any type labels it.
+     */
     @Test
-    void anUnknownEncodingDoesNotResolve() {
-        assertThrows(RuntimeException.class,
-                () -> resolved(API.replace("status: 201 }", "status: 201  encodings: [XML] }")));
+    void aMediaTypeNoCodecSpeaksIsRefusedAtStartup() {
+        String refused = assertThrows(IllegalArgumentException.class, () -> described(API.replace("status: 201 }",
+                "status: 201  media_types: [\"application/xml\"] }"))).getMessage();
+        assertEquals("'orders_http POST /orders' lists the media type 'application/xml', which no codec this server "
+                + "holds can speak -- an endpoint answering a TSON value speaks [application/json, application/tson, "
+                + "application/tson+json]; an endpoint answering bytes is a !document", refused);
+
+        Route page = described(API.replace("media_types: [\"application/tson\"]", "media_types: [\"text/html\"]"))
+                .route(HttpVerb.GET, "/{+schemaPath}").orElseThrow();
+        assertEquals(Set.of("text/html"), page.mediaTypes(), "a document implies no application/tson");
     }
 
-    /** A document's media type is a type and a subtype; anything else is refused at load. */
+    /**
+     * <b>A document lists a media type</b>: none is implied for it, and {@code media_types} is optional on the base
+     * record, so only the reader can require it.
+     */
     @Test
-    void aDocumentStatesAMediaType() {
-        String refused = only(API.replace("media_type: \"application/tson\"", "media_type: \"tson\""));
+    void aDocumentListingNoMediaTypeIsRefused() {
+        String refused = assertThrows(IllegalArgumentException.class, () -> described(API.replace(
+                "  media_types: [\"application/tson\"]", ""))).getMessage();
+        assertEquals("'orders_http GET /{+schemaPath}' is a document listing no media type -- a document's body is "
+                + "bytes, so media_types is the whole of its contract; list one", refused);
+    }
+
+    /** A media type is a type and a subtype; anything else is refused at load. */
+    @Test
+    void aMediaTypeIsATypeAndASubtype() {
+        String refused = only(API.replace("media_types: [\"application/tson\"]", "media_types: [\"tson\"]"));
         assertTrue(refused.contains("media_type"), refused);
     }
 
@@ -256,13 +295,16 @@ class TsonApiSchemaTest {
         assertTrue(twice.contains("both fix status 404"), twice);
     }
 
-    /** A verb and a path are one endpoint across every api a description holds, since a server serves one handler. */
+    /**
+     * A verb and a path are one endpoint across every http projection a description holds, since a server serves one
+     * handler.
+     */
     @Test
     void twoEndpointsCannotShareAVerbAndPath() {
         String refused = assertThrows(IllegalArgumentException.class, () -> described(API.replace("\n}", """
 
-                  again => !api { "/{+schemaPath}" => {
-                    @safe GET => !document { request: schema_ref  media_type: "text/plain" } } }
+                  again => !http { "/{+schemaPath}" => {
+                    @safe GET => !document { request: schema_ref  media_types: ["text/plain"] } } }
                 }"""))).getMessage();
         assertTrue(refused.contains("'GET /{+schemaPath}' is declared twice"), refused);
     }
@@ -277,15 +319,15 @@ class TsonApiSchemaTest {
     // ── templates, in the shipping design ──
 
     private static final String PAGED = """
-            !!id:"https://schemas.example.com/2026/38/app/orders-api-1.tn"
-            !!meta:"https://tson.io/2026/38/io/ltr8/http/meta-service.tn"
-            !!import:"https://schemas.example.com/2026/38/app/order-1.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            {
+            !!id:"https://schemas.example.com/2026/39/app/orders-api-1.tn"
+            !!import:"https://tson.io/2026/39/io/ltr8/http/meta-service.tn"
+            !!import:"https://schemas.example.com/2026/39/app/order-1.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema {
               page       => <T> { items: [T]  next?: uri  total: int32 }
               order_page => page<order>
 
-              orders_api => !api { "/orders" => {
+              orders_http => !http { "/orders" => {
                 @safe GET => !operation { response: %s } } }
             }""";
 
@@ -311,8 +353,8 @@ class TsonApiSchemaTest {
      * <b>An application is named through an alias, never written inline.</b> {@code response} is typed by a kind,
      * so it holds the name of a type: one bare token. An endpoint is a value body, where nothing lifts or mints, so
      * an application written there would be the name of no entry. §5.6's braced form is therefore refused, naming
-     * the alias spelling that gives the application its entry; the schema sugar {@code page<order>} in the same
-     * position is a parse error, before resolution is reached.
+     * the alias spelling that gives the application its entry, and so is the schema sugar {@code page<order>} in the
+     * same position, which reads as a reference and is refused for the same reason.
      */
     @Test
     void anApplicationIsNamedThroughAnAliasNotInline() {
@@ -320,8 +362,9 @@ class TsonApiSchemaTest {
                 () -> resolved(PAGED.formatted("{ name: page  arguments: [ { name: order } ] }"))).getMessage();
         assertTrue(message.contains("declare an alias"), "the refusal names the alias spelling: " + message);
 
-        assertTrue(assertThrows(RuntimeException.class, () -> resolved(PAGED.formatted("page<order>")))
-                .getMessage().contains("adjacent values must be separated"));
+        String sugar = assertThrows(RuntimeException.class, () -> resolved(PAGED.formatted("page<order>")))
+                .getMessage();
+        assertTrue(sugar.contains("found the reference page<order>") && sugar.contains("declare an alias"), sugar);
     }
 
     /** A bad argument is caught where the application is spelled, which is the alias. */
@@ -335,9 +378,9 @@ class TsonApiSchemaTest {
     // ── what a server can derive from its description, instead of listing it ──
 
     /**
-     * <b>Everything a client needs to resolve the contract</b>: the description, the meta layer governing it,
-     * and its imports transitively. The bundled standard library is excluded -- every implementation has it,
-     * and a service publishing {@code core.tn} would be claiming ownership of something it does not own.
+     * <b>Everything a client needs to resolve the contract</b>: the description and its imports transitively, {@code
+     * meta-service.tn} among them. The bundled standard library is excluded -- every implementation has it, and a
+     * service publishing {@code core.tn} would be claiming ownership of something it does not own.
      */
     @Test
     void aDescriptionKnowsWhatItsServerMustPublish() {
@@ -347,7 +390,7 @@ class TsonApiSchemaTest {
         assertTrue(published.contains(TsonApiSchema.ID), "the meta layer, or the description will not resolve");
         assertTrue(published.contains(ORDER_ID));
         assertTrue(published.contains(TsonProblemSchema.ID));
-        assertFalse(published.stream().anyMatch(id -> id.startsWith("https://tson.io/2026/38/m/")),
+        assertFalse(published.stream().anyMatch(id -> id.startsWith("https://tson.io/2026/39/m/")),
                 () -> "the bundled standard library is not a service's to publish: " + published);
     }
 

@@ -15,38 +15,37 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * How to separate method names from {@code type_name}: declare a naming ROLE for the borrowed namespace, as the
+ * How to separate exchange names from {@code type_name}: declare a naming ROLE for the borrowed namespace, as the
  * kernel declares {@code type_name}, {@code field_name} and {@code param_name} -- all {@code => identifier}.
  *
- * <p>Measured: a role declared in the meta layer ({@code method_name => identifier}) enforces the identifier
- * grammar at a map key and <em>names itself</em> in the refusal ("'method_name': 'place order': U+0020 …"), where
+ * <p>Measured: a role declared in the meta layer ({@code exchange_name => identifier}) enforces the identifier
+ * grammar at a map key and <em>names itself</em> in the refusal ("'exchange_name': 'place order': U+0020 …"), where
  * a namespace cannot be keyed by {@code text} at all, since its keys are names. [TSON-DATA] §8.2's name hygiene
  * reaches an identifier-keyed map in a data document and a namespace in a schema governed by a meta layer alike,
- * under any role, {@code type_name} included -- the second being where an interface's methods are written.
+ * under any role, {@code type_name} included -- the second being where a protocol's exchanges are written.
  */
 class NameRoleTest {
 
-    static final String META_ID = "https://tson.io/2026/38/io/ltr8/http/meta-probe-n.tn";
-    static final String DOC_ID = "https://schemas.example.com/2026/38/app/probe-n-1.tn";
+    static final String META_ID = "https://tson.io/2026/39/io/ltr8/http/meta-probe-n.tn";
+    static final String DOC_ID = "https://schemas.example.com/2026/39/app/probe-n-1.tn";
 
     static final String META = """
         !!id:"%s"
-        !!meta:"https://tson.io/2026/38/m/meta-kernel.tn"
-        !!import:"https://tson.io/2026/38/m/meta.tn"
-        {
-          signature   => { request?: type_kind  response?: type_kind  errors?: [type_kind] }
-          method      => signature & {}
-          method_name => identifier
-          by_type_name   => namespace & { key_type: = type_name  value_type: = method }
-          by_method_name => namespace & { key_type: = method_name  value_type: = method }
+        !!import:"https://tson.io/2026/39/m/meta.tn"
+        !schema {
+          signature   => { request?: meta.type_ref  response?: meta.type_ref  errors?: [meta.type_ref] }
+          exchange      => signature & {}
+          exchange_name => meta.identifier
+          by_type_name     => !meta.namespace { key_type: meta.type_name  value_type: exchange }
+          by_exchange_name => !meta.namespace { key_type: exchange_name  value_type: exchange }
         }""".formatted(META_ID);
 
     static List<Diagnostic> problems(String entries) {
         String doc = """
             !!id:"%s"
-            !!meta:"%s"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            {
+            !!import:"%s"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema {
               order => { sku: text }
             %s
             }""".formatted(DOC_ID, META_ID, entries);
@@ -67,33 +66,33 @@ class NameRoleTest {
 
     /** A role of its own enforces the grammar and says which namespace refused the name. */
     @Test
-    void aMethodNameRoleEnforcesTheIdentifierGrammarUnderItsOwnName() {
-        String refused = only(problems("  x => !by_method_name { \"place order\" => { request: order } }"));
-        assertTrue(refused.contains("'method_name': 'place order'") && refused.contains("cannot appear in an identifier"),
-                refused);
+    void anExchangeNameRoleEnforcesTheIdentifierGrammarUnderItsOwnName() {
+        String refused = only(problems("  x => !by_exchange_name { \"place order\" => { request: order } }"));
+        assertTrue(refused.contains("'exchange_name': 'place order'")
+                && refused.contains("cannot appear in an identifier"), refused);
 
-        String digit = only(problems("  x => !by_method_name { \"1st\" => { request: order } }"));
-        assertTrue(digit.contains("'method_name': '1st'") && digit.contains("cannot start an identifier"), digit);
+        String digit = only(problems("  x => !by_exchange_name { \"1st\" => { request: order } }"));
+        assertTrue(digit.contains("'exchange_name': '1st'") && digit.contains("cannot start an identifier"), digit);
     }
 
-    /** {@code type_name} enforces the same grammar -- and misnames the namespace doing it. */
+    /** {@code meta.type_name} enforces the same grammar -- and misnames the namespace doing it. */
     @Test
     void typeNameEnforcesTheGrammarButNamesTheWrongNamespace() {
         String refused = only(problems("  x => !by_type_name { \"place order\" => { request: order } }"));
-        assertTrue(refused.contains("'type_name': 'place order'"), refused);
+        assertTrue(refused.contains("'meta.type_name': 'place order'"), refused);
     }
 
     /**
      * A namespace's keys are names, so a {@code text} key family is refused where the layer declares it: {@code
-     * key_type} is an {@code identifier_kind}. A map keyed by {@code text} is still a map, and accepts anything --
+     * key_type} is an {@code identifier_ref}. A map keyed by {@code text} is still a map, and accepts anything --
      * it is just no namespace, so a qualified name does not enter it, and an entry in it is reached by location. A
-     * text-keyed namespace is not proposed in Revision 38, a qualified name's segment being an identifier.
+     * text-keyed namespace is not proposed in Revision 39, a qualified name's segment being an identifier.
      */
     @Test
     void aNamespaceCannotBeKeyedByText() {
-        String meta = META.replace("  by_method_name => namespace",
-                "  by_text => namespace & { key_type: = text  value_type: = method }\n"
-                + "          by_method_name => namespace");
+        String meta = META.replace("  by_exchange_name => !meta.namespace",
+                "  by_text => !meta.namespace { key_type: text  value_type: exchange }\n"
+                + "          by_exchange_name => !meta.namespace");
         Tson tson = Tson.of(OrdersExamples.bindVocabulary(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(Map.of())))));
         String refused = only(tson.validateSchema(meta));
@@ -103,41 +102,40 @@ class NameRoleTest {
     /**
      * In a <em>data</em> document, an identifier-keyed map's keys are names: each meets the per-name rules and
      * the key set is one look-alike scope ([TSON-SCHEMA] §11.4), under a role over {@code identifier} as under
-     * {@code identifier} itself. The interface below is data, so a method map written this way is checked.
+     * {@code identifier} itself. The protocol below is data, so an exchange map written this way is checked.
      */
     @Test
     void aDataDocumentsIdentifierKeysAreNames() {
-        String schemaId = "https://schemas.example.com/2026/38/app/probe-n-data-1.tn";
+        String schemaId = "https://schemas.example.com/2026/39/app/probe-n-data-1.tn";
         Map<String, String> lib = Map.of(schemaId, """
             !!id:"%s"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            {
-              identifier  => !identifier_type { continue_add: "-" }
-              method_name => identifier
-              iface       => { methods: {method_name => text} }
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema {
+              identifier  => !unicode.identifier_type { continue_add: "-" }
+              exchange_name => identifier
+              protocol      => { exchanges: {exchange_name => text} }
             }""".formatted(schemaId));
         Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib))));
-        String head = "!!schema:\"" + schemaId + "\"\n";
+        String head = "!!import:\"" + schemaId + "\"\n";
 
         // The set rule needs two names the per-name rules admit, or the script rule refuses the second first:
         // `раѕѕ` is wholly Cyrillic, so it is single-script and reads alike with the Latin `pass`.
         assertEquals(List.of(Diagnostic.Code.CONFUSABLE_NAMES),
-                tson.validate(head + "!iface { methods: { pass => a  раѕѕ => b } }").stream()
+                tson.validate(head + "!protocol { exchanges: { pass => a  раѕѕ => b } }").stream()
                         .map(Diagnostic::code).toList());
         assertEquals(List.of(Diagnostic.Code.RESTRICTED_SCRIPT),
-                tson.validate(head + "!iface { methods: { pаy => a } }").stream().map(Diagnostic::code).toList());
+                tson.validate(head + "!protocol { exchanges: { pаy => a } }").stream().map(Diagnostic::code).toList());
     }
 
     /**
-     * In a <em>schema</em> governed by a meta layer, the same map's keys are names too -- which is where an
-     * interface's methods are written, in a schema governed by the meta layer that declares {@code interface}. Two
-     * confusable method names, or a mixed-script one, are refused here as they are as two fields of one record, two
+     * In a <em>schema</em> governed by a meta layer, the same map's keys are names too -- which is where a
+     * protocol's exchanges are written, in a schema importing the layer that declares {@code protocol}. Two
+     * confusable exchange names, or a mixed-script one, are refused here as they are as two fields of one record, two
      * declarations of one schema, or two keys of the same map in a data document (above).
      */
     @Test
     void aGovernedSchemasIdentifierKeysAreNamesToo() {
-        for (String ctor : List.of("by_type_name", "by_method_name")) {
+        for (String ctor : List.of("by_type_name", "by_exchange_name")) {
             assertEquals(List.of(Diagnostic.Code.CONFUSABLE_NAMES),
                     problems("  x => !" + ctor + " { pass => { request: order }  раѕѕ => { request: order } }")
                             .stream().map(Diagnostic::code).toList(),

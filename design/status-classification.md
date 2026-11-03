@@ -55,12 +55,13 @@ reading application, this deployment's own policy and budget, whoever was to ser
 **Not being a verdict does not settle the status**, and the fetch codes are where that shows. `verdict()` answers *was the
 document judged*; a status answers *who must act*. For a reference this deployment will not fetch, cannot find, or finds too
 large, the body went unchecked **and** the sender still holds the fix — so those are 400s. The spec says the first half
-itself: [TSON-DATA] §8.1's fifth outcome is *not judged*, whose members are a **refusal** (§8.2's name hygiene and §9.1's
-limits — this processor declined, and the next may accept the same document in full) and an **unavailable schema**
-([TSON-SCHEMA] §10.1) — so neither is a verdict by the spec's own account. Upstream counts `SCHEMA_NOT_PERMITTED` and
-`SCHEMA_TOO_LARGE` as refusals too (`Code.isRefusal()`): a schema this deployment *would not* supply, where the other three
-are what the world *could not*; tson-java's `SPEC-FEEDBACK.md` carries the change to §8.1's wording, and a `?sha256=` pin
-mismatch stays a resolver error, a finding about bytes that *were* obtained. The invariant that does hold is the other
+itself: [TSON-DATA] §8.1 sets two outcomes beside the four categories, neither a verdict on validity — **refused**
+(this processor declined under its own configuration: §8.2's name hygiene, §9.1's limits, or a schema it will not
+fetch or one past its size limit, and the next may accept the same document in full) and **undetermined** (it could
+not obtain what it would judge against, [TSON-SCHEMA] §10.1). Upstream's `Code.isRefusal()` follows that line:
+`SCHEMA_NOT_PERMITTED` and `SCHEMA_TOO_LARGE` are a schema this deployment *would not* supply, the other fetch codes
+what the world *could not*, and a `?sha256=` pin mismatch stays a resolver error, a finding about bytes that *were*
+obtained. The invariant that does hold is the other
 direction, and `TsonHttpCodecTest.everyCodeEarnsAStatusAndNoVerdictBecomesAServerFault` pins it: **a code `verdict()` calls
 true may never be answered 5xx.** That is the failure the classification exists to prevent — telling a sender the server
 broke when their document really was wrong sends them round a loop that cannot terminate.
@@ -118,7 +119,7 @@ disagree with the first — on the wire that means a body stating a code and a r
 other, which the schema would still call valid. Pinned by
 `TsonProblemSchemaTest.theSchemaCarriesNoSecondCarrierForAFetchFailure`.
 
-`Diagnostic.Code` is the detail vocabulary — mostly verdicts, but see the table above for the eleven that are not:
+`Diagnostic.Code` is the detail vocabulary — mostly verdicts, but see the table above for those that are not:
 `FIELD_REQUIRED`, `FIELD_FIXED`, `FIELD_GROUP`, `TYPE_MISMATCH`, `WRONG_ARITY`, `UNKNOWN_TYPE_REF`,
 `SCOPE_NOT_ADMITTED`, `ATOM_FORM_INVALID`, `ATOM_CONSTRAINT_VIOLATION`, `UNRECOGNIZED_FIELD`, `DUPLICATE_MAP_KEY`,
 `DUPLICATE_FIELD`, `CONFUSABLE_NAMES`,
@@ -163,7 +164,7 @@ not supply is skipped unjudged, so its problem carries the unusable reference al
 schema admitting `"first name"` would never make (`UpstreamGapsTest.aFieldNameIsJudgedOnlyByTheSchemaTheDocumentNames`).
 A relaxed name type is a translation's tool — `@id`, `$ref`, or an HTTP-style name under `ASCII_CASEFOLD` — stated on
 a fieldless abstract base its records compose, and bound with `@Field("@id")`; the hygiene rules then run under that
-type's profile. `RecordBody.fields()` is an ordered map from name to `RecordField`, which carries no name of its own.
+type's profile. `RecordBody.fields()` is an ordered text-keyed `AnnotatedMap`: a field name is in no namespace.
 
 **All three are 400 and none is a verdict**, both halves pinned rather than left implicit
 (`TsonHttpCodecTest.nameHygieneIsARefusalTheSenderFixes`): §8.1 makes a refusal its fifth outcome, so
@@ -189,7 +190,7 @@ level plus what only a name has: a unit (`perSegment()`, dividing at the name's 
 `ScriptPolicy`, so a per-segment token policy is *unwritable* rather than refused. **A name is decided by type,
 not position**: an identifier-typed field value, an identifier-keyed map's keys and a unique array of identifiers
 are names and meet all three rules, the key and element sets being look-alike scopes — in a data document and in a
-schema governed by a meta layer alike, where a namespace value and an annotation value are read under the same
+schema's value entries alike, where a namespace value and an annotation value are read under the same
 policy. `NameRoleTest` pins both places.
 Over HTTP the once-statement is `deployment.tn`'s acceptance profile at `/.well-known/tson-deployment`. §8.3
 is why any of it matters: all three rules are unstable across Unicode releases, so two conforming processors

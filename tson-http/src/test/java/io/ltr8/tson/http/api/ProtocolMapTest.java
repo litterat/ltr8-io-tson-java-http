@@ -6,6 +6,7 @@ import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.schema.meta.Namespace;
+import io.ltr8.tson.schema.meta.ValueEntry;
 import io.ltr8.tson.schema.meta.Top;
 import org.junit.jupiter.api.Test;
 
@@ -18,27 +19,27 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * An interface as a map of methods, measured on the layer's own {@code interface}: an entry applying it is the map
- * itself, read back as a {@code Namespace} of {@link Method}s; a value under the typed slot needs no {@code !method}
+ * A protocol as a map of exchanges, measured on the layer's own {@code protocol}: a value entry of it holds the
+ * map, read back as a {@code Namespace} of {@link Exchange}s; a value under the typed slot needs no {@code !exchange}
  * tag; an unresolved reference inside a value is caught at load, because the slot is typed by a kind; and the
- * annotations written before a method's key survive into {@code Namespace.getAnnotations}, which is where a reader
- * finds a method's documentation and facts.
+ * annotations written before an exchange's key survive into {@code Namespace.getAnnotations}, which is where a reader
+ * finds an exchange's documentation and facts.
  */
-class InterfaceMapTest {
+class ProtocolMapTest {
 
-    static final String PROBE_META_ID = "https://tson.io/2026/38/io/ltr8/http/meta-probe.tn";
-    static final String DOC_ID = "https://schemas.example.com/2026/38/app/probe-1.tn";
+    static final String PROBE_META_ID = "https://tson.io/2026/39/io/ltr8/http/meta-probe.tn";
+    static final String DOC_ID = "https://schemas.example.com/2026/39/app/probe-1.tn";
 
     /** The layer, served under a probe identity. */
     static final String META = TsonApiSchema.source()
-            .replace("https://tson.io/2026/38/io/ltr8/http/meta-service.tn", PROBE_META_ID);
+            .replace("https://tson.io/2026/39/io/ltr8/http/meta-service.tn", PROBE_META_ID);
 
     static String doc(String entries) {
         return """
         !!id:"%s"
-        !!meta:"%s"
-        !!import:"https://tson.io/2026/38/m/core.tn"
-        {
+        !!import:"%s"
+        !!import:"https://tson.io/2026/39/m/core.tn"
+        !schema {
           order     => { sku: text  quantity: int32 }
           order_ref => { id: text }
         %s
@@ -53,40 +54,42 @@ class InterfaceMapTest {
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))));
     }
 
-    /** The entry {@code orders}, which applies {@code interface}: the map of methods itself. */
-    static Namespace<?> resolvedInterface(String entries) {
+    /** The entry {@code orders}, which applies {@code protocol}: the map of exchanges itself. */
+    static Namespace<?> resolvedProtocol(String entries) {
         String doc = doc(entries);
         Tson tson = tson(doc);
         List<Diagnostic> problems = tson.validateSchema(doc);
         assertEquals(List.of(), problems, () -> "" + problems);
         Top entry = tson.schemaRegistry().get(DOC_ID).orElseThrow().schema().entries().get("orders");
-        return assertInstanceOf(Namespace.class, entry);
+        ValueEntry value = assertInstanceOf(ValueEntry.class, entry);
+        assertEquals("protocol", value.type());
+        return assertInstanceOf(Namespace.class, value.value());
     }
 
-    /** The entry is the map of methods, with nothing beside it: its keys are the methods, in written order. */
+    /** The entry is the map of exchanges, with nothing beside it: its keys are the exchanges, in written order. */
     @Test
-    void anInterfaceIsTheMapOfMethodsItself() {
-        Namespace<?> orders = resolvedInterface("""
-                  orders => !interface { place_order  => !method { request: order  response: order }
-                                         cancel_order => !method { request: order_ref } }""");
+    void aProtocolIsTheMapOfExchangesItself() {
+        Namespace<?> orders = resolvedProtocol("""
+                  orders => !protocol { place_order  => !exchange { request: order  response: order }
+                                        cancel_order => !exchange { request: order_ref } }""");
 
-        assertEquals("interface", orders.type());
+        assertEquals("protocol", orders.type());
         assertEquals(List.of("place_order", "cancel_order"), List.copyOf(orders.keySet()));
-        assertEquals("order", assertInstanceOf(Method.class, orders.get("place_order")).request().orElseThrow().name());
+        assertEquals("order", assertInstanceOf(Exchange.class, orders.get("place_order")).request().orElseThrow().name());
     }
 
     /** The slot's type supplies the record, so the tag is optional -- as at any typed position. */
     @Test
-    void aValueUnderAMethodTypedSlotNeedsNoTag() {
-        Namespace<?> orders = resolvedInterface("  orders => !interface { place_order => { request: order } }");
+    void aValueUnderAnExchangeTypedSlotNeedsNoTag() {
+        Namespace<?> orders = resolvedProtocol("  orders => !protocol { place_order => { request: order } }");
 
-        assertInstanceOf(Method.class, orders.get("place_order"));
+        assertInstanceOf(Exchange.class, orders.get("place_order"));
     }
 
     /** A name inside a map value is judged at load: the slot is typed by a kind, so the read records it. */
     @Test
     void anUnresolvedReferenceInsideAMapValueIsCaughtAtLoad() {
-        String doc = doc("  orders => !interface { place_order => !method { request: no_such } }");
+        String doc = doc("  orders => !protocol { place_order => !exchange { request: no_such } }");
         List<Diagnostic> problems = tson(doc).validateSchema(doc);
 
         assertEquals(1, problems.size(), () -> "" + problems);
@@ -95,13 +98,13 @@ class InterfaceMapTest {
     }
 
     /**
-     * A method can be documented where it is declared: a {@code @doc} and a bare marker before the key survive the
+     * An exchange can be documented where it is declared: a {@code @doc} and a bare marker before the key survive the
      * read, on the namespace's own key annotations.
      */
     @Test
-    void anAnnotationOnAMethodKeySurvivesIntoTheNamespace() {
-        Namespace<?> orders = resolvedInterface(
-                "  orders => !interface { @safe @doc:\"Fetch it.\" get_order => { request: order_ref } }");
+    void anAnnotationOnAnExchangeKeySurvivesIntoTheNamespace() {
+        Namespace<?> orders = resolvedProtocol(
+                "  orders => !protocol { @safe @doc:\"Fetch it.\" get_order => { request: order_ref } }");
 
         assertEquals("Fetch it.", orders.getAnnotations("get_order").value("doc", String.class).orElseThrow());
         assertTrue(orders.getAnnotations("get_order").has("safe"));

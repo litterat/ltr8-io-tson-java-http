@@ -6,10 +6,11 @@ import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.compiler.TsonDocumentHeader;
 import io.ltr8.tson.compiler.TsonDocumentPeek;
+import io.ltr8.tson.http.TsonBindings;
 import io.ltr8.tson.http.TsonMediaType;
 import io.ltr8.tson.http.TsonSchemaHeader;
+import io.ltr8.tson.http.api.ExchangeName;
 import io.ltr8.tson.http.api.HttpVerb;
-import io.ltr8.tson.http.api.InterfaceMethod;
 import io.ltr8.tson.http.api.RequestPlacement;
 import io.ltr8.tson.http.api.Route;
 import io.ltr8.tson.http.api.TsonApiDescription;
@@ -70,7 +71,7 @@ class TsonApiConformanceTest {
     private Tson serverResolved() throws Exception {
         String description = get(URI.create(OrderServer.API_ID).getPath()).body();
         Tson tson = Tson.of(ProcessorConfig.defaults()
-                .withMetaNameBinder(TsonApiSchema.metaNameBinder())
+                .withDataBindContext(TsonBindings.of(TsonApiSchema.bindings()))
                 .withSchemaAccess(SchemaAccess.of(uri -> {
                     String metaLayer = TsonApiSchema.publishedById().get(uri);
                     if (metaLayer != null) {
@@ -106,7 +107,7 @@ class TsonApiConformanceTest {
 
     private static String order(String sku, int quantity) {
         return """
-                !!schema:"%s"
+                !!import:"%s"
                 !order { sku: "%s"  quantity: %d }""".formatted(OrderServer.SCHEMA_ID, sku, quantity);
     }
 
@@ -117,11 +118,11 @@ class TsonApiConformanceTest {
         assertEquals(Set.of("POST /orders", "GET /{+schemaPath}"), keys);
 
         Route post = api.route(HttpVerb.POST, "/orders").orElseThrow();
-        assertEquals(Optional.of(new InterfaceMethod("orders", "place_order")), post.method());
-        assertEquals("order", post.request().orElseThrow().name(), "a resolved reference, borrowed from the method");
+        assertEquals(Optional.of(new ExchangeName("orders", "place_order")), post.exchange());
+        assertEquals("order", post.request().orElseThrow().name(), "a resolved reference, borrowed from the exchange");
         assertEquals(Optional.of("Place an order"), post.summary());
         assertEquals(Optional.of("Accept an order and confirm it with the quantity doubled."), post.doc(),
-                "the method's own documentation, since the verb key adds none");
+                "the exchange's own documentation, since the verb key adds none");
     }
 
     /**
@@ -134,24 +135,25 @@ class TsonApiConformanceTest {
 
         assertResponseMatches(post, postOrder(order("ABC-1", 3)), 201);
         assertResponseMatches(post, postOrder("""
-                !!schema:"%s"
+                !!import:"%s"
                 !order { }""".formatted(OrderServer.SCHEMA_ID)), 400);
         assertResponseMatches(post, postOrder(order(OrderServer.UNSTOCKED_SKU, 1)), 404);
     }
 
     /**
-     * The schema route is a document: its success is labelled by the media type the description states rather
+     * The schema route is a document: its success is labelled by the media type the description lists rather
      * than read as a value, its request record is placed from the path, and a miss is the boundary's problem.
      */
     @Test
     void theSchemaRouteIsADocumentOfItsMediaType() throws Exception {
         Route getSchema = api.route(HttpVerb.GET, "/{+schemaPath}").orElseThrow();
-        assertEquals(Optional.of("application/tson"), getSchema.mediaType());
+        assertTrue(getSchema.document());
+        assertEquals(Set.of("application/tson"), getSchema.mediaTypes());
         assertEquals("schema_ref", getSchema.request().orElseThrow().name());
         assertEquals(Map.of("schemaPath", RequestPlacement.Location.PATH), getSchema.placement().fields());
 
-        assertResponseMatches(getSchema, get("/2026/38/app/order-1.tn"), 200);
-        assertResponseMatches(getSchema, get("/2026/38/app/nope-1.tn"), 404);
+        assertResponseMatches(getSchema, get("/2026/39/app/order-1.tn"), 200);
+        assertResponseMatches(getSchema, get("/2026/39/app/nope-1.tn"), 404);
     }
 
     /** The description is served at its own identity's path, by the catalog like every other schema. */
@@ -164,38 +166,44 @@ class TsonApiConformanceTest {
     }
 
     /**
-     * <b>An endpoint speaks the encodings it declares, and no others.</b> One that declares JSON is sent JSON
-     * and asked for JSON, and each reply is held to the description as a TSON one is -- the status declared,
-     * and the body read against the schema its {@code TSON-Schema} header names, at the type the description
-     * gives for that status. A JSON body has no type-ref to show, so validating it at the declared type is the
-     * check. One that does not declare JSON must refuse it, or the description understates the endpoint.
+     * <b>An endpoint speaks the media types it lists.</b> One listing a JSON label is sent JSON under that label
+     * and asked for it, and each reply is held to the description as a TSON one is -- the status declared, the
+     * label the one asked for, and the body read against the schema its {@code TSON-Schema} header names, at the
+     * type the description gives for that status. A JSON body has no type-ref to show, so validating it at the
+     * declared type is the check. One listing no JSON label must refuse JSON, or the description understates the
+     * endpoint.
      */
     @Test
-    void everyEndpointSpeaksTheEncodingsItDeclares() throws Exception {
+    void everyEndpointSpeaksTheMediaTypesItLists() throws Exception {
         Tson published = serverResolved();
         Json json = Json.of(ProcessorConfig.defaults().withDataBindContext(published.dataBindContext()))
                 .withSchemas(published.schemaRegistry());
         for (Route route : api.routes()) {
-            if (route.mediaType().isPresent() || route.verb() != HttpVerb.POST) {
+            if (route.document() || route.verb() != HttpVerb.POST) {
                 continue;   // no body to send in either encoding
             }
             if (!route.speaksJson()) {
-                assertEquals(415, postJson(route.path(), "{}").statusCode(),
-                        route.key() + " does not declare JSON, so it must not read it");
+                assertEquals(415, postJson(route.path(), "application/json", "{}").statusCode(),
+                        route.key() + " lists no JSON label, so it must not read JSON");
                 continue;
             }
-            assertJsonResponseMatches(json, route, postJson(route.path(),
-                    "{\"sku\": \"ABC-1\", \"quantity\": 3}"), 201);
-            assertJsonResponseMatches(json, route, postJson(route.path(), "{}"), 400);
-            assertJsonResponseMatches(json, route, postJson(route.path(),
-                    "{\"sku\": \"" + OrderServer.UNSTOCKED_SKU + "\", \"quantity\": 1}"), 404);
+            for (String label : route.mediaTypes()) {
+                if (!TsonMediaType.namesJson(label)) {
+                    continue;
+                }
+                assertJsonResponseMatches(json, route, label, postJson(route.path(), label,
+                        "{\"sku\": \"ABC-1\", \"quantity\": 3}"), 201);
+                assertJsonResponseMatches(json, route, label, postJson(route.path(), label, "{}"), 400);
+                assertJsonResponseMatches(json, route, label, postJson(route.path(), label,
+                        "{\"sku\": \"" + OrderServer.UNSTOCKED_SKU + "\", \"quantity\": 1}"), 404);
+            }
         }
     }
 
-    private HttpResponse<String> postJson(String path, String body) throws Exception {
+    private HttpResponse<String> postJson(String path, String label, String body) throws Exception {
         return client.send(HttpRequest.newBuilder(URI.create(base + path))
-                        .header("Content-Type", "application/json")
-                        .header("Accept", "application/json, application/problem+json")
+                        .header("Content-Type", label)
+                        .header("Accept", label + ", application/problem+json")
                         .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)).build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
     }
@@ -221,17 +229,25 @@ class TsonApiConformanceTest {
         return "problem";
     }
 
-    /** {@link #assertResponseMatches} for JSON: the schema from the header, the type from the description. */
-    private void assertJsonResponseMatches(Json json, Route route, HttpResponse<String> response,
+    /**
+     * {@link #assertResponseMatches} for JSON: a success under the label asked for, any reply in JSON, the schema
+     * from the header, the type from the description.
+     */
+    private void assertJsonResponseMatches(Json json, Route route, String label, HttpResponse<String> response,
                                            int expectedStatus) throws Exception {
         assertEquals(expectedStatus, response.statusCode(), response.body());
         String mediaType = response.headers().firstValue("Content-Type").orElseThrow();
         assertTrue(TsonMediaType.namesJson(mediaType), () -> "a JSON client was answered in " + mediaType);
+        if (response.statusCode() == route.status()) {
+            assertTrue(mediaType.startsWith(label), () -> "asked for " + label + ", answered " + mediaType);
+        }
         String type = declaredType(route, response.statusCode());
 
-        String schema = TsonSchemaHeader.parse(response.headers().firstValue(TsonSchemaHeader.NAME).orElse(null))
-                .orElseThrow(() -> new AssertionError("a JSON " + response.statusCode()
-                        + " names no schema, and has nowhere but the header to name one"));
+        java.util.List<String> named =
+                TsonSchemaHeader.parse(response.headers().firstValue(TsonSchemaHeader.NAME).orElse(null));
+        assertEquals(1, named.size(), () -> "a JSON " + response.statusCode() + " names " + named
+                + " in its header, which is the only place it has to name its one schema");
+        String schema = named.getFirst();
         assertEquals(200, get(URI.create(schema).getPath()).statusCode(),
                 () -> "the " + response.statusCode() + " reply names " + schema
                         + ", which this server does not publish");
@@ -241,17 +257,17 @@ class TsonApiConformanceTest {
     }
 
     /**
-     * Holds one response to the description: a document's success must carry its media type, and any other reply
-     * must be self-describing -- its own {@code !!schema} and type-ref the ones the description gives that status.
+     * Holds one response to the description: a document's success must carry a media type it lists, and any other
+     * reply must be self-describing -- its own {@code !!import} and type-ref the ones the description gives that status.
      * Responses being self-describing is what makes this checkable without the description carrying examples.
      */
     private void assertResponseMatches(Route route, HttpResponse<String> response, int expectedStatus)
             throws Exception {
         assertEquals(expectedStatus, response.statusCode(), response.body());
-        if (route.mediaType().isPresent() && response.statusCode() == route.status()) {
+        if (route.document() && response.statusCode() == route.status()) {
             String contentType = response.headers().firstValue("Content-Type").orElseThrow();
-            assertTrue(contentType.startsWith(route.mediaType().get()),
-                    () -> route.key() + " is a document of " + route.mediaType().get() + ", answered " + contentType);
+            assertTrue(route.mediaTypes().stream().anyMatch(contentType::startsWith),
+                    () -> route.key() + " is a document of " + route.mediaTypes() + ", answered " + contentType);
             return;
         }
         String type = declaredType(route, response.statusCode());
@@ -260,9 +276,10 @@ class TsonApiConformanceTest {
 
         // And the schema it names must be one this server publishes -- fetched, not assumed.
         TsonDocumentHeader header = TsonDocumentPeek.of(response.body()).header();
-        assertTrue(header.schema().isPresent(), () -> "a self-describing body: " + response.body());
-        assertEquals(200, get(URI.create(header.schema().orElseThrow()).getPath()).statusCode(),
-                () -> "the " + response.statusCode() + " body names " + header.schema().orElseThrow()
+        assertEquals(1, header.imports().size(), () -> "a self-describing body: " + response.body());
+        String imported = header.imports().getFirst();
+        assertEquals(200, get(URI.create(imported).getPath()).statusCode(),
+                () -> "the " + response.statusCode() + " body imports " + imported
                         + ", which this server does not publish");
     }
 }

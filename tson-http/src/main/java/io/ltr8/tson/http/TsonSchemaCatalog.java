@@ -12,7 +12,7 @@ import java.util.Set;
 
 /**
  * The schema documents a server publishes, indexed by the path each one's own {@code !!id} names -- so the URL
- * in a <code>!!schema:"https://…"</code> reference is something a client can actually dereference.
+ * in a <code>!!import:"https://…"</code> reference is something a client can actually dereference.
  *
  * <p>Server-agnostic on purpose: every adapter needs the same lookup and the same two headers, and only the
  * routing around it differs. An adapter's schema handler is a few lines over this.

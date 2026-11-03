@@ -10,6 +10,8 @@ does not say where to get it. `allowHost` is the security boundary, `mapHost` is
 - Policy is checked on every reference, cached or not. A cache hit skips the network, never the allow-list.
 - Use `SchemaSource.ofMap`, never `map::get`: it refuses a miss as `NOT_PERMITTED` and compares by canonical identity.
 - Never `computeIfAbsent` on a schema cache; `HttpSchemaSource` uses get-then-put.
+- A request body names its schemas in its header (`!!import`) and nowhere else. A directive inside a value is a parse
+  error, so no value can make the server fetch.
 - `HttpSchemaSource` lives upstream. The mapping of its failures to statuses is `design/status-classification.md`.
 
 ## Identity is not location
@@ -27,9 +29,22 @@ separately: `allowHost` decides which schema *names* this server will load (the 
 non-default port** — an ephemeral test port, an internal endpoint, a mirror — because such a URL can never be
 an identity. A mapping renames nothing: the loader still cross-checks the fetched document's `!!id`.
 
-Getting this backwards produces a confusing failure a long way from its cause: a port-carrying `!!schema`
+Getting this backwards produces a confusing failure a long way from its cause: a port-carrying `!!import`
 fails inside `CanonicalIdentity.canonicalize` during resolution, with a message about identity and a
 stack trace through the resolver.
+
+## Where a body can name a schema
+
+A schema reference in a request body is an untrusted URL, and the body's header is the one place it can stand: a
+data document's `!!import`s bind it, several read under one namespace ([TSON-SCHEMA] §7.1). Each is resolved through
+the configured `SchemaSource`, so the allow-list sees every one.
+
+**A directive inside a value is a parse error**, outside [TSON-DATA]'s placement for directives. A body writing
+`{ attachment: !!import:"…" !order {…} }` is a 400 `VALIDATION_ERROR`, *"directive '!!import' is not permitted
+here"*, and nothing is fetched first: `TsonHttpSchemaSourceIntegrationTest.`
+`aDirectiveInsideAValueIsABadRequestAndFetchesNothing` points the value's reference at a source that permits nothing,
+so a fetch attempted before the refusal would surface as `SCHEMA_NOT_PERMITTED` instead. A value tagged at a position
+typed `meta.declared` names a type of the closure the header bound, and nothing outside it.
 
 
 ## Traps

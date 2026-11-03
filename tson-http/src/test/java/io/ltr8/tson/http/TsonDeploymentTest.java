@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TsonDeploymentTest {
 
     private static final String FULL = """
-            !!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
+            !!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
             !deployment {
               name:     "production"
               listener: { host: "127.0.0.1"  port: 8080 }
@@ -36,7 +36,7 @@ class TsonDeploymentTest {
     /** A descriptor whose policy is {@code policy}. */
     private static String withPolicy(String policy) {
         return """
-                !!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
+                !!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
                 !deployment { name: "n"  policy: %s }""".formatted(policy);
     }
 
@@ -94,10 +94,52 @@ class TsonDeploymentTest {
                 Optional.of(ProcessorPolicy.dataVersion()), stated.limits()), TsonDeployment.Policy.of(inForce));
     }
 
+    /** A descriptor whose policy states these {@code limits} beside the default policies. */
+    private static String withLimits(String limits) {
+        return withPolicy("""
+                { identifier_policy: %s
+                  token_policy: { level: UNRESTRICTED  permitting: [] }
+                  limits: %s }""".formatted(DEFAULT_IDENTIFIERS, limits));
+    }
+
+    /**
+     * <b>Every limit is a {@code policy.limit}, an {@code int64}, and reads whole.</b> A size the library holds
+     * as a {@code long} reaches it unchanged, past {@link Integer#MAX_VALUE} as much as below it.
+     */
+    @Test
+    void aSizeLimitPastIntRangeReachesTheLibraryUnchanged() {
+        TsonDeployment deployment = TsonDeployment.read(withLimits("{ max_document_size: 3000000000 }"));
+
+        assertEquals(3_000_000_000L, deployment.policy().orElseThrow().limits().maxDocumentSize());
+        assertEquals(3_000_000_000L, deployment.processorPolicy().orElseThrow().limits().maxDocumentSize());
+    }
+
+    /**
+     * <b>A count past what the library counts in is capped, as the library caps it.</b> {@code policy.limit}
+     * admits 2<sup>63</sup>-1 and {@code LimitsPolicy} holds a count as an {@code int}, so a valid descriptor
+     * stating a larger count reads, and runs at {@link Integer#MAX_VALUE}: the widest this processor counts it.
+     */
+    @Test
+    void aCountLimitPastIntRangeIsCappedAtTheWidestTheLibraryCounts() {
+        TsonDeployment deployment = TsonDeployment.read(withLimits("{ max_elements: 9223372036854775807 }"));
+
+        assertEquals(Long.MAX_VALUE, deployment.policy().orElseThrow().limits().maxElements());
+        assertEquals(Integer.MAX_VALUE, deployment.processorPolicy().orElseThrow().limits().maxElements());
+    }
+
+    /** <b>A limit below 1 admits nothing</b>, and {@code policy.limit} refuses it where it is written. */
+    @Test
+    void aLimitBelowOneIsRefusedWhereItIsWritten() {
+        List<Diagnostic> problems = TsonDeployment.tson().validate(withLimits("{ max_elements: 0 }"));
+
+        assertEquals(List.of(Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION),
+                problems.stream().map(Diagnostic::code).toList(), problems::toString);
+    }
+
     /** A descriptor with this {@code schema_hosts} and, where given, this {@code listener.host}. */
     private static String withHosts(String hosts, String listenerHost) {
         return """
-                !!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
+                !!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
                 !deployment { name: "n"  %s schema_hosts: [%s] }""".formatted(
                 listenerHost == null ? "" : "listener: { host: " + listenerHost + " }", hosts);
     }
@@ -171,7 +213,7 @@ class TsonDeploymentTest {
     @Test
     void anAbsentPolicyIsNotAPermissiveOne() {
         TsonDeployment deployment = TsonDeployment.read("""
-                !!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
+                !!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
                 !deployment { name: "minimal" }""");
 
         assertTrue(deployment.processorPolicy().isEmpty());
@@ -266,7 +308,7 @@ class TsonDeploymentTest {
     @Test
     void aDescriptorWithNoPolicyPublishesTheDefaults() {
         TsonDeployment.Policy policy = profileOf(TsonDeployment.read("""
-                !!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
+                !!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
                 !deployment { name: "minimal" }""")).policy();
 
         assertEquals(TsonDeployment.Policy.of(ProcessorPolicy.defaults()), policy);
@@ -276,7 +318,7 @@ class TsonDeploymentTest {
     }
 
     /**
-     * <b>The profile is {@code policy.tn}'s {@code policy}</b>, the shape {@code tson policy} and the CLI's
+     * <b>The profile is {@code policy.tn}'s {@code policy.processor}</b>, the shape {@code tson policy} and the CLI's
      * report state one in, so a client reads one format. Written and read back against the published schema,
      * which imports the bundled one: a field this project names differently would not validate.
      */

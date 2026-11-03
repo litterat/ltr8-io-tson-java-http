@@ -1,12 +1,11 @@
-!!id:"https://schemas.example.com/2026/38/orders/orders-types-1.tn"
-!!meta:"https://tson.io/2026/38/m/meta.tn"
-!!import:"https://tson.io/2026/38/m/core.tn"
+!!id:"https://schemas.example.com/2026/39/orders/orders-types-1.tn"
+!!import:"https://tson.io/2026/39/m/core.tn"
 @doc:"""
-  The types the orders examples share. Every method takes exactly one request record, which is what lets
+  The types the orders examples share. Every exchange takes exactly one request record, which is what lets
   a binding distribute its fields over the HTTP request -- so a parameter-only endpoint has a one-field
   record here too (`order_ref`) rather than a parameter list anywhere else.
   """
-{
+!schema {
   order       => { sku: text  quantity: int32 }
   order_ref   => { id: text }
   order_query => { status?: text  page?: int32 ~ 1  page_size?: int32 ~ 20 }

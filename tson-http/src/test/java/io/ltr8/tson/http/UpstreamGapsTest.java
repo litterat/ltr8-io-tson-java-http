@@ -2,6 +2,7 @@ package io.ltr8.tson.http;
 
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.BindMismatchException;
 import io.ltr8.tson.base.CanonicalIdentity;
 import io.ltr8.tson.base.Diagnostic;
@@ -53,16 +54,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class UpstreamGapsTest {
 
-    private static final String META_ID = "https://tson.io/2026/38/io/ltr8/http/meta-probe.tn";
-    private static final String API_ID = "https://schemas.example.com/2026/38/app/probe-1.tn";
+    private static final String META_ID = "https://tson.io/2026/39/io/ltr8/http/meta-probe.tn";
+    private static final String API_ID = "https://schemas.example.com/2026/39/app/probe-1.tn";
 
     /** A meta layer declaring namespace types of its own, standing in for meta-service without depending on its shape. */
     private static String meta(String declarations) {
         return """
                 !!id:"%s"
-                !!meta:"https://tson.io/2026/38/m/meta-kernel.tn"
-                !!import:"https://tson.io/2026/38/m/meta.tn"
-                {
+                !!import:"https://tson.io/2026/39/m/meta.tn"
+                !schema {
                 %s
                 }""".formatted(META_ID, declarations);
     }
@@ -70,9 +70,9 @@ class UpstreamGapsTest {
     private static String governed(String declarations) {
         return """
                 !!id:"%s"
-                !!meta:"%s"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                {
+                !!import:"%s"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema {
                 %s
                 }""".formatted(API_ID, META_ID, declarations);
     }
@@ -83,8 +83,9 @@ class UpstreamGapsTest {
         lib.put(API_ID, doc);
         ProcessorConfig config = ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(lib::get));
         if (packages.length > 0) {
-            config = config.withMetaNameBinder(
-                    new DataNameBinder.DefaultDataNameBinder(Set.of(packages), Map.of()));
+            config = config.withDataBindContext(
+                    AtomContext.defaultContext().toBuilder()
+                            .nameBinder(new DataNameBinder.DefaultDataNameBinder(Set.of(packages), Map.of())).build());
         }
         return Tson.of(config);
     }
@@ -106,10 +107,9 @@ class UpstreamGapsTest {
     @Test
     void anApplicationInsideAChoiceResolves() {
         String schema = """
-                !!id:"https://s.example.com/2026/38/p-1.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                {
+                !!id:"https://s.example.com/2026/39/p-1.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema {
                     order   => { sku: text }
                     problem => { title: text }
                     resp    => <T, S> { status: int32 = S  body: T }
@@ -120,7 +120,7 @@ class UpstreamGapsTest {
         List<Diagnostic> problems = tson.validateSchema(schema);
         assertEquals(List.of(), problems, () -> "expected a clean resolution, got " + problems);
 
-        var entries = tson.schemaRegistry().get("https://s.example.com/2026/38/p-1.tn").orElseThrow()
+        var entries = tson.schemaRegistry().get("https://s.example.com/2026/39/p-1.tn").orElseThrow()
                 .schema().entries();
         TypeRef response = ((RecordBody) entries.get("op")).fields().values().iterator().next().type();
         var variants = assertInstanceOf(ChoiceBody.class, entries.get(response.name())).variants();
@@ -141,17 +141,16 @@ class UpstreamGapsTest {
     @Test
     void aValueParameterFixedFieldConstrains() {
         String schema = """
-                !!id:"https://s.example.com/2026/38/p-1.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                {
+                !!id:"https://s.example.com/2026/39/p-1.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema {
                     order    => { sku: text }
                     resp     => <T, S> { status: int32 = S  body: T }
                     created  => resp<order, 201>
                 }""";
         Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> schema)));
         tson.resolve(schema);
-        String header = "!!schema:\"https://s.example.com/2026/38/p-1.tn\"\n";
+        String header = "!!import:\"https://s.example.com/2026/39/p-1.tn\"\n";
 
         assertEquals(List.of(), tson.validate(header
                 + "!created { status: 201  body: !order { sku: \"a\" } }"));
@@ -170,17 +169,16 @@ class UpstreamGapsTest {
     @Test
     void aMaterialisedApplicationCarriesAFixedField() {
         String schema = """
-                !!id:"https://s.example.com/2026/38/p-1.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                {
+                !!id:"https://s.example.com/2026/39/p-1.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema {
                     order   => { sku: text }
                     resp    => <T, S> { status: int32 = S  body: T }
                     created => resp<order, 201>
                 }""";
         Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> schema)));
         tson.resolve(schema);
-        var resolved = tson.schemaRegistry().get("https://s.example.com/2026/38/p-1.tn").orElseThrow().schema();
+        var resolved = tson.schemaRegistry().get("https://s.example.com/2026/39/p-1.tn").orElseThrow().schema();
         var entries = resolved.entries();
 
         assertEquals("resp", resolved.applicationOf("created").orElseThrow().name());
@@ -193,45 +191,36 @@ class UpstreamGapsTest {
         assertFalse(status.optional(), "the name is unmarked, so the key must be written");
     }
 
-    // ── fixed upstream: every meta-layer name in a governed schema refuses the same way ──────────
+    // ── one namespace: every name an imported layer declares resolves in the importer ─────────────
 
     /**
-     * <b>A meta layer is the schema <em>for</em> the schema.</b> Its declarations are the vocabulary a schema
-     * is written in, not types that schema may reference — a governed schema applies its constructors as
-     * {@code !C { … }} and nothing else. So every form here is refused, and they are all refused in the
-     * same words.
-     *
-     * <p>The one that used to differ was the <em>application</em>, which claimed the arguments were missing
-     * when they were written. Not a lookup bug: the desugar pass collapsed the application to its bare head,
-     * so the {@code source} lookup found a template through the meta-structure fallback and faulted it for
-     * supplying no arguments. Keeping the application whole is what let the linker judge what was actually
-     * written.
+     * <b>A layer's declarations are names its importer may use, every kind of them.</b> A schema's namespace is
+     * its own entries and every entry its {@code !!import}s bring in, one namespace with no second store for a
+     * layer's vocabulary ([TSON-SCHEMA] §2.2.3, §3.4), so an atom, a record, a namespace type, a template unapplied
+     * and a template applied, each declared by the imported layer, all resolve where the importer names them. That
+     * the unapplied template resolves at all is its own gap, {@link #aTemplatesBareNameAsAFieldTypeResolvesSilently}.
      */
     @Test
-    void everyMetaLayerNameInAGovernedSchemaIsUnresolved() {
+    void everyNameAnImportedLayerDeclaresResolvesInTheImporter() {
         String metaSource = meta("""
                   scalar => !integer ^ { min: 100  max: 599 }
                   plain  => { a: text }
                   tmpl   => <T> { v: T }
                   item   => { a: text }
-                  ctor   => namespace & { key_type: = identifier  value_type: = item }""");
+                  ctor   => !meta.namespace { key_type: meta.identifier  value_type: item }""");
 
-        record Case(String label, String declaration, String name) {
+        record Case(String label, String declaration) {
         }
         List<Case> cases = List.of(
-                new Case("an atom", "  x => { s: scalar }", "scalar"),
-                new Case("a record", "  x => { s: plain }", "plain"),
-                new Case("a constructor as a type", "  x => { s: ctor }", "ctor"),
-                new Case("a template, unapplied", "  x => { s: tmpl }", "tmpl"),
-                new Case("a template, applied", "  x => tmpl<text>", "tmpl"));
+                new Case("an atom", "  x => { s: scalar }"),
+                new Case("a record", "  x => { s: plain }"),
+                new Case("a namespace type as a type", "  x => { s: ctor }"),
+                new Case("a template, unapplied", "  x => { s: tmpl }"),
+                new Case("a template, applied", "  x => tmpl<text>"));
 
         for (Case one : cases) {
             String doc = governed(one.declaration());
-            String message = assertThrows(RuntimeException.class,
-                    () -> tson(metaSource, doc).resolve(doc), () -> "expected " + one.label() + " to be refused")
-                    .getMessage();
-            assertTrue(message.contains("unresolved reference '" + one.name() + "'"),
-                    () -> one.label() + ": " + message);
+            assertEquals(List.of(), tson(metaSource, doc).validateSchema(doc), one.label());
         }
     }
 
@@ -240,7 +229,7 @@ class UpstreamGapsTest {
     void aLocallyDeclaredTemplateApplies() {
         String metaSource = meta("""
                   item => { a: text }
-                  ctor => namespace & { key_type: = identifier  value_type: = item }""");
+                  ctor => !meta.namespace { key_type: meta.identifier  value_type: item }""");
         String doc = governed("  local => <T> { v: T }\n  x => local<text>");
 
         tson(metaSource, doc).resolve(doc);
@@ -255,8 +244,8 @@ class UpstreamGapsTest {
     @Test
     void aJavaComponentTheMetaDoesNotDeclareIsReported() {
         String metaSource = meta("""
-                  operation => { method: text  path: text  responses: [type_ref] }
-                  ops       => namespace & { key_type: = identifier  value_type: = operation }""");
+                  operation => { method: text  path: text  responses: [meta.type_ref] }
+                  ops       => !meta.namespace { key_type: meta.identifier  value_type: operation }""");
         String doc = governed("""
                   y   => { a: text }
                   api => !ops { op => { method: "GET"  path: "/x"  responses: [ y ] } }""");
@@ -269,33 +258,33 @@ class UpstreamGapsTest {
                 thrown.getMessage());
     }
 
-    // ── a templated api: a namespace value under a template, applied by name ─────────────────────
+    // ── a templated http projection: a namespace value under a template, applied by name ─────────
 
     /**
-     * <b>The CRUD-family payoff, restated for a namespace.</b> An endpoint is a value held two maps down in an api,
-     * so it is no entry and cannot be applied on its own; what a template can hold is a whole {@code !api} value.
-     * {@code fetching => <T> !api { … }} stands for every fetch-by-id family, and {@code orders =>
+     * <b>The CRUD-family payoff, restated for a namespace.</b> An endpoint is a value held two maps down in an http
+     * projection, so it is no entry and cannot be applied on its own; what a template can hold is a whole {@code
+     * !http} value. {@code fetching => <T> !http { … }} stands for every fetch-by-id family, and {@code orders =>
      * fetching<order>} names its application. [TSON-SCHEMA] §8.2 makes a declaration naming an application that
      * application's entry, so {@code orders} <em>is</em> the materialised namespace value, under the author's name,
      * with the argument substituted into its endpoints.
      *
      * <p>So {@link io.ltr8.tson.http.api.TsonApiDescription} finds it the way it finds a written-out one, by what
      * the entry is. Asserted through the description rather than the entries map, because that is the consumer the
-     * payoff is for; the written-out api beside it keeps the comparison honest.
+     * payoff is for; the written-out projection beside it keeps the comparison honest.
      */
     @Test
-    void aTemplatedApiIsAppliedByName() {
+    void aTemplatedHttpProjectionIsAppliedByName() {
         String template = """
                   order     => { sku: text }
                   order_ref => { id: text }
                   order_put => { id: text  sku: text }
-                  fetching  => <T> !api { "/orders/{id}" => {
+                  fetching  => <T> !http { "/orders/{id}" => {
                     @safe GET => !operation { request: order_ref  response: T } } }
                   orders    => fetching<order>
-                  writes    => !api { "/orders/{id}" => {
+                  writes    => !http { "/orders/{id}" => {
                     @idempotent PUT => !operation { request: order_put  response: order } } }""";
 
-        var described = TsonApiSchema.describedBy(resolveAgainstApiMeta(template), API_ID);
+        var described = TsonApiSchema.describedBy(resolveAgainstServiceMeta(template), API_ID);
 
         assertEquals(List.of("GET /orders/{id}", "PUT /orders/{id}"),
                 described.routes().stream().map(io.ltr8.tson.http.api.Route::key).sorted().toList(),
@@ -305,30 +294,30 @@ class UpstreamGapsTest {
     }
 
     /**
-     * <b>A templated api mints no name from its paths</b> -- kept because an HTTP path is the case that found it and
-     * would be the first to regress. A templated operation with a path {@code "/x"} once minted a name holding
-     * {@code /}, which §8.2 makes a MUST violation ("an internal name is a valid identifier") and which surfaced as
-     * a name-hygiene refusal on {@code U+002F} -- a refusal on a name nobody wrote and nobody could edit. A
-     * declaration naming the application mints no name at all, so every path resolves under the template.
+     * <b>A templated http projection mints no name from its paths</b> -- kept because an HTTP path is the case that
+     * would be the first to regress. A name minted from a path {@code "/x"} would hold {@code /}, which §8.2 makes a
+     * MUST violation ("an internal name is a valid identifier") and which would surface as a name-hygiene refusal on
+     * {@code U+002F} -- a refusal on a name nobody wrote and nobody could edit. A declaration naming the application
+     * mints no name at all, so every path resolves under the template.
      *
      * <p>A path key is a name of its own now, in the URL namespace's grammar ({@code path_template}, an identifier
      * family), so §8.2's hygiene judges the key the author wrote: a single-script path in Cyrillic resolves, and a
      * mixed-script one is refused, naming the key written rather than a name minted from it.
      */
     @Test
-    void aTemplatedApisPathMintsNoName() {
+    void aTemplatedHttpProjectionsPathMintsNoName() {
         String body = """
                   order    => { sku: text }
-                  fetching => <T> !api { "%s" => { @safe GET => !operation { response: T } } }
+                  fetching => <T> !http { "%s" => { @safe GET => !operation { response: T } } }
                   orders   => fetching<order>""";
 
         for (String path : List.of("/", "/x", "/orders/42", "/путь")) {
             var described = assertDoesNotThrow(() -> TsonApiSchema.describedBy(
-                    resolveAgainstApiMeta(body.formatted(path)), API_ID), path);
+                    resolveAgainstServiceMeta(body.formatted(path)), API_ID), path);
             assertTrue(described.route(io.ltr8.tson.http.api.HttpVerb.GET, path).isPresent(), path);
         }
         String mixed = assertThrows(RuntimeException.class,
-                () -> resolveAgainstApiMeta(body.formatted("/pаth"))).getMessage();
+                () -> resolveAgainstServiceMeta(body.formatted("/pаth"))).getMessage();
         assertTrue(mixed.contains("'/pаth' mixes the scripts"), mixed);
     }
 
@@ -338,17 +327,17 @@ class UpstreamGapsTest {
      * to bind, its minimal records disagree with this project's bound classes. The real meta is also the one whose
      * payoff this is.
      */
-    private static Tson resolveAgainstApiMeta(String declarations) {
+    private static Tson resolveAgainstServiceMeta(String declarations) {
         String doc = """
                 !!id:"%s"
-                !!meta:"%s"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                {
+                !!import:"%s"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema {
                 %s
                 }""".formatted(API_ID, TsonApiSchema.ID, declarations);
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(TsonApiSchema.publishedById())))
-                .withMetaNameBinder(TsonApiSchema.metaNameBinder()));
+                .withDataBindContext(TsonBindings.of(TsonApiSchema.bindings())));
         tson.resolve(doc);
         return tson;
     }
@@ -365,17 +354,16 @@ class UpstreamGapsTest {
     @Test
     void anEntrysTwoAnnotationPositionsLandInDifferentPlaces() {
         String schema = """
-                !!id:"https://s.example.com/2026/38/p-1.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                {
+                !!id:"https://s.example.com/2026/39/p-1.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema {
                   @doc:"on the entry"
                   before => { a: text }
                   after  => @doc:"on the definition" { a: text }
                 }""";
         Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> schema)));
         tson.resolve(schema);
-        var resolved = tson.schemaRegistry().get("https://s.example.com/2026/38/p-1.tn").orElseThrow().schema();
+        var resolved = tson.schemaRegistry().get("https://s.example.com/2026/39/p-1.tn").orElseThrow().schema();
         var entries = resolved.entries();
 
         assertEquals(java.util.Optional.of("on the entry"),
@@ -391,10 +379,9 @@ class UpstreamGapsTest {
     @Test
     void anUnknownAnnotationOnAnEntryIsRefused() {
         String schema = """
-                !!id:"https://s.example.com/2026/38/p-1.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                {
+                !!id:"https://s.example.com/2026/39/p-1.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema {
                   @nosuchtype:"x"
                   thing => { a: text }
                 }""";
@@ -410,8 +397,8 @@ class UpstreamGapsTest {
     @Test
     void aNamespaceEntryCannotBeUsedWhereATypeBelongs() {
         String metaSource = meta("""
-                  operation => { method: text  path: text  responses: [type_ref] }
-                  ops       => namespace & { key_type: = identifier  value_type: = operation }""");
+                  operation => { method: text  path: text  responses: [meta.type_ref] }
+                  ops       => !meta.namespace { key_type: meta.identifier  value_type: operation }""");
         String doc = governed("""
                   y      => { a: text }
                   api    => !ops { op => { method: "GET"  path: "/x"  responses: [ y ] } }
@@ -424,67 +411,75 @@ class UpstreamGapsTest {
     }
 
     /**
-     * A namespace type declares its facets and nothing else: a value of it is the map alone, so a field beside {@code
-     * key_type} and {@code value_type} has nowhere to be written and the meta layer is refused. That is why what
-     * {@code meta-service.tn}'s {@code api} says about the interfaces behind it -- the claims {@code implements} and
-     * {@code not_bound} -- is annotation on the api's entry rather than fields beside its paths.
+     * A namespace type declares its facets and nothing else: a value of it is the map alone, so a field beyond the
+     * facets {@code meta.namespace} has as a refinement of {@code meta.map} -- {@code key_type} and {@code
+     * value_type}, {@code ordered}, {@code min_items} and {@code max_items} among them -- has nowhere to be written,
+     * and {@code meta.namespace}'s own record reader refuses it as an unknown field, listing the facets. That is
+     * why what {@code meta-service.tn}'s {@code http} says about the protocols behind it -- the claims {@code
+     * binds} and {@code not_bound} -- is annotation on the projection's entry rather than fields beside its paths.
      */
     @Test
     void aNamespaceTypeDeclaresOnlyItsFacets() {
         String metaSource = meta("""
                   operation => { method: text }
-                  ops       => namespace & { key_type: = identifier  value_type: = operation  extends?: [type_name] }""");
+                  ops       => !meta.namespace {
+                    key_type: meta.identifier  value_type: operation  extends: [operation]
+                  }""");
 
         List<Diagnostic> problems = tson(metaSource, governed("  y => { a: text }")).validateSchema(metaSource);
 
         assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), problems.stream().map(Diagnostic::code).toList(),
                 () -> "" + problems);
-        assertTrue(problems.getFirst().message().contains("the field 'extends' beside them, which no value can carry"),
+        assertTrue(problems.getFirst().message().contains("unknown field 'extends' on 'meta.namespace'"),
                 problems.getFirst().message());
+        assertTrue(problems.getFirst().message().endsWith("whose fields are (chain | access_pattern | size_type | "
+                + "key_type | value_type | voidable | ordered | min_items | max_items)"), problems.getFirst().message());
     }
 
     // ── open: a reference inside an annotation's value is not judged ─────────────────────────────
 
     /**
-     * <b>The resolver does not judge a reference inside an annotation's value.</b> A meta layer may declare an
-     * annotation whose value holds references -- {@code implements => @annotation [ref<interface>]}, or a record
-     * carrying a {@code ref<method>} -- and the value's <em>shape</em> is checked ({@code @implements:42} is refused),
-     * but no name in it is: an unknown interface and a method key the interface does not hold both load clean. The
-     * {@code [ref<interface>]} elements arrive as plain {@code String}s, and the record's {@code ref<method>} as a
-     * {@code TypeRef} nobody resolved.
+     * <b>The resolver does not judge a reference inside an annotation's value.</b> A layer may declare an annotation
+     * whose value holds references -- {@code binds => @meta.annotation [meta.ref<protocol>]}, or a record carrying a
+     * {@code meta.ref<exchange>} -- and the value's <em>shape</em> is checked ({@code @binds:42} is refused), but no
+     * name in it is: an unknown protocol and an exchange key the protocol does not hold both load clean. The {@code
+     * [meta.ref<protocol>]} elements and the record's {@code meta.ref<exchange>} each arrive as a {@code TypeRef}
+     * nobody resolved.
      *
-     * <p>{@code meta-service.tn} writes an api's {@code @implements} and {@code @not_bound} exactly this way, so
-     * {@code TsonApiDescription} checks both itself: each name is an entry applying {@code interface}, each exemption
-     * a key of an interface the api implements. The layer keeps the {@code ref<…>} typing so the declaration says
+     * <p>{@code meta-service.tn} writes an http projection's {@code @binds} and {@code @not_bound} exactly this way,
+     * so {@code TsonApiDescription} checks both itself: each name is an entry applying {@code protocol}, each
+     * exemption a key of a protocol the projection binds. The layer keeps the {@code ref<…>} typing so the declaration says
      * what it means; when this is fixed, the clean load below flips and the reader's checks become a second net.
      */
     @Test
     void aReferenceInsideAnAnnotationValueIsNotJudged() {
         String metaSource = meta("""
-                  method      => { request?: type_kind }
-                  method_name => identifier
-                  interface   => namespace & { key_type: = method_name  value_type: = method }
-                  exemption   => { method: ref<method>  reason: text }
-                  implements  => @annotation [ref<interface>]
-                  not_bound   => @annotation [exemption]""");
+                  exchange      => { request?: meta.type_ref }
+                  exchange_name => meta.identifier
+                  protocol      => !meta.namespace { key_type: exchange_name  value_type: exchange }
+                  exemption     => { exchange: meta.ref<exchange>  reason: text }
+                  binds         => @meta.annotation [meta.ref<protocol>]
+                  not_bound     => @meta.annotation [exemption]""");
         String unsound = governed("""
                   order  => { sku: text }
-                  orders => !interface { place => { request: order } }
-                  @implements:[no_such]
-                  @not_bound:[ { method: orders.no_such  reason: "later" } ]
+                  orders => !protocol { place => { request: order } }
+                  @binds:[no_such]
+                  @not_bound:[ { exchange: orders.no_such  reason: "later" } ]
                   holder => { a: text }""");
         Tson tson = tson(metaSource, unsound, "io.ltr8.tson.http.probe.annotation");
 
         assertEquals(List.of(), tson.validateSchema(unsound), "neither name is judged");
 
         var annotations = tson.schemaRegistry().get(API_ID).orElseThrow().schema().entries().getAnnotations("holder");
-        assertEquals(List.of("no_such"), annotations.value("implements", List.class).orElseThrow(),
-                "a [ref<interface>] element arrives as a String");
+        List<?> bound = annotations.value("binds", List.class).orElseThrow();
+        assertEquals(List.of("no_such"), bound.stream().map(e -> assertInstanceOf(TypeRef.class, e).name())
+                .toList(), "a [meta.ref<protocol>] element arrives as a TypeRef nobody resolved");
         var exemption = assertInstanceOf(io.ltr8.tson.http.probe.annotation.Exemption.class,
                 annotations.value("not_bound", List.class).orElseThrow().getFirst());
-        assertEquals("orders.no_such", exemption.method().name(), "a ref<method> arrives as an unresolved TypeRef");
+        assertEquals("orders.no_such", exemption.exchange().name(),
+                "a meta.ref<exchange> arrives as an unresolved TypeRef");
 
-        String misshapen = governed("  @implements:42\n  holder => { a: text }");
+        String misshapen = governed("  @binds:42\n  holder => { a: text }");
         assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR),
                 tson(metaSource, misshapen, "io.ltr8.tson.http.probe.annotation").validateSchema(misshapen).stream()
                         .map(Diagnostic::code).toList(),
@@ -494,31 +489,42 @@ class UpstreamGapsTest {
     // ── a constraint: a namespace is keyed by an identifier family ───────────────────────────────
 
     /**
-     * <b>Revision 38 keys a namespace by names: its {@code key_type} must be an identifier family.</b> A {@code
+     * <b>Revision 39 keys a namespace by names: its {@code key_type} must be an identifier family.</b> A {@code
      * text_type} with a {@code pattern} is refused as a key type where the meta layer declares it, since {@code
-     * key_type} is an {@code identifier_kind}. An {@code identifier_type} widened with {@code start_add} and {@code
-     * continue_add} is admitted, and still carries a {@code pattern} that is enforced at the key.
+     * key_type} is a {@code meta.identifier_ref}. It is required: a namespace states its key family, there being
+     * no default one. An {@code identifier_type} widened with {@code start_add} and {@code continue_add} is
+     * admitted, and still carries a {@code pattern} that is enforced at the key.
      *
-     * <p>{@code meta-service.tn}'s {@code api} is keyed this way: {@code path_template} is an {@code identifier_type}
+     * <p>{@code meta-service.tn}'s {@code http} is keyed this way: {@code path_template} is an {@code identifier_type}
      * starting with {@code /}, its {@code pattern} holding a URI template's structure, and §8.2's name hygiene
      * reaches a path key as it reaches any name.
      */
     @Test
     void aNamespaceKeyTypeMustBeAnIdentifierFamily() {
         String textKeyed = meta("""
-                  method => { request?: type_kind }
-                  path   => !text_type { pattern: "/[a-z]*" }
-                  paths  => namespace & { key_type: = path  value_type: = method }""");
+                  exchange => { request?: meta.type_ref }
+                  path     => !unicode.text_type { pattern: "/[a-z]*" }
+                  paths    => !meta.namespace { key_type: path  value_type: exchange }""");
         List<Diagnostic> refused = tson(textKeyed, governed("  y => { a: text }")).validateSchema(textKeyed);
         assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), refused.stream().map(Diagnostic::code).toList(),
                 () -> "" + refused);
-        assertTrue(refused.getFirst().message().contains("is declared 'identifier_kind'"),
-                refused.getFirst().message());
+        assertTrue(refused.getFirst().message().contains("'paths' key_type names 'path', which is no identifier "
+                + "family"), refused.getFirst().message());
+
+        String unkeyed = meta("""
+                  exchange => { request?: meta.type_ref }
+                  paths    => !meta.namespace { value_type: exchange }""");
+        List<Diagnostic> keyless = tson(unkeyed, governed("  y => { a: text }")).validateSchema(unkeyed);
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), keyless.stream().map(Diagnostic::code).toList(),
+                () -> "" + keyless);
+        assertTrue(keyless.getFirst().message().contains("missing required field 'key_type' for 'meta.namespace'"),
+                keyless.getFirst().message());
 
         String identifierKeyed = meta("""
-                  method => { request?: type_kind }
-                  path   => !identifier_type { start: NONE  start_add: "/"  continue_add: "/"  pattern: "/[a-z/]*" }
-                  paths  => namespace & { key_type: = path  value_type: = method }""");
+                  exchange => { request?: meta.type_ref }
+                  path     => !unicode.identifier_type {
+                    start: NONE  start_add: "/"  continue_add: "/"  pattern: "/[a-z/]*" }
+                  paths    => !meta.namespace { key_type: path  value_type: exchange }""");
         String sound = governed("  order => { sku: text }\n  p => !paths { \"/orders\" => { request: order } }");
         assertEquals(List.of(), tson(identifierKeyed, sound, "io.ltr8.tson.http.probe.annotation")
                 .validateSchema(sound));
@@ -540,16 +546,16 @@ class UpstreamGapsTest {
      * declaration records its type beside the name, so the linker never walks declared types back to it.
      *
      * <p>{@code meta-service.tn} holds every {@code !operation} this way, in a {@code resource}'s map field under a
-     * path key of an {@code api}. Pinned because a gap here stops a sound schema resolving.
+     * path key of an {@code http}. Pinned because a gap here stops a sound schema resolving.
      */
     @Test
     void aKindSlotOnASubtypeBehindARecordFieldIsJudged() {
         String metaSource = meta("""
                   endpoint  => abstract {}
-                  op        => endpoint & { request?: type_kind }
-                  ops       => namespace & { key_type: = identifier  value_type: = endpoint }
-                  resource  => { endpoints: {identifier => endpoint} }
-                  resources => namespace & { key_type: = identifier  value_type: = resource }""");
+                  op        => endpoint & { request?: meta.type_ref }
+                  ops       => !meta.namespace { key_type: meta.identifier  value_type: endpoint }
+                  resource  => { endpoints: {meta.identifier => endpoint} }
+                  resources => !meta.namespace { key_type: meta.identifier  value_type: resource }""");
 
         String inHand = governed("  order => { sku: text }\n  r => !ops { get => !op { request: order } }");
         assertEquals(List.of(), tson(metaSource, inHand, "io.ltr8.tson.http.probe.subtype").validateSchema(inHand));
@@ -575,18 +581,18 @@ class UpstreamGapsTest {
      * interface held under a key that keeps its methods in a namespace-typed field is reached as {@code
      * i.orders.methods.place}, walking an entry, a key, a field and a key; the walk reads the field through the
      * descriptor that bound the host. A key missing past the field is refused. {@code meta-service.tn}'s own
-     * {@code ref<method>} walks an entry and a key alone; this pins the longer walk so a regression to a gap fails
+     * {@code ref<exchange>} walks an entry and a key alone; this pins the longer walk so a regression to a gap fails
      * here.
      */
     @Test
     void aReferenceThroughARecordValuesFieldIsJudged() {
         String metaSource = meta("""
-                  method   => { request?: type_kind }
-                  methods  => namespace & { key_type: = identifier  value_type: = method }
+                  method   => { request?: meta.type_ref }
+                  methods  => !meta.namespace { key_type: meta.identifier  value_type: method }
                   iface    => { methods: methods }
-                  ifaces   => namespace & { key_type: = identifier  value_type: = iface }
-                  binding  => { method: ref<method> }
-                  bindings => namespace & { key_type: = identifier  value_type: = binding }""");
+                  ifaces   => !meta.namespace { key_type: meta.identifier  value_type: iface }
+                  binding  => { method: meta.ref<method> }
+                  bindings => !meta.namespace { key_type: meta.identifier  value_type: binding }""");
         String interfaces =
                 "  order => { sku: text }\n  i => !ifaces { orders => { methods: { place => { request: order } } } }";
 
@@ -600,36 +606,39 @@ class UpstreamGapsTest {
         assertTrue(problems.getFirst().message().contains("cancel"), problems.getFirst().message());
     }
 
-    // ── filed spec feedback: no template-application sugar at a `type_ref` slot in data ──────────
+    // ── decided upstream: an application at a kind slot in a value is named through an alias ──────
 
     /**
-     * <b>Not a gap — the spec's design, pinned because what it costs is filed as spec feedback (tson-java's
-     * {@code SPEC-FEEDBACK.md}, the entry on a template application at a {@code type_ref} slot in data).</b> [TSON-SCHEMA] §8.1 gives {@code type_ref} a positional form at every {@code type_ref}-typed
-     * position: a bare token fills {@code name}, and the braced record is the explicit form, canonical only
-     * where {@code arguments} is present. A <em>schema</em> may therefore write {@code page<order>}; a
-     * <em>value</em> at such a slot — an operation held by an {@code !api { … }} a consumer's meta layer declares
-     * — cannot, because {@code <} is not data syntax. So an API description applying one template at four
-     * endpoints writes the braced record four times, or names four aliases. Both spellings are asserted
-     * here: the braced one resolves, the sugar is a parse error.
+     * <b>Not a gap -- the spec's design, pinned because it decides how an API description applies a template.</b> A
+     * slot typed by a kind holds the name of a type, one bare token, and a value entry's payload is a value body,
+     * where nothing lifts or mints. So neither the braced record nor the sugar {@code page<order>} is admitted at
+     * such a slot inside an {@code !ops { … }} value: both are refused, naming the alias spelling. The alias, {@code
+     * order_page => page<order>}, gives the application its entry, and its name is what the slot holds.
+     *
+     * <p>Revision 38 admitted the braced record there and refused the sugar as a parse error; Revision 39 refuses
+     * both and leaves the alias as the one spelling.
      */
     @Test
-    void aTemplateApplicationAtATypeRefSlotInDataNeedsTheBracedForm() {
+    void aTemplateApplicationAtAKindSlotInAValueIsNamedThroughAnAlias() {
         String metaSource = meta("""
-                  operation => { method: text  path: text  responses: [type_ref] }
-                  ops       => namespace & { key_type: = identifier  value_type: = operation }""");
+                  operation => { method: text  path: text  responses: [meta.type_ref] }
+                  ops       => !meta.namespace { key_type: meta.identifier  value_type: operation }""");
         String body = """
-                  order => { sku: text }
-                  page  => <T> { items: [T] }
-                  api   => !ops { op => { method: "GET"  path: "/x"  responses: [ %s ] } }""";
+                  order      => { sku: text }
+                  page       => <T> { items: [T] }
+                  order_page => page<order>
+                  api        => !ops { op => { method: "GET"  path: "/x"  responses: [ %s ] } }""";
 
-        String braced = governed(body.formatted("{ name: page  arguments: [ { name: order } ] }"));
-        tson(metaSource, braced, "io.ltr8.tson.http.probe").resolve(braced);
+        for (String inline : List.of("{ name: page  arguments: [ { name: order } ] }", "page<order>")) {
+            String written = governed(body.formatted(inline));
+            String message = assertThrows(RuntimeException.class,
+                    () -> tson(metaSource, written, "io.ltr8.tson.http.probe").resolve(written)).getMessage();
+            assertTrue(message.contains("a position typed by a kind holds the name of a type")
+                    && message.contains("declare an alias"), message);
+        }
 
-        String sugar = governed(body.formatted("page<order>"));
-        String message = assertThrows(RuntimeException.class,
-                () -> tson(metaSource, sugar, "io.ltr8.tson.http.probe").resolve(sugar)).getMessage();
-
-        assertTrue(message.contains("adjacent values must be separated"), message);
+        String aliased = governed(body.formatted("order_page"));
+        assertEquals(List.of(), tson(metaSource, aliased, "io.ltr8.tson.http.probe").validateSchema(aliased));
     }
 
     /**
@@ -676,7 +685,7 @@ class UpstreamGapsTest {
 
         var problems = DiagnosticsReceiver.collecting();
         tson.treeReader().withDiagnostics(problems)
-                .read("!!schema:\"https://s.example.com/2026/38/p-1.tn\"\n{ \"first name\": 1 }");
+                .read("!!import:\"https://s.example.com/2026/39/p-1.tn\"\n{ \"first name\": 1 }");
         assertEquals(List.of(Diagnostic.Code.SCHEMA_NOT_PERMITTED),
                 problems.diagnostics().stream().map(Diagnostic::code).distinct().toList());
     }
@@ -727,10 +736,9 @@ class UpstreamGapsTest {
     @Test
     void aDeclaredNameDefaultsToHighlyRestrictiveAndAValueToUnrestricted() {
         String schema = """
-                !!id:"https://example.com/2026/38/app/hygiene-1.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                {
+                !!id:"https://example.com/2026/39/app/hygiene-1.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema {
                   rec => { \u0430dmin: text }
                 }""";
 
@@ -761,11 +769,10 @@ class UpstreamGapsTest {
         // The import is what reaches the source at all: the meta layer and core are pre-loaded, so a schema
         // naming only those never consults it and the null is never returned.
         String schema = """
-                !!id:"https://example.com/2026/38/app/null-source-1.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                !!import:"https://example.com/2026/38/app/absent-1.tn"
-                { thing => { a: text } }""";
+                !!id:"https://example.com/2026/39/app/null-source-1.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !!import:"https://example.com/2026/39/app/absent-1.tn"
+                !schema { thing => { a: text } }""";
         Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> null)));
 
         RuntimeException refused = assertThrows(RuntimeException.class, () -> tson.resolve(schema));
@@ -786,31 +793,29 @@ class UpstreamGapsTest {
     @Test
     void ofMapRefusesAMissAndComparesByCanonicalIdentity() {
         String schema = """
-                !!id:"https://example.com/2026/38/app/ofmap-1.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                { thing => { a: text } }""";
+                !!id:"https://example.com/2026/39/app/ofmap-1.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema { thing => { a: text } }""";
         SchemaSource source =
-                SchemaSource.ofMap(Map.of("https://example.com/2026/38/app/ofmap-1.tn", schema));
+                SchemaSource.ofMap(Map.of("https://example.com/2026/39/app/ofmap-1.tn", schema));
 
         // The scheme is a transport hint, not part of the name.
-        assertDoesNotThrow(() -> source.fetch("http://example.com/2026/38/app/ofmap-1.tn"));
+        assertDoesNotThrow(() -> source.fetch("http://example.com/2026/39/app/ofmap-1.tn"));
 
         SchemaFetchException refused = assertThrows(SchemaFetchException.class,
-                () -> source.fetch("https://example.com/2026/38/app/absent-1.tn"));
+                () -> source.fetch("https://example.com/2026/39/app/absent-1.tn"));
         assertEquals(SchemaFetchException.Reason.NOT_PERMITTED, refused.reason());
     }
 
     // ── open: RFC 6901 over TSON's map keys ─────────────────────────────────────────────────────
 
-    private static final String KEYS_ID = "https://s.example.com/2026/38/keys-1.tn";
+    private static final String KEYS_ID = "https://s.example.com/2026/39/keys-1.tn";
 
     private static Tson keysTson() {
         String schema = """
-                !!id:"https://s.example.com/2026/38/keys-1.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                {
+                !!id:"https://s.example.com/2026/39/keys-1.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema {
                   point => { x: int32  y: int32 }
                   tally => { counts?: {int32 => int32}  grid?: {point => int32}  tags?: {text => int32} }
                 }""";
@@ -834,7 +839,7 @@ class UpstreamGapsTest {
     @Test
     void aMapKeysPointerTokenIsItsSpellingNotItsValue() {
         Tson tson = keysTson();
-        String head = "!!schema:\"" + KEYS_ID + "\"\n";
+        String head = "!!import:\"" + KEYS_ID + "\"\n";
 
         assertEquals(List.of("/counts/0x10"), pathsOf(tson.validate(head + "!tally { counts: { 0x10 => oops } }")));
         assertEquals(List.of("/counts/16"), pathsOf(tson.validate(head + "!tally { counts: { 16 => oops } }")));
@@ -863,7 +868,7 @@ class UpstreamGapsTest {
     @Test
     void aCompoundKeyHasNoPointerTokenAndTheEncodingsDisagree() {
         Tson tson = keysTson();
-        String head = "!!schema:\"" + KEYS_ID + "\"\n";
+        String head = "!!import:\"" + KEYS_ID + "\"\n";
         Json json = Json.standard().withSchemas(tson.schemaRegistry());
 
         assertEquals(List.of("/grid/TsonRecord[fields={x=1, y=2}, typeRef=Optional[point], annotations=[]]"),
@@ -879,11 +884,11 @@ class UpstreamGapsTest {
     // ── open: a JSON document cannot name its own binding ───────────────────────────────────────
 
     /**
-     * <b>[TSON-JSON] §3.4's in-band route is not built</b>: a root annotation object carrying {@code $schema} and
-     * {@code $type} is how a JSON document names its own binding, and §3.5 requires it to agree with a {@code
-     * TSON-Schema} header by canonical identity. tson-java's JSON reader builds only the out-of-band route, and
-     * refuses a {@code $schema} at a position that is not scoped -- so a spec-valid body that names its binding
-     * twice, in agreement, is a 400 today. {@code TsonHttpCodec.acceptingJson} documents it; this is what fails
+     * <b>[TSON-JSON] §3.4's in-band route is not built</b>: a root annotation object led by {@code $import} is how a
+     * JSON document names its own binding, and §3.5 requires it to agree with a {@code TSON-Schema} header by
+     * canonical identity. tson-java's JSON reader builds only the out-of-band route, and declines an {@code $import}
+     * at the root as {@code NOT_IMPLEMENTED} -- so a spec-valid body that names its binding twice, in agreement, is
+     * refused today. {@code TsonHttpCodec.acceptingJson} documents it; this is what fails
      * the day it lands, so the codec can then check the agreement rather than leave it to the reader.
      *
      * <p>Asserted through {@code Json} directly, over the same schema the header route would name, so the refusal
@@ -891,12 +896,11 @@ class UpstreamGapsTest {
      */
     @Test
     void aJsonDocumentsInBandBindingIsRefused() {
-        String schemaId = "https://s.example.com/2026/38/j-1.tn";
+        String schemaId = "https://s.example.com/2026/39/j-1.tn";
         String schema = """
-                !!id:"https://s.example.com/2026/38/j-1.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                {
+                !!id:"https://s.example.com/2026/39/j-1.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema {
                     note => { title: text }
                 }""";
         Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(u -> schema)));
@@ -908,27 +912,90 @@ class UpstreamGapsTest {
 
         // In band, agreeing with it exactly: refused, where §3.4 makes it valid.
         List<Diagnostic> inBand = json.validate(
-                "{\"$schema\": \"" + schemaId + "\", \"$type\": \"note\", \"title\": \"t\"}", schemaId, "note");
+                "{\"$import\": [\"" + schemaId + "\"], \"$type\": \"note\", \"title\": \"t\"}", schemaId, "note");
         assertFalse(inBand.isEmpty(), "the in-band route has landed -- check the agreement in TsonHttpCodec");
-        assertTrue(inBand.getFirst().message().contains("$schema"), () -> "" + inBand);
+        assertEquals(List.of(Diagnostic.Code.NOT_IMPLEMENTED), inBand.stream().map(Diagnostic::code).toList(),
+                () -> "" + inBand);
+        assertTrue(inBand.getFirst().message().contains("'$import'"), () -> "" + inBand);
+    }
+
+    // ── open: the JSON bind registry refuses the kernel under the bind context Tson composes ─────────
+
+    /**
+     * <b>{@code Json} given {@code Tson.dataBindContext()} binds no document at all.</b> That context answers the
+     * kernel's own vocabulary with the schema model's classes, and the JSON bind registry, compiling a closure,
+     * checks those records against their classes and refuses the first it meets -- {@code net.iri_type}'s fixed
+     * booleans -- and every closure holds the kernel. The same reader given the context the application configured
+     * binds. The TSON registry binds under the composed context, so the two encodings disagree on one value.
+     *
+     * <p>{@code TsonHttpCodec.acceptingJson} works round it, handing the JSON reader the composed context with the
+     * kernel's vocabulary left unbound. When this flips, that filter can go.
+     */
+    @Test
+    void jsonBindingUnderTheComposedBindContextRefusesTheKernel() {
+        String id = "https://s.example.com/2026/39/j-2.tn";
+        String schema = """
+                !!id:"https://s.example.com/2026/39/j-2.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema {
+                    note => { title: text }
+                }""";
+        ProcessorConfig configured = ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(Map.of(id, schema))))
+                .withDataBindContext(TsonBindings.of(Map.of("note", Note.class)));
+        Tson tson = Tson.of(configured);
+        tson.resolve(schema);
+        assertEquals(new Note("t"), tson.objectReader().withSchema(id).readAs("{ title: t }", "note", Note.class),
+                "the TSON reader binds under the composed context");
+
+        Json composed = Json.of(ProcessorConfig.defaults().withDataBindContext(tson.dataBindContext()))
+                .withSchemas(tson.schemaRegistry());
+        String refused = assertThrows(RuntimeException.class, () -> composed.objectReader().withSchema(id)
+                .readAs("{\"title\": \"t\"}", "note", Note.class)).getMessage();
+        assertTrue(refused.contains("'net.iri_type' and io.ltr8.tson.schema.net.IriType do not agree"), refused);
+
+        Json asConfigured = Json.of(configured).withSchemas(tson.schemaRegistry());
+        assertEquals(new Note("t"), asConfigured.objectReader().withSchema(id)
+                .readAs("{\"title\": \"t\"}", "note", Note.class));
+    }
+
+    // ── open: the JSON readers state one schema ─────────────────────────────────────────────────────
+
+    /**
+     * <b>The JSON readers state one schema, where the TSON readers state several.</b> A {@code TSON-Schema} List
+     * names a binding of several schemas, read as one namespace ([TSON-JSON] §3.4, §3.5); a TSON body is read under
+     * all of them through {@code withImports}, and a JSON body only under the one {@code withSchema} takes. Fails the
+     * day either JSON reader can state several.
+     */
+    @Test
+    void theJsonReadersStateOneSchema() {
+        assertDoesNotThrow(() -> io.ltr8.tson.compiler.TsonObjectReader.class.getMethod("withImports", List.class));
+        assertDoesNotThrow(() -> io.ltr8.tson.compiler.TsonTreeReader.class.getMethod("withImports", List.class));
+        for (Class<?> reader : List.of(io.ltr8.tson.json.JsonObjectReader.class,
+                io.ltr8.tson.json.JsonTreeReader.class)) {
+            assertTrue(java.util.Arrays.stream(reader.getMethods()).noneMatch(method ->
+                            method.getName().startsWith("with") && method.getParameterCount() == 1
+                                    && method.getParameterTypes()[0] == List.class),
+                    reader.getSimpleName() + " states several schemas now -- read a JSON body under its whole binding "
+                            + "in TsonSchemaVersions.Routed, delete UPSTREAM.md's entry and flip this");
+        }
     }
 
     // ── open: an unresolved name a bundled library declares does not name the library ────────────
 
     /**
      * <b>A schema naming {@code ipv4} without importing {@code net.tn} is told only that the reference is
-     * unresolved</b> -- which reads like a typo, where the fix is an import. The network types are {@code net.tn}'s,
-     * not core's, so a schema written against a fuller core meets exactly this message.
+     * unresolved</b> -- which reads like a typo, where the fix is an import. {@code core.tn} imports {@code net.tn},
+     * so a schema importing core sees it; one importing only {@code temporal.tn} meets exactly this message.
      * The bundled libraries are fixed and known, so the resolver could say which one declares the name. Fails
      * the day the message names the library.
      */
     @Test
     void anUnresolvedNameABundledLibraryDeclaresDoesNotNameTheLibrary() {
         String schema = """
-                !!id:"https://example.com/2026/38/app/net-hint.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                { server => { addr: ipv4 } }""";
+                !!id:"https://example.com/2026/39/app/net-hint.tn"
+                !!import:"https://tson.io/2026/39/m/temporal.tn"
+                !schema { server => { addr: ipv4 } }""";
         Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(uri -> schema)));
 
         List<Diagnostic> problems = tson.validateSchema(schema);
@@ -939,7 +1006,98 @@ class UpstreamGapsTest {
                 "the message names the library now -- delete UPSTREAM.md's entry and flip this");
         // And the import is the whole fix.
         assertEquals(List.of(), tson.validateSchema(schema.replace("net-hint.tn", "net-hint-2.tn")
-                .replace("{ server", "!!import:\"https://tson.io/2026/38/m/net.tn\"\n{ server")));
+                .replace("!schema { server", "!!import:\"https://tson.io/2026/39/m/net.tn\"\n!schema { server")));
+    }
+
+    /**
+     * <b>A schema importing nothing sees no kernel name, and is not told where {@code text} lives.</b> Valid, and
+     * its namespace is its own entries alone, so {@code text} is unresolved with no word that {@code meta.tn}
+     * declares it. Only the first unresolved field of the record is reported. Fails the day the message names the
+     * document.
+     */
+    @Test
+    void aSchemaImportingNothingSeesNoKernelName() {
+        String nothing = """
+                !!id:"https://example.com/2026/39/app/imports-nothing.tn"
+                !schema { a => { b: text  c: integer } }""";
+        Tson tson = Tson.of(ProcessorConfig.defaults());
+
+        List<Diagnostic> problems = tson.validateSchema(nothing);
+
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), problems.stream().map(Diagnostic::code).toList());
+        assertEquals("'a' field 'b' has an unresolved reference 'text'", problems.getFirst().message());
+        assertFalse(problems.getFirst().message().contains("meta.tn"),
+                "the message names the declaring document now -- update UPSTREAM.md's entry and flip this");
+        // Its own entries resolve: importing nothing is valid.
+        assertEquals(List.of(), tson.validateSchema("""
+                !!id:"https://example.com/2026/39/app/imports-nothing-2.tn"
+                !schema { a => { b: c }  c => { } }"""));
+    }
+
+    // ── open: a template's bare name as a field type resolves silently ──────────────────────────────
+
+    /**
+     * <b>{@code x => { s: tmpl }}, {@code tmpl} a template, loads with no diagnostic</b> -- declared locally or
+     * brought by an import. A template is not a type until it is applied, and the read shows it: every value at the
+     * field is refused as standing where an abstract type with no subtypes is, which blames the closure for a slip
+     * in the schema. Fails the day the schema is refused.
+     */
+    @Test
+    void aTemplatesBareNameAsAFieldTypeResolvesSilently() {
+        String local = """
+                !!id:"https://example.com/2026/39/app/bare-template.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema {
+                  tmpl => <T> { v: T }
+                  x    => { s: tmpl }
+                }""";
+        String library = """
+                !!id:"https://example.com/2026/39/app/bare-template-lib.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema { tmpl => <T> { v: T } }""";
+        String importer = """
+                !!id:"https://example.com/2026/39/app/bare-template-importer.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !!import:"https://example.com/2026/39/app/bare-template-lib.tn"
+                !schema { x => { s: tmpl } }""";
+        Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(
+                Map.of("https://example.com/2026/39/app/bare-template-lib.tn", library)))));
+
+        assertEquals(List.of(), tson.validateSchema(importer), "across an import");
+
+        Tson reading = Tson.of(ProcessorConfig.defaults());
+        reading.resolve(local);
+        List<Diagnostic> problems = reading.validate("""
+                !!import:"https://example.com/2026/39/app/bare-template.tn"
+                !x { s: { v: 1 } }""");
+        assertEquals(List.of(Diagnostic.Code.TYPE_MISMATCH), problems.stream().map(Diagnostic::code).toList(),
+                "loaded locally, and refused only when a value arrives");
+        assertTrue(problems.getFirst().message().startsWith("no schema in this closure declares a subtype of "
+                + "'tmpl', and it is abstract"), problems::toString);
+    }
+
+    // ── open: Tson.validate on a schema document blames Class 1 ─────────────────────────────────────
+
+    /**
+     * <b>{@code Tson.validate} handed a {@code !schema}-rooted document reports a Class 1 limitation</b>, from a
+     * schema-aware {@code Tson}. Refusing is right, since {@code validate} reads data; the message names the wrong
+     * cause, and the validator demo shows it to whoever pasted a schema into the data box. Fails the day it names
+     * {@code validateSchema}.
+     */
+    @Test
+    void validateOnASchemaDocumentBlamesClassOne() {
+        Tson tson = Tson.of(ProcessorConfig.defaults());
+
+        List<Diagnostic> problems = tson.validate("""
+                !!id:"https://example.com/2026/39/app/pasted-schema.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema { a => { b: text } }""");
+
+        assertEquals(List.of(Diagnostic.Code.VALIDATION_ERROR), problems.stream().map(Diagnostic::code).toList());
+        assertEquals("this is a TSON schema document (its root is tagged !schema); a Class 1 (data-format-only) "
+                + "processor does not support schema documents", problems.getFirst().message());
+        assertFalse(problems.getFirst().message().contains("validateSchema"),
+                "the message points at validateSchema now -- delete UPSTREAM.md's entry and flip this");
     }
 
     // ── fixed upstream: an identity's host is a host value, in either label form ─────────────────────
@@ -959,90 +1117,73 @@ class UpstreamGapsTest {
         assertDoesNotThrow(() -> HttpSchemaSource.builder().allowHost("bücher.example").build().close());
     }
 
-    // ── fixed upstream: an import stands at the importer's governing level ───────────────────────
+    // ── fixed upstream: an import crosses no level ──────────────────────────────────────────────────
 
     /**
-     * <b>An import stands at the importer's governing level</b> ([TSON-SCHEMA] §2.2.3, §3.1): importer and imported
-     * both name the meta-kernel as their {@code !!meta}, or neither. A meta layer is kernel-governed and an ordinary
-     * schema is not, and an import crossing them is refused in both directions, each with its own fix:
+     * <b>An import crosses no level</b>: a schema's namespace is its own entries and its import closure's, whatever
+     * either declares: one namespace per schema ([TSON-SCHEMA] §2.2.3, §3.4). An import is held to no level, in either
+     * direction, and each direction is pinned so a rule holding it to one fails here:
      *
      * <ul>
-     *   <li>a meta layer importing a {@code meta.tn}-governed library, which is how this project first gave its
-     *       meta layer its HTTP vocabulary -- a meta layer declares the vocabulary its constructors use itself;</li>
-     *   <li>an ordinary schema importing a kernel-governed library -- it reaches a meta-schema's constructors only
-     *       through its {@code !!meta}.</li>
+     *   <li>a layer declaring a namespace type imports an ordinary library and uses its atom in a record the
+     *       namespace holds -- how {@code meta-service.tn} takes {@code net.tn}'s {@code media_type};</li>
+     *   <li>an ordinary schema imports a library applying a kernel constructor and uses the type it builds.</li>
      * </ul>
      *
-     * A schema a meta layer governs is ordinary, so it imports {@code core.tn} and the records it describes: every
-     * API description here does. Pinned so a relaxation of either direction fails here.
+     * A kernel name reaches a schema only by import, so each library imports {@code meta.tn} itself.
      */
     @Test
-    void anImportStandsAtTheImportersGoverningLevel() {
+    void anImportCrossesNoLevel() {
         String library = """
-                !!id:"https://example.com/2026/38/app/levels-lib.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                { stock_code => !text_type { pattern: "[A-Z]{3}" } }""";
+                !!id:"https://example.com/2026/39/app/levels-lib.tn"
+                !!import:"https://tson.io/2026/39/m/meta.tn"
+                !schema { stock_code => !unicode.text_type { pattern: "[A-Z]{3}" } }""";
         String layer = """
-                !!id:"https://example.com/2026/38/app/levels-layer.tn"
-                !!meta:"https://tson.io/2026/38/m/meta-kernel.tn"
-                !!import:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://example.com/2026/38/app/levels-lib.tn"
-                {
+                !!id:"https://example.com/2026/39/app/levels-layer.tn"
+                !!import:"https://tson.io/2026/39/m/meta.tn"
+                !!import:"https://example.com/2026/39/app/levels-lib.tn"
+                !schema {
                   item  => { code: stock_code }
-                  items => namespace & { key_type: = identifier  value_type: = item }
+                  items => !meta.namespace { key_type: meta.identifier  value_type: item }
                 }""";
-        Tson kernelOverMeta = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(
-                Map.of("https://example.com/2026/38/app/levels-lib.tn", library)))));
-        List<Diagnostic> layerImporting = kernelOverMeta.validateSchema(layer);
-        assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), layerImporting.stream().map(Diagnostic::code).toList(),
-                () -> "" + layerImporting);
-        String layerImportingMessage = layerImporting.getFirst().message();
-        assertTrue(layerImportingMessage.contains("an !!import stands at the importer's governing level")
-                && layerImportingMessage.contains("a meta layer declares the vocabulary its constructors use itself"),
-                layerImportingMessage);
+        Tson layerOverLibrary = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(
+                SchemaSource.ofMap(Map.of("https://example.com/2026/39/app/levels-lib.tn", library)))));
+        assertEquals(List.of(), layerOverLibrary.validateSchema(layer));
 
         String kernelLibrary = """
-                !!id:"https://example.com/2026/38/app/levels-kernel-lib.tn"
-                !!meta:"https://tson.io/2026/38/m/meta-kernel.tn"
-                { status_code => !integer_type { min: 100  max: 599 } }""";
+                !!id:"https://example.com/2026/39/app/levels-kernel-lib.tn"
+                !!import:"https://tson.io/2026/39/m/meta.tn"
+                !schema { status_code => !numeric.integer_type { min: 100  max: 599 } }""";
         String application = """
-                !!id:"https://example.com/2026/38/app/levels-app.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                !!import:"https://example.com/2026/38/app/levels-kernel-lib.tn"
-                { reply => { status: status_code } }""";
-        Tson metaOverKernel = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(
-                Map.of("https://example.com/2026/38/app/levels-kernel-lib.tn", kernelLibrary)))));
-        List<Diagnostic> schemaImporting = metaOverKernel.validateSchema(application);
-        assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), schemaImporting.stream().map(Diagnostic::code).toList(),
-                () -> "" + schemaImporting);
-        String schemaImportingMessage = schemaImporting.getFirst().message();
-        assertTrue(schemaImportingMessage.contains("an !!import stands at the importer's governing level")
-                && schemaImportingMessage.contains("an ordinary schema reaches a meta-schema's constructors only "
-                        + "through its !!meta"), schemaImportingMessage);
+                !!id:"https://example.com/2026/39/app/levels-app.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !!import:"https://example.com/2026/39/app/levels-kernel-lib.tn"
+                !schema { reply => { status: status_code } }""";
+        Tson schemaOverLibrary = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(
+                SchemaSource.ofMap(Map.of("https://example.com/2026/39/app/levels-kernel-lib.tn", kernelLibrary)))));
+        assertEquals(List.of(), schemaOverLibrary.validateSchema(application));
     }
 
     // ── decided upstream: a stated schema overrides the document's own ──────────────────────────────
 
     /**
-     * <b>{@code readAs} against a stated schema overrides a {@code !!schema} the document names itself</b> -- even
-     * one naming a different schema, which is read as the stated one with no diagnostic. Not a gap: upstream's
-     * decision, stated on {@code TsonObjectReader.readAs(TsonDocumentPeek, …)} -- "any {@code !!schema} the
-     * document declares is overridden … a caller holding both compares {@code peek.header()} against its own".
+     * <b>{@code readAs} against a stated schema overrides the {@code !!import}s the document names itself</b> --
+     * even one naming a different schema, which is read as the stated one with no diagnostic. Not a gap: upstream's
+     * decision, stated on {@code TsonObjectReader.readAs(TsonDocumentPeek, …)} -- "any {@code !!import} the
+     * document declares is overridden … a caller holding both … compares {@code peek.header()} against its own".
      *
      * <p>So the comparison is this project's to make, and {@code TsonHttpCodec} makes it: its out-of-band reads
-     * peek a TSON body and answer a disagreeing {@code !!schema} 400, the posture [TSON-JSON] §3.5 takes for the
-     * header. Pinned because the codec's check exists only because the reader does not refuse -- if upstream ever
+     * peek a TSON body and answer imports that are not the stated set 400, the posture [TSON-JSON] §3.5 takes for
+     * the header. Pinned because the codec's check exists only because the reader does not refuse -- if upstream ever
      * starts refusing, this fails and the codec's own check becomes a second copy of the rule.
      */
     @Test
     void aStatedSchemaSilentlyOverridesTheDocumentsOwn() {
-        String id = "https://s.example.com/2026/38/j-1.tn";
+        String id = "https://s.example.com/2026/39/j-1.tn";
         String schema = """
-                !!id:"https://s.example.com/2026/38/j-1.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                {
+                !!id:"https://s.example.com/2026/39/j-1.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema {
                     note => { title: text }
                 }""";
         Tson tson = Tson.of(ProcessorConfig.defaults()
@@ -1050,7 +1191,7 @@ class UpstreamGapsTest {
                 .withDataBindContext(TsonBindings.of(Map.of("note", Note.class))));
         tson.resolve(schema);
         String elsewhere = """
-                !!schema:"https://s.example.com/2026/38/other-1.tn"
+                !!import:"https://s.example.com/2026/39/other-1.tn"
                 !note { title: t }""";
 
         assertEquals(new Note("t"), tson.objectReader().withSchema(id).readAs(elsewhere, "note", Note.class),
@@ -1063,23 +1204,63 @@ class UpstreamGapsTest {
     public record Note(String title) {
     }
 
+    // ── open: a component narrower than its field's value space binds, and fails at the read ─────────────
+
+    /**
+     * <b>A component narrower than its field's value space is a bind mismatch at startup, never a read-time
+     * error</b> -- the contract wanted, and the one {@code TsonHttpCodec.prepareToRead} exists for. Today strict
+     * binding accepts an {@code int} component against an {@code int64} field: the bind registry prepares the
+     * schema, a value in {@code int} range reads, and a valid document stating one past it fails at the read with
+     * a bare {@link ArithmeticException}, no {@code ReadException} and no {@link Diagnostic.Code} to classify, so
+     * a server answers a document with nothing wrong with it with a 500. This project's exposure was {@code
+     * TsonDeployment.Policy.Limits}, whose components are all {@code long} for this reason. Fails the day
+     * preparing the schema refuses the component.
+     */
+    @Test
+    void aComponentNarrowerThanItsFieldBindsAndFailsAtTheRead() {
+        String id = "https://s.example.com/2026/39/narrow-1.tn";
+        String schema = """
+                !!id:"https://s.example.com/2026/39/narrow-1.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema {
+                    x => { n: int64 }
+                }""";
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(Map.of(id, schema))))
+                .withDataBindContext(TsonBindings.of(Map.of("x", Narrow.class))));
+        tson.resolve(schema);
+
+        assertDoesNotThrow(() -> tson.bindRegistry().get(id),
+                "preparing the schema refuses the int component now -- delete UPSTREAM.md's entry and flip this");
+        assertEquals(new Narrow(7), tson.objectReader().withSchema(id).readAs("{ n: 7 }", "x", Narrow.class));
+
+        String past = "{ n: 3000000000 }";
+        assertEquals(List.of(), tson.validate("!!import:\"" + id + "\"\n!x " + past), "the document is valid");
+        ArithmeticException thrown = assertThrows(ArithmeticException.class,
+                () -> tson.objectReader().withSchema(id).readAs(past, "x", Narrow.class));
+        assertEquals("BigInteger out of int range", thrown.getMessage());
+    }
+
+    /** Bound by {@link #aComponentNarrowerThanItsFieldBindsAndFailsAtTheRead}: an {@code int} for an {@code int64}. */
+    public record Narrow(int n) {
+    }
+
     // ── fixed upstream: bind mode continues a peek against a stated type ──────────────────────────────
 
     /**
      * <b>The object reader continues a peek against a stated type</b> -- {@code readAs(TsonDocumentPeek, String,
      * Class)}, the counterpart of the tree reader's {@code readAs(peek, typeName)}. It is what lets a body whose
-     * schema arrives in a {@code TSON-Schema} header be peeked, checked against its own {@code !!schema}, and bound
+     * schema arrives in a {@code TSON-Schema} header be peeked, checked against its own {@code !!import}, and bound
      * in one pass, which {@code TsonHttpCodec.readObjectAs} and {@code TsonSchemaVersions.Routed.readObjectAs}
      * both rely on. Over a stream that cannot be rewound, so a peek that consumed the body would fail here.
      */
     @Test
     void theObjectReaderContinuesAPeekAgainstAStatedType() {
-        String id = "https://s.example.com/2026/38/j-1.tn";
+        String id = "https://s.example.com/2026/39/j-1.tn";
         String schema = """
-                !!id:"https://s.example.com/2026/38/j-1.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                {
+                !!id:"https://s.example.com/2026/39/j-1.tn"
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema {
                     note => { title: text }
                 }""";
         Tson tson = Tson.of(ProcessorConfig.defaults()
@@ -1100,7 +1281,7 @@ class UpstreamGapsTest {
         };
 
         var peek = tson.begin(unmarkable);
-        assertEquals(java.util.Optional.empty(), peek.header().schema(), "the header names no schema");
+        assertEquals(java.util.List.of(), peek.header().imports(), "the header imports no schema");
         assertEquals(new Note("t"), tson.objectReader().withSchema(id).readAs(peek, "note", Note.class));
     }
 }

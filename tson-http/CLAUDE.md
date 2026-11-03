@@ -19,13 +19,14 @@ Rules that bite here:
   `IllegalArgumentException` and the codec decides what it is worth.
 - `TsonHttpException.from(RuntimeException)` is the entire status policy. Put nothing status-shaped anywhere else, and
   key nothing on `Diagnostic.Code.verdict()` alone: it answers whether the document was judged, not who must act.
-- Problem `type` URIs live under `https://ltr8.io/2026/38/http/problems/`; `ltr8.io` is the implementation, `tson.io`
+- Problem `type` URIs live under `https://ltr8.io/2026/39/http/problems/`; `ltr8.io` is the implementation, `tson.io`
   the specification. `ReadmeTest` holds the README's problem-type table to the types minted in `src/main`.
 - `problem.tn` is this project's own schema and diverges from tson-cli's `diagnostics.tn` on purpose. Its
   `diagnostic_code` is a hand copy of `Diagnostic.Code`; `TsonProblemSchemaTest` keeps it current.
 - `HttpSchemaSource` is upstream's. What stays here is the mapping of its failures to statuses and
   `TsonHttpSchemaSourceIntegrationTest`; do not retest upstream's policy.
-- A public class in `io.ltr8.tson.http.api` named like a `meta-service.tn` record binds to it whether meant to or
-  not, which is why the computed placement is `RequestPlacement` and not `Placement`.
+- A class in `io.ltr8.tson.http.api` binds to a `meta-service.tn` record only by being named in
+  `TsonApiSchema.bindings()`, an explicit map; a record added to the layer binds nothing until a line is added there,
+  and an application binding one of those names is refused by `bindingsWith`.
 - Experiments' probe tests join this module's test source set from `experiments/*/java`; a probe failing after a
   library change is information, not a regression.

@@ -50,9 +50,9 @@ public record RequestPlacement(Map<String, Location> fields) {
             if (type == null || !(type instanceof RecordBody record)) {
                 throw new IllegalArgumentException("'" + name + "' takes '" + ref.name() + "', which is not a record"
                         + " -- a request is the record whose fields an endpoint distributes over the HTTP request,"
-                        + " so a method taking one value declares a one-field record for it");
+                        + " so an exchange taking one value declares a one-field record for it");
             }
-            declared.putAll(record.fields().entries());
+            declared.putAll(record.fields());
         });
         Map<String, Location> placed = new LinkedHashMap<>();
         Matcher segments = SEGMENT.matcher(path);

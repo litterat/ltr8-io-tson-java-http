@@ -1,6 +1,5 @@
-!!id:"https://tson.io/2026/38/io/ltr8/http/agent.tn"
-!!meta:"https://tson.io/2026/38/m/meta.tn"
-!!import:"https://tson.io/2026/38/m/core.tn"
+!!id:"https://tson.io/2026/39/io/ltr8/http/agent.tn"
+!!import:"https://tson.io/2026/39/m/core.tn"
 @doc:"""
   TSON Agent AST — the structured middle representation
   (draft 2; the agent experiment, experiments/agent).
@@ -34,22 +33,22 @@
   with agent_error, discriminated from the derived success contract
   by transport status. Plans cannot branch on values.
   """
-{
+!schema {
   @doc:"""
     A name in one of the namespaces a plan borrows -- a step, a method, a field: an identifier family,
     not `text`, which admits anything. Being an identifier family is what makes it a name, so §8.2's
     hygiene judges it wherever it stands -- a field's value, a map's key -- and a mixed-script or
     look-alike step name is refused by the reader rather than left to the admission verifier.
     """
-  name => !identifier_type { continue_add: "-" }
+  name => !unicode.identifier_type { continue_add: "-" }
 
   @doc:"""
-    A constant, of any shape. `dynamic` is §7.8's widest scoped instance: the value names its own type,
-    from this schema's namespace or from a foreign one it names with a nested !!schema, and is validated
-    in full against whatever it named. A value naming no type at all is a validation error here, so this is not
+    A constant, of any shape. `meta.declared` is the kernel's declared position: the value names its own
+    type by its tag, from the namespace of the document's imports, and is validated in full against
+    whatever it named. A value naming no type at all is a validation error here, so this is not
     an `any` that goes unchecked. rpc.tn's payload slot is the same slot.
     """
-  constant => dynamic
+  constant => meta.declared
 
   @doc:"""
     Source spelling of a selection, as the surface writes it: a

@@ -1,6 +1,6 @@
-# The interface layer: the data view of a method (tson-invoke, the join in tson-service)
+# The protocol layer: the data view of a call (tson-invoke, the join in tson-service)
 
-How a method is described below the HTTP projection, and why the description takes the data's side rather than the
+How a call is described below the HTTP projection, and why the description takes the data's side rather than the
 language's. The modules are backlog items; this note fixes the paradigm they are built to. `BACKLOG.md`, "The module
 split", says what each module holds and in what order they land.
 
@@ -12,9 +12,9 @@ split", says what each module holds and in what order they land.
 - The bridge absorbs the language. A parameter list, a return type, a thrown exception, a future or whatever a
   language's idiom is are bridged into the request shape and the outcome union, as tson-bind's `DataClassBridge` stands
   a language form in for a data form.
-- The join compares like with like: a resolved `!interface` against a descriptor in the same view, so the check is
+- The join compares like with like: a resolved `!protocol` against a descriptor in the same view, so the check is
   between two statements of one call and never between a schema and a language idiom.
-- A method's identity is its name in its interface (`InterfaceMethod`), never the request type: two methods may take
+- An exchange's identity is its name in its protocol (`ExchangeName`), never the request type: two exchanges may take
   the same record.
 - The descriptor holds `Class` and `MethodHandle` and nothing else, and knows no schema; what it cannot check, the join
   does.
@@ -22,10 +22,10 @@ split", says what each module holds and in what order they land.
 ## Why the data view, and not the language's
 
 An rpc call is a request record, a response record and a set of error records. That is what a method is once the
-language's spelling is bridged away, and it is what an `!interface` in `meta-service.tn` already says: `request`,
-`response`, `errors`. A language says the same thing in its own idiom: Java with a parameter list, a return type and a
-`throws` clause; a functional language with a function from a product to a sum; C with arguments and an out-parameter.
-The two views differ only slightly in shape. They differ decisively in direction.
+language's spelling is bridged away, and it is what an exchange in a `!protocol` of `meta-service.tn` already says:
+`request`, `response`, `errors`. A language says the same thing in its own idiom: Java with a parameter list, a return
+type and a `throws` clause; a functional language with a function from a product to a sum; C with arguments and an
+out-parameter. The two views differ only slightly in shape. They differ decisively in direction.
 
 Taking the data's side means the mapping to a language always runs from the same side. Whether the target language is
 object-oriented, functional, procedural or something else does not matter: each language supplies its bridges, and the
@@ -51,7 +51,7 @@ falling back to position.
 **Outcome.** The language has a privileged normal path and an exceptional one; the call has a union. The return type
 and the declared throwables are the language's spelling of that union. A thrown type binds to an error record through a
 bridge, since an exception cannot be a record but can carry one. Whether a projection throws or writes an error is the
-projection's choice, and the interface layer makes none. That is how the HTTP boundary's invariant, that a business
+projection's choice, and the protocol layer makes none. That is how the HTTP boundary's invariant, that a business
 error is written and not thrown (`design/service-description.md`, "Business errors compose `problem`"), holds at the
 boundary and nowhere else.
 
@@ -60,7 +60,7 @@ absence, not a special case: `cancel_order` in the orders fixtures declares no r
 `void`.
 
 **Identity.** The request type cannot address a call: `get_order` and `cancel_order` both take `order_ref` in the
-orders fixtures. The name does, as `InterfaceMethod` holds it: the interface's entry and the method's key in it. A
+orders fixtures. The name does, as `ExchangeName` holds it: the protocol's entry and the exchange's key in it. A
 descriptor that keyed dispatch by request class would merge two calls the schema keeps apart.
 
 **Context.** A network call carries what a method does not: headers, an idempotency key, the caller. The service's
@@ -73,16 +73,16 @@ the one handle, and a client-side stub in any of them is the one proxy.
 
 ## The join
 
-The join lives in `tson-service`, the layer that knows both sides. It holds a resolved `!interface` against an invoke
+The join lives in `tson-service`, the layer that knows both sides. It holds a resolved `!protocol` against an invoke
 descriptor at startup, by naming convention (`place_order` to `placeOrder`), and fails startup on a mismatch in either
-direction: a Java method with no schema method, a schema method with no Java method, a request or response bound to a
-record other than the method's, or an outcome member that is neither the response nor a declared error. It is the
-method-level counterpart of `prepareToRead` (`design/binding.md`): a mismatch is a startup failure, never a 500.
+direction: a Java method with no exchange, an exchange with no Java method, a request or response bound to a record
+other than the exchange's, or an outcome member that is neither the response nor a declared error. It is the
+exchange-level counterpart of `prepareToRead` (`design/binding.md`): a mismatch is a startup failure, never a 500.
 
 Because both sides are in the data view, every check is a comparison of shapes the join already has words for: a
 request record against a request record, a union against a union. None of it asks what a Java exception or a
-`CompletableFuture` means; the bridges answered that before the join ran. The same holds for the other direction, an
-`!interface` document written from a descriptor: it writes the data view the descriptor already holds, and only what
+`CompletableFuture` means; the bridges answered that before the join ran. The same holds for the other direction, a
+`!protocol` document written from a descriptor: it writes the data view the descriptor already holds, and only what
 has no language counterpart (`@safe`, `@idempotent`) must come from elsewhere.
 
 ## The same paradigm one layer up: the HTTP projection
@@ -100,14 +100,15 @@ no TSON knowledge of its own (`design/adapters.md`), and why three frameworks sh
 HTTP's semantics are version-independent, as RFC 9110 is written to be, so HTTP/3 over QUIC changes nothing in the
 vocabulary. What it adds is a reason the call's facts matter on the wire: QUIC's 0-RTT early data may be replayed, and
 RFC 8470 admits only a safe or idempotent request in it, answering 425 (Too Early) to one that must not be replayed.
-`@safe` and `@idempotent` on a method, which the projection checks against the verb, are exactly what a client needs to
+`@safe` and `@idempotent` on an exchange, which the projection checks against the verb, are exactly what a client needs to
 decide on early data and a server needs to refuse it: a projection-level fact derived from a call-level one, which is
 the layering doing its job. Priorities (RFC 9218) and trailers are the other constructs of that era a projection could
 name. A streaming endpoint, over a long-lived stream or WebTransport, would be a new record composing `endpoint`, the
 way the layer's own doc says a new kind of endpoint arrives.
 
-The constructor's name follows the same paradigm: a projection is named for its protocol (`BACKLOG.md`, "The
-description").
+The constructor's name follows the same paradigm: a projection is named for the transport it projects a protocol onto,
+so `tson-http` implements `!http` as a gRPC projection of the same protocol would be `!grpc`, one projection among
+several and not the description of the service.
 
 ## What this layer is not
 
@@ -115,5 +116,5 @@ description").
   responses and the deployment descriptor (`BACKLOG.md`, "Client"). A proxy over the descriptor is a language
   convenience, not the contract a caller is held to.
 - **Not the agent experiment.** `experiments/agent/` is future work the layer is not built toward
-  (`design/service-description.md`, "What builds on the interface"); a decision that is the agent's alone does not
+  (`design/service-description.md`, "What builds on the protocol"); a decision that is the agent's alone does not
   move the descriptor.

@@ -2,7 +2,7 @@
 
 Integrating [TSON](https://tson.io) into a Java HTTP server — reading `application/tson` request bodies,
 writing `application/tson` responses, mapping schema violations onto HTTP status codes, and resolving
-`!!schema` URLs over HTTP.
+`!!import` URLs over HTTP.
 
 Four modules:
 
@@ -17,9 +17,9 @@ Four modules:
 rather than by calling handlers, because the point of three adapters is that each framework's own body and
 content-negotiation handling differs. Each proves the same loop: a schema served at its own identity path,
 fetched back over HTTP under policy, and used to validate a posted document. Serves multiple schema versions
-side by side, routed by the `TSON-Schema` header ([TSON-JSON] §3.5) or the body's own `!!schema`, and speaks JSON
+side by side, routed by the `TSON-Schema` header ([TSON-JSON] §3.5) or the body's own `!!import`, and speaks JSON
 where an endpoint opts in: a JSON body validated against a TSON schema, and a JSON reply for a client that prefers
-one. A service also publishes a description of itself, as a schema whose payload types and method references the
+one. A service also publishes a description of itself, as a schema whose payload types and exchange references the
 compiler resolves — and the examples below are executed by a test, so they are true or the build fails.
 
 ## Try it
@@ -32,15 +32,15 @@ Each starts the same server and prints what to try. The same commands work again
 
 ```
 $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binary '
-  !!schema:"https://schemas.example.com/2026/38/app/order-1.tn"
+  !!import:"https://schemas.example.com/2026/39/app/order-1.tn"
   !order { sku: "ABC-1"  quantity: 3 }'
-!!schema:"https://schemas.example.com/2026/38/app/order-1.tn"
+!!import:"https://schemas.example.com/2026/39/app/order-1.tn"
 !order { sku: "ABC-1" quantity: 6 }
 
 $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binary '
-  !!schema:"https://schemas.example.com/2026/38/app/order-1.tn"
+  !!import:"https://schemas.example.com/2026/39/app/order-1.tn"
   !order { }'
-!!schema:"https://tson.io/2026/38/io/ltr8/http/problem.tn"
+!!import:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
 !problem { status: 400 title: "Invalid TSON document" detail: "the request body has 2 problems" errors: [
   { path: "/sku" schema_pointer: "/order/sku" code: "FIELD_REQUIRED"
     message: "missing required field \'sku\' for \'order\'" data_position: "3:8:70" ... }
@@ -49,7 +49,7 @@ $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binar
 
 Both problems, in one response — a client fixing one error per round trip needs one round trip per error.
 
-The service description says `POST /orders` also speaks TSON's JSON encoding ([TSON-JSON]), so the same order can
+The service description lists JSON's media types for `POST /orders` ([TSON-JSON]), so the same order can
 arrive as JSON and be answered in it, the schema named in the `TSON-Schema` header since a JSON body has nowhere
 else to name it:
 
@@ -62,7 +62,7 @@ $ curl -s localhost:8080/orders -H 'Content-Type: application/json' -H 'Accept: 
 ### Problem types
 
 `type` is the member to match on: it is stable where `title` is prose. Every failure this project produces
-carries one of these, under `https://ltr8.io/2026/38/http/problems/` — the implementation's own host, kept apart
+carries one of these, under `https://ltr8.io/2026/39/http/problems/` — the implementation's own host, kept apart
 from the specification's `tson.io`, where schema identities live.
 
 | `type` | Status | Raised when |
@@ -73,9 +73,9 @@ from the specification's `tson.io`, where schema identities live.
 | `invalid-schema` | 400 | the schema the body names is itself wrong |
 | `unusable-schema-reference` | 400 | the body names a schema this server will not load, or nothing serves |
 | `no-schema-declared` | 400 | the endpoint requires a version and the body named none |
-| `unsupported-schema-version` | 400 | the body names a schema version this endpoint does not serve |
-| `malformed-schema-header` | 400 | `TSON-Schema` or `TSON-Accept-Schema` is not a valid sf-string |
-| `conflicting-schema` | 400 | header and body both name a schema and they disagree |
+| `unsupported-schema-version` | 400 | the body's schemas include no version this endpoint serves |
+| `malformed-schema-header` | 400 | `TSON-Schema` or `TSON-Accept-Schema` is not a valid List of sf-strings |
+| `conflicting-schema` | 400 | header and body name different sets of schemas, or a message names two versions served |
 | `no-such-schema` | 404 | a schema was requested at a path this server does not publish |
 | `method-not-allowed` | 405 | the route does not take this method (adapters) |
 | `not-acceptable` | 406 | `Accept` rules out the only representation the route produces |
@@ -94,8 +94,8 @@ Both replies name the schema that governs them, and the server publishes both do
 validate what it received with nothing told out of band:
 
 ```
-$ curl -s localhost:8080/2026/38/io/ltr8/http/problem.tn | head -1
-!!id:"https://tson.io/2026/38/io/ltr8/http/problem.tn"
+$ curl -s localhost:8080/2026/39/io/ltr8/http/problem.tn | head -1
+!!id:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
 ```
 
 ```java
@@ -130,10 +130,10 @@ difference in code, message or source position between the two is a finding.
 The request is itself a TSON document, governed by a schema the service publishes:
 
 ```
-!!schema:"https://schemas.example.com/2026/38/app/validate-1.tn"
+!!import:"https://schemas.example.com/2026/39/app/validate-1.tn"
 !validation_request {
   schema: "!!id:\"...the schema under test...\" ..."
-  data:   "!!schema:\"...that same identity...\" ..."
+  data:   "!!import:\"...that same identity...\" ..."
 }
 ```
 
@@ -162,17 +162,21 @@ sets a token policy, which you can see refuse a document the default would accep
 
 ```
 $ curl -s localhost:8080/.well-known/tson-deployment
-!!schema:"https://tson.io/2026/38/io/ltr8/http/deployment.tn"
+!!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
 !acceptance_profile { name: "validator-demo" policy: {
   identifier_policy: { level: "HIGHLY_RESTRICTIVE" per_segment: false skeleton_distinctness: true permitting: [] }
   token_policy: { level: "SINGLE_SCRIPT" permitting: [] }
-  unicode_data_version: "16.0" limits: { max_depth: 64 } } }
+  unicode_data_version: "16.0" limits: { max_depth: 64 max_token_length: 1048576 max_text_length: 1048576
+    max_numeric_literal_length: 4096 max_binary_size: 16777216 max_document_size: 16777216 max_elements: 1048576
+    max_entries: 1048576 max_fields: 65536 max_annotations: 64 max_values: 16777216 max_import_closure: 64
+    max_schema_entries: 65536 max_alias_chain: 64 max_supertype_chain: 64 max_materialisation_depth: 64
+    max_wait_depth: 64 } } }
 ```
 
-That is the policy **in force**, in the spec's `policy.tn` shape — the shape the descriptor states its policy in,
-whole — and not the descriptor: which origins a deployment will fetch schemas from is nobody else's business. It
-is served at a well-known path because everything with an identity in this series is served at its identity's
-path, and a descriptor is precisely the artifact that must not have one. And it is a hint — only the refusal a
+That is the policy **in force**, in `policy.tn`'s `policy.processor` shape — the shape the descriptor states its
+policy in, whole — and not the descriptor: which origins a deployment will fetch schemas from is nobody else's
+business. It is served at a well-known path because everything with an identity in this series is served at its
+identity's path, and a descriptor is precisely the artifact that must not have one. And it is a hint — only the refusal a
 request actually receives says what applied to that request.
 
 ## Building

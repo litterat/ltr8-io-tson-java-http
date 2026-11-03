@@ -28,25 +28,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The {@code TSON-Schema} header over real HTTP: routing by it, agreeing with the body's directive, and the
- * case it exists for -- a JSON body, which cannot carry a {@code !!schema} at all, validated against a TSON
+ * case it exists for -- a JSON body, which cannot carry an {@code !!import} at all, validated against a TSON
  * schema the header names.
  */
 class TsonSchemaHeaderRoutingTest {
 
-    private static final String V1_ID = "https://schemas.example.com/2026/38/app/order-1.tn";
-    private static final String V2_ID = "https://schemas.example.com/2026/38/app/order-2.tn";
+    private static final String V1_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
+    private static final String V2_ID = "https://schemas.example.com/2026/39/app/order-2.tn";
 
     private static final String V1 = """
-            !!id:"https://schemas.example.com/2026/38/app/order-1.tn"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            { order => { sku: text  quantity: int32 } }""";
+            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema { order => { sku: text  quantity: int32 } }""";
 
     private static final String V2 = """
-            !!id:"https://schemas.example.com/2026/38/app/order-2.tn"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            { order => { sku: text  quantity: int32  currency: text } }""";
+            !!id:"https://schemas.example.com/2026/39/app/order-2.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema { order => { sku: text  quantity: int32  currency: text } }""";
 
     private static final SchemaSource SOURCE = SchemaSource.ofMap(Map.of(V1_ID, V1, V2_ID, V2));
 
@@ -143,7 +141,7 @@ class TsonSchemaHeaderRoutingTest {
     @Test
     void acceptsBothWhenTheyAgree() throws Exception {
         HttpResponse<String> response = post("/orders", "application/tson",
-                "!!schema:\"" + V2_ID + "\"\n!order { sku: \"B\" quantity: 4 currency: \"AUD\" }",
+                "!!import:\"" + V2_ID + "\"\n!order { sku: \"B\" quantity: 4 currency: \"AUD\" }",
                 TsonSchemaHeader.format(V2_ID));
         assertEquals(200, response.statusCode(), response.body());
         assertEquals("v2:B:4:AUD", response.body());
@@ -152,7 +150,7 @@ class TsonSchemaHeaderRoutingTest {
     @Test
     void refusesAHeaderAndBodyThatDisagree() throws Exception {
         HttpResponse<String> response = post("/orders", "application/tson",
-                "!!schema:\"" + V1_ID + "\"\n!order { sku: \"A\" quantity: 3 }",
+                "!!import:\"" + V1_ID + "\"\n!order { sku: \"A\" quantity: 3 }",
                 TsonSchemaHeader.format(V2_ID));
         assertEquals(400, response.statusCode());
         assertTrue(response.body().contains("Conflicting schema"), response.body());
@@ -162,7 +160,7 @@ class TsonSchemaHeaderRoutingTest {
     @Test
     void aPinnedHeaderAgreesWithAPlainDirective() throws Exception {
         HttpResponse<String> response = post("/orders", "application/tson",
-                "!!schema:\"" + V1_ID + "\"\n!order { sku: \"A\" quantity: 3 }",
+                "!!import:\"" + V1_ID + "\"\n!order { sku: \"A\" quantity: 3 }",
                 TsonSchemaHeader.format(V1_ID + "?sha256=abc123"));
         assertEquals(200, response.statusCode(), response.body());
         assertEquals("v1:A:3", response.body());
@@ -185,7 +183,7 @@ class TsonSchemaHeaderRoutingTest {
     }
 
     /**
-     * <b>The case the header exists for.</b> {@code !!schema} is directive syntax and not JSON, so the header is
+     * <b>The case the header exists for.</b> {@code !!import} is directive syntax and not JSON, so the header is
      * the only channel a JSON payload has to say which schema governs it ([TSON-JSON] §3.4's out-of-band route,
      * which §3.5 makes this header's).
      */

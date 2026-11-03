@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * The {@code TSON-Accept-Schema} request field: which schema versions a client will accept <b>back</b>.
@@ -29,15 +30,15 @@ import java.util.Optional;
  * versions and prefer one:
  *
  * <pre>{@code
- * TSON-Accept-Schema: "https://schemas.example.com/2026/38/app/order-2.tn",
- *                     "https://schemas.example.com/2026/38/app/order-1.tn";q=0.5
+ * TSON-Accept-Schema: "https://schemas.example.com/2026/39/app/order-2.tn",
+ *                     "https://schemas.example.com/2026/39/app/order-1.tn";q=0.5
  * }</pre>
  *
  * <p><b>Absence means the server chooses</b>, as {@code Accept}'s absence means "anything". That keeps every
  * existing client working and makes this additive: a client that says nothing gets whatever the server
  * prefers, which is normally its newest version. {@code q=0} explicitly refuses a version.
  *
- * <p>The reply names what was actually chosen in its own {@code TSON-Schema} and in the body's {@code !!schema},
+ * <p>The reply names what was actually chosen in its own {@code TSON-Schema} and in the body's {@code !!import},
  * so a response stays self-describing without this field having a response form. When nothing acceptable can
  * be served, the answer is {@code 406}, mirroring {@code Accept}.
  *
@@ -72,18 +73,19 @@ public final class TsonAcceptSchemaHeader {
         if (fieldValue == null || fieldValue.isBlank()) {
             return List.of();
         }
+        Function<String, TsonHttpException> malformed = why -> malformed(fieldValue, why);
         List<Acceptable> parsed = new ArrayList<>();
-        for (String member : splitTopLevel(fieldValue)) {
-            String reference = member;
+        for (String member : TsonSchemaHeader.members(fieldValue, malformed)) {
+            int end = TsonSchemaHeader.endOfString(member, malformed);
+            String reference = TsonSchemaHeader.string(member.substring(0, end + 1), malformed);
+            String rest = member.substring(end + 1).trim();
             double quality = 1.0;
-            int semicolon = member.indexOf(';', endOfQuotedString(member, fieldValue));
-            if (semicolon >= 0) {
-                reference = member.substring(0, semicolon);
-                quality = quality(member.substring(semicolon + 1), fieldValue);
+            if (rest.startsWith(";")) {
+                quality = quality(rest.substring(1), fieldValue);
+            } else if (!rest.isEmpty()) {
+                throw malformed(fieldValue, "members are separated by commas");
             }
-            String uri = TsonSchemaHeader.parse(reference).orElseThrow(() -> malformed(fieldValue,
-                    "an empty schema reference names no version"));
-            parsed.add(new Acceptable(uri, quality));
+            parsed.add(new Acceptable(reference, quality));
         }
         return List.copyOf(parsed);
     }
@@ -122,9 +124,7 @@ public final class TsonAcceptSchemaHeader {
 
     /** {@code references} as a field value, in the order given, each quoted as an sf-string. */
     public static String format(List<String> references) {
-        List<String> quoted = new ArrayList<>();
-        references.forEach(reference -> quoted.add(TsonSchemaHeader.format(reference)));
-        return String.join(", ", quoted);
+        return TsonSchemaHeader.format(references);
     }
 
     private static boolean sameIdentity(String wanted, String candidate) {
@@ -136,46 +136,6 @@ public final class TsonAcceptSchemaHeader {
             // a match. Refusing the whole header for one bad member would deny a client its other choices.
             return false;
         }
-    }
-
-    /** Splits on commas outside quoted strings -- a schema URI may not contain one, but an escape may. */
-    private static List<String> splitTopLevel(String fieldValue) {
-        List<String> members = new ArrayList<>();
-        boolean inQuotes = false;
-        int start = 0;
-        for (int i = 0; i < fieldValue.length(); i++) {
-            char c = fieldValue.charAt(i);
-            if (c == '\\' && inQuotes) {
-                i++;
-            } else if (c == '"') {
-                inQuotes = !inQuotes;
-            } else if (c == ',' && !inQuotes) {
-                members.add(fieldValue.substring(start, i).trim());
-                start = i + 1;
-            }
-        }
-        members.add(fieldValue.substring(start).trim());
-        members.removeIf(String::isBlank);
-        if (members.isEmpty()) {
-            throw malformed(fieldValue, "a present field names at least one version");
-        }
-        return members;
-    }
-
-    private static int endOfQuotedString(String member, String fieldValue) {
-        boolean inQuotes = false;
-        for (int i = 0; i < member.length(); i++) {
-            char c = member.charAt(i);
-            if (c == '\\' && inQuotes) {
-                i++;
-            } else if (c == '"') {
-                inQuotes = !inQuotes;
-                if (!inQuotes) {
-                    return i;
-                }
-            }
-        }
-        throw malformed(fieldValue, "each member is a quoted sf-string");
     }
 
     private static double quality(String parameters, String fieldValue) {

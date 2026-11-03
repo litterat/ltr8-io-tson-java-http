@@ -53,10 +53,10 @@ public final class AllocationHarness {
         HttpClient client = HttpClient.newHttpClient();
 
         String valid = """
-                !!schema:"%s"
+                !!import:"%s"
                 !order { sku: "ABC-1"  quantity: 3 }""".formatted(OrderServer.SCHEMA_ID);
         String invalid = """
-                !!schema:"%s"
+                !!import:"%s"
                 !order { }""".formatted(OrderServer.SCHEMA_ID);
 
         // Warm up: first-write descriptor resolution and JIT, neither of which is per-request cost.

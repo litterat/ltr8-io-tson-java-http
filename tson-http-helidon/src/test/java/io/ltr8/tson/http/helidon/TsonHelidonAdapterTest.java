@@ -48,15 +48,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonHelidonAdapterTest {
 
-    private static final String SCHEMA_ID = "https://schemas.example.com/2026/38/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/38/app/order-1.tn"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            {
+            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema {
                 order => { sku: text  quantity: int32 }
             }""";
+
+    /** A schema a body imports beside the one its route reads: a second member of its binding. */
+    private static final String MONEY_ID = "https://schemas.example.com/2026/39/app/money.tn";
+
+    private static final String MONEY = """
+            !!id:"https://schemas.example.com/2026/39/app/money.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema { amount => { value: int32  currency: text } }""";
 
     @Typename(name = "order")
     public record Order(String sku, int quantity) {
@@ -75,9 +82,10 @@ class TsonHelidonAdapterTest {
         DataBindContext bind =
                 DataBindContext.builder().nameBinder(binder).registerAtoms(AtomContext.hostTypes()).build();
         Tson tson = Tson.of(ProcessorConfig.defaults()
-                .withSchemaAccess(SchemaAccess.of(uri -> SCHEMA))
+                .withSchemaAccess(SchemaAccess.of(uri -> uri.endsWith("/money.tn") ? MONEY : SCHEMA))
                 .withDataBindContext(bind));
         tson.resolve(SCHEMA);
+        tson.resolve(MONEY);
         codec = new TsonHttpCodec(tson);
         jsonCodec = codec.acceptingJson();
         client = HttpClient.newHttpClient();
@@ -124,7 +132,7 @@ class TsonHelidonAdapterTest {
         })));
 
         HttpResponse<String> response = post("/orders", """
-                !!schema:"%s"
+                !!import:"%s"
                 !order { sku: "ABC-1"  quantity: 3 }""".formatted(SCHEMA_ID));
 
         assertEquals(201, response.statusCode());
@@ -139,7 +147,7 @@ class TsonHelidonAdapterTest {
                 TsonHandler.asHandler(codec, tson -> tson.respond(201, tson.readObject(Order.class)))));
 
         HttpResponse<String> response = post("/orders", """
-                !!schema:"%s"
+                !!import:"%s"
                 !order { }""".formatted(SCHEMA_ID));
 
         assertEquals(400, response.statusCode());
@@ -282,6 +290,36 @@ class TsonHelidonAdapterTest {
         assertEquals("order ABC-1 already exists", problemFrom(response).detail().orElseThrow());
     }
 
+    /**
+     * <b>A {@code TSON-Schema} List agrees with a body's imports as a set</b> ([TSON-JSON] §3.5): a two-member field
+     * naming the body's two imports in the other order is read under both, and the same body under a field naming
+     * only one of them is a 400 {@code conflicting-schema} -- membership would let the body widen what the field
+     * claims.
+     */
+    @Test
+    void aSchemaHeaderListMustNameTheBodysWholeBinding() throws Exception {
+        start(routing -> routing.post("/orders", TsonHandler.asHandler(codec, tson -> {
+            TsonSchemaHeader.Governing governing = TsonSchemaHeader.resolve(
+                    tson.codec().begin(tson.request().content().inputStream()), tson.header(TsonSchemaHeader.NAME));
+            tson.respond(201, tson.codec().readObjectAs(governing.body(), tson.header("Content-Type"),
+                    governing.schemas(), "order", Order.class));
+        })));
+        String body = """
+                !!import:"%s"
+                !!import:"%s"
+                !order { sku: "ABC-1"  quantity: 3 }""".formatted(SCHEMA_ID, MONEY_ID);
+
+        HttpResponse<String> agreed = post("/orders", body, "Content-Type", "application/tson",
+                TsonSchemaHeader.NAME, TsonSchemaHeader.format(List.of(MONEY_ID, SCHEMA_ID)));
+        assertEquals(201, agreed.statusCode(), agreed.body());
+        assertTrue(agreed.body().contains("ABC-1"), agreed.body());
+
+        HttpResponse<String> narrower = post("/orders", body, "Content-Type", "application/tson",
+                TsonSchemaHeader.NAME, TsonSchemaHeader.format(SCHEMA_ID));
+        assertEquals(400, narrower.statusCode());
+        assertEquals(TsonHttpException.TYPES + "conflicting-schema", problemFrom(narrower).type().orElseThrow());
+    }
+
     @Test
     void aHandlerThatAnswersNothingIsAServerError() throws Exception {
         start(routing -> routing.post("/silent", TsonHandler.asHandler(codec, tson -> { })));
@@ -373,7 +411,7 @@ class TsonHelidonAdapterTest {
 
         assertEquals(201, response.statusCode(), response.body());
         assertEquals("application/tson", mediaType(response));
-        assertTrue(response.body().contains("!!schema:\"" + SCHEMA_ID + "\""), response.body());
+        assertTrue(response.body().contains("!!import:\"" + SCHEMA_ID + "\""), response.body());
     }
 
     /**

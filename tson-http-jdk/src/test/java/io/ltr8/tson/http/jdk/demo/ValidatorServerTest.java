@@ -45,15 +45,14 @@ class ValidatorServerTest {
     /** The schema a caller submits. Deliberately not this server's own — it arrives in the body like any. */
     private static final String PEOPLE = """
             !!id:"https://example.com/people.tn"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            {
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema {
               non_empty_text => !text ^ { min_length: 1 }
               employee => { id: uuid  name: non_empty_text  age: uint8 }
             }""";
 
     private static final String CONFORMING = """
-            !!schema:"https://example.com/people.tn"
+            !!import:"https://example.com/people.tn"
             !employee { id: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"  name: "Ada"  age: 36 }""";
 
     private com.sun.net.httpserver.HttpServer server;
@@ -88,7 +87,7 @@ class ValidatorServerTest {
     private static String request(String schema, String data) {
         String fields = (schema == null ? "" : "  schema: " + quoted(schema) + "\n")
                 + "  data:   " + quoted(data) + "\n";
-        return "!!schema:\"" + ValidatorServer.VALIDATE_ID + "\"\n!validation_request {\n" + fields + "}\n";
+        return "!!import:\"" + ValidatorServer.VALIDATE_ID + "\"\n!validation_request {\n" + fields + "}\n";
     }
 
     /** [TSON-DATA] §7.2.2's single-line escapes, which is all these payloads need. */
@@ -127,7 +126,7 @@ class ValidatorServerTest {
     @Test
     void aFaultingDocumentIsAnAnswerRatherThanAFailure() throws Exception {
         ValidationResult result = resultOf(validate(PEOPLE, """
-                !!schema:"https://example.com/people.tn"
+                !!import:"https://example.com/people.tn"
                 !employee { id: "not-a-uuid"  name: ""  age: 300  nickname: "Countess" }"""));
 
         assertEquals(Outcome.REJECTED, result.outcome());
@@ -155,9 +154,8 @@ class ValidatorServerTest {
     void aBrokenSchemaIsReportedAndTheDataIsNotChecked() throws Exception {
         ValidationResult result = resultOf(validate("""
                 !!id:"https://example.com/people.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                { employee => { name: no_such_type } }""", CONFORMING));
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema { employee => { name: no_such_type } }""", CONFORMING));
 
         assertEquals(ValidatorServer.Phase.SCHEMA, result.phase());
         assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR),
@@ -189,16 +187,14 @@ class ValidatorServerTest {
     void twoCallersSharingASchemaIdDoNotSeeEachOther() throws Exception {
         String mine = """
                 !!id:"https://example.com/people.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                { employee => { handle: text } }""";
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema { employee => { handle: text } }""";
         String theirs = """
                 !!id:"https://example.com/people.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                { employee => { nickname: text } }""";
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema { employee => { nickname: text } }""";
         String document = """
-                !!schema:"https://example.com/people.tn"
+                !!import:"https://example.com/people.tn"
                 !employee { handle: "ada" }""";
 
         assertEquals(Outcome.ACCEPTED, resultOf(validate(mine, document)).outcome());
@@ -271,7 +267,7 @@ class ValidatorServerTest {
     @Test
     void aSchemaThatWasNotSubmittedIsNeverFetched() throws Exception {
         ValidationResult result = resultOf(validate(PEOPLE, """
-                !!schema:"https://example.com/somewhere-else.tn"
+                !!import:"https://example.com/somewhere-else.tn"
                 !employee { id: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6" }"""));
 
         assertEquals(List.of(Diagnostic.Code.SCHEMA_NOT_PERMITTED),
@@ -290,7 +286,7 @@ class ValidatorServerTest {
     void aMalformedEnvelopeIsTheOneThingAnsweredFourHundred() throws Exception {
         HttpResponse<String> response = client.send(HttpRequest.newBuilder(URI.create(base + "/validate"))
                         .header("Content-Type", "application/tson")
-                        .POST(HttpRequest.BodyPublishers.ofString("!!schema:\"" + ValidatorServer.VALIDATE_ID
+                        .POST(HttpRequest.BodyPublishers.ofString("!!import:\"" + ValidatorServer.VALIDATE_ID
                                 + "\"\n!validation_request { data: 1  unexpected: 2 }", StandardCharsets.UTF_8))
                         .build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
@@ -313,13 +309,13 @@ class ValidatorServerTest {
     }
 
     /**
-     * The demo's own schemas resolve from the running server, so the identity in a reply's {@code !!schema}
+     * The demo's own schemas resolve from the running server, so the identity in a reply's {@code !!import}
      * is something a client can actually dereference -- the same loop every other demo here proves.
      */
     @Test
     void theEnvelopeIsPublishedAtItsOwnIdentityPath() throws Exception {
         HttpResponse<String> response = client.send(HttpRequest.newBuilder(
-                        URI.create(base + "/2026/38/app/validate-1.tn")).GET().build(),
+                        URI.create(base + "/2026/39/app/validate-1.tn")).GET().build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         assertEquals(200, response.statusCode());
@@ -391,7 +387,7 @@ class ValidatorServerTest {
     @Test
     void theDescriptorIsNeverServed() throws Exception {
         HttpResponse<String> schema = client.send(HttpRequest.newBuilder(
-                        URI.create(base + "/2026/38/io/ltr8/http/deployment.tn")).GET().build(),
+                        URI.create(base + "/2026/39/io/ltr8/http/deployment.tn")).GET().build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         assertEquals(200, schema.statusCode(), "the schema is published, so a profile can be validated");
 

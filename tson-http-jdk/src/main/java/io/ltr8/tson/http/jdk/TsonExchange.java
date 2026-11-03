@@ -135,7 +135,7 @@ public final class TsonExchange {
 
     /**
      * {@link #respond}, naming the schema that governs the reply: in the {@code TSON-Schema} header always, and
-     * in band as well where the representation is TSON ({@code !!schema} and a root type-ref). A JSON body has no
+     * in band as well where the representation is TSON ({@code !!import} and a root type-ref). A JSON body has no
      * in-band channel, so the header is its only one ([TSON-JSON] §3.5).
      */
     public void respondDescribed(int status, Object value, String schemaUri, String rootTypeName) {

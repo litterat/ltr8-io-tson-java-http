@@ -152,20 +152,19 @@
 
 <footer>
   Empty the schema pane to ask for a Class&nbsp;1 read — base syntax and the built-in type vocabulary, no
-  schema in scope. That is what a JSON document gets, and what a document naming no <code>!!schema</code>
+  schema in scope. That is what a JSON document gets, and what a document importing no schema
   gets. The service publishes its own envelope at
-  <code><a href="/2026/38/app/validate-1.tn">/2026/38/app/validate-1.tn</a></code> and describes itself at
-  <code><a href="/2026/38/app/validate-api-1.tn">/2026/38/app/validate-api-1.tn</a></code>.
+  <code><a href="/2026/39/app/validate-1.tn">/2026/39/app/validate-1.tn</a></code> and describes itself at
+  <code><a href="/2026/39/app/validate-api-1.tn">/2026/39/app/validate-api-1.tn</a></code>.
 </footer>
 
 <script>
-const ENVELOPE = "https://schemas.example.com/2026/38/app/validate-1.tn";
+const ENVELOPE = "https://schemas.example.com/2026/39/app/validate-1.tn";
 
 const PEOPLE = `!!id:"https://example.com/people.tn"
-!!meta:"https://tson.io/2026/38/m/meta.tn"
-!!import:"https://tson.io/2026/38/m/core.tn"
+!!import:"https://tson.io/2026/39/m/core.tn"
 @doc:"The demo schema: an employee record."
-{
+!schema {
   @doc:"Text with at least one character. Core does not declare it, so a schema that wants it does."
   non_empty_text => !text ^ { min_length: 1 }
 
@@ -182,7 +181,7 @@ const PEOPLE = `!!id:"https://example.com/people.tn"
 }
 `;
 
-const HEAD = '!!schema:"https://example.com/people.tn"\n';
+const HEAD = '!!import:"https://example.com/people.tn"\n';
 
 const SCENARIOS = [
   {
@@ -252,9 +251,8 @@ const SCENARIOS = [
     // The schema is the thing at fault, so the data is never looked at -- which is what `phase` reports.
     id: 'badschema', label: 'broken schema',
     schema: `!!id:"https://example.com/people.tn"
-!!meta:"https://tson.io/2026/38/m/meta.tn"
-!!import:"https://tson.io/2026/38/m/core.tn"
-{
+!!import:"https://tson.io/2026/39/m/core.tn"
+!schema {
   employee => {
     id:   uuid
     name: no_such_type
@@ -306,7 +304,7 @@ function requestBody(data, schema) {
   // An absent field, not an empty one: `schema` is optional in the envelope, and omitting it is how the
   // request asks for a class 1 read rather than for a check against an empty schema.
   if (schema.trim() !== '') fields.unshift(`  schema: ${tsonText(schema)}`);
-  return `!!schema:"${ENVELOPE}"\n!validation_request {\n${fields.join('\n')}\n}\n`;
+  return `!!import:"${ENVELOPE}"\n!validation_request {\n${fields.join('\n')}\n}\n`;
 }
 
 const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) =>

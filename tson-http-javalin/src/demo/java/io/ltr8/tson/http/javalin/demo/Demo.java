@@ -14,12 +14,12 @@ final class Demo {
 
                 A valid order (201, doubled quantity):
                   curl -s %s/orders -H 'Content-Type: application/tson' --data-binary '
-                  !!schema:"%s"
+                  !!import:"%s"
                   !order { sku: "ABC-1"  quantity: 3 }'
 
                 An invalid one (400, every problem at once -- not just the first):
                   curl -s %s/orders -H 'Content-Type: application/tson' --data-binary '
-                  !!schema:"%s"
+                  !!import:"%s"
                   !order { }'
 
                 The same order as JSON, answered in JSON -- the description says create_order speaks it:
@@ -30,10 +30,10 @@ final class Demo {
                   curl -s -o /dev/null -w '%%{http_code}\\n' %s/orders -H 'Content-Type: text/plain' -d 'hello'
 
                 The schema this server validates against, published at its own identity path:
-                  curl -s %s/2026/38/app/order-1.tn
+                  curl -s %s/2026/39/app/order-1.tn
 
                 The schema its error bodies conform to:
-                  curl -s %s/2026/38/io/ltr8/http/problem.tn
+                  curl -s %s/2026/39/io/ltr8/http/problem.tn
 
                 Note the schema's identity is %s, not localhost:
                 [TSON-DATA] §2.2.1 forbids a port in an identifying URI, so a name and a

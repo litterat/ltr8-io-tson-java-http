@@ -68,7 +68,7 @@ class OrderServerConcurrencyTest {
                             if (i % 2 == 0) {
                                 String sku = "SKU-" + id + "-" + i;
                                 HttpResponse<String> ok = post("""
-                                        !!schema:"%s"
+                                        !!import:"%s"
                                         !order { sku: "%s"  quantity: %d }"""
                                         .formatted(OrderServer.SCHEMA_ID, sku, i));
                                 assertEquals(201, ok.statusCode(), ok.body());
@@ -76,7 +76,7 @@ class OrderServerConcurrencyTest {
                                 assertTrue(ok.body().contains(String.valueOf(i * 2)), ok.body());
                             } else {
                                 HttpResponse<String> bad = post("""
-                                        !!schema:"%s"
+                                        !!import:"%s"
                                         !order { }""".formatted(OrderServer.SCHEMA_ID));
                                 assertEquals(400, bad.statusCode(), bad.body());
                                 assertTrue(bad.body().contains("FIELD_REQUIRED"), bad.body());

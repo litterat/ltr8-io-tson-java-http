@@ -31,7 +31,7 @@ public final class ThroughputHarness {
         Javalin app = OrderServer.start(0);
         String base = "http://127.0.0.1:" + app.port();
         String valid = """
-                !!schema:"%s"
+                !!import:"%s"
                 !order { sku: "ABC-1"  quantity: 3 }""".formatted(OrderServer.SCHEMA_ID);
 
         // Built and warmed BEFORE timing: a fresh client pays for connection setup and an unwarmed JIT, and

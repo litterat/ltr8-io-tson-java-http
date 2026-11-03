@@ -1,7 +1,6 @@
-!!id:"https://schemas.example.com/2026/38/app/validate-1.tn"
-!!meta:"https://tson.io/2026/38/m/meta.tn"
-!!import:"https://tson.io/2026/38/m/core.tn"
-!!import:"https://tson.io/2026/38/io/ltr8/http/problem.tn"
+!!id:"https://schemas.example.com/2026/39/app/validate-1.tn"
+!!import:"https://tson.io/2026/39/m/core.tn"
+!!import:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
 @doc:"""
   The validator demo's own envelope: a schema and a document go in, the diagnostics come back.
 
@@ -19,7 +18,7 @@
   diagnostic whether it rides in an error body or in a result, and two shapes for one thing is how
   a client ends up with two renderers.
   """
-{
+!schema {
   @doc:"""
     Which phase the diagnostics come from, and so what they are a verdict ON.
 
@@ -34,7 +33,7 @@
   @doc:"""
     What to check. `schema` absent asks for a Class 1 read -- base syntax and the built-in type
     vocabulary, no schema in scope -- which is a real mode rather than a degenerate one: it is what
-    a JSON document gets, and what a document naming no !!schema gets.
+    a JSON document gets, and what a document importing no schema gets.
     """
   validation_request => {
     schema?: text

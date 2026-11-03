@@ -33,15 +33,14 @@ class MapKeyPointerTest {
 
     private static final String SCHEMA = """
             !!id:"%s"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            {
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema {
               point => { x: int32  y: int32 }
               tally => { counts?: {int32 => int32}  grid?: {point => int32} }
             }
             """.formatted(ID);
 
-    private static final String HEAD = "!!schema:\"" + ID + "\"\n";
+    private static final String HEAD = "!!import:\"" + ID + "\"\n";
 
     public record Point(int x, int y) {
     }

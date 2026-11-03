@@ -61,7 +61,7 @@ class OrderServerTest {
     @Test
     void acceptsAValidOrder() throws Exception {
         HttpResponse<String> response = post("""
-                !!schema:"%s"
+                !!import:"%s"
                 !order { sku: "ABC-1"  quantity: 3 }""".formatted(OrderServer.SCHEMA_ID));
 
         assertEquals(201, response.statusCode());
@@ -73,7 +73,7 @@ class OrderServerTest {
     @Test
     void rejectsAnInvalidOrderWithEveryDiagnostic() throws Exception {
         HttpResponse<String> response = post("""
-                !!schema:"%s"
+                !!import:"%s"
                 !order { }""".formatted(OrderServer.SCHEMA_ID));
 
         assertEquals(400, response.statusCode());
@@ -128,8 +128,8 @@ class OrderServerTest {
     /** The last two: both schemas published at their own identity paths. */
     @Test
     void publishesBothSchemasAtTheirIdentityPaths() throws Exception {
-        assertEquals(OrderServer.SCHEMA, get("/2026/38/app/order-1.tn").body());
-        assertEquals(TsonProblemSchema.source(), get("/2026/38/io/ltr8/http/problem.tn").body());
+        assertEquals(OrderServer.SCHEMA, get("/2026/39/app/order-1.tn").body());
+        assertEquals(TsonProblemSchema.source(), get("/2026/39/io/ltr8/http/problem.tn").body());
     }
     /**
      * <b>The schemas name their identities literally, so something has to hold them to the constants.</b>
@@ -146,8 +146,8 @@ class OrderServerTest {
 
         assertTrue(OrderServer.SCHEMA.contains("!!import:\"" + TsonProblemSchema.ID + "\""),
                 "the error schema composes the CURRENT problem schema");
-        assertTrue(OrderServer.API.contains("!!meta:\"" + TsonApiSchema.ID + "\""),
-                "the description is governed by the CURRENT meta layer");
+        assertTrue(OrderServer.API.contains("!!import:\"" + TsonApiSchema.ID + "\""),
+                "the description imports the CURRENT meta-service.tn");
     }
 
 
@@ -167,7 +167,7 @@ class OrderServerTest {
     @Test
     void aDocumentNamingAnUnknownSchemaIsTheSendersMistake() throws Exception {
         HttpResponse<String> response = post("""
-                !!schema:"https://schemas.example.com/2026/38/app/nowhere-1.tn"
+                !!import:"https://schemas.example.com/2026/39/app/nowhere-1.tn"
                 !order { sku: "ABC-1"  quantity: 3 }""");
 
         assertEquals(400, response.statusCode(), response.body());

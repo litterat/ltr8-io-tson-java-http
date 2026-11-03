@@ -31,12 +31,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonHttpCodecJsonTest {
 
-    private static final String SCHEMA_ID = "https://s.example.com/2026/38/app/note-1.tn";
+    private static final String SCHEMA_ID = "https://s.example.com/2026/39/app/note-1.tn";
     private static final String SCHEMA = """
-            !!id:"https://s.example.com/2026/38/app/note-1.tn"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            {
+            !!id:"https://s.example.com/2026/39/app/note-1.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema {
                 note => { title: text  body?: text  subtitle?: text?  count: int32 }
             }""";
 
@@ -127,7 +126,8 @@ class TsonHttpCodecJsonTest {
      */
     @Test
     void theJsonReaderIsJudgedByTheTsonPolicy() {
-        TsonHttpCodec shallow = codec(ProcessorConfig.defaults().withLimits(new LimitsPolicy(3))).acceptingJson();
+        TsonHttpCodec shallow = codec(ProcessorConfig.defaults().withLimits(LimitsPolicy.defaults().withMaxDepth(3)))
+                .acceptingJson();
 
         TsonHttpException refused = assertThrows(TsonHttpException.class,
                 () -> shallow.readJsonTree(json("[[[[[1]]]]]"), "application/json"));
@@ -236,7 +236,7 @@ class TsonHttpCodecJsonTest {
         codec.writeTo(note, SCHEMA_ID, "note", json, out);
         String written = out.toString(StandardCharsets.UTF_8);
 
-        assertFalse(written.contains("$schema") || written.contains("!!schema"), written);
+        assertFalse(written.contains("$import") || written.contains("!!import"), written);
         assertEquals(note, codec.readObjectAs(json(written), "application/tson+json", SCHEMA_ID, "note", Note.class));
     }
 

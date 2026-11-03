@@ -3,6 +3,7 @@ package io.ltr8.tson.http.experiment.onelevel;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.schema.meta.Namespace;
+import io.ltr8.tson.schema.meta.ValueEntry;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -14,24 +15,25 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * <b>A namespace type is the map itself</b> ([TSON-SCHEMA] §4.1): {@code iface => namespace & { … }} is written as
- * the bare map, the names inside it judged, and entered by a qualified name key by key (§5.12), so {@code ref<T>}
+ * <b>A namespace type is the map itself</b> ([TSON-SCHEMA] §4.1): a value of {@code iface => !meta.namespace { … }} is
+ * written as the bare map, the names inside it judged, and entered by a qualified name key by key (§5.12), so {@code
+ * meta.ref<T>}
  * reaches a member as {@code orders.get} with no reading-side rule. A record template closed over a map,
  * {@code ns => <M> { entries: M }}, would put a field between the entry and its keys ({@code orders.entries.get}).
  */
 class NamespaceTemplateProbe {
 
-    static final String LAYER = OneLevelProbe.head(OneLevelProbe.LAYER_ID, OneLevelProbe.KERNEL, OneLevelProbe.META)
+    static final String LAYER = OneLevelProbe.head(OneLevelProbe.LAYER_ID, OneLevelProbe.META)
             + """
-            {
-              meth       => { request?: type_kind }
-              iface      => namespace & { key_type: = identifier  value_type: = meth }
-              plain      => { entries: {identifier => meth} }
-              plains     => namespace & { key_type: = identifier  value_type: = plain }
-              bind       => { m: ref<meth> }
-              binds      => namespace & { key_type: = identifier  value_type: = bind }
-              bind_text  => { m: ref<meth> }
-              bind_texts => namespace & { key_type: = identifier  value_type: = bind_text }
+            !schema {
+              meth       => { request?: meta.type_ref }
+              iface      => !meta.namespace { key_type: meta.identifier  value_type: meth }
+              plain      => { entries: {meta.identifier => meth} }
+              plains     => !meta.namespace { key_type: meta.identifier  value_type: plain }
+              bind       => { m: meta.ref<meth> }
+              binds      => !meta.namespace { key_type: meta.identifier  value_type: bind }
+              bind_text  => { m: meta.ref<meth> }
+              bind_texts => !meta.namespace { key_type: meta.identifier  value_type: bind_text }
             }""";
 
     static Tson tson(String schema) {
@@ -45,7 +47,7 @@ class NamespaceTemplateProbe {
 
     static String schema(String entries) {
         return OneLevelProbe.head(OneLevelProbe.ID, OneLevelProbe.LAYER_ID, OneLevelProbe.CORE)
-                + "{\n  order => { sku: text }\n" + entries + "\n}";
+                + "!schema {\n  order => { sku: text }\n" + entries + "\n}";
     }
 
     static List<Diagnostic> resolve(String entries) {
@@ -60,17 +62,22 @@ class NamespaceTemplateProbe {
         return tson.schemaRegistry().get(OneLevelProbe.ID).orElseThrow().schema().entries().get(name);
     }
 
+    /** The map the value entry {@code name} holds. */
+    static Namespace<?> namespace(String entries, String name) {
+        return assertInstanceOf(Namespace.class, assertInstanceOf(ValueEntry.class, entry(entries, name)).value());
+    }
+
     /** The value under {@code key} of the namespace entry {@code name}. */
     static Object held(String entries, String name, String key) {
-        return assertInstanceOf(Namespace.class, entry(entries, name)).get(key);
+        return namespace(entries, name).get(key);
     }
 
     static final String ORDERS = "  orders => !iface { get => { request: order } }\n";
 
-    /** The entry is the map: a {@code Namespace} of the constructor, holding each value under its key. */
+    /** The entry is a value holding the map: a {@code Namespace} of the type, holding each value under its key. */
     @Test
     void aNamespaceTemplateIsWrittenAsTheBareMap() {
-        var orders = assertInstanceOf(Namespace.class, entry(ORDERS, "orders"));
+        var orders = namespace(ORDERS, "orders");
         assertEquals("iface", orders.type());
         assertEquals("order", assertInstanceOf(Meth.class, orders.get("get")).request().name());
     }

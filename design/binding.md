@@ -7,6 +7,9 @@ are the server's own. Current form only.
 
 - A bound class is public. Bindings come from `TsonBindings.of(map)` or `of(map, profile)`, never a hand-rolled
   `DataBindContext.builder()`.
+- One bind context per `Tson` binds a schema's value entries and a data document's values alike, so a vocabulary's
+  records go in the application's map: `TsonBindings.of(TsonApiSchema.bindingsWith(application))`. The map binds
+  application names only; `Tson.of` answers the kernel's vocabulary ahead of it.
 - Binding is strict and a mismatch is a startup failure if `prepareToRead(schemaId)` runs at startup; there is no
   lenient mode. `prepareToWrite` is a warm-up, not a correctness measure.
 - A type nothing binds is a 500 (`MissingBindingException`), not a 501. A compact constructor stricter than its schema
@@ -19,8 +22,8 @@ are the server's own. Current form only.
 
 - **A bound class guards its own optional lists.** An optional field a document omits reaches the constructor
   as `null`, and the binder does not normalise it — the convention upstream follows is that the record does,
-  in its compact constructor, as `RecordBody`, `TypeDefinition` and `TypeRef` all do. `Operation` guards
-  `parameters` for that reason. A **required** list is deliberately not guarded: it never reaches a
+  in its compact constructor, as `RecordBody` and `TypeRef` do. `Operation`,
+  `Binding` and `Document` guard theirs for that reason. A **required** list is deliberately not guarded: it never reaches a
   constructor, because the reader reports `FIELD_REQUIRED` and abandons the construction first, so a guard
   there would mask a real violation. A `references()` that returns such a `null` is refused by name — a
   `BindMismatchException` naming the class — rather than being an NPE out of `Tson.resolve`; the guard is
@@ -28,18 +31,26 @@ are the server's own. Current form only.
 - **A bound class must be public.** tson-java declares no `opens` and binding only ever touches public
   constructors and methods, so a package-private record fails analysis with a bare `DataBindException:
   Failed to resolve` that names nothing useful.
-- **Object binding needs bindings, and the convenience is now this repo's.** The class passed to `readObject`
-  is the expected *result*, not the mapping. Upstream's `bindings(Map)`/`profile(String)` are gone with the
-  builder, so `TsonBindings.of(Map.of("order", Order.class))` — or `of(map, profile)` — is what builds the whole
-  context here: the map as a name binder, **chained over the kernel's vocabulary rather than replacing it**,
-  with the atom registrations applied. Do **not** hand-roll `DataBindContext.builder()` at a call site: two of
-  those three steps are invisible, and missing either fails a long way from the cause. The map authors the
-  failure on purpose — the kernel binder is the backstop, and letting it speak reports a missing line of your
-  configuration as "not kernel vocabulary".
+- **Object binding needs bindings, and `TsonBindings` builds them.** The class passed to `readObject` is the
+  expected *result*, not the mapping. `TsonBindings.of(Map.of("order", Order.class))` — or `of(map, profile)` — is
+  the whole context: the map as a name binder, with the atom registrations applied. Do **not** hand-roll
+  `DataBindContext.builder()` at a call site: the atom step is invisible, and missing it fails a long way from the
+  cause. **The map authors the failure**: a name it does not bind is reported as a missing line of this
+  application's configuration, listing what it does bind. It has no fallback, and needs none: `Tson.of` composes the
+  kernel's vocabulary over the configured binder and asks it first, so every kernel name binds to the schema model
+  whatever the map says, and `Tson.dataBindContext()` is that composed context.
+- **One context, schemas and data alike.** The context a `Tson` is built with binds a schema's value entries as it
+  binds a data document's values. A value entry binds by the name of the type it applies, as a data value does: an
+  entry applying a record type (`!binding { … }`) binds to the class the map gives that name, and one applying a
+  namespace type is a `ValueEntry(type, Namespace)` whose values bind the same way. An entry no class binds is held as
+  a tree: the schema loads, and the bind registry refuses it with `BIND_MISMATCH` at the entry. So a vocabulary a
+  schema imports belongs in the same map as the application's: `TsonApiSchema.bindings()` is `meta-service.tn`'s
+  records as an explicit map, and `bindingsWith(application)` merges the two, refusing a name both bind, since within
+  one closure a name means one thing. The demos build their one context as
+  `TsonBindings.of(TsonApiSchema.bindingsWith(bindings))`.
 - **A type nothing binds is a 500, not a 501.** It is a `MissingBindingException` naming the map, deferred
-  to the first read of that specific type (a schema legitimately declares types a consumer never binds). It
-  used to present as `UnsupportedOperationException: no usable compiled reader`, which this project mapped to
-  501 — reporting a missing line of its own configuration as "this library cannot do that". Pinned by
+  to the first read of that specific type (a schema legitimately declares types a consumer never binds). A 501
+  would report a missing line of this server's configuration as "this library cannot do that". Pinned by
   `TsonHttpCodecTest.aTypeNothingBindsIsAServerFaultNotALibraryGap`.
 - **A bound class stricter than its schema answers 500.** A compact constructor that throws on a value the schema
   admits is reported as `BIND_MISMATCH` — the class disagrees with its contract — so the client whose body the
@@ -54,13 +65,10 @@ are the server's own. Current form only.
   component, or a component no field fills, is a `BindMismatchException` when the schema compiles in bind
   mode. `TsonHttpCodec.prepareToRead(schemaId)` forces that at startup and `TsonSchemaVersions` calls it —
   without it the same mistake is a 500 on the first request that reads one. `@Unbound` marks a component that
-  is the class's own, and as of Revision 35 it means **not on the wire in both directions** — it was read-side
-  only, so a marked component was silently *written*. If a response type here ever carries one, that is the
-  change to know: the field leaves the body. **There is no lenient escape hatch any more** — upstream removed
-  it, so strict is the only mode and a mismatch is a startup failure or nothing. **A
+  is the class's own, and it means **not on the wire in both directions**: a response type carrying one leaves the
+  field out of the body. **There is no lenient mode**, so a mismatch is a startup failure or nothing. **A
   mismatch reaching the diagnostics channel is still reported as `SCHEMA_ERROR` and so becomes a 400** —
   routing and `prepareToRead` are what keep it unreachable.
-- **`prepareToWrite` is a warm-up, not a correctness measure** — it was one, before the descriptor race was
-  fixed upstream. Keep calling it at startup to move first-write descriptor resolution off the request thread;
-  do not treat it as load-bearing for concurrency any more.
+- **`prepareToWrite` is a warm-up, not a correctness measure.** Keep calling it at startup to move first-write
+  descriptor resolution off the request thread; nothing about concurrency depends on it.
 

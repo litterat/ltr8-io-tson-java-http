@@ -2,7 +2,9 @@ package io.ltr8.tson.http.experiment.onelevel;
 
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.Diagnostic;
+import io.ltr8.tson.base.DiagnosticsReceiver;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
@@ -17,32 +19,31 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * What the resolver does today at each place the levels show, so {@code experiments/one-level/README.md} states
- * measurements rather than readings of the spec. Every test pins the current outcome; one failing after a library
+ * What the resolver does at each place the levels used to show, so {@code experiments/one-level/README.md} states
+ * measurements rather than readings of the spec. Every test pins Revision 39's outcome; one failing after a library
  * change means the ground the note stands on has moved.
  *
- * <p>Two halves. Within schemas: who may declare a constructor, who may apply one, and whether a schema can be its
- * own meta. Across the data/schema line: whether a data document can hold a type's name or a value's name, and
- * whether either is judged.
+ * <p>Two halves. Within schemas: who may declare a constructor, who may apply one, and whether a schema can import
+ * itself. Across the data/schema line: whether a data document can hold a type's name or a value's name, and whether
+ * either is judged. Revision 39 removed the ladder (one namespace per schema, {@code !!import} the one directive), so
+ * most of the first half now pins that a Revision 38 refusal is gone.
  */
 class OneLevelProbe {
 
-    static final String KERNEL = "https://tson.io/2026/38/m/meta-kernel.tn";
-    static final String META = "https://tson.io/2026/38/m/meta.tn";
-    static final String CORE = "https://tson.io/2026/38/m/core.tn";
-    static final String ID = "https://schemas.example.com/2026/38/one-level/s-1.tn";
-    static final String LAYER_ID = "https://schemas.example.com/2026/38/one-level/layer-1.tn";
+    static final String META = "https://tson.io/2026/39/m/meta.tn";
+    static final String CORE = "https://tson.io/2026/39/m/core.tn";
+    static final String ID = "https://schemas.example.com/2026/39/one-level/s-1.tn";
+    static final String LAYER_ID = "https://schemas.example.com/2026/39/one-level/layer-1.tn";
 
-    /** The probe's vocabulary: a record, and the namespace type a governed schema applies to hold it. */
-    static final String STEPS =
-            "step => { takes: type_kind }  steps => namespace & { key_type: = identifier  value_type: = step }";
+    /** The probe's vocabulary: a record, and the namespace type a schema importing it applies to hold it. */
+    static final String STEPS = "step => { takes: meta.type_ref }  "
+            + "steps => !meta.namespace { key_type: meta.identifier  value_type: step }";
 
-    /** A meta layer declaring the probe's one constructor, the two-document shape every governed schema has today. */
-    static final String LAYER = head(LAYER_ID, KERNEL, META)
-            + "{ " + STEPS + " }";
+    /** A layer declaring the probe's one namespace type, imported by the schema that holds its values. */
+    static final String LAYER = head(LAYER_ID, META) + "!schema { " + STEPS + " }";
 
-    static String head(String id, String meta, String... imports) {
-        StringBuilder head = new StringBuilder("!!id:\"" + id + "\"\n!!meta:\"" + meta + "\"\n");
+    static String head(String id, String... imports) {
+        StringBuilder head = new StringBuilder("!!id:\"" + id + "\"\n");
         for (String imported : imports) {
             head.append("!!import:\"").append(imported).append("\"\n");
         }
@@ -52,8 +53,9 @@ class OneLevelProbe {
     static Tson tson(Map<String, String> documents) {
         return Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(documents)))
-                .withMetaNameBinder(new DataNameBinder.DefaultDataNameBinder(
-                        Set.of("io.ltr8.tson.http.experiment.onelevel"), Map.of())));
+                .withDataBindContext(
+                    AtomContext.defaultContext().toBuilder().nameBinder(new DataNameBinder.DefaultDataNameBinder(
+                        Set.of("io.ltr8.tson.http.experiment.onelevel"), Map.of())).build()));
     }
 
     /** Resolves {@code schema} (served at {@link #ID}) beside {@link #LAYER} and returns what was reported. */
@@ -71,91 +73,90 @@ class OneLevelProbe {
 
     // ── within schemas ──────────────────────────────────────────────────────────────────────────────────────────
 
-    /** Today's shape: the constructor in a meta layer, its instance one document down. */
+    /** The two-document shape: the namespace type in a layer, its value in a schema importing it. */
     @Test
     void aConstructorDeclaredInALayerIsAppliedOneDocumentDown() {
         assertEquals(List.of(), resolve(LAYER));
         assertEquals(List.of(), resolve(head(ID, LAYER_ID, CORE)
-                + "{ order => { sku: text }  s => !steps { one => { takes: order } } }"));
+                + "!schema { order => { sku: text }  s => !steps { one => { takes: order } } }"));
     }
 
     /**
-     * A meta layer cannot apply its own constructor: a schema's {@code !} targets come from the meta that governs it
-     * (§3.3.1), so {@code steps} serves the layer below and is invisible here.
+     * A schema declaring a namespace type holds a value of it beside the declaration: the value waits on the type
+     * being ready. Revision 38 refused it, a schema's {@code !} targets coming from the meta governing it.
      */
     @Test
-    void aMetaLayerCannotApplyItsOwnConstructor() {
-        String message = onlyMessage(resolve(head(ID, KERNEL, META)
-                + "{ order => { sku: text }  STEPS  s => !steps { one => { takes: order } } }".replace("STEPS", STEPS)));
-        assertTrue(message.contains("'!steps' does not resolve against the structure namespace"), message);
+    void aSchemaAppliesANamespaceTypeItDeclaresItself() {
+        assertEquals(List.of(), resolve(head(ID, META)
+                + "!schema { order => { sku: text }  STEPS  s => !steps { one => { takes: order } } }"
+                .replace("STEPS", STEPS)));
     }
 
     /**
-     * An ordinary schema never reaches the placement rule: the kernel's names are not in its namespace, so {@code
-     * namespace} is simply undeclared. The level is enforced by visibility first.
+     * A schema importing core sees the kernel's machinery and declares a namespace type with it: the kernel reaches
+     * it through core's own imports. Revision 38 refused it, the kernel's names being out of an ordinary schema's
+     * reach.
      */
     @Test
-    void anOrdinarySchemaCannotSeeTheKernel() {
-        String message = onlyMessage(resolve(head(ID, META, CORE) + "{ " + STEPS + " }"));
-        assertTrue(message.contains("supertype 'namespace' names no type this schema declares or imports"), message);
+    void aSchemaImportingCoreDeclaresANamespaceType() {
+        assertEquals(List.of(), resolve(head(ID, CORE) + "!schema { " + STEPS + " }"));
     }
 
     /**
-     * An ordinary schema cannot import the kernel, with core or without: an import stands at the importer's governing
-     * level (§2.2.3), so the edge is refused before core's {@code void} collides or the placement rule (§2.2.2) is
-     * reached, and that rule meets no loaded document.
+     * Any schema imports the kernel, with core or without: an import crosses no level. Revision 38 refused both, an
+     * import standing at the importer's governing level.
      */
     @Test
-    void anOrdinarySchemaCannotImportTheKernel() {
-        for (String schema : List.of(head(ID, META, CORE, KERNEL) + "{ order => { sku: text } }",
-                head(ID, META, KERNEL) + "{ " + STEPS + " }")) {
-            String message = onlyMessage(resolve(schema));
-            assertTrue(message.contains("an !!import stands at the importer's governing level")
-                    && message.contains("an ordinary schema reaches a meta-schema's constructors only through its "
-                    + "!!meta"), message);
+    void anySchemaImportsTheKernel() {
+        for (String schema : List.of(head(ID, CORE, META) + "!schema { order => { sku: text } }",
+                head(ID, META) + "!schema { " + STEPS + " }")) {
+            assertEquals(List.of(), resolve(schema), schema);
         }
     }
 
     /**
-     * A schema that is its own meta is an import cycle, even one declaring only types. The kernel's self-reference
-     * is closed by pre-loading, and no other document can close it.
+     * A schema importing itself is an import cycle, even one declaring only types. The kernel imports nothing, so
+     * no self-reference is left to close by pre-loading.
      */
     @Test
-    void aSchemaThatIsItsOwnMetaIsAnImportCycle() {
-        String message = onlyMessage(resolve(head(ID, ID, META, CORE) + "{ order => { sku: text } }"));
+    void aSchemaImportingItselfIsAnImportCycle() {
+        String message = onlyMessage(resolve(head(ID, ID, CORE) + "!schema { order => { sku: text } }"));
         assertTrue(message.contains("is part of an import cycle"), message);
     }
 
-    /** In one governed schema, an instance names a type declared beside it, and a kind slot refuses the instance. */
+    /** An instance names a type declared beside it, and a kind slot refuses the instance. */
     @Test
     void aKindSlotRefusesAnInstanceDeclaredBesideIt() {
         String message = onlyMessage(resolve(head(ID, LAYER_ID, CORE)
-                + "{ order => { sku: text }  s => !steps { one => { takes: order } }"
+                + "!schema { order => { sku: text }  s => !steps { one => { takes: order } }"
                 + "  t => !steps { one => { takes: s } } }"));
-        assertTrue(message.contains("'s' is a value of the namespace type 'steps', a map of names -- a value and not a "
-                + "type"), message);
+        assertTrue(message.contains("'s' is a value of the type 'steps' -- a value and not a type, so nothing can be "
+                + "typed by it"), message);
     }
 
     // ── across the data/schema line ─────────────────────────────────────────────────────────────────────────────
 
-    /** An ordinary schema types a field by a kind through core's own {@code kind}. */
-    static final String NAMING = head(ID, META, CORE) + "{ order => { sku: text }  pick => { t: kind<type> } }";
+    /** A schema types a field by a kind through the kernel's {@code meta.ref}. */
+    static final String NAMING = head(ID, CORE)
+            + "!schema { order => { sku: text }  pick => { t: meta.ref<meta.type> } }";
 
-    /** The same, typing a field by a reference: core declares no {@code ref}, so nothing here resolves it. */
-    static final String REFERRING = head(ID, META, CORE) + "{ order => { sku: text }  rpick => { m: ref<order> } }";
+    /** The same, typing a field by a reference, the kernel's {@code meta.ref}. */
+    static final String REFERRING = head(ID, CORE)
+            + "!schema { order => { sku: text }  rpick => { m: meta.ref<order> } }";
 
     static List<Diagnostic> readUnderNaming(String body) {
         Map<String, String> documents = new LinkedHashMap<>();
         documents.put(ID, NAMING);
         Tson tson = tson(documents);
         assertEquals(List.of(), tson.validateSchema(NAMING));
-        return tson.validate("!!schema:\"" + ID + "\"\n" + body);
+        return tson.validate("!!import:\"" + ID + "\"\n" + body);
     }
 
     /**
      * <b>A data document can hold a type's name, and it is judged.</b> At a kind-typed field the name must be a member
-     * of the kind over the governing schema's closure: a declared type is admitted, an undeclared name is refused, and
-     * so is a constructor. A data document still declares nothing, but it does hold a checked name for a type.
+     * of the kind over the reading document's closure: a declared type is admitted, and an undeclared name is
+     * refused. A constructor is admitted too, its declaration being a record and so a type: Revision 38 refused
+     * {@code record} there. A data document still declares nothing, but it does hold a checked name for a type.
      */
     @Test
     void aDataDocumentCanHoldACheckedTypeName() {
@@ -164,96 +165,101 @@ class OneLevelProbe {
         String undeclared = onlyMessage(readUnderNaming("!pick { t: no_such }"));
         assertTrue(undeclared.contains("'no_such' is not a member of this kind"), undeclared);
 
-        String constructor = onlyMessage(readUnderNaming("!pick { t: record }"));
-        assertTrue(constructor.contains("'record' is not a member of this kind"), constructor);
+        assertEquals(List.of(), readUnderNaming("!pick { t: meta.record }"));
     }
 
     /**
-     * <b>A reference is declared only in a kernel-governed schema.</b> A reference names an entry holding a value, and
-     * only a kernel-governed schema can declare the namespace type that puts one there, so a schema that governs data
-     * has nothing to name. Core declares no {@code ref}, and the kernel's is out of an ordinary schema's reach (an
-     * import stands at the importer's governing level), so {@code ref<order>} there is an unresolved name. The kind
-     * half ({@link #aDataDocumentCanHoldACheckedTypeName}) is unaffected; under one level the question returns (the
-     * README's "The reference atom").
+     * <b>Any schema declares a reference.</b> The kernel's {@code meta.ref} reaches a schema importing core, so
+     * {@code meta.ref<order>} resolves where Revision 38 left {@code ref<order>} an unresolved name outside a
+     * kernel-governed schema.
      */
     @Test
-    void aReferenceIsDeclaredOnlyInAKernelGovernedSchema() {
-        String message = onlyMessage(tson(new LinkedHashMap<>(Map.of(ID, REFERRING))).validateSchema(REFERRING));
-        assertTrue(message.contains("has an unresolved reference 'ref'"), message);
+    void anySchemaDeclaresAReference() {
+        assertEquals(List.of(), tson(new LinkedHashMap<>(Map.of(ID, REFERRING))).validateSchema(REFERRING));
     }
 
     /**
-     * <b>A type definition read as data is checked for shape and grammar, not membership.</b> Governed by
-     * {@code meta.tn}, {@code !record { … }} is an ordinary value: a misspelt field and a malformed name are refused,
-     * and a name no schema declares is admitted -- where the same kind under a user schema judges membership
-     * ({@link #aDataDocumentCanHoldACheckedTypeName}).
+     * <b>A type definition read as data is checked for membership as well as shape.</b> Imported from {@code
+     * meta.tn}, {@code !meta.record { … }} is an ordinary value: a misspelt field and a malformed name are refused,
+     * and so is a name the reading closure does not declare, a kind in a data document being judged by membership
+     * whichever schema it is read under ({@link #aDataDocumentCanHoldACheckedTypeName}). Revision 38 admitted the
+     * undeclared name under {@code meta.tn}.
      */
     @Test
-    void aTypeDefinitionReadAsDataIsJudgedForShapeNotMembership() {
+    void aTypeDefinitionReadAsDataIsJudgedForMembership() {
         Tson tson = tson(new LinkedHashMap<>());
-        String data = "!!schema:\"" + META + "\"\n";
+        String data = "!!import:\"" + META + "\"\n";
 
-        assertEquals(List.of(), tson.validate(data + "!record { fields: { sku => { type: no_such } } }"));
+        assertEquals(List.of(Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION),
+                tson.validate(data + "!meta.record { fields: { sku => { type: no_such } } }").stream()
+                        .map(Diagnostic::code).toList());
+        assertEquals(List.of(), tson.validate(data + "!meta.record { fields: { sku => { type: text } } }"));
         assertEquals(List.of(Diagnostic.Code.ATOM_FORM_INVALID),
-                tson.validate(data + "!record { fields: { sku => { type: 42 } } }").stream().map(Diagnostic::code)
-                        .toList());
+                tson.validate(data + "!meta.record { fields: { sku => { type: 42 } } }").stream()
+                        .map(Diagnostic::code).toList());
         assertEquals(List.of(Diagnostic.Code.UNRECOGNIZED_FIELD, Diagnostic.Code.FIELD_REQUIRED),
-                tson.validate(data + "!record { fieldz: { sku => { type: text } } }").stream().map(Diagnostic::code)
-                        .toList());
+                tson.validate(data + "!meta.record { fieldz: { sku => { type: text } } }").stream()
+                        .map(Diagnostic::code).toList());
     }
 
     // ── resolved forms ──────────────────────────────────────────────────────────────────────────────────────────
 
-    /** The resolved form of a governed schema's entries, written as a data document's root. */
+    /** The resolved form of a schema's entries, under its source's imports. */
     static final String RESOLVED_ENTRIES = """
             !schema {
-              order => !record { chain: { supertypes: [product top type] }  fields: {
-                sku => !record_field { type: text }
+              order => !meta.record { chain: { supertypes: [meta.product meta.top meta.type] }  fields: {
+                sku => !meta.record_field { type: text }
               } }
               s => !steps { one => !step { takes: order } }
             }""";
 
-    /** A namespace type's resolved body and its record's, as {@code meta-kernel-resolved.tn} writes {@code schema}. */
+    /** A namespace type's resolved body and its record's, as {@code meta-resolved.tn} writes the kernel's. */
     static final String RESOLVED_STEP = """
-              step => !record { chain: { supertypes: [product top type] }  fields: {
-                takes => !record_field { type: type_kind }
+              step => !meta.record { chain: { supertypes: [meta.product meta.top meta.type] }  fields: {
+                takes => !meta.record_field { type: meta.type_ref }
               } }
-              steps => !record { chain: { supertypes: [namespace top] }  fields: {
-                key_type   => !record_field { type: identifier_kind  role: FIXED  value: identifier }
-                value_type => !record_field { type: type_kind  role: FIXED  value: step }
-                ordered    => !record_field { type: boolean  optional: true  role: DEFAULT  value: false }
-              } }
+              steps => !meta.namespace { key_type: meta.identifier  value_type: step }
             """;
 
-    static List<Diagnostic> readResolved(String governing, String root) {
+    static List<Diagnostic> readResolved(String root, String... imports) {
         Map<String, String> documents = new LinkedHashMap<>();
         documents.put(LAYER_ID, LAYER);
         Tson tson = tson(documents);
         assertEquals(List.of(), tson.validateSchema(LAYER));
-        return tson.validate("!!schema:\"" + governing + "\"\n" + root);
+        StringBuilder head = new StringBuilder();
+        for (String imported : imports) {
+            head.append("!!import:\"").append(imported).append("\"\n");
+        }
+        var problems = DiagnosticsReceiver.collecting();
+        tson.treeReader().withImports(List.of(imports)).withDiagnostics(problems)
+                .readAs(tson.begin(head + root), "meta.schema");
+        return problems.diagnostics();
     }
 
     /**
-     * <b>Today a resolved form is read under its source's meta.</b> The layer supplies {@code steps}'s reader, so the
-     * fixture's {@code !steps} instance reads -- the ladder is what makes a resolved schema readable as data.
+     * <b>A resolved form is read under its source's imports</b>, as data whose root is told to be a {@code
+     * meta.schema}: a resolved form is a schema document by its root's tag, so only a read asked for that type takes
+     * it. The layer supplies {@code steps}, so the fixture's {@code !steps} value reads.
      */
     @Test
-    void aResolvedFormIsReadUnderItsSourcesMeta() {
-        assertEquals(List.of(), readResolved(LAYER_ID, RESOLVED_ENTRIES));
+    void aResolvedFormIsReadUnderItsSourcesImports() {
+        assertEquals(List.of(), readResolved(RESOLVED_ENTRIES, LAYER_ID, META));
     }
 
     /**
-     * <b>The one-level form does not read today.</b> The fixture carries {@code steps}'s own resolved body beside its
-     * instance and is governed by the kernel alone. The constructor's entry reads as an ordinary {@code !record}; its
-     * instance is refused, since the kernel's closure has no {@code steps} among {@code top}'s subtypes and nothing
-     * compiles a reader from an entry of the document being read. Deferring an instance until its constructor is
-     * resolved is what would read it.
+     * <b>The one-level form does not read as data.</b> The fixture carries {@code steps}'s own resolved body beside
+     * its value and imports the kernel alone. The namespace type's entry reads as an ordinary {@code !meta.namespace}
+     * value; its value is refused, since {@code meta.declared} resolves a tag in the reading closure and nothing
+     * compiles a reader from an entry of the document being read. A schema resolving it would wait on the type
+     * declared beside the value; a data read does not.
      */
     @Test
     void aResolvedFormCarryingItsOwnConstructorDoesNotReadUnderTheKernel() {
         String root = RESOLVED_ENTRIES.replace("!schema {\n", "!schema {\n" + RESOLVED_STEP);
-        List<Diagnostic> problems = readResolved(KERNEL, root);
+        List<Diagnostic> problems = readResolved(root, META);
         assertEquals(List.of("/s"), problems.stream().map(d -> d.path().orElse("<none>")).toList(), () -> "" + problems);
-        assertTrue(onlyMessage(problems).contains("'steps' is not admissible at a 'top' position"), onlyMessage(problems));
+        assertEquals(Diagnostic.Code.UNKNOWN_TYPE, problems.getFirst().code());
+        assertTrue(onlyMessage(problems).contains("'steps' is not a type this schema declares or imports"),
+                onlyMessage(problems));
     }
 }

@@ -35,15 +35,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TsonHttpCodecTest {
 
-    private static final String SCHEMA_ID = "https://example.com/2026/38/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://example.com/2026/39/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://example.com/2026/38/app/order-1.tn"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            {
+            !!id:"https://example.com/2026/39/app/order-1.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema {
                 order => { sku: text  quantity: int32 }
             }""";
+
+    /** A second schema a body may import beside the first: a helper, not a version. */
+    private static final String MONEY_ID = "https://example.com/2026/39/app/money.tn";
+
+    private static final String MONEY = """
+            !!id:"https://example.com/2026/39/app/money.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema { amount => { value: int32  currency: text } }""";
 
     /**
      * Public deliberately: tson-java declares no {@code opens} and binding only ever touches public
@@ -68,9 +75,10 @@ class TsonHttpCodecTest {
         DataBindContext bind =
                 DataBindContext.builder().nameBinder(binder).registerAtoms(AtomContext.hostTypes()).build();
         Tson tson = Tson.of(ProcessorConfig.defaults()
-                .withSchemaAccess(SchemaAccess.of(uri -> SCHEMA))
+                .withSchemaAccess(SchemaAccess.of(uri -> uri.endsWith("/money.tn") ? MONEY : SCHEMA))
                 .withDataBindContext(bind));
         tson.resolve(SCHEMA);
+        tson.resolve(MONEY);
         codec = new TsonHttpCodec(tson);
     }
 
@@ -81,7 +89,7 @@ class TsonHttpCodecTest {
     @Test
     void readsASelfDescribingBodyIntoATree() {
         TsonValue order = codec.readTree(body("""
-                !!schema:"%s"
+                !!import:"%s"
                 !order { sku: "ABC-1"  quantity: 3 }""".formatted(SCHEMA_ID)), "application/tson");
         assertEquals("ABC-1", order.get("sku").asString().orElseThrow());
         assertEquals(3, order.at("/quantity").asInt().orElseThrow());
@@ -90,7 +98,7 @@ class TsonHttpCodecTest {
     @Test
     void readsABodyIntoABoundObject() {
         Order order = codec.readObject(body("""
-                !!schema:"%s"
+                !!import:"%s"
                 !order { sku: "ABC-1"  quantity: 3 }""".formatted(SCHEMA_ID)), "application/tson", Order.class);
         assertEquals(new Order("ABC-1", 3), order);
     }
@@ -98,7 +106,7 @@ class TsonHttpCodecTest {
     @Test
     void rejectsADocumentThatBreaksItsSchema() {
         TsonHttpException rejected = assertThrows(TsonHttpException.class, () -> codec.readTree(body("""
-                !!schema:"%s"
+                !!import:"%s"
                 !order { sku: "ABC-1"  quantity: 99999999999 }""".formatted(SCHEMA_ID)), "application/tson"));
         assertEquals(TsonHttpException.BAD_REQUEST, rejected.status());
         assertEquals(1, rejected.diagnostics().size());
@@ -111,7 +119,7 @@ class TsonHttpCodecTest {
     @Test
     void reportsEveryProblemInOneResponseNotJustTheFirst() {
         TsonHttpException rejected = assertThrows(TsonHttpException.class, () -> codec.readTree(body("""
-                !!schema:"%s"
+                !!import:"%s"
                 !order { }""".formatted(SCHEMA_ID)), "application/tson"));
         assertEquals(TsonHttpException.BAD_REQUEST, rejected.status());
         assertEquals(2, rejected.diagnostics().size(), "both missing fields, not only the first");
@@ -130,11 +138,11 @@ class TsonHttpCodecTest {
     @Test
     void aTextFieldAcceptsAnyTokenButNotAContainer() {
         assertDoesNotThrow(() -> codec.readTree(body("""
-                !!schema:"%s"
+                !!import:"%s"
                 !order { sku: 42  quantity: 1 }""".formatted(SCHEMA_ID)), "application/tson"));
 
         TsonHttpException rejected = assertThrows(TsonHttpException.class, () -> codec.readTree(body("""
-                !!schema:"%s"
+                !!import:"%s"
                 !order { sku: [1]  quantity: 1 }""".formatted(SCHEMA_ID)), "application/tson"));
         assertEquals(Diagnostic.Code.TYPE_MISMATCH, rejected.diagnostics().getFirst().code());
     }
@@ -244,14 +252,14 @@ class TsonHttpCodecTest {
 
     /**
      * <b>A body stating a schema of its own must state the one it is read as.</b> The reader lets a stated schema
-     * override a document's {@code !!schema} and leaves the comparison to its caller, so the codec makes it: the
+     * override a document's {@code !!import} and leaves the comparison to its caller, so the codec makes it: the
      * body is peeked, and a disagreement is a 400 of its own type rather than a document validated against a
      * schema it never claimed. Both modes, since both readers override alike.
      */
     @Test
     void aBodyNamingAnotherSchemaThanTheStatedOneIsA400() {
         String elsewhere = """
-                !!schema:"https://example.com/2026/38/app/other-1.tn"
+                !!import:"https://example.com/2026/39/app/other-1.tn"
                 !order { sku: "A"  quantity: 1 }""";
 
         TsonHttpException bound = assertThrows(TsonHttpException.class, () -> codec.readObjectAs(body(elsewhere),
@@ -264,13 +272,51 @@ class TsonHttpCodecTest {
     }
 
     /**
+     * <b>The stated schema must be the body's whole binding, not one of its imports.</b> A body importing the
+     * stated schema and one more would be read under a wider namespace than the one stated ([TSON-JSON] §3.4), so
+     * membership is refused: the sets are compared whole.
+     */
+    @Test
+    void aBodyImportingTheStatedSchemaAndAnotherIsA400() {
+        String wider = "!!import:\"" + SCHEMA_ID + "\"\n!!import:\"" + MONEY_ID + "\"\n"
+                + "!order { sku: \"A\"  quantity: 1 }";
+
+        TsonHttpException bound = assertThrows(TsonHttpException.class, () -> codec.readObjectAs(body(wider),
+                "application/tson", SCHEMA_ID, "order", Order.class));
+        assertEquals(TsonHttpException.TYPES + "conflicting-schema", bound.problem().type().orElseThrow());
+        assertTrue(bound.getMessage().contains("money.tn"), bound.getMessage());
+        assertEquals(TsonHttpException.BAD_REQUEST, assertThrows(TsonHttpException.class,
+                () -> codec.readTreeAs(body(wider), "application/tson", SCHEMA_ID, "order")).status());
+    }
+
+    /**
+     * Stated as the same set, in another order and spelling, the body is read under both -- one namespace over
+     * their closures, the root type from the caller.
+     */
+    @Test
+    void aBodyImportingTheStatedSetIsReadUnderAllOfIt() {
+        String both = "!!import:\"" + SCHEMA_ID + "\"\n!!import:\"" + MONEY_ID + "\"\n"
+                + "!order { sku: \"A\"  quantity: 1 }";
+        List<String> stated = List.of(MONEY_ID.replace("https://", "http://"), SCHEMA_ID);
+
+        assertEquals(new Order("A", 1), codec.readObjectAs(codec.begin(unmarkable(both)), "application/tson",
+                stated, "order", Order.class));
+        assertEquals("A", codec.readTreeAs(codec.begin(body(both)), "application/tson", stated, "order")
+                .get("sku").asString().orElseThrow());
+        TsonHttpException narrower = assertThrows(TsonHttpException.class, () -> codec.readObjectAs(
+                codec.begin(body("!!import:\"" + SCHEMA_ID + "\"\n!order { sku: \"A\"  quantity: 1 }")),
+                "application/tson", stated, "order", Order.class));
+        assertEquals(TsonHttpException.TYPES + "conflicting-schema", narrower.problem().type().orElseThrow());
+    }
+
+    /**
      * Agreement is by canonical identity (§2.2.1): a body naming the same schema under another scheme, or with a
      * pin, agrees -- and one naming none is read against the stated schema, which is what stating one is for.
      */
     @Test
     void aBodyAgreeingByIdentityOrNamingNoneIsRead() {
-        for (String header : List.of("!!schema:\"" + SCHEMA_ID + "\"\n",
-                "!!schema:\"" + SCHEMA_ID.replace("https://", "http://") + "\"\n", "")) {
+        for (String header : List.of("!!import:\"" + SCHEMA_ID + "\"\n",
+                "!!import:\"" + SCHEMA_ID.replace("https://", "http://") + "\"\n", "")) {
             assertEquals(new Order("A", 1), codec.readObjectAs(unmarkable(header + "!order { sku: \"A\"  quantity: 1 }"),
                     "application/tson", SCHEMA_ID, "order", Order.class), header);
         }
@@ -284,7 +330,7 @@ class TsonHttpCodecTest {
     @Test
     void theAgreementCheckReadsTheBodyOnce() {
         assertEquals(new Order("A", 1), codec.readObjectAs(
-                unmarkable("!!schema:\"" + SCHEMA_ID + "\"\n!order { sku: \"A\"  quantity: 1 }"),
+                unmarkable("!!import:\"" + SCHEMA_ID + "\"\n!order { sku: \"A\"  quantity: 1 }"),
                 "application/tson", SCHEMA_ID, "order", Order.class));
     }
 
@@ -369,16 +415,15 @@ class TsonHttpCodecTest {
     void aTypeNothingBindsIsAServerFaultNotALibraryGap() {
         String schema = """
                 !!id:"https://example.test/thing-1.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                { thing => { a: text } }""";
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema { thing => { a: text } }""";
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(uri -> schema))
                 .withDataBindContext(TsonBindings.of(Map.of())));
         tson.resolve(schema);
         TsonHttpCodec bare = new TsonHttpCodec(tson);
         InputStream body = new ByteArrayInputStream(
-                ("!!schema:\"https://example.test/thing-1.tn\"\n!thing { a: \"x\" }")
+                ("!!import:\"https://example.test/thing-1.tn\"\n!thing { a: \"x\" }")
                         .getBytes(StandardCharsets.UTF_8));
 
         TsonHttpException thrown = org.junit.jupiter.api.Assertions.assertThrows(TsonHttpException.class,
@@ -408,16 +453,15 @@ class TsonHttpCodecTest {
     void aBoundClassRefusingWhatItsSchemaAdmitsIsAServerFault() {
         String schema = """
                 !!id:"https://example.test/positive-1.tn"
-                !!meta:"https://tson.io/2026/38/m/meta.tn"
-                !!import:"https://tson.io/2026/38/m/core.tn"
-                { positive => { n: int32 } }""";
+                !!import:"https://tson.io/2026/39/m/core.tn"
+                !schema { positive => { n: int32 } }""";
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(uri -> schema))
                 .withDataBindContext(TsonBindings.of(Map.of("positive", Positive.class))));
         tson.resolve(schema);
         TsonHttpCodec codec = new TsonHttpCodec(tson);
         InputStream body = new ByteArrayInputStream(
-                ("!!schema:\"https://example.test/positive-1.tn\"\n!positive { n: 0 }")
+                ("!!import:\"https://example.test/positive-1.tn\"\n!positive { n: 0 }")
                         .getBytes(StandardCharsets.UTF_8));
 
         TsonHttpException thrown = org.junit.jupiter.api.Assertions.assertThrows(TsonHttpException.class,

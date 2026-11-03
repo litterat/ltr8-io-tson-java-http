@@ -2,7 +2,7 @@ package io.ltr8.tson.http.experiment.rpc;
 
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.Diagnostic;
-import io.ltr8.tson.http.api.Method;
+import io.ltr8.tson.http.api.Exchange;
 import io.ltr8.tson.http.api.OrdersExamples;
 import io.ltr8.tson.schema.TsonSchema;
 import io.ltr8.tson.schema.meta.RecordBody;
@@ -25,21 +25,21 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code rpc.tn} -- the wire form of an interface, {@code call} and {@code return} as templates -- closed per
- * method by a wire schema ({@code orders-wire-1.tn}), so that a packet is a fully typed document. The interface is
+ * {@code rpc.tn} -- the wire form of a protocol, {@code call} and {@code return} as templates -- closed per
+ * exchange by a wire schema ({@code orders-wire-1.tn}), so that a packet is a fully typed document. The protocol is
  * {@code tson-http}'s own {@link OrdersExamples}.
  *
  * <p>Measured: both schemas resolve, a choice of errors included as a template argument; a packet's request is
- * checked against the interface's own types ({@code quantity: two} is an {@code int32} violation at
+ * checked against the protocol's own types ({@code quantity: two} is an {@code int32} violation at
  * {@code /request/order/quantity}); an error arm carries the declared error with its status pin enforced, and
- * where a method declares several the value takes the error's tag; a return has exactly one outcome; the
- * envelope reads, {@code deadline} as a duration; and the wire schema is what the interface determines. Nothing
+ * where an exchange declares several the value takes the error's tag; a return has exactly one outcome; the
+ * envelope reads, {@code deadline} as a duration; and the wire schema is what the protocol determines. Nothing
  * here needs a scope push: the templates type the payload at the schema, so no packet names its own.
  */
 class RpcProbe {
 
-    static final String RPC_ID = "https://tson.io/2026/38/io/ltr8/http/rpc.tn";
-    static final String WIRE_ID = "https://schemas.example.com/2026/38/experiment/rpc/orders-wire-1.tn";
+    static final String RPC_ID = "https://tson.io/2026/39/io/ltr8/http/rpc.tn";
+    static final String WIRE_ID = "https://schemas.example.com/2026/39/experiment/rpc/orders-wire-1.tn";
     static final String ORDERS_ID = OrdersExamples.id("orders-1.tn");
 
     static String read(String file) {
@@ -59,7 +59,7 @@ class RpcProbe {
     }
 
     static String packet(String body) {
-        return "!!schema:\"" + WIRE_ID + "\"\n" + body;
+        return "!!import:\"" + WIRE_ID + "\"\n" + body;
     }
 
     @Test
@@ -69,9 +69,9 @@ class RpcProbe {
         assertEquals(List.of(), tson.validateSchema(read("orders-wire-1.tn")));
     }
 
-    /** A call is a fully typed document: its request is the interface's own record, checked by the resolver. */
+    /** A call is a fully typed document: its request is the protocol's own record, checked by the resolver. */
     @Test
-    void aCallIsTypedByTheInterfacesOwnTypes() {
+    void aCallIsTypedByTheProtocolsOwnTypes() {
         Tson tson = tson();
         String call = packet("""
             !place_order_call {
@@ -102,7 +102,7 @@ class RpcProbe {
                 "!place_order_return { id: c1  response: { sku: A-100  quantity: 4 } }")));
         assertEquals(List.of(), tson.validate(packet("""
             !place_order_return { id: c1
-              error: { type: "https://ltr8.io/2026/38/http/problems/sku-not-found"  title: "No such SKU"
+              error: { type: "https://ltr8.io/2026/39/http/problems/sku-not-found"  title: "No such SKU"
                        status: 404  sku: A-100  errors: [] } }""")));
 
         List<Diagnostic> wrongStatus = tson.validate(packet(
@@ -112,7 +112,7 @@ class RpcProbe {
         assertEquals("/error/status", wrongStatus.getFirst().path().orElseThrow());
     }
 
-    /** Exactly one outcome; a method with no declared errors closes `return_plain`, a `void` response included. */
+    /** Exactly one outcome; an exchange with no declared errors closes `return_plain`, a `void` response included. */
     @Test
     void aReturnHasExactlyOneOutcome() {
         Tson tson = tson();
@@ -127,35 +127,35 @@ class RpcProbe {
     }
 
     /**
-     * The wire schema is stated to be <b>deterministic in the interface</b>, so it is derived here rather than
-     * read: for every method of {@code orders}, {@code orders-wire-1.tn} must close {@code call} over its
-     * request and {@code return} over its response and its declared error -- {@code return_plain} only where a
-     * method declares none. Resolving the file says nothing about any of that, so a hand-written return that could
-     * not hold its method's error would load clean. This is the check a generator makes unnecessary.
+     * The wire schema is stated to be <b>deterministic in the protocol</b>, so it is derived here rather than
+     * read: for every exchange of {@code orders}, {@code orders-wire-1.tn} must close {@code call} over its
+     * request and {@code return} over its response and its declared error -- {@code return_plain} only where an
+     * exchange declares none. Resolving the file says nothing about any of that, so a hand-written return that
+     * could not hold its exchange's error would load clean. This is the check a generator makes unnecessary.
      */
     @Test
-    void theWireSchemaIsWhatTheInterfaceDetermines() {
+    void theWireSchemaIsWhatTheProtocolDetermines() {
         Tson tson = tson();
-        // The wire schema does not import the interface -- it is derived from it -- so both are resolved here.
+        // The wire schema does not import the protocol -- it is derived from it -- so both are resolved here.
         assertEquals(List.of(), tson.validateSchema(OrdersExamples.source("orders-1.tn")));
         assertEquals(List.of(), tson.validateSchema(read("orders-wire-1.tn")));
-        var iface = OrdersExamples.applying(tson.schemaRegistry().get(ORDERS_ID).orElseThrow().schema().entries(),
-                "interface").get("orders");
+        var protocol = OrdersExamples.applying(tson.schemaRegistry().get(ORDERS_ID).orElseThrow().schema().entries(),
+                "protocol").get("orders");
         var wire = tson.schemaRegistry().get(WIRE_ID).orElseThrow().schema();
 
-        iface.forEach((name, held) -> {
-            Method method = (Method) held;
+        protocol.forEach((name, held) -> {
+            Exchange exchange = (Exchange) held;
             Map<String, String> call = closedOver(wire, name + "_call", "call");
-            assertEquals(method.request().map(TypeRef::name).orElse("void"), call.get("request"),
+            assertEquals(exchange.request().map(TypeRef::name).orElse("void"), call.get("request"),
                     name + "_call closes call over the wrong request");
 
-            boolean declaresErrors = !method.errors().isEmpty();
+            boolean declaresErrors = !exchange.errors().isEmpty();
             Map<String, String> ret = closedOver(wire, name + "_return", declaresErrors ? "return" : "return_plain");
-            assertEquals(method.response().map(TypeRef::name).orElse("void"), ret.get("response"),
+            assertEquals(exchange.response().map(TypeRef::name).orElse("void"), ret.get("response"),
                     name + "_return closes its template over the wrong response");
-            if (method.errors().size() == 1) {
-                assertEquals(method.errors().getFirst().name(), ret.get("error"),
-                        name + "_return does not carry the error its method declares");
+            if (exchange.errors().size() == 1) {
+                assertEquals(exchange.errors().getFirst().name(), ret.get("error"),
+                        name + "_return does not carry the error its exchange declares");
             }
         });
     }

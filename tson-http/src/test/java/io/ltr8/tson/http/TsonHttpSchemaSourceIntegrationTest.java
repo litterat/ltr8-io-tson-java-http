@@ -41,19 +41,17 @@ class TsonHttpSchemaSourceIntegrationTest {
 
     private static final String SCHEMA = """
             !!id:"%s"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            {
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema {
                 order => { sku: text  quantity: int32 }
             }""";
 
-    /** A schema with a {@code scoped} field, so a body may push a foreign scope where this one opted into it. */
+    /** A schema with a field a body might try to name a foreign schema at. */
     private static final String ENVELOPE = """
             !!id:"%s"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            {
-                envelope => { attachment: extern  note?: text }
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema {
+                envelope => { attachment: text  note?: text }
             }""";
 
     /** The identity host schemas are named by -- never where they are fetched from. §2.2.1 forbids a port here. */
@@ -88,12 +86,12 @@ class TsonHttpSchemaSourceIntegrationTest {
             TsonHttpCodec codec = new TsonHttpCodec(tson);
 
             TsonValue order = codec.readTree(body("""
-                    !!schema:"%s"
+                    !!import:"%s"
                     !order { sku: "ABC-1"  quantity: 3 }""".formatted(schemaUri)), "application/tson");
             assertEquals("ABC-1", order.get("sku").asString().orElseThrow());
 
             TsonHttpException rejected = assertThrows(TsonHttpException.class, () -> codec.readTree(body("""
-                    !!schema:"%s"
+                    !!import:"%s"
                     !order { }""".formatted(schemaUri)), "application/tson"));
             assertEquals(TsonHttpException.BAD_REQUEST, rejected.status());
             assertEquals(2, rejected.diagnostics().size());
@@ -129,7 +127,7 @@ class TsonHttpSchemaSourceIntegrationTest {
 
     /**
      * <b>And the collecting path is the one that actually fires, so it has to give the same answer.</b> Every
-     * read through the codec collects, so an unfetchable {@code !!schema} essentially never arrives as {@link
+     * read through the codec collects, so an unfetchable {@code !!import} essentially never arrives as {@link
      * SchemaFetchException} and essentially always as one of the five {@code SCHEMA_*} diagnostics. The two
      * channels used to disagree for one underlying failure -- the diagnostic kept no reason at all, so the
      * whole class rounded to 502 while {@code statusFor(NOT_PERMITTED)} said 400 -- and carrying the reason in
@@ -148,7 +146,7 @@ class TsonHttpSchemaSourceIntegrationTest {
                     .withSchemaAccess(SchemaAccess.of(denyAll))));
 
             TsonHttpException thrown = assertThrows(TsonHttpException.class, () -> codec.readTree(body("""
-                    !!schema:"%s"
+                    !!import:"%s"
                     !order { sku: "ABC-1"  quantity: 3 }""".formatted(reference("/order-1.tn"))),
                     "application/tson"));
 
@@ -161,70 +159,19 @@ class TsonHttpSchemaSourceIntegrationTest {
     }
 
     /**
-     * <b>[TSON-SCHEMA] §7.8's scope push is a second way a request body can name a schema, and it goes through
-     * the same allow-list.</b> A {@code scoped} position has a real reader: at an {@code extern}
-     * field the value carries its own nested {@code !!schema} and a type-ref resolved there, loaded as the
-     * value arrives rather than from the document header. That is a URL out of an untrusted body at a
-     * <em>value</em> position, so the question this pins is whether the policy that guards {@code !!schema}
-     * guards this too -- and it does: the push resolves through the configured {@link
-     * io.ltr8.tson.base.source.SchemaSource}, so an origin the source will not serve is refused there.
-     *
-     * <p>Both directions, because only the pair says the gate is a gate. A permitted origin reads and the
-     * foreign type is validated in full; a source that permits nothing answers {@code SCHEMA_NOT_PERMITTED},
-     * which is a fetch code and so never a verdict on the document.
+     * <b>A request body names its schema in its header and nowhere else, so a value cannot make the server fetch
+     * one.</b> A directive inside a value is outside [TSON-DATA]'s placement for directives, so it is a parse
+     * error: a 400 on the document, refused before anything is fetched. The identity the value names goes to a
+     * source that permits nothing, so a fetch attempted before the refusal would surface as {@code
+     * SCHEMA_NOT_PERMITTED} and rank as a fetch failure instead.
      */
     @Test
-    void aScopePushInARequestBodyIsGatedByTheSameAllowList() {
-        String envelopeUri = reference("/envelope-1.tn");
-        String orderUri = reference("/order-1.tn");
-        serve("/envelope-1.tn", ENVELOPE.formatted(envelopeUri));
-        serve("/order-1.tn", schemaAt("/order-1.tn"));
-        String document = """
-                !!schema:"%s"
-                !envelope { attachment: !!schema:"%s" !order { sku: "ABC-1"  quantity: 3 } }"""
-                .formatted(envelopeUri, orderUri);
-
-        try (HttpSchemaSource source = allowingThisServer()) {
-            Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(source)));
-            tson.resolve(source.fetch(envelopeUri));
-            TsonValue read = new TsonHttpCodec(tson).readTree(body(document), "application/tson");
-
-            assertEquals("ABC-1", read.at("/attachment/sku").asString().orElseThrow(),
-                    "a permitted origin reads, and the foreign type is validated where it stands");
-        }
-
-        // The envelope is served from a map so it still resolves; every other identity -- which is only the
-        // pushed one -- goes to a source that permits no host at all.
-        try (HttpSchemaSource denyAll = HttpSchemaSource.builder().build()) {
-            String envelopeSource = ENVELOPE.formatted(envelopeUri);
-            Tson gated = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(
-                    uri -> uri.equals(envelopeUri) ? envelopeSource : denyAll.fetch(uri))));
-            gated.resolve(envelopeSource);
-
-            TsonHttpException refused = assertThrows(TsonHttpException.class,
-                    () -> new TsonHttpCodec(gated).readTree(body(document), "application/tson"));
-
-            assertEquals(List.of(Diagnostic.Code.SCHEMA_NOT_PERMITTED),
-                    refused.diagnostics().stream().map(Diagnostic::code).toList(),
-                    "a scope push at a value position is refused by the same policy as a !!schema directive");
-            assertEquals(statusFor(Reason.NOT_PERMITTED), refused.status());
-        }
-    }
-
-    /**
-     * <b>A push the schema never opted into is the sender's error, and fetches nothing.</b> [TSON-SCHEMA] §7.8
-     * makes a scope opened at a position whose type is not {@code scoped} a resolver error --
-     * {@code SCOPE_NOT_ADMITTED}, a verdict and a 400 -- so a body cannot push a scope into an ordinary record
-     * field. The pushed identity goes to a source that permits nothing: had the reader fetched before refusing,
-     * the answer would carry {@code SCHEMA_NOT_PERMITTED} and rank as a fetch failure instead.
-     */
-    @Test
-    void aPushWhereTheSchemaOpensNoScopeIsABadRequest() {
+    void aDirectiveInsideAValueIsABadRequestAndFetchesNothing() {
         String envelopeUri = reference("/envelope-1.tn");
         String envelopeSource = ENVELOPE.formatted(envelopeUri);
         String document = """
-                !!schema:"%s"
-                !envelope { attachment: "x"  note: !!schema:"%s" !order { sku: "ABC-1"  quantity: 3 } }"""
+                !!import:"%s"
+                !envelope { attachment: !!import:"%s" !order { sku: "ABC-1"  quantity: 3 } }"""
                 .formatted(envelopeUri, reference("/order-1.tn"));
 
         try (HttpSchemaSource denyAll = HttpSchemaSource.builder().build()) {
@@ -235,11 +182,11 @@ class TsonHttpSchemaSourceIntegrationTest {
             TsonHttpException refused = assertThrows(TsonHttpException.class,
                     () -> new TsonHttpCodec(tson).readTree(body(document), "application/tson"));
 
-            assertTrue(Diagnostic.Code.SCOPE_NOT_ADMITTED.verdict());
-            assertTrue(refused.diagnostics().stream().anyMatch(d -> d.code() == Diagnostic.Code.SCOPE_NOT_ADMITTED),
-                    () -> "" + refused.diagnostics());
-            assertTrue(refused.diagnostics().stream().noneMatch(d -> d.code() == Diagnostic.Code.SCHEMA_NOT_PERMITTED),
-                    "the refused push was fetched before it was refused");
+            assertEquals(List.of(Diagnostic.Code.VALIDATION_ERROR),
+                    refused.diagnostics().stream().map(Diagnostic::code).toList(),
+                    "a base-syntax refusal, and no fetch of the value's identity before it");
+            assertTrue(refused.diagnostics().getFirst().message().startsWith("directive '!!import' is not permitted "
+                    + "here"), refused.diagnostics().getFirst().message());
             assertEquals(TsonHttpException.BAD_REQUEST, refused.status());
         }
     }

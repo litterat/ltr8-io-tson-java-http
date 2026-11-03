@@ -7,8 +7,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * The transport-neutral contract of one callable thing: what {@link Method} and an inline {@link Operation}
- * share. Its slots are typed {@code type_kind}, so each name is a type the resolver judged; nothing here
+ * The transport-neutral contract of one request-and-reply: what {@link Exchange} and an inline {@link Operation}
+ * share. Its slots are typed {@code meta.type_ref}, so each name is a type the resolver judged; nothing here
  * declares that.
  */
 @Typename(name = "signature")

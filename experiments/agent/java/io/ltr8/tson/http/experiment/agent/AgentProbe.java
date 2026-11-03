@@ -28,16 +28,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>Read here: a plan whose arguments are references only ({@code arg} recursing through {@code record} to a
  * {@code selector}); a compiled agent whose pool holds names, a type and a method, and whose {@code code} mixes
  * bare mnemonics with labelled operands -- the {@code @disjoint} choice read tag-free, an enum beside a record.
- * And a constant: {@code constant => dynamic} is [TSON-SCHEMA] §7.8's scope push, so a
- * literal argument names its own type -- from this schema's namespace, or from a foreign one it names with a
- * nested {@code !!schema} -- and is validated in full against whatever it named. The same slot serves the
- * payload of {@code rpc.tn}, the wire form each CALL compiles to ({@code experiments/rpc}). The interface a plan
+ * And a constant: {@code constant => meta.declared}, so a literal argument names its own type by its tag, from the
+ * namespace of the document's imports, and is validated in full against whatever it named. The same slot serves the
+ * payload of {@code rpc.tn}, the wire form each CALL compiles to ({@code experiments/rpc}). The protocol a plan
  * calls is {@code tson-http}'s own {@link OrdersExamples}.
  */
 class AgentProbe {
 
-    static final String PLAN_ID = "https://tson.io/2026/38/io/ltr8/http/agent.tn";
-    static final String AGENT_ID = "https://tson.io/2026/38/io/ltr8/http/agent-vm.tn";
+    static final String PLAN_ID = "https://tson.io/2026/39/io/ltr8/http/agent.tn";
+    static final String AGENT_ID = "https://tson.io/2026/39/io/ltr8/http/agent-vm.tn";
     static final String ORDERS_ID = OrdersExamples.id("orders-1.tn");
     static final String ORDER_TYPES_ID = OrdersExamples.id("orders-types-1.tn");
 
@@ -70,7 +69,7 @@ class AgentProbe {
     @Test
     void aPlanOfReferencesReads() {
         String plan = """
-            !!schema:"%s"
+            !!import:"%s"
             !plan {
               interface: "%s"
               steps: [
@@ -95,7 +94,7 @@ class AgentProbe {
     @Test
     void aCompiledAgentReads() {
         String agent = """
-            !!schema:"%s"
+            !!import:"%s"
             !agent {
               version:   2
               interface: "%s"
@@ -126,7 +125,7 @@ class AgentProbe {
     @Test
     void anUntaggedInstructionIsStillRefusedAtADisjointChoice() {
         String agent = """
-            !!schema:"%s"
+            !!import:"%s"
             !agent { version: 2  interface: "%s"  pool: [ { method: get_order } ]  max_stack: 1  slots: 0
                      code: [ { call: { method: 0 } }  RET ] }""".formatted(AGENT_ID, ORDERS_ID);
         List<Diagnostic> problems = tson().validate(agent);
@@ -135,36 +134,52 @@ class AgentProbe {
     }
 
     /**
-     * A constant -- an `or`, a CONST pool entry, a literal argument -- reads, and the interesting half is that
-     * the type it names is a foreign schema's. {@code constant => dynamic} admits both scopes, so the value
-     * carries a nested {@code !!schema} and a {@code !order} resolved there ([TSON-SCHEMA] §7.8), and is checked
-     * against that record in full.
+     * A constant -- an `or`, a CONST pool entry, a literal argument -- reads, naming a type of the document's
+     * import closure by its tag: {@code constant => meta.declared}, so a plan importing the order types beside
+     * the plan schema writes {@code !order { … }} and is checked against that record in full. Pins Revision 39:
+     * the scope push is gone, so a value cannot name a schema of its own, and a directive inside one is a parse
+     * error.
      */
     @Test
-    void aConstantNamesItsOwnTypeAcrossSchemas() {
+    void aConstantNamesATypeOfTheDocumentsImports() {
         String withConstant = """
-            !!schema:"%s"
+            !!import:"%s"
+            !!import:"%s"
             !plan {
               interface: "%s"
               steps: [ { name: a  method: place_order
-                         input: { order => { value: !!schema:"%s" !order { sku: A-100  quantity: 2 } } } } ]
+                         input: { order => { value: !order { sku: A-100  quantity: 2 } } } } ]
               return: { ref: { step: a } }
-            }""".formatted(PLAN_ID, ORDERS_ID, ORDER_TYPES_ID);
+            }""".formatted(PLAN_ID, ORDER_TYPES_ID, ORDERS_ID);
         var problems = DiagnosticsReceiver.collecting();
         TsonValue value = tson().treeReader().withDiagnostics(problems).read(withConstant);
 
         assertEquals(List.of(), problems.diagnostics());
         assertEquals("A-100", value.at("/steps/0/input/order/value/sku").asString().orElseThrow());
+
+        String pushed = """
+            !!import:"%s"
+            !plan {
+              interface: "%s"
+              steps: [ { name: a  method: place_order
+                         input: { order => { value: !!import:"%s" !order { sku: A-100  quantity: 2 } } } } ]
+              return: { ref: { step: a } }
+            }""".formatted(PLAN_ID, ORDERS_ID, ORDER_TYPES_ID);
+        List<Diagnostic> refused = tson().validate(pushed);
+        assertEquals(1, refused.size(), () -> "" + refused);
+        assertTrue(refused.getFirst().message().startsWith("directive '!!import' is not permitted here"),
+                refused.getFirst().message());
     }
 
     /**
      * The other half of the same rule: a constant that names no type at all is a validation error, not an
-     * unchecked {@code any}. That is what keeps `dynamic` a scope and not an escape from validation.
+     * unchecked {@code any}. That is what keeps {@code meta.declared} a choice the value makes and not an escape from
+     * validation.
      */
     @Test
     void aConstantNamingNoTypeIsRefused() {
         String untyped = """
-            !!schema:"%s"
+            !!import:"%s"
             !plan {
               interface: "%s"
               steps: [ { name: a  method: place_order  input: { order => { value: { sku: A-100 } } } } ]
@@ -182,7 +197,7 @@ class AgentProbe {
     @Test
     void aNameThatIsNotAnIdentifierIsRefused() {
         String plan = """
-            !!schema:"%s"
+            !!import:"%s"
             !plan { interface: "%s"
                     steps: [ { name: "1st step"  method: get_order  input: { id => { ref: { step: x } } } } ]
                     return: { ref: { step: x } } }""".formatted(PLAN_ID, ORDERS_ID);
@@ -197,7 +212,7 @@ class AgentProbe {
     @Test
     void aMixedScriptStepNameIsRefusedByNameHygiene() {
         String plan = """
-            !!schema:"%s"
+            !!import:"%s"
             !plan { interface: "%s"
                     steps: [ { name: pаy  method: get_order  input: { id => { ref: { step: x } } } } ]
                     return: { ref: { step: x } } }""".formatted(PLAN_ID, ORDERS_ID);

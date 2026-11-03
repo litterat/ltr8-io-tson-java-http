@@ -5,29 +5,22 @@ import io.ltr8.bind.DataBindException;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.bind.AtomContext;
-import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
 
 import java.util.Map;
 import java.util.Objects;
 
 /**
- * A schema-type-name-to-Java-class map as a {@link DataBindContext} -- the three steps that turn one into the
- * other, in one place rather than at every call site.
+ * A schema-type-name-to-Java-class map as a {@link DataBindContext} -- the steps that turn one into the other, in
+ * one place rather than at every call site.
  *
- * <p>The map is a {@link DataNameBinder} <b>chained over the kernel's own vocabulary rather than replacing
- * it</b>, with the atom registrations applied. Two of those three steps are invisible from the call site, and
- * missing either fails a long way from the cause -- which is why a hand-rolled {@code DataBindContext.builder()}
- * is the wrong shape for this even though it is what this delegates to.
+ * <p>The map is a {@link DataNameBinder} with the atom registrations applied, and <b>the map authors the
+ * failure</b>: a name it does not bind is reported as a missing line of this application's configuration, listing
+ * what it does bind. The kernel's own vocabulary never reaches it: {@code Tson.of} composes that over the
+ * configured binder and answers it first, so a map binds the application's names and nothing else.
  *
- * <p>The chain is a backstop, not the main path: a map-only binder resolves an ordinary user schema perfectly
- * well, the kernel's names being resolved through the resolution core's own context. It earns its keep where a
- * schema names a kernel or meta record type. That is also why <b>the map authors the failure</b> -- the last
- * binder consulted is the backstop, and letting it speak would report a missing line of this application's
- * configuration as "not kernel vocabulary".
- *
- * <p>A meta layer's vocabulary is a separate namespace and does not belong here; that is
- * {@code ProcessorConfig.withMetaNameBinder}, which binds what a schema is written <em>in</em> rather than the
- * data a schema describes.
+ * <p>One context binds a schema's value entries and a data document's values alike, so a vocabulary a schema
+ * imports belongs in the same map: {@code TsonApiSchema.bindingsWith} adds {@code meta-service.tn}'s records to an
+ * application's.
  */
 public final class TsonBindings {
 
@@ -53,15 +46,10 @@ public final class TsonBindings {
         Map<String, Class<?>> mapped = Map.copyOf(Objects.requireNonNull(bindings, "bindings"));
         DataNameBinder binder = name -> {
             Class<?> bound = mapped.get(name);
-            if (bound != null) {
-                return bound;
+            if (bound == null) {
+                throw new DataBindException("'" + name + "' is not bound: the bindings map " + mapped.keySet());
             }
-            try {
-                return SchemaMetaNameBinder.INSTANCE.resolve(name);
-            } catch (DataBindException notKernelVocabulary) {
-                throw new DataBindException("'" + name + "' is not bound: the bindings map " + mapped.keySet()
-                        + ", and it is not the kernel's own vocabulary either", notKernelVocabulary);
-            }
+            return bound;
         };
         DataBindContext.Builder builder = DataBindContext.builder().nameBinder(binder);
         if (profile != null) {

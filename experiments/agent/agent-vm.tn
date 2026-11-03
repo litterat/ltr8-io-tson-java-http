@@ -1,7 +1,6 @@
-!!id:"https://tson.io/2026/38/io/ltr8/http/agent-vm.tn"
-!!meta:"https://tson.io/2026/38/m/meta.tn"
-!!import:"https://tson.io/2026/38/m/core.tn"
-!!import:"https://tson.io/2026/38/io/ltr8/http/agent.tn"
+!!id:"https://tson.io/2026/39/io/ltr8/http/agent-vm.tn"
+!!import:"https://tson.io/2026/39/m/core.tn"
+!!import:"https://tson.io/2026/39/io/ltr8/http/agent.tn"
 @doc:"""
   TSON Agent VM — the resolved form of an agent plan
   (draft 2; companion to agent.tn, whose `name` and `constant` it imports).
@@ -26,7 +25,7 @@
   failure aborts with agent_error (agent.tn), reported in source
   terms via `debug`.
   """
-{
+!schema {
   @doc:"Index into `agent.pool`. Varint-friendly in the binary form."
   pool_index => uint32
 
@@ -100,7 +99,7 @@
     One instruction: a bare mnemonic or a labelled operand record —
     two discrimination classes, so the choice is tag-free.
     """
-  @disjoint
+  @meta.disjoint
   instruction => ( simple_op | op )
 
   @doc:"""

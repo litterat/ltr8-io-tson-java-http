@@ -1,6 +1,5 @@
-!!id:"https://tson.io/2026/38/io/ltr8/http/problem.tn"
-!!meta:"https://tson.io/2026/38/m/meta.tn"
-!!import:"https://tson.io/2026/38/m/core.tn"
+!!id:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
+!!import:"https://tson.io/2026/39/m/core.tn"
 @doc:"""
   The error body this project writes when a request cannot be fulfilled.
 
@@ -22,7 +21,7 @@
   is edited in place under the one identity it has. Once a release fixes it, adding so much as an enum
   member below is a new identity, and this document keeps being served alongside it.
   """
-{
+!schema {
   @doc:"""
     A hand-written copy of io.ltr8.tson.compiler.Diagnostic.Code, which is the source of truth;
     TsonProblemSchemaTest is the only thing that checks the two agree.
@@ -58,10 +57,9 @@
     character outside the identifier profile, or relax the level. A second enum would only restate what
     the code already fixes and would be free to disagree with it.
 
-    SCOPE_NOT_ADMITTED is a body opening a schema scope (!!schema) at a position whose type is not a
-    scoped one, so the schema gives it nowhere to open -- [TSON-SCHEMA] §7.8's typed-position
-    restriction, a resolver error and a 400. A push at a scoped position that does not admit foreign
-    schemas is the cell rule's refusal instead, a VALIDATION_ERROR.
+    SCOPE_NOT_ADMITTED is a JSON body naming its imports ($import) anywhere but the leading member of its
+    top object ([TSON-JSON] §3.4): the binding written where no binding stands, a resolver error and a
+    400. A TSON body's !!import past the header is a parse error instead, a VALIDATION_ERROR.
 
     An atom refuses a token in two categories, so it carries two codes. §5.2 splits the refusal -- a
     token the atom's grammar rejects is a parse error, a parsed value violating the atom's range is a

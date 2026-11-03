@@ -143,13 +143,13 @@ delegation => {
   parent?:    digest              -- the delegation this one attenuates, by hash
 }
 grant => {
-  method:   ref<method>           -- a method of the interface
-  request?: kind<record>          -- the refinement its requests must validate against
+  method:   meta.ref<method>      -- a method of the interface
+  request?: meta.ref<meta.record> -- the refinement its requests must validate against
 }
 ```
 
 This lands on threads from the one-level note:
-- A data document holding a checked type name works today (a kind-typed field, measured by `OneLevelProbe`).
+- A data document holding a checked type name works today (a field typed by a type reference, measured by `OneLevelProbe`).
 - A reference to a method can't be typed in a schema that governs data at all: `ref` is declared only in a
   kernel-governed schema, so `ref<method>` there is an unresolved name (`OneLevelProbe`). A reference in a data
   document is a Revision 39 question.

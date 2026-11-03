@@ -1,17 +1,16 @@
-!!id:"https://schemas.example.com/2026/38/experiment/rpc/orders-wire-1.tn"
-!!meta:"https://tson.io/2026/38/m/meta.tn"
-!!import:"https://tson.io/2026/38/m/core.tn"
-!!import:"https://tson.io/2026/38/io/ltr8/http/rpc.tn"
-!!import:"https://schemas.example.com/2026/38/orders/orders-types-1.tn"
-!!import:"https://schemas.example.com/2026/38/orders/orders-errors-1.tn"
+!!id:"https://schemas.example.com/2026/39/experiment/rpc/orders-wire-1.tn"
+!!import:"https://tson.io/2026/39/m/core.tn"
+!!import:"https://tson.io/2026/39/io/ltr8/http/rpc.tn"
+!!import:"https://schemas.example.com/2026/39/orders/orders-types-1.tn"
+!!import:"https://schemas.example.com/2026/39/orders/orders-errors-1.tn"
 @doc:"""
-  The wire schema of the orders interface: rpc.tn's templates closed once per method, so a packet is a
+  The wire schema of the orders protocol: rpc.tn's templates closed once per exchange, so a packet is a
   fully typed document -- `!place_order_call { ... }`, `!get_order_return { ... }`. Deterministic in
-  orders-1.tn (one `_call` and one `_return` per method, the errors choice per method), so this is what a
-  generator produces from the interface; it is written by hand here to show the shape. A method with no
+  orders-1.tn (one `_call` and one `_return` per exchange, the errors choice per exchange), so this is what a
+  generator produces from the protocol; it is written by hand here to show the shape. An exchange with no
   declared errors closes `return_plain`; one with several closes `return` over a choice of them.
   """
-{
+!schema {
   place_order_call    => call<new_order>
   place_order_return  => return<order, sku_not_found>
 

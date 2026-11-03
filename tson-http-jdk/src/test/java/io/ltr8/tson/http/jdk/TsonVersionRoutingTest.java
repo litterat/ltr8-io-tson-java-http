@@ -32,22 +32,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonVersionRoutingTest {
 
-    private static final String V1_ID = "https://schemas.example.com/2026/38/app/order-1.tn";
-    private static final String V2_ID = "https://schemas.example.com/2026/38/app/order-2.tn";
+    private static final String V1_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
+    private static final String V2_ID = "https://schemas.example.com/2026/39/app/order-2.tn";
 
     private static final String V1 = """
-            !!id:"https://schemas.example.com/2026/38/app/order-1.tn"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            { order => { sku: text  quantity: int32 } }""";
+            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema { order => { sku: text  quantity: int32 } }""";
 
     private static final String V2 = """
-            !!id:"https://schemas.example.com/2026/38/app/order-2.tn"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            { order => { sku: text  quantity: int32  currency: text } }""";
+            !!id:"https://schemas.example.com/2026/39/app/order-2.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema { order => { sku: text  quantity: int32  currency: text } }""";
 
-    private static final SchemaSource SOURCE = Map.of(V1_ID, V1, V2_ID, V2)::get;
+    /** A schema a body imports beside its version: never a version itself. */
+    private static final String MONEY_ID = "https://schemas.example.com/2026/39/app/money.tn";
+
+    private static final String MONEY = """
+            !!id:"https://schemas.example.com/2026/39/app/money.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema { amount => { value: int32  currency: text } }""";
+
+    private static final SchemaSource SOURCE = SchemaSource.ofMap(Map.of(V1_ID, V1, V2_ID, V2, MONEY_ID, MONEY));
 
     @Typename(name = "order")
     public record OrderV1(String sku, int quantity) {
@@ -116,7 +122,7 @@ class TsonVersionRoutingTest {
     }
 
     private static String order(String schemaId, String fields) {
-        return "!!schema:\"" + schemaId + "\"\n!order " + fields;
+        return "!!import:\"" + schemaId + "\"\n!order " + fields;
     }
 
     @Test
@@ -148,7 +154,7 @@ class TsonVersionRoutingTest {
     @Test
     void anUnservedVersionIs400() throws Exception {
         HttpResponse<String> response =
-                post(order("https://schemas.example.com/2026/38/app/order-3.tn", "{ sku: \"A\" quantity: 1 }"));
+                post(order("https://schemas.example.com/2026/39/app/order-3.tn", "{ sku: \"A\" quantity: 1 }"));
         assertEquals(400, response.statusCode());
         assertTrue(response.body().contains("order-3"), response.body());
         assertTrue(response.body().contains("order-1"), "and names what it does serve: " + response.body());
@@ -166,17 +172,34 @@ class TsonVersionRoutingTest {
         assertFalse(response.body().startsWith("v1:"), "must not have been read as v1");
     }
 
+    /**
+     * A body importing its version and another schema is routed on the version, the one member of its binding
+     * this endpoint serves; one importing both versions names two, and neither is chosen.
+     */
+    @Test
+    void theVersionIsTheServedMemberOfTheBinding() throws Exception {
+        HttpResponse<String> withMoney =
+                post("!!import:\"" + MONEY_ID + "\"\n" + order(V1_ID, "{ sku: \"A\" quantity: 3 }"));
+        assertEquals(200, withMoney.statusCode(), withMoney.body());
+        assertEquals("v1:A:6", withMoney.body());
+
+        HttpResponse<String> both =
+                post("!!import:\"" + V2_ID + "\"\n" + order(V1_ID, "{ sku: \"A\" quantity: 3 }"));
+        assertEquals(400, both.statusCode());
+        assertTrue(both.body().contains("conflicting-schema"), both.body());
+    }
+
     @Test
     void aDocumentNamingNoVersionIs400() throws Exception {
         HttpResponse<String> response = post("!order { sku: \"A\" quantity: 1 }");
         assertEquals(400, response.statusCode());
-        assertTrue(response.body().contains("!!schema"), response.body());
+        assertTrue(response.body().contains("an !!import directive"), response.body());
     }
 
     /** Both schemas are published, so a client can fetch whichever version governs it. */
     @Test
     void bothVersionsArePublished() throws Exception {
-        for (String path : new String[] {"/2026/38/app/order-1.tn", "/2026/38/app/order-2.tn"}) {
+        for (String path : new String[] {"/2026/39/app/order-1.tn", "/2026/39/app/order-2.tn"}) {
             HttpResponse<String> response = client.send(
                     HttpRequest.newBuilder(URI.create(base + path)).GET().build(),
                     HttpResponse.BodyHandlers.ofString());

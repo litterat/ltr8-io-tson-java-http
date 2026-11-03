@@ -8,8 +8,9 @@ negotiated, and the two ways to model the Java side. Current form only.
 - A published schema is immutable (§3.5): a shape change is a new identity beside the old, and a server serves both.
 - Reading is governed by the body's own schema (`route`); writing is negotiated through `TSON-Accept-Schema`
   (`chooseResponseVersion`). `TSON-Schema` on a request never means "what I want back".
-- `route` refuses a body naming a version this endpoint does not serve, and one naming none. Never add a guessing
-  fallback; `defaultVersion` is off by default for the same reason.
+- A message's binding is a set of schemas, and its version is the one member this endpoint serves. `route` refuses a
+  binding naming no version it serves, one naming no schema at all, and one naming two of its versions. Never add a
+  guessing fallback; `defaultVersion` is off by default for the same reason.
 - `Routed.schemaId()` is the registered id, not the spelling the document used.
 - Binding uses the canonical constructor only. A version is selected by routing or a `@Profile`, never by overloads.
 
@@ -26,7 +27,7 @@ not assignable to the requested OrderV2"*. Tree mode has none of this difficulty
 happily, because no classes are involved. Reach for `TsonSchemaVersions` only in bind mode.
 
 **Reading is governed, writing is negotiated.** A request body names the schema that governs it and `route`
-obeys it — a JSON one through the `TSON-Schema` header alone, since it can carry no directive: `route(body,
+obeys it — a JSON one through the `TSON-Schema` header alone, since its in-band `$import` is not read: `route(body,
 header, contentType)` routes it without a peek, and `Routed.readObjectAs(rootType, class)` reads whichever
 encoding arrived, so a handler writes one read per version rather than one per version per encoding.
 `Builder.acceptingJson()` makes every version's codec admit JSON. A response has no such anchor — a GET carries no body
@@ -36,9 +37,30 @@ whose meaning depends on the method is worse than two fields.
 
 **Routing is a safety feature, not a convenience.** A codec built for v1 will read a v2 document and silently
 drop what its class has no component for — `OrderV1[sku=A, quantity=1]`, no error, **no diagnostic even
-collecting**. So `route` refuses a document naming a version this endpoint does not serve,
-and refuses one naming none. Do not add a fallback that guesses; that is the failure it exists to prevent.
-`defaultVersion` exists for an older unversioned client and is off by default for the same reason.
+collecting**. So `route` refuses what it cannot place.
+
+**The version is the served member of the binding.** `TsonSchemaHeader.resolve` gives the governing set — header and
+imports agreeing as sets, or whichever is present (`design/codec.md` has the table) — and a body importing its version
+and a helper schema beside it (`order-1.tn` and `money.tn`) is one binding of two members, read as one namespace. The
+version is the member whose canonical identity this endpoint serves; the others are schemas the body also uses and are
+not the version question. `Routed.schemas()` is the whole set, the version spelt as registered, and
+`Routed.readObjectAs` reads a TSON body under all of it. A JSON body is read against the version alone, since the JSON
+reader states one schema. Each refusal is a 400:
+
+- **No version this endpoint serves** — `unsupported-schema-version`, *"this endpoint does not serve '…'; it serves
+  [...]"*, the set listed where it has several members. The same type answers a body import that is not a schema
+  identity at all; a header member that is none is `unusable-schema-reference`, from `TsonSchemaHeader`.
+- **No schema named at all** — `no-schema-declared`, *"this endpoint serves several schema versions, so a message must
+  name the one that governs it -- in a TSON-Schema header or an !!import directive; it serves [...]"*.
+- **Two versions this endpoint serves** — `conflicting-schema`, *"this message names [...], several versions this
+  endpoint serves; at most one of them governs it"*. Two versions of one schema both declare `order`, so they cannot be
+  one namespace, and choosing either would be a guess.
+- **Header and body naming different sets** — `conflicting-schema`, *"the TSON-Schema header names … and the body
+  imports …; at most one of them governs it"*, from `TsonSchemaHeader.resolve` before routing.
+
+Do not add a fallback that guesses; that is the failure it exists to prevent. `defaultVersion` exists for an older
+unversioned client, answers only a message naming no schema at all — a binding that names schemas and leaves the
+version out is refused, not defaulted — and is off by default for the same reason.
 
 **The schema is honest, and migration across versions is the developer's call.** A v1 document read into a
 class that also serves v2 fills the v2-only fields from the constructor that read it — and that constructor
@@ -63,6 +85,6 @@ never called. A second constructor is for your code, invisible to binding.
 
 **`Routed.schemaId()` is the registered id, not what the document spelled.** A client may write the same
 identity with a different scheme or a `?sha256=` pin (§2.2.1); a caller switching on the version must not see
-that. An earlier version of this returned the reference and would have broken the moment a client pinned one.
+that.
 
 

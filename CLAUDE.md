@@ -25,9 +25,9 @@ Each under ~20 KB and opening with its invariants. Pick by what you are about to
 | A bound class, `TsonBindings`, `prepareToRead`, a 500 that should be a 400 or vice versa | `binding.md` |
 | `acceptingJson`, `application/json` bodies, `respondDescribed`, `application/problem+json` | `json-encoding.md` |
 | `TsonSchemaVersions`, `TSON-Accept-Schema`, `@Profile`, two versions of one schema | `schema-versions.md` |
-| `allowHost`/`mapHost`, `SchemaSource.ofMap`, a `!!schema` URL in a request body | `schema-sources.md` |
+| `allowHost`/`mapHost`, `SchemaSource.ofMap`, an `!!import` URL in a request body | `schema-sources.md` |
 | `meta-service.tn`, `io.ltr8.tson.http.api`, `TsonApiDescription`, `TsonApiCoverage`, business errors | `service-description.md` |
-| The interface layer, `tson-invoke`, the join (backlog) | `invoke.md` |
+| The protocol layer, `tson-invoke`, the join (backlog) | `invoke.md` |
 | A `.tn` file this project owns, a `!!id`, `problem.tn`, a revision bump, a field spelling | `schema-authoring.md` |
 | `deployment.tn`, `TsonDeployment`, `/.well-known/tson-deployment`, `policy.tn` | `deployment-descriptor.md` |
 | `OrderServer`, `demo/schemas/`, `ValidatorServer`, the throughput harnesses | `demos.md` |
@@ -45,8 +45,8 @@ responses, and serving and fetching schema documents over HTTP. It is a **consum
 it. The library is the sibling repo [ltr8-io-tson-java](https://github.com/litterat/ltr8-io-tson-java), checked out at
 `../ltr8-io-tson-java` and consumed as a Gradle included build (below). Destination remote: `https://github.com/litterat/`.
 
-**Built against Revision 38**, published at tson.io and on the sibling's `main`, which is what CI checks out. Every
-identity in this repo carries `/2026/38/` and `tson.version` names `0.38.0-SNAPSHOT`. The revision series changes
+**Built against Revision 39**, on the sibling's `r2026-39-proposal` branch; CI checks out the sibling's default branch.
+Every identity in this repo carries `/2026/39/` and `tson.version` names `0.39.0-SNAPSHOT`. The revision series changes
 without compatibility guarantees, so a `git pull` of the sibling can move the whole identity space;
 `design/schema-authoring.md` says what a bump touches.
 
@@ -124,7 +124,7 @@ Matching tson-java's conventions is what keeps the two repos readable as one bod
   number**: a `SPEC-FEEDBACK.md #N` is live only while the entry is open.
 - **`UpstreamGapsTest` pins every library gap and constraint this project depends on.** A fixed gap flips its assertion
   rather than losing it. Pin the gap, not the way it is delivered.
-- **Project-owned schema `!!id`:** `https://tson.io/2026/38/io/ltr8/http/<name>.tn`, no version in the name; `.tn`, never
+- **Project-owned schema `!!id`:** `https://tson.io/2026/39/io/ltr8/http/<name>.tn`, no version in the name; `.tn`, never
   `.tn1`. Nothing is published yet, so a schema is edited in place.
 
 ## Traps
@@ -140,6 +140,8 @@ One line each; the note carries the why. Read the note before touching the code 
   a `ByteArrayInputStream` hides a peek that ate the body. (`codec.md`)
 - Upstream's `readAs` silently lets a stated schema override a body's own; the codec checks agreement. Never bypass it
   on a body a client wrote. (`codec.md`)
+- `TSON-Schema` is a List, and agrees with a body's imports as a set of canonical identities compared whole; "one
+  member matches" is not agreement, since it lets a sender widen the namespace. (`codec.md`)
 - `describing()` needs a root type name for an object; the tree form takes the URI alone. (`codec.md`)
 - A `com.sun.net.httpserver` with no executor is serial; use a virtual-thread executor, never a pool. (`demos.md`)
 - Never overwrite a committed response; a handler that returns without answering is a 500. (`adapters.md`)
@@ -149,18 +151,20 @@ One line each; the note carries the why. Read the note before touching the code 
 - A URI atom reads to `io.ltr8.net.Iri`, not `java.net.URI`. (`binding.md`)
 - A JSON body is never peeked and never read into a `TsonValue`; its schema comes from `TSON-Schema` and its root type
   from the route. JSON `null` is `_` and is refused at `a?: T`. (`json-encoding.md`)
-- `route` refuses a body naming a version this endpoint does not serve, and one naming none. No guessing fallback.
-  Multiple constructors do not select a version. (`schema-versions.md`)
+- The version is the one member of a message's binding this endpoint serves. `route` refuses a binding naming none of
+  its versions, one naming two, and one naming no schema at all. No guessing fallback. Multiple constructors do not
+  select a version. (`schema-versions.md`)
 - A schema reference carries no port; `mapHost` is the only way to a non-default port, and the failure surfaces from the
   resolver, far from the fetch. (`schema-sources.md`)
 - `SchemaSource.ofMap`, never `map::get`; never `computeIfAbsent` on a schema cache; policy on every reference, cached or
   not. (`schema-sources.md`)
 - `name?: T` is optional; `name: T?` is required and admits `_`. A `text` field accepts any token. A `pattern` is
-  I-Regexp, whole-token, and `^`/`$` are literals. Core no longer declares `identifier` or `non_empty_text`.
-  (`schema-authoring.md`)
+  I-Regexp, whole-token, and `^`/`$` are literals. (`schema-authoring.md`)
+- A schema importing core reserves every root name of the kernel, numeric, temporal, net and core, so an application
+  type is never named `int64`, `schema`, `host`, `date`, `uri`, `media_type` or `title`. (`schema-authoring.md`)
 - `problem.tn`'s `diagnostic_code` is a hand-written copy of `Diagnostic.Code`; `TsonProblemSchemaTest` is the only check.
   (`schema-authoring.md`)
-- An entry applying a namespace type is a value, never a type, and the map alone: an api's `@implements` and
+- An entry applying a namespace type is a value, never a type, and the map alone: an http projection's `@binds` and
   `@not_bound` are annotations on its entry, whose names the reader checks. Only `resource` has the positional form,
   and a second required field breaks every document written in it. (`service-description.md`)
 - An entry has two annotation positions that land in different places; reading only one looks like a library bug. (same)

@@ -1,10 +1,12 @@
 package io.ltr8.tson.http.api;
 
+import io.ltr8.tson.http.TsonMediaType;
 import io.ltr8.tson.schema.meta.TypeRef;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -12,29 +14,36 @@ import java.util.Set;
 
 /**
  * One endpoint of a description, resolved: the verb and the path it sits under, its signature -- inline for an
- * {@link Operation}, the method's for a {@link Binding} -- or the media type of a {@link Document}, and everything
- * {@link TsonApiDescription} checked about it.
+ * {@link Operation}, the exchange's for a {@link Binding} -- the media types it speaks, and everything {@link
+ * TsonApiDescription} checked about it.
  *
- * @param method      the method a binding borrows; empty for an operation or a document
+ * @param exchange    the exchange a binding borrows; empty for an operation or a document
  * @param errors      each business error, by the status its type fixes
- * @param mediaType   a document's media type; empty for an endpoint answering a TSON value
- * @param encodings   every encoding spoken, TSON always among them
- * @param summary     the short documentation: the verb key's {@code @summary}, else the method's
- * @param doc         the long documentation: the verb key's {@code @doc}, else the method's
+ * @param document    whether this is a {@link Document}, its success body bytes labelled by a media type rather than
+ *                    a TSON value
+ * @param mediaTypes  every media type the endpoint speaks, in both directions, folded to lower case:
+ *                    {@code application/tson} first and always, then those listed, for an endpoint answering a TSON
+ *                    value; exactly those listed for a document
+ * @param summary     the short documentation: the verb key's {@code @summary}, else the exchange's
+ * @param doc         the long documentation: the verb key's {@code @doc}, else the exchange's
  */
-public record Route(HttpVerb verb, String path, Optional<InterfaceMethod> method, Optional<TypeRef> request,
-                    Optional<TypeRef> response, Map<Integer, TypeRef> errors, int status,
-                    Optional<String> mediaType, Set<Encoding> encodings, RequestPlacement placement,
-                    Optional<String> summary, Optional<String> doc) {
+public record Route(HttpVerb verb, String path, Optional<ExchangeName> exchange, Optional<TypeRef> request,
+                    Optional<TypeRef> response, Map<Integer, TypeRef> errors, int status, boolean document,
+                    Set<String> mediaTypes, RequestPlacement placement, Optional<String> summary,
+                    Optional<String> doc) {
 
     public Route {
         errors = Collections.unmodifiableMap(new LinkedHashMap<>(errors));
-        encodings = Set.copyOf(encodings);
+        mediaTypes = Collections.unmodifiableSet(new LinkedHashSet<>(mediaTypes));
     }
 
-    /** Whether this endpoint also speaks TSON's JSON encoding: admits a JSON body, and answers in JSON when asked. */
+    /**
+     * Whether this endpoint speaks TSON's JSON encoding under either of its labels, {@code application/json} or
+     * {@code application/tson+json}: admits a JSON body, and answers in JSON when asked.
+     */
     public boolean speaksJson() {
-        return encodings.contains(Encoding.JSON);
+        return mediaTypes.contains(TsonMediaType.APPLICATION_JSON.toString())
+                || mediaTypes.contains(TsonMediaType.APPLICATION_TSON_JSON.toString());
     }
 
     /** The business error this endpoint declares at {@code status}, if it declares one. */

@@ -6,11 +6,14 @@ probe tests join `tson-http`'s test source set from `<experiment>/java`.
 
 - A probe failing after a library change is information, not a regression. Update the conclusion or delete the
   experiment; do not patch the probe to pass.
-- The orders interface the experiments call is not an experiment: it is `tson-http`'s `OrdersExamples` test fixture,
+- The orders protocol the experiments call is not an experiment: it is `tson-http`'s `OrdersExamples` test fixture,
   the shipped layer's own examples (`design/service-description.md`). An experiment reads it from the classpath and
   never copies it.
-- `rpc/` is the interface's wire form, next in the order of work and homed outside `tson-http` when it lands.
-- **The agent sketches (`agent/`) are future work.** They press on the interface layer from a direction that is not
+- `rpc/` is the protocol's wire form, next in the order of work and homed outside `tson-http` when it lands.
+- **The agent sketches (`agent/`) are future work.** They press on the protocol layer from a direction that is not
   HTTP so the layer is shaped by more than one consumer. Do not build toward them, and do not let a decision that is
   the agent's alone move the descriptor.
-- `one-level/` is a design direction for later revisions; its probes pin the ladder as Revision 38 defines it.
+- `one-level/` is the design direction Revision 39 implements; its probes pin Revision 39's behaviour.
+- `cognitive-load/` is a protocol for measuring the syntax against LLMs, not code; it has no probe, and its item banks
+  are the existing probes and the bundled schemas. Do not run it from a session on your own initiative; it costs
+  model calls the user decides on.

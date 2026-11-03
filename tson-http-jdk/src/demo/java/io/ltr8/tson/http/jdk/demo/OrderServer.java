@@ -39,7 +39,7 @@ import java.util.Optional;
 public final class OrderServer {
 
     /** The identity of the order schema. It names a host; where it is served is separate. */
-    public static final String SCHEMA_ID = "https://schemas.example.com/2026/38/app/order-1.tn";
+    public static final String SCHEMA_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
 
     /**
      * The schema this server governs orders by, and the business errors it answers with.
@@ -56,14 +56,14 @@ public final class OrderServer {
     public static final String SCHEMA = schema("order-1.tn");
 
     /**
-     * A description of this service, as a schema governed by {@code meta-service.tn} -- published, resolved at
+     * A description of this service, as a schema importing {@code meta-service.tn} -- published, resolved at
      * startup, and checked by a conformance test.
      *
-     * <p><b>The payload types and the method a binding names are references, not strings.</b> {@code request:
+     * <p><b>The payload types and the exchange a binding names are references, not strings.</b> {@code request:
      * order} and {@code orders.place_order} are resolved when this schema loads, so a description
-     * naming a type or a method nothing declares does not start this server.
+     * naming a type or an exchange nothing declares does not start this server.
      */
-    public static final String API_ID = "https://schemas.example.com/2026/38/app/orders-api-1.tn";
+    public static final String API_ID = "https://schemas.example.com/2026/39/app/orders-api-1.tn";
 
     public static final String API = schema("orders-api-1.tn");
 
@@ -126,12 +126,11 @@ public final class OrderServer {
         Map<String, String> schemas = new HashMap<>(Map.of(SCHEMA_ID, SCHEMA,
                 TsonProblemSchema.ID, TsonProblemSchema.source(), API_ID, API));
         schemas.putAll(TsonApiSchema.publishedById());
-        // metaNameBinder, not bindings: one binds the data a schema describes, the other a governing meta's
-        // own vocabulary. Without it the API schema below declares `operation` and nothing can build one.
+        // One bind context for the data and the description: without meta-service.tn's records in it, the API
+        // schema below holds its endpoints as trees and nothing can read them.
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(schemas)))
-                .withDataBindContext(TsonBindings.of(bindings))
-                .withMetaNameBinder(TsonApiSchema.metaNameBinder()));
+                .withDataBindContext(TsonBindings.of(TsonApiSchema.bindingsWith(bindings))));
         tson.resolve(SCHEMA);
         // Resolving the description is what checks it: a payload type nothing declares fails startup here,
         // rather than being published as a contract no client can act on.
@@ -159,7 +158,7 @@ public final class OrderServer {
         server.setExecutor(java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
 
         // The description is a contract, so hold this server to it before it accepts anything. `serving`
-        // hands back the endpoint, which is where the path and the encodings below come from -- and refuses
+        // hands back the endpoint, which is where the path and the media types below come from -- and refuses
         // one the description does not declare, so a moved endpoint fails at the handler that outlived it.
         TsonApiCoverage coverage = TsonApiCoverage.of(described);
 
@@ -171,7 +170,7 @@ public final class OrderServer {
         TsonHttpCodec createCodec = create.speaksJson() ? codec.acceptingJson() : codec;
         server.createContext(create.path(), TsonHandler.asHttpHandler(createCodec, exchange -> {
             exchange.requireMethod(create.verb().name());
-            // A TSON body names its own schema; a JSON one cannot, so the method's declared request type is
+            // A TSON body names its own schema; a JSON one cannot, so the exchange's declared request type is
             // its binding -- [TSON-JSON] §3.4's out-of-band route, with the description as the contract.
             Order order = TsonMediaType.namesJson(exchange.header("Content-Type"))
                     ? exchange.readObjectAs(SCHEMA_ID, "order", Order.class)
@@ -188,7 +187,7 @@ public final class OrderServer {
             exchange.respondDescribed(201, new Order(order.sku(), order.quantity() * 2), SCHEMA_ID, "order");
         }));
 
-        // Publishing the schemas at their own identity paths is what makes the URL in a !!schema directive --
+        // Publishing the schemas at their own identity paths is what makes the URL in an !!import directive --
         // and the one in an error body -- something a client can actually dereference. The API description is
         // a schema too, so it needs no route of its own: the catalog serves it like everything else.
         // A prefix, not the declared `/{+schemaPath}`: an identity path has slashes and this framework matches

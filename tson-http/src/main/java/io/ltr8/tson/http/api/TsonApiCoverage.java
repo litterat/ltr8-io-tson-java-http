@@ -43,7 +43,7 @@ import java.util.TreeSet;
  * coverage.requireComplete();
  * }</pre>
  *
- * <p>Whether every method of an implemented interface has an endpoint is a different question, about the
+ * <p>Whether every exchange of a bound protocol has an endpoint is a different question, about the
  * description rather than the server, and {@link TsonApiDescription} answers it when it reads one.
  *
  * <h2>The opinion has a way out</h2>
@@ -71,7 +71,7 @@ public final class TsonApiCoverage {
 
     /**
      * Claims the endpoint at {@code verb} and the declared {@code path}, and hands it back so its path and its
-     * encodings can drive the registration rather than being written out again.
+     * media types can drive the registration rather than being written out again.
      *
      * @throws IllegalArgumentException if the description declares no such endpoint — a typo, or a handler
      *                                  outliving the endpoint it was written for

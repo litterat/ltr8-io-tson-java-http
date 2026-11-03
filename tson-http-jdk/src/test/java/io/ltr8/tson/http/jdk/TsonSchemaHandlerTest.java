@@ -30,14 +30,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TsonSchemaHandlerTest {
 
     private static final String HOST = "schemas.example.com";
-    private static final String SCHEMA_ID = "https://schemas.example.com/2026/38/app/order-1.tn";
-    private static final String SCHEMA_PATH = "/2026/38/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
+    private static final String SCHEMA_PATH = "/2026/39/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/38/app/order-1.tn"
-            !!meta:"https://tson.io/2026/38/m/meta.tn"
-            !!import:"https://tson.io/2026/38/m/core.tn"
-            {
+            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema {
                 order => { sku: text  quantity: int32 }
             }""";
 
@@ -70,7 +69,7 @@ class TsonSchemaHandlerTest {
     /** The path is the identity's path, taken from the document -- never chosen by whoever registered it. */
     @Test
     void servesEachSchemaAtItsOwnIdentityPath() throws Exception {
-        assertEquals(Set.of(SCHEMA_PATH, "/2026/38/io/ltr8/http/problem.tn"),
+        assertEquals(Set.of(SCHEMA_PATH, "/2026/39/io/ltr8/http/problem.tn"),
                 TsonSchemaHandler.of(SCHEMA, TsonProblemSchema.source()).paths());
 
         HttpResponse<String> response = get(SCHEMA_PATH);
@@ -111,7 +110,7 @@ class TsonSchemaHandlerTest {
 
     @Test
     void anUnknownPathIs404() throws Exception {
-        assertEquals(404, get("/2026/38/app/nope-1.tn").statusCode());
+        assertEquals(404, get("/2026/39/app/nope-1.tn").statusCode());
     }
 
     @Test
@@ -128,8 +127,7 @@ class TsonSchemaHandlerTest {
     void refusesASchemaWithNoIdentityToServeItAt() {
         IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
                 () -> TsonSchemaHandler.of("""
-                        !!meta:"https://tson.io/2026/38/m/meta.tn"
-                        { thing => { a: text } }"""));
+                        !schema { thing => { a: text } }"""));
         assertTrue(refused.getMessage().contains("!!id"), refused.getMessage());
     }
 
@@ -155,7 +153,7 @@ class TsonSchemaHandlerTest {
             TsonHttpCodec codec = new TsonHttpCodec(tson);
 
             TsonValue order = codec.readTree(new ByteArrayInputStream("""
-                    !!schema:"%s"
+                    !!import:"%s"
                     !order { sku: "ABC-1"  quantity: 3 }""".formatted(SCHEMA_ID)
                     .getBytes(StandardCharsets.UTF_8)), "application/tson");
 

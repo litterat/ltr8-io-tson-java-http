@@ -19,7 +19,7 @@ import java.util.Map;
  * server can serve, and as a compiled schema bound to {@link TsonProblem}/{@link TsonProblemDiagnostic}.
  *
  * <p><b>{@link #source} exists because the {@code !!id} in an error body has to resolve.</b> A problem body
- * declares {@code !!schema:"…/problem.tn"}, and a client that wants to validate what it received needs that
+ * declares {@code !!import:"…/problem.tn"}, and a client that wants to validate what it received needs that
  * document. Serving it from this constant is what makes the URL in the body true rather than decorative.
  *
  * <p><b>This is tson-http's own schema.</b> It began as a copy of {@code tson-cli}'s {@code diagnostics.tn} and
@@ -36,7 +36,7 @@ import java.util.Map;
 public final class TsonProblemSchema {
 
     /** The current error-body schema's identity -- the {@code !!id} it declares and the URL it is served at. */
-    public static final String ID = "https://tson.io/2026/38/io/ltr8/http/problem.tn";
+    public static final String ID = "https://tson.io/2026/39/io/ltr8/http/problem.tn";
 
     /**
      * Every version of this schema that is still published, current first -- one, today.
