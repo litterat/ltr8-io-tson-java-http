@@ -40,6 +40,15 @@ type -- from this schema or from one the document imports, a nested directive be
 validated in full, and a value naming no type is refused. The AST's top type is `plan`, since the VM imports the AST
 and two `agent`s would collide.
 
+**Revision 39's dependent field gives a constant a second shape, and a step none.** A record field typed `kind!` is
+read per instance against the type its sibling `kind` names, so a constant could be the pair `{ type: meta.type_ref
+value: type! }`, its type a type reference in a field rather than a tag, binding to an `Object` component. Neither
+shape is chosen here: the tag is one token, the pair two fields, and both check the value in full. A step cannot type
+its parts that way. `or` is to validate against its method's response, which is a projection through `method` that
+the revision does not have; and `method` itself, as `meta.ref<exchange>`, could not be a sibling, which must be a type
+reference over a constructor. Neither is the plan's `interface: uri`, which names a schema. So a step's typing stays
+the admission verifier's.
+
 ## Decisions this leaves, in the order to take them
 
 1. **One protocol per plan, or several?** Both layers carry one `interface: uri`, where an agent is expected to call
@@ -61,10 +70,11 @@ and two `agent`s would collide.
 **Which namespace may a document bind?** `!!import` binds the type namespace and `!name` resolves against it, one
 hop. A plan or batch document wants to bind a *protocol* -- to say `!place_order { request: { … } }` and have the
 step checked against the exchange -- and cannot: `place_order` is a key inside `orders`, not a type name, and a
-qualified name stands only at a `meta.ref<T>` slot in a schema. A reference in a data document is open, with the
-one-level work (`experiments/one-level/README.md`, "The reference atom"); the URL namespace being hierarchical
-(`/orders/{id}/items` under `/orders/{id}`) while a resource key in `meta-service.tn` is a flat template is the same
-question, and one answer should serve both.
+qualified name stands only at a `meta.ref<T>` slot in a schema. Revision 39 judges a type reference in a data
+document, while a reference to a value there (`orders.place_order`) is read for its grammar and reported as a gap
+(`NOT_IMPLEMENTED`), a data document never being linked (`experiments/one-level/README.md`, "The reference atom").
+The URL namespace being hierarchical (`/orders/{id}/items` under `/orders/{id}`) while a resource key in
+`meta-service.tn` is a flat template is the same question, and one answer should serve both.
 
 **A disjoint choice with an enum variant is not read tag-free.** `agent-vm.tn`'s `instruction => ( simple_op | op )`
 is `@disjoint` -- string class beside brace class -- and the resolver accepts the assertion, but the reader refuses a

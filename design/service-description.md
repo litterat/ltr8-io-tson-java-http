@@ -131,7 +131,12 @@ startup failure rather than a published contract no client can act on:
 - each request record's fields are placed exactly once over the path, the query, the headers and the body
   (`RequestPlacement`): a `{segment}` binds the field of that name, `query` and `headers` name fields, `body` names one
   field carried unwrapped, and the remainder is the body, or the query for a GET or HEAD; a field in the path, query or
-  a header is a scalar (an array of scalars in a query or header, which may repeat);
+  a header is a scalar (an array of scalars in a query or header, which may repeat). A dependent field (`payload:
+  kind!`, a `SiblingRef` in `RecordField.type()`'s sealed `Reference`) travels in the remainder body with its sibling,
+  the one place a record instance holds both;
+- a bound request record holding a dependent field loads only if every type a sender may name in its sibling binds
+  (`ChosenTypes`): a free `meta.type_ref` sibling admits the kernel's records and never does, while a pinned sibling
+  or a discriminator over bound subtypes does;
 - the verb agrees with what the exchange says about itself, `@safe` and `@idempotent` on its key: GET safe, PUT and
   DELETE idempotent; and a response-less endpoint answers a status that carries no body;
 - each business error fixes its status (`sku_not_found => problem & { status: = 404 … }`), which is how a client tells
@@ -144,10 +149,9 @@ startup failure rather than a published contract no client can act on:
 `endpoint` carries `media_types?: [media_type]`, net.tn's `media_type`. **Every endpoint but a `document` speaks
 `application/tson`**, and the list says what it speaks beside it; absent is `application/tson` alone. **A label is
 listed, never implied**: an endpoint answering JSON lists `application/json`, `application/tson+json` or both, and
-Accept chooses among what is listed. Media types rather than a closed enum of encodings, because HTTP already has the
-vocabulary and negotiates it with `Accept` and `Content-Type`, so a new encoding is a new registered name and never an
-edit to the layer. One set serves both directions, as the codec does; a split between what an endpoint accepts and
-what it produces is a later field.
+Accept chooses among what is listed. Media types rather than an enum of encodings: HTTP already negotiates them, so a
+new encoding is a registered name and never an edit to the layer. One set serves both directions, as the codec does;
+a split between what an endpoint accepts and what it produces is a later field.
 
 `Route.mediaTypes()` is the resolved set, folded to lower case: `application/tson` first for a non-document, then what
 is listed. `Route.speaksJson()` is membership of either JSON label, and a demo builds the route's codec from it
@@ -247,8 +251,7 @@ boundary cannot produce it: the boundary only renders a `problem`, and a `sku_no
 These types belong in the **application's** schema, importing `problem.tn`: `tson-http` owns the transport envelope,
 the service owns "SKU not found".
 
-- **Imports are transitive, but name what you use anyway.** `order-1.tn` would get `text` through `problem.tn` without
-  saying so. Name `core.tn` too: a collision is judged by the *declaring schema's identity*, not by how many routes
-  reach it, so naming a shared dependency twice is redundant rather than an error.
+- **Imports are transitive, but name what you use anyway.** `order-1.tn` would get `text` through `problem.tn`; name
+  `core.tn` too. A collision is judged by the *declaring schema's identity*, so naming a dependency twice is no error.
 - **`errors` stays data-level.** A business failure carries `errors: []` and its own fields. They never co-occur
   anyway: validation is a gate, so business logic is not reached on a document that failed it.

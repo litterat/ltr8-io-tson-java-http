@@ -14,6 +14,9 @@ are the server's own. Current form only.
   lenient mode. `prepareToWrite` is a warm-up, not a correctness measure.
 - A type nothing binds is a 500 (`MissingBindingException`), not a 501. A compact constructor stricter than its schema
   is a 500 (`BIND_MISMATCH`), not a 400: a constraint a client is held to goes in the schema.
+- A dependent field (`payload: kind!`) binds to an `Object` component, which `TsonBindings` registers as an atom; a
+  context without it prepares clean and fails every read. Which types a sender may name in the sibling is held at
+  startup (`ChosenTypes`, `design/service-description.md`), so a sender's choice never reaches the 500 above.
 - A bound class guards its own optional lists in its compact constructor and never guards a required one.
 - A URI atom reads to `io.ltr8.net.Iri`, not `java.net.URI`.
 - `@Unbound` means not on the wire in both directions.
@@ -22,7 +25,7 @@ are the server's own. Current form only.
 
 - **A bound class guards its own optional lists.** An optional field a document omits reaches the constructor
   as `null`, and the binder does not normalise it — the convention upstream follows is that the record does,
-  in its compact constructor, as `RecordBody` and `TypeRef` do. `Operation`,
+  in its compact constructor, as `RecordBody` and `TypeChain` do. `Operation`,
   `Binding` and `Document` guard theirs for that reason. A **required** list is deliberately not guarded: it never reaches a
   constructor, because the reader reports `FIELD_REQUIRED` and abandons the construction first, so a guard
   there would mask a real violation. A `references()` that returns such a `null` is refused by name — a
@@ -66,7 +69,10 @@ are the server's own. Current form only.
   mode. `TsonHttpCodec.prepareToRead(schemaId)` forces that at startup and `TsonSchemaVersions` calls it —
   without it the same mistake is a 500 on the first request that reads one. `@Unbound` marks a component that
   is the class's own, and it means **not on the wire in both directions**: a response type carrying one leaves the
-  field out of the body. **There is no lenient mode**, so a mismatch is a startup failure or nothing. **A
+  field out of the body. A field's type is a reference: a type reference, whose type fixes the component's class, or a
+  sibling reference (`value?: kind!`), whose dependent field is read per instance against the type its sibling `kind`
+  names, so its component is an `Object` receiving whatever that type binds to; a narrower class is a mismatch at
+  compile. **There is no lenient mode**, so a mismatch is a startup failure or nothing. **A
   mismatch reaching the diagnostics channel is still reported as `SCHEMA_ERROR` and so becomes a 400** —
   routing and `prepareToRead` are what keep it unreachable.
 - **`prepareToWrite` is a warm-up, not a correctness measure.** Keep calling it at startup to move first-write

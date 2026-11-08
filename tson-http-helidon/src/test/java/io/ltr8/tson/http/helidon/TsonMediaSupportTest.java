@@ -11,7 +11,7 @@ import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.source.SchemaAccess;
-import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
+import io.ltr8.tson.compiler.config.SchemaModelNameBinder;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonProblem;
 import io.ltr8.tson.http.TsonProblemSchema;
@@ -60,7 +60,7 @@ class TsonMediaSupportTest {
     @BeforeEach
     void setUp() {
         DataNameBinder binder = name -> "order".equals(name) ? Order.class
-                : SchemaMetaNameBinder.INSTANCE.resolve(name);
+                : SchemaModelNameBinder.INSTANCE.resolve(name);
         DataBindContext bind =
                 DataBindContext.builder().nameBinder(binder).registerAtoms(AtomContext.hostTypes()).build();
         Tson tson = Tson.of(ProcessorConfig.defaults()

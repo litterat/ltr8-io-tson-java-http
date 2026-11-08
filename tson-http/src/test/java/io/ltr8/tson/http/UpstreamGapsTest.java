@@ -19,6 +19,7 @@ import io.ltr8.tson.schema.meta.ChoiceBody;
 import io.ltr8.tson.schema.meta.FieldRole;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.RecordField;
+import io.ltr8.tson.schema.meta.SiblingRef;
 import io.ltr8.tson.schema.meta.Top;
 import io.ltr8.tson.schema.meta.TypeRef;
 import org.junit.jupiter.api.Test;
@@ -94,15 +95,13 @@ class UpstreamGapsTest {
 
     /**
      * <b>Fixed: {@code (resp<order, 201> | resp<problem, 400>)} resolves.</b> This is the shape an operation's
-     * responses want, and it used to be the gap this project's API description worked around by naming each
-     * application as its own entry first. The lift now happens for a choice as it already did for a field and
-     * an array, so the workaround is a choice of style rather than a necessity.
+     * responses want. An application inside a choice lifts to an entry as one in a field or an array does, so
+     * naming each application as its own entry first is a choice of style rather than a necessity.
      *
-     * <p>Asserting resolution alone would pass on silence, which is how the old version of this test nearly
-     * read as a fix when only the reporting channel had changed. So it asserts the resolved shape: each
-     * application becomes its own synthetic entry, the choice names both, and each carries the value argument
-     * as a {@link FieldRole#FIXED} field -- which is the part that would be quietly wrong if the substitution
-     * were dropped.
+     * <p>Asserting resolution alone would pass on silence: a gap reported through another channel reads as a fix.
+     * So it asserts the resolved shape: each application becomes its own synthetic entry, the choice names both,
+     * and each carries the value argument as a {@link FieldRole#FIXED} field -- which is the part that would be
+     * quietly wrong if the substitution were dropped.
      */
     @Test
     void anApplicationInsideAChoiceResolves() {
@@ -122,7 +121,7 @@ class UpstreamGapsTest {
 
         var entries = tson.schemaRegistry().get("https://s.example.com/2026/39/p-1.tn").orElseThrow()
                 .schema().entries();
-        TypeRef response = ((RecordBody) entries.get("op")).fields().values().iterator().next().type();
+        TypeRef response = ((RecordBody) entries.get("op")).fields().values().iterator().next().typeRef();
         var variants = assertInstanceOf(ChoiceBody.class, entries.get(response.name())).variants();
         assertEquals(2, variants.size(), () -> "both applications lift: " + variants);
 
@@ -131,7 +130,7 @@ class UpstreamGapsTest {
                 .map(v -> (RecordBody) entries.get(v.name()))
                 .flatMap(b -> b.fields().values().stream())
                 .map(f -> f.role() == FieldRole.FIXED
-                        ? f.value().orElseThrow().text() : f.type().name())
+                        ? f.value().orElseThrow().text() : f.typeRef().name())
                 .toList());
     }
 
@@ -161,10 +160,9 @@ class UpstreamGapsTest {
 
     /**
      * The same, seen through the applied entry: the substituted field is {@link FieldRole#FIXED} rather than
-     * merely carrying its value. This is the shape that made the {@code response<T, S>} design unattractive
-     * while the constraint was being lost, so it is worth knowing it is now sound. A declaration naming an
-     * application is that application's entry ([TSON-SCHEMA] §8.2), so the field is read from {@code created}
-     * itself, with no hop onto a minted name.
+     * merely carrying its value; without the constraint the {@code response<T, S>} design would be unsound. A
+     * declaration naming an application is that application's entry ([TSON-SCHEMA] §8.2), so the field is read
+     * from {@code created} itself, with no hop onto a minted name.
      */
     @Test
     void aMaterialisedApplicationCarriesAFixedField() {
@@ -758,15 +756,14 @@ class UpstreamGapsTest {
      * assertion of a gap that has closed, kept because this is the shape a regression would take.
      *
      * <p>{@code SchemaSource} admits {@code SchemaFetchException} and nothing else for "cannot supply
-     * this", but the natural first implementation is a map and a map spells absence as {@code null}. That used
-     * to reach {@code TsonCompiledMetaRegistry.recordAndVerify} and throw a bare {@code NullPointerException}
-     * four frames from the cause — which, since the identity comes from the request body, was a 500 any client
-     * could produce at will. It now says what is wrong, and {@code ofMap} exists so the mistake need not be
-     * made.
+     * this", but the natural first implementation is a map and a map spells absence as {@code null}. Left
+     * unchecked, that null is a bare {@code NullPointerException} frames from the cause — and since the identity
+     * comes from the request body, a 500 any client could produce at will. The refusal says what is wrong, and
+     * {@code ofMap} exists so the mistake need not be made.
      */
     @Test
     void aSourceReturningNullIsRefusedRatherThanThrowingAnNpe() {
-        // The import is what reaches the source at all: the meta layer and core are pre-loaded, so a schema
+        // The import is what reaches the source at all: the kernel vocabulary and core are pre-loaded, so a schema
         // naming only those never consults it and the null is never returned.
         String schema = """
                 !!id:"https://example.com/2026/39/app/null-source-1.tn"
@@ -1106,8 +1103,8 @@ class UpstreamGapsTest {
      * <b>A non-ASCII host is one identity in either label form, and the allow-list takes it.</b> Canonical
      * identity reads an identity's host as a {@code host} value, so {@code bücher.example} and its A-label
      * spelling {@code xn--bcher-kva.example} are one identity, canonically the U-label; and {@link
-     * HttpSchemaSource#builder()}'s {@code allowHost} accepts the U-label, where it used to refuse it as no host
-     * at all. Pinned so a regression to two identities, or a refusal, fails here.
+     * HttpSchemaSource#builder()}'s {@code allowHost} accepts the U-label rather than refusing it as no host at
+     * all. Pinned so a regression to two identities, or a refusal, fails here.
      */
     @Test
     void aNonAsciiHostIsOneIdentityInEitherLabelForm() {
@@ -1283,5 +1280,206 @@ class UpstreamGapsTest {
         var peek = tson.begin(unmarkable);
         assertEquals(java.util.List.of(), peek.header().imports(), "the header imports no schema");
         assertEquals(new Note("t"), tson.objectReader().withSchema(id).readAs(peek, "note", Note.class));
+    }
+
+    // ── a dependent field: the sender chooses the type a value is read against ─────────────────────────
+
+    private static final String NOTES_ID = "https://s.example.com/2026/39/notes-1.tn";
+
+    /** A free sibling over the whole closure, beside a record no class binds. */
+    private static final String NOTES = """
+            !!id:"https://s.example.com/2026/39/notes-1.tn"
+            !!import:"https://tson.io/2026/39/m/meta.tn"
+            !!import:"https://tson.io/2026/39/m/core.tn"
+            !schema {
+                point      => { x: int32  y: int32 }
+                secret     => { s: text }
+                typed_note => { note_id: text  kind: meta.type_ref  payload: kind! }
+            }""";
+
+    /** The bind target for {@code typed_note}: a dependent field binds to {@code Object}, what the named type reads to. */
+    public record TypedNote(String note_id, TypeRef kind, Object payload) {
+    }
+
+    /** The bind target for {@code point}. */
+    public record Point(int x, int y) {
+    }
+
+    private static Tson notes(io.ltr8.bind.DataBindContext context) {
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(Map.of(NOTES_ID, NOTES))))
+                .withDataBindContext(context));
+        tson.resolve(NOTES);
+        return tson;
+    }
+
+    /**
+     * <b>A dependent field lets the sender choose a type nothing binds, and the read throws {@code
+     * MissingBindingException}</b>, which {@link TsonHttpException#from} answers 500: a server-fault status a client
+     * produces at will by naming a type of the closure the application never mapped ([TSON-SCHEMA] §5.2 says nothing
+     * of a sender choosing the type). {@code TsonApiDescription} closes it at startup ({@code ChosenTypes}); this pins
+     * the raw read, so a library that refuses the choice as the sender's fault flips it.
+     */
+    @Test
+    void aDependentFieldsSiblingNamingATypeNothingBindsIsAMissingBinding() {
+        Tson tson = notes(TsonBindings.of(Map.of("typed_note", TypedNote.class, "point", Point.class)));
+        String header = "!!import:\"" + NOTES_ID + "\"\n";
+        TypedNote point = tson.objectReader().read(header
+                + "!typed_note { note_id: n  kind: point  payload: { x: 1  y: 2 } }", TypedNote.class);
+        assertEquals(new Point(1, 2), point.payload());
+
+        RuntimeException thrown = assertThrows(RuntimeException.class, () -> tson.objectReader().read(header
+                + "!typed_note { note_id: n  kind: secret  payload: { s: x } }", TypedNote.class));
+        assertInstanceOf(io.ltr8.tson.base.MissingBindingException.class, thrown,
+                "the chosen type is refused as the sender's now -- flip this and revisit ChosenTypes");
+        assertTrue(thrown.getMessage().startsWith("no bound Java class for 'secret': nothing in this bind context"
+                + " resolves that schema type name"), thrown.getMessage());
+        assertEquals(TsonHttpException.INTERNAL_SERVER_ERROR, TsonHttpException.from(thrown).status());
+    }
+
+    /**
+     * <b>Over the JSON encoding a free sibling is written before its dependent field</b> ([TSON-JSON] §6.1.6), so
+     * member order decides validity where RFC 8259 §4 calls an object an unordered collection: a client that sorts
+     * its keys writes {@code payload} before {@code kind} and is refused, {@code VALIDATION_ERROR} at {@code
+     * /payload}, a 400. The status is the spec's rule, kept; this pins it so a change of rule is seen.
+     */
+    @Test
+    void aJsonBodyWritingADependentFieldBeforeItsSiblingIsRefused() {
+        TsonHttpCodec json = new TsonHttpCodec(notes(TsonBindings.of(
+                Map.of("typed_note", TypedNote.class, "point", Point.class)))).acceptingJson();
+        java.util.function.Function<String, java.io.InputStream> body =
+                text -> new java.io.ByteArrayInputStream(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        assertEquals(new Point(1, 2), json.readObjectAs(body.apply(
+                "{\"note_id\":\"n\",\"kind\":\"point\",\"payload\":{\"x\":1,\"y\":2}}"),
+                "application/json", NOTES_ID, "typed_note", TypedNote.class).payload());
+
+        TsonHttpException sorted = assertThrows(TsonHttpException.class, () -> json.readObjectAs(body.apply(
+                "{\"note_id\":\"n\",\"payload\":{\"x\":1,\"y\":2},\"kind\":\"point\"}"),
+                "application/json", NOTES_ID, "typed_note", TypedNote.class));
+        assertEquals(TsonHttpException.BAD_REQUEST, sorted.status());
+        TsonProblemDiagnostic only = sorted.problem().errors().getFirst();
+        assertEquals(1, sorted.problem().errors().size(), () -> "" + sorted.problem().errors());
+        assertEquals(Diagnostic.Code.VALIDATION_ERROR, only.code());
+        assertEquals(java.util.Optional.of("/payload"), only.path());
+        assertTrue(only.message().startsWith("field 'payload' on 'typed_note' is written before 'kind', the sibling"
+                + " whose value names its type -- a sibling that is neither pinned nor a discriminator is written"
+                + " before the field that depends on it"), only.message());
+    }
+
+    /**
+     * <b>A mapped class the context cannot analyse is deferred as a missing binding</b>: a dependent field binds to
+     * {@code Object}, which a context binds only where it registers {@code Object} as an atom. Without it the bind
+     * registry prepares the schema clean and every read of the record throws {@code MissingBindingException}, a
+     * 500 per request, where the class the map names is a mismatch the startup step could refuse. {@link
+     * TsonBindings} registers the atom, so this project is not exposed; fails the day preparing the schema refuses
+     * the class.
+     */
+    @Test
+    void aMappedClassThatCannotBeAnalysedPreparesCleanAndFailsEachRead() {
+        Map<String, Class<?>> map = Map.of("typed_note", TypedNote.class, "point", Point.class);
+        Tson tson = notes(io.ltr8.bind.DataBindContext.builder().nameBinder(map::get)
+                .registerAtoms(AtomContext.hostTypes()).build());
+
+        assertDoesNotThrow(() -> tson.bindRegistry().get(NOTES_ID),
+                "preparing the schema refuses the class now -- delete UPSTREAM.md's entry and flip this");
+        RuntimeException thrown = assertThrows(RuntimeException.class, () -> tson.objectReader().read(
+                "!!import:\"" + NOTES_ID + "\"\n!typed_note { note_id: n  kind: int32  payload: 5 }", TypedNote.class));
+        assertInstanceOf(io.ltr8.tson.base.MissingBindingException.class, thrown);
+        assertTrue(thrown.getMessage().contains("which cannot be analysed: Failed to resolve: Unable to find a valid"
+                + " data conversion for class: class java.lang.Object"), thrown.getMessage());
+    }
+
+    // ── open: a record field's type through an accessor that throws on a dependent field ────────────────
+
+    /**
+     * <b>{@code RecordField.typeRef()} throws on a dependent field</b>, whose type is a {@link SiblingRef}: one fact
+     * of a schema that loaded clean, answered through an accessor that turns it into an {@code
+     * IllegalStateException} for a consumer that reads a schema it did not write. {@code type()} is the sealed
+     * {@code Reference} the field holds, and is what {@code RequestPlacement} and {@code ChosenTypes} match on. The
+     * contract wanted is no accessor that throws on a valid schema: the sealed reference alone, or {@code typeRef()}
+     * answering with an {@code Optional}. Fails the day the call returns, or stops compiling when the accessor changes.
+     */
+    @Test
+    void aDependentFieldsTypeRefThrowsWhereItsTypeIsASiblingRef() {
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(Map.of(NOTES_ID, NOTES)))));
+        tson.resolve(NOTES);
+        RecordField payload = ((RecordBody) tson.schemaRegistry().get(NOTES_ID).orElseThrow().schema().entries()
+                .get("typed_note")).fields().get("payload");
+
+        assertEquals("kind", assertInstanceOf(SiblingRef.class, payload.type()).field());
+        IllegalStateException thrown = assertThrows(IllegalStateException.class, payload::typeRef,
+                "typeRef() answers a dependent field now -- update UPSTREAM.md's entry and flip this");
+        assertTrue(thrown.getMessage().startsWith("a dependent field ('kind!') names no type of its own"),
+                thrown.getMessage());
+    }
+
+    // ── open: two diagnostics name internals, and one misses the fault ──────────────────────────────────
+
+    /** A protocol layer as {@code meta-service.tn} has it: exchanges, each naming its request type, under a name. */
+    private static final String EXCHANGES = meta("""
+              exchange      => { request?: meta.type_ref }
+              exchange_name => meta.identifier
+              protocol      => !meta.namespace { key_type: exchange_name  value_type: exchange }""");
+
+    /**
+     * <b>A sibling typed by an inline {@code meta.ref<exchange>} is refused naming the entry the application lifted
+     * to</b>, {@code reference_type_exchange_false_<hash>}, where the author wrote {@code meta.ref<exchange>}. The
+     * refusal is right (a reference over values names no type, [TSON-SCHEMA] §5.2 as proposed); the name in it is not
+     * one the author can find. {@code DependentEnvelopeProbe} measures the same over the orders protocol. The contract
+     * wanted is the reference as written, as the reader already names an application in data. Fails the day the
+     * message names {@code meta.ref<exchange>}.
+     */
+    @Test
+    void aSiblingTypedByAnInlineValueReferenceIsRefusedUnderAMintedName() {
+        String doc = governed("  by_exchange => { exchange: meta.ref<exchange>  body: exchange! }");
+
+        List<Diagnostic> problems = tson(EXCHANGES, doc).validateSchema(doc);
+
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), problems.stream().map(Diagnostic::code).toList(),
+                () -> "" + problems);
+        String message = problems.getFirst().message();
+        assertTrue(message.startsWith("'by_exchange': field 'body' takes its type from 'exchange', which is typed"
+                + " 'reference_type_exchange_false_"), message);
+        assertFalse(message.contains("'meta.ref<exchange>'"),
+                "the refusal names the reference as written now -- update UPSTREAM.md's entry and flip this");
+        assertTrue(message.contains("-- a sibling is typed by a reference whose values name types, meta.type_ref,"
+                + " a meta.ref<C> over a constructor, or a refinement of either"), message);
+    }
+
+    /**
+     * <b>An exchange's qualified name at a {@code meta.type_ref} slot is refused with every member of the closure
+     * and no word of the fault</b>: {@code orders.place_order} resolves, to a value of {@code exchange}, and a value
+     * names no type. The message lists the members, minted entries shown by their application ({@code [text; 1..]})
+     * among them, and {@code expected} repeats the list, so a diagnostic printed whole carries it twice. The contract
+     * wanted is the fault named ("names a value of 'exchange', not a type") and the list dropped or capped. Fails the
+     * day the message says the name is a value's, or stops repeating the list in {@code expected}.
+     */
+    @Test
+    void anExchangesNameAtATypeRefSlotIsRefusedWithTheClosureListedTwice() {
+        String doc = governed("""
+                  point   => { x: int32  y: int32 }
+                  orders  => !protocol { place_order => { request: point } }
+                  by_type => { request: meta.type_ref  body: request! }""");
+        Tson tson = tson(EXCHANGES, doc);
+        tson.resolve(doc);
+
+        List<Diagnostic> problems = tson.validate("!!import:\"" + API_ID + "\"\n"
+                + "!by_type { request: orders.place_order  body: { x: 1  y: 2 } }");
+
+        assertEquals(List.of(Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION), problems.stream().map(Diagnostic::code)
+                .toList(), () -> "" + problems);
+        Diagnostic refused = problems.getFirst();
+        assertEquals(java.util.Optional.of("/request"), refused.path());
+        String message = refused.message();
+        String opening = "'meta.type_ref': 'orders.place_order' is not a member of this kind -- expected the name of"
+                + " a type whose value IS-A 'meta.type', one of [";
+        assertTrue(message.startsWith(opening), message);
+        String listed = message.substring(opening.length() - 1);
+        assertTrue(listed.contains("[text; 1..]"), "a minted entry shown by its application: " + listed);
+        assertEquals("one of (" + listed.substring(1, listed.length() - 1) + ")", refused.expected(),
+                "expected no longer repeats the member list -- update UPSTREAM.md's entry");
+        assertFalse(message.contains("names a value") || message.contains("not a type"),
+                "the message names the fault now -- update UPSTREAM.md's entry and flip this");
     }
 }

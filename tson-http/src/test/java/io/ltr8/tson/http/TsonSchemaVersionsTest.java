@@ -11,7 +11,7 @@ import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonContentHash;
-import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
+import io.ltr8.tson.compiler.config.SchemaModelNameBinder;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -410,7 +410,7 @@ class TsonSchemaVersionsTest {
     @Test
     void oneBinderCannotServeTwoVersionsOfOneTypeName() {
         DataNameBinder binder = name -> "order".equals(name) ? OrderV1.class
-                : SchemaMetaNameBinder.INSTANCE.resolve(name);
+                : SchemaModelNameBinder.INSTANCE.resolve(name);
         DataBindContext context =
                 DataBindContext.builder().nameBinder(binder).registerAtoms(AtomContext.hostTypes()).build();
         Tson tson = Tson.of(ProcessorConfig.defaults()

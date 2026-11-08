@@ -13,6 +13,7 @@ import io.ltr8.tson.schema.meta.ValueEntry;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.Top;
 import io.ltr8.tson.schema.meta.TypeChain;
+import io.ltr8.tson.schema.meta.TypeRef;
 import io.ltr8.tson.http.api.RequestPlacement.Location;
 import org.junit.jupiter.api.Test;
 
@@ -62,6 +63,7 @@ class TsonApiDescriptionTest {
     static final String PROTOCOL = """
         !!id:"%s"
         !!import:"%s"
+        !!import:"https://tson.io/2026/39/m/meta.tn"
         !!import:"https://tson.io/2026/39/m/core.tn"
         !!import:"%s"
         !schema {
@@ -94,6 +96,19 @@ class TsonApiDescriptionTest {
 
           @doc:"A request that is not a record at all, which the placement cannot distribute."
           scalars => !protocol { by_text => { request: text } }
+
+          @doc:"A dependent field: payload is read against the type kind names, per instance."
+          typed_note => { note_id: text  kind: meta.type_ref  payload: kind! }
+          notes => !protocol { put_note         => { request: typed_note  response: order }
+                               @safe find_notes => { request: typed_note  response: order_page } }
+
+          @doc:"A dependent field whose sibling the sender cannot choose freely: pinned, and a discriminator."
+          pinned_note => { note_id: text  kind?: meta.type_ref = order  payload: kind! }
+          note_base   => abstract { kind: meta.type_ref =?  payload: kind! }
+          order_note  => note_base & { kind?: = order }
+          ref_note    => note_base & { kind?: = order_ref }
+          narrowed => !protocol { put_pinned => { request: pinned_note  response: order }
+                                  put_based  => { request: note_base    response: order } }
         }""".formatted(PROTOCOL_ID, TsonApiSchema.ID, ERR_ID);
 
     /**
@@ -128,6 +143,11 @@ class TsonApiDescriptionTest {
     }
 
     static Tson tson(String api) {
+        return tson(api, Map.of());
+    }
+
+    /** {@link #tson(String)} binding {@code application}'s classes beside the vocabulary's. */
+    static Tson tson(String api, Map<String, Class<?>> application) {
         Map<String, String> lib = new LinkedHashMap<>();
         lib.putAll(TsonApiSchema.publishedById());
         lib.put(TsonProblemSchema.ID, TsonProblemSchema.source());
@@ -136,7 +156,7 @@ class TsonApiDescriptionTest {
         lib.put(API_ID, api);
         return Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))
-                .withDataBindContext(TsonBindings.of(TsonApiSchema.bindings())));
+                .withDataBindContext(TsonBindings.of(TsonApiSchema.bindingsWith(application))));
     }
 
     /** Resolves the http document and reads its description; the resolver's verdict is asserted clean first. */
@@ -337,6 +357,120 @@ class TsonApiDescriptionTest {
             """))).getMessage();
 
         assertTrue(refused.contains("'text'") && refused.contains("not a record"), refused);
+    }
+
+    /**
+     * A dependent field's type is chosen per instance by its sibling, so it travels in the remainder body beside
+     * that sibling, the one place a single record holds both. Placed in the path, a header or the query, named as
+     * the whole body, or left to a remainder that goes to the query, it is refused; so is its sibling placed
+     * anywhere but the remainder body.
+     */
+    @Test
+    void aDependentFieldTravelsInTheRemainderBodyWithItsSibling() {
+        String exempt = "@not_bound:[ { exchange: notes.find_notes  reason: \"elsewhere\" } ]\n";
+        TsonApiDescription routes = routes(api("@binds:[notes]\n" + exempt
+                + "a => !http { \"/notes/{note_id}\" => { POST => !binding { exchange: notes.put_note } } }"));
+        RequestPlacement placement = routes.route(HttpVerb.POST, "/notes/{note_id}").orElseThrow().placement();
+        assertEquals(List.of("kind", "payload"), placement.at(Location.BODY));
+        assertEquals(List.of("note_id"), placement.at(Location.PATH));
+
+        String inPath = refusedPlacement(exempt,
+                "\"/notes/{payload}\" => { POST => !binding { exchange: notes.put_note } }");
+        assertTrue(inPath.contains("places 'payload' in the PATH, but 'payload: kind!' is a dependent field")
+                && inPath.contains("travels in the remainder body with 'kind'"), inPath);
+
+        String wholeBody = refusedPlacement(exempt,
+                "\"/notes\" => { POST => !binding { exchange: notes.put_note  body: payload } }");
+        assertTrue(wholeBody.contains("places 'payload' as the whole body"), wholeBody);
+
+        String sibling = refusedPlacement(exempt,
+                "\"/notes\" => { POST => !binding { exchange: notes.put_note  headers: { kind => \"X-Kind\" } } }");
+        assertTrue(sibling.contains("places 'kind', the sibling of 'payload', in the HEADER"), sibling);
+
+        String query = refusedPlacement("@not_bound:[ { exchange: notes.put_note  reason: \"elsewhere\" } ]\n",
+                "\"/notes\" => { GET => !binding { exchange: notes.find_notes } }");
+        assertTrue(query.contains("places 'payload' in the QUERY as the remainder"), query);
+    }
+
+    /** Bind targets for the dependent-field requests: a dependent field binds to {@code Object}. */
+    public record Order(String sku, int quantity) {
+    }
+
+    public record OrderRef(String id) {
+    }
+
+    public record TypedNote(String note_id, TypeRef kind, Object payload) {
+    }
+
+    public record PinnedNote(String note_id, TypeRef kind, Object payload) {
+    }
+
+    public sealed interface NoteBase permits OrderNote, RefNote {
+    }
+
+    public record OrderNote(TypeRef kind, Object payload) implements NoteBase {
+    }
+
+    public record RefNote(TypeRef kind, Object payload) implements NoteBase {
+    }
+
+    /** Resolves {@code api} under {@code application}'s bindings and reads its description. */
+    private static TsonApiDescription boundRoutes(String api, Map<String, Class<?>> application) {
+        Tson tson = tson(api, application);
+        List<Diagnostic> problems = tson.validateSchema(api);
+        assertEquals(List.of(), problems, () -> "" + problems);
+        return TsonApiSchema.describedBy(tson, API_ID);
+    }
+
+    /**
+     * A dependent field lets the sender name the type its value is read against, and in bind mode a named type no
+     * class binds is a 500 at the read -- a server-fault status the client chose. So a bound request record holding
+     * one loads only if every type the sender may name binds. A free {@code meta.type_ref} sibling admits the whole
+     * closure, the kernel's records among them, so it never does; a pinned sibling offers its pin, and a
+     * discriminator the pins of its subtypes, which the application binds or the description does not load.
+     */
+    @Test
+    void aBoundDependentFieldLoadsOnlyIfEveryTypeASenderMayNameBinds() {
+        Map<String, Class<?>> bound = new LinkedHashMap<>(Map.of("order", Order.class, "order_ref", OrderRef.class,
+                "typed_note", TypedNote.class, "pinned_note", PinnedNote.class, "note_base", NoteBase.class,
+                "order_note", OrderNote.class, "ref_note", RefNote.class));
+        String free = api("""
+              @binds:[notes]
+              @not_bound:[ { exchange: notes.find_notes  reason: "elsewhere" } ]
+              a => !http { "/notes/{note_id}" => { POST => !binding { exchange: notes.put_note } } }
+            """);
+        String refused = assertThrows(IllegalArgumentException.class, () -> boundRoutes(free, bound)).getMessage();
+        assertTrue(refused.contains("'POST /notes/{note_id}' takes 'typed_note', whose dependent field 'payload: kind!'"
+                + " is read against the type a sender names in 'kind', and it may name types this server cannot"
+                + " bind:"), refused);
+        assertTrue(refused.contains("(the kernel's vocabulary)") && refused.contains("pin 'kind'"), refused);
+        boundRoutes(free, Map.of("order", Order.class));                // unbound, read as a tree: not checked
+
+        String narrowed = api("""
+              @binds:[narrowed]
+              a => !http { "/pinned/{note_id}" => { POST => !binding { exchange: narrowed.put_pinned } }
+                           "/based"            => { POST => !binding { exchange: narrowed.put_based } } }
+            """);
+        boundRoutes(narrowed, bound);
+
+        Map<String, Class<?>> noRef = new LinkedHashMap<>(bound);
+        noRef.remove("order_ref");
+        String discriminated = assertThrows(IllegalArgumentException.class, () -> boundRoutes(narrowed, noRef))
+                .getMessage();
+        assertTrue(discriminated.contains("'POST /based' takes 'note_base'")
+                && discriminated.contains("bind: 'order_ref' (no class binds it) --"), discriminated);
+
+        Map<String, Class<?>> noOrder = new LinkedHashMap<>(bound);
+        noOrder.remove("order");
+        String pinned = assertThrows(IllegalArgumentException.class, () -> boundRoutes(narrowed, noOrder))
+                .getMessage();
+        assertTrue(pinned.contains("'POST /pinned/{note_id}' takes 'pinned_note'")
+                && pinned.contains("bind: 'order' (no class binds it) --"), pinned);
+    }
+
+    private static String refusedPlacement(String exempt, String path) {
+        return assertThrows(IllegalArgumentException.class, () -> routes(api(
+                "@binds:[notes]\n" + exempt + "a => !http { " + path + " }"))).getMessage();
     }
 
     /**
@@ -564,7 +698,7 @@ class TsonApiDescriptionTest {
         assertEquals(FieldRole.FIXED, fields.get("verb").role());
         assertEquals("POST", fields.get("verb").value().orElseThrow().text());
         assertEquals("/orders", fields.get("path").value().orElseThrow().text());
-        assertEquals("order", fields.get("request").type().name());
+        assertEquals("order", fields.get("request").typeRef().name());
 
         String bare = """
             !!import:"%s"

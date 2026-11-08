@@ -34,12 +34,18 @@ unless registered or reachable through the configured source. From a `Tson`:
 - `dataBindContext()` — the configured context with the kernel's vocabulary composed over its binder and asked first,
   so every kernel name binds to the schema model. It binds a schema's value entries and a data document's values
   alike (`design/binding.md`). `tson-json` given it whole binds nothing; `design/json-encoding.md` has the workaround.
+  The vocabulary is `SchemaModelNameBinder` (`compiler.config`), the bind context for the schema model's classes: it
+  answers only for the names the bundled schemas declare and refuses the rest, which is how the codec asks whether a
+  name is the kernel's own.
 - `resolve(schemaText)` / `validateSchema(schemaText)` — register a schema by its own `!!id`; the second collects
   rather than throws, and registers only a sound schema.
 - `validate(data)` — a data document, schemaless where it imports nothing. A document rooted `!schema` is refused as
   a diagnostic whose message blames Class 1 (`UPSTREAM.md`); use `validateSchema` for one.
 - `schemaRegistry()` — what is registered, by identity; the JSON reader is built `withSchemas(schemaRegistry())`.
-  `loader()` — the resolution core as an on-demand loader.
+  `loader()` — the resolution core as an on-demand `TsonCompiledSchemaLoader`. The core is
+  `TsonCompiledVocabularyRegistry`, which compiles each schema it loads to a `TsonCompiledVocabulary`: that schema's
+  compiled vocabulary, the readers a schema importing it reads a `!C { … }` body or an annotation value through, cached
+  per identity.
 - `processorPolicy()` / `limitsPolicy()` — the policy in force, which `TsonDeployment.profile` publishes.
 
 **Where a schema comes from is its own value.** `SchemaAccess.registeredOnly()` (nothing is fetchable — what an
@@ -74,8 +80,9 @@ fetching whatever it is handed. Never wire a naive fetcher in. The header is the
 directive inside a value is a parse error, refused before anything is fetched (`design/schema-sources.md`).
 
 **Concurrency — the load-bearing constraint for a server.** tson-java is not documented as thread-safe as
-a whole, and parts of it explicitly are not (`TsonCompiledMetaRegistry`: "`register`/`get` are
-`synchronized`, but `loadMeta` … are not"; `Lexer` and `TsonDataEmitter` are single-use, not thread-safe).
+a whole, and parts of it explicitly are not (`TsonCompiledVocabularyRegistry`: "`register`/`get` are
+`synchronized`, but `loadVocabulary`/`resolveLinked` deliberately are not"; `Lexer` and `TsonDataEmitter` are
+single-use, not thread-safe).
 What *is* built for cross-thread use is the post-compile read path — `CompiledReaders` holds its binding
 `volatile` precisely because the compile happens on one thread and reads happen on many. So the required
 shape is:

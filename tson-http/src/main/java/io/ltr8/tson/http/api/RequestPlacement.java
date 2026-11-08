@@ -4,6 +4,7 @@ import io.ltr8.tson.schema.meta.ArrayBody;
 import io.ltr8.tson.schema.meta.MapBody;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.RecordField;
+import io.ltr8.tson.schema.meta.SiblingRef;
 import io.ltr8.tson.schema.meta.TupleBody;
 import io.ltr8.tson.schema.meta.Top;
 import io.ltr8.tson.schema.meta.TypeRef;
@@ -29,6 +30,15 @@ import java.util.regex.Pattern;
  * scalar is needed is refused with the field and the entry named. An entry with no request admits no placement
  * at all, so a path segment on one is refused too.
  *
+ * <p><b>A dependent field ({@code payload: kind!}) travels in the body, as part of the remainder record, and its
+ * sibling travels with it.</b> Its type is chosen per instance by the value of {@code kind} in the same record
+ * ([TSON-SCHEMA] §5.2), so no type is known when the binding is read: the scalar check a path segment, a query
+ * parameter or a header needs has nothing to check, and a body that is the field alone ({@code body: payload})
+ * has no type to be read against. Only the remainder body is a record instance holding both fields, which is
+ * where the reader judges one against the other. So a dependent field placed in the path, the query or a header,
+ * named as {@code body}, or left to a remainder that goes to the query is refused, and so is its sibling placed
+ * anywhere but the remainder body. The refusal names the field, its sibling and where it was placed.
+ *
  * <p>A request that is not a record is refused where it is read rather than left to fail as an empty field set:
  * the whole mapping is a distribution of one record's fields, so {@code request: text} places nothing, and
  * silently placing nothing reads as a working endpoint that carries no data.
@@ -48,7 +58,7 @@ public record RequestPlacement(Map<String, Location> fields) {
         request.ifPresent(ref -> {
             Top type = entries.apply(ref.name());
             if (type == null || !(type instanceof RecordBody record)) {
-                throw new IllegalArgumentException("'" + name + "' takes '" + ref.name() + "', which is not a record"
+                throw new IllegalArgumentException("'" + name + "' takes '" + ref.text() + "', which is not a record"
                         + " -- a request is the record whose fields an endpoint distributes over the HTTP request,"
                         + " so an exchange taking one value declares a one-field record for it");
             }
@@ -74,6 +84,14 @@ public record RequestPlacement(Map<String, Location> fields) {
             }
             inRecordOrder.put(field, where);
         }
+        boolean remainderIsBody = !remainderIsQuery;
+        declared.forEach((field, declaration) -> {
+            if (declaration.type() instanceof SiblingRef sibling) {
+                requireInRemainderBody(name, field, sibling, field, inRecordOrder.get(field), placed, remainderIsBody);
+                requireInRemainderBody(name, field, sibling, sibling.field(), inRecordOrder.get(sibling.field()),
+                        placed, remainderIsBody);
+            }
+        });
         return new RequestPlacement(Collections.unmodifiableMap(inRecordOrder));
     }
 
@@ -94,6 +112,25 @@ public record RequestPlacement(Map<String, Location> fields) {
     }
 
     /**
+     * Refuses {@code placedField} -- the dependent field {@code dependent} or its sibling -- anywhere but the
+     * remainder body, the one place both arrive in one record instance.
+     */
+    private static void requireInRemainderBody(String entry, String dependent, SiblingRef sibling, String placedField,
+                                               Location where, Map<String, Location> placed, boolean remainderIsBody) {
+        boolean inRemainderBody = where == Location.BODY && remainderIsBody && !placed.containsKey(placedField);
+        if (inRemainderBody) {
+            return;
+        }
+        String how = where == Location.BODY ? "as the whole body"
+                : placed.containsKey(placedField) ? "in the " + where : "in the " + where + " as the remainder";
+        String which = placedField.equals(dependent) ? "'" + dependent + "'"
+                : "'" + placedField + "', the sibling of '" + dependent + "',";
+        throw new IllegalArgumentException("'" + entry + "' places " + which + " " + how + ", but '" + dependent
+                + ": " + sibling.text() + "' is a dependent field whose type its sibling names per instance -- it"
+                + " travels in the remainder body with '" + sibling.field() + "', where one record holds both");
+    }
+
+    /**
      * A URL segment carries exactly one scalar; a query parameter and a header may repeat, so either admits an
      * array of scalars as well -- {@code ?tag=a&tag=b} is ordinary HTTP, and refusing it would push a
      * multi-valued parameter into the body where no GET can carry it. A record, a map, a tuple, or an array of
@@ -101,7 +138,10 @@ public record RequestPlacement(Map<String, Location> fields) {
      */
     private static void requireScalar(String entry, String name, RecordField field, Location where,
                                       Function<String, Top> entries) {
-        Top type = entries.apply(field.type().name());
+        if (!(field.type() instanceof TypeRef reference)) {
+            return;                                     // a dependent field: requireInRemainderBody refuses it
+        }
+        Top type = entries.apply(reference.name());
         if (type == null) {
             return;                                     // a built-in: text, int32, a date -- scalar by construction
         }
@@ -116,7 +156,7 @@ public record RequestPlacement(Map<String, Location> fields) {
             return;
         }
         if (isContainer(type)) {
-            refuse(entry, name, where, "a " + field.type().name() + ", which is not a scalar");
+            refuse(entry, name, where, "a " + reference.text() + ", which is not a scalar");
         }
     }
 

@@ -21,6 +21,12 @@ import java.util.Objects;
  * <p>One context binds a schema's value entries and a data document's values alike, so a vocabulary a schema
  * imports belongs in the same map: {@code TsonApiSchema.bindingsWith} adds {@code meta-service.tn}'s records to an
  * application's.
+ *
+ * <p><b>{@code Object} is registered as an atom</b>, so a dependent field ({@code payload: kind!}, [TSON-SCHEMA]
+ * §5.2) binds to an {@code Object} component that receives whatever the type its sibling names reads to. Without it
+ * the class cannot be analysed, and the library defers that as a missing binding: the schema prepares clean and every
+ * read of the record is a 500. The cost is that any component erased to {@code Object} binds the same way rather than
+ * being refused; which types a sender may name there is held at startup by {@code TsonApiDescription}.
  */
 public final class TsonBindings {
 
@@ -55,6 +61,6 @@ public final class TsonBindings {
         if (profile != null) {
             builder.profile(profile);
         }
-        return builder.registerAtoms(AtomContext.hostTypes()).build();
+        return builder.registerAtoms(AtomContext.hostTypes()).registerAtom(Object.class).build();
     }
 }

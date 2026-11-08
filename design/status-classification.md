@@ -52,6 +52,10 @@ reading application, this deployment's own policy and budget, whoever was to ser
 | `SCHEMA_NOT_FOUND` | an origin or directory looked and found nothing at the reference | 400 |
 | `SCHEMA_TOO_LARGE` | the document exceeds this deployment's size cap | 400 |
 
+A type nothing binds is a 500 because the server chose the types it reads; a dependent field (`payload: kind!`), where
+the sender names the type, cannot reach it, since `TsonApiDescription` refuses at startup a bound request record whose
+sibling may name a type no class binds (`ChosenTypes`).
+
 **Not being a verdict does not settle the status**, and the fetch codes are where that shows. `verdict()` answers *was the
 document judged*; a status answers *who must act*. For a reference this deployment will not fetch, cannot find, or finds too
 large, the body went unchecked **and** the sender still holds the fix — so those are 400s. The spec says the first half
@@ -78,10 +82,9 @@ was blamed.
 nothing else needs fixing: every other fix ends in a resend, which retries the origin for free, while a bare retry
 of a body holding anything else the sender must change — a verdict, a refusal, a reference this deployment will
 not supply — reaches the same answer. So beside one of those a 502 or 504 is the wrong advice, and the answer is
-that problem's 4xx, the detail saying part of the body went unchecked. This reverses an older rule here ("a mixed
-failure is never blamed on the client"): the client *is* who must act first. `BIND_MISMATCH` and
-`NOT_IMPLEMENTED` keep their place above everything: an operator acts first, and a server fault answered 4xx would
-leave nothing to log. So the status answers what the CLI's exit code answers, and parts from its `outcome`
+that problem's 4xx, the detail saying part of the body went unchecked: the client *is* who must act first.
+`BIND_MISMATCH` and `NOT_IMPLEMENTED` keep their place above everything: an operator acts first, and a server fault
+answered 4xx would leave nothing to log. So the status answers what the CLI's exit code answers, and parts from its `outcome`
 exactly where the exit code does — a rejection beside a gap or a bind mismatch is a 500 or 501 here and
 `REJECTED` there, and `SCHEMA_NOT_FOUND` is a 400 here (exit 69, the sender most likely holds the fix) and
 `UNDETERMINED` there. Pinned by `TsonHttpCodecTest.aRejectionOutranksAnOriginsFailure` and

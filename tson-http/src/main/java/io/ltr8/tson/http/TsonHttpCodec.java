@@ -12,7 +12,7 @@ import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.compiler.TsonDocumentPeek;
 import io.ltr8.tson.compiler.TsonObjectWriter;
 import io.ltr8.tson.compiler.TsonTreeWriter;
-import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
+import io.ltr8.tson.compiler.config.SchemaModelNameBinder;
 import io.ltr8.tson.json.Json;
 import io.ltr8.tson.json.JsonObjectWriter;
 import io.ltr8.tson.json.tree.JsonValue;
@@ -632,7 +632,7 @@ public final class TsonHttpCodec {
 
     private static boolean isKernelVocabulary(String name) {
         try {
-            SchemaMetaNameBinder.INSTANCE.resolve(name);
+            SchemaModelNameBinder.INSTANCE.resolve(name);
             return true;
         } catch (DataBindException notVocabulary) {
             return false;

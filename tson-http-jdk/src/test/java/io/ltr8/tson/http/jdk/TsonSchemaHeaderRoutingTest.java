@@ -7,7 +7,7 @@ import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.source.SchemaSource;
-import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
+import io.ltr8.tson.compiler.config.SchemaModelNameBinder;
 import io.ltr8.tson.http.TsonSchemaHeader;
 import io.ltr8.tson.http.TsonSchemaVersions;
 import org.junit.jupiter.api.AfterEach;

@@ -27,8 +27,10 @@ set the HTTP problem types use).
 
 **Both are closed once per exchange by a wire schema derived from the protocol** -- `place_order_call =>
 call<new_order>`, `place_order_return => return<order, sku_not_found>`, a choice of errors where an exchange declares
-several, `return_plain` where it declares none. [`orders-wire-1.tn`](orders-wire-1.tn) is that schema for the orders
-protocol, written by hand to show what a generator emits. A packet is then `!place_order_call { … }`: a fully typed
+several, `return_plain` where it declares none. `call` and `return` are record templates, their own constructor
+(`meta.record_template`) that nothing is read or written against; each application is an ordinary closed record.
+[`orders-wire-1.tn`](orders-wire-1.tn) is that schema for the orders protocol, written by hand to show what a
+generator emits. A packet is then `!place_order_call { … }`: a fully typed
 document whose request the resolver checks against the protocol's own types, with `rpc.tn` importing no service's
 types. The wire schema is deterministic in the protocol, so it is generated, published at its own identity, and
 fetched like any other; `RpcProbe.theWireSchemaIsWhatTheProtocolDetermines` derives it from the protocol and
@@ -58,9 +60,21 @@ carries more for the same purpose.
 **Two things TSON has that they lack, and the packet leans on both.** Templates closed per exchange give a typed
 envelope with no per-service code: the packet is checked end to end by the resolver -- `quantity: two` in a call is
 an `int32` violation at `/request/order/quantity`, an error's fixed `status` is enforced, and where an exchange
-declares several errors the value carries the error's tag. A scope push at a `dynamic` slot would also type the
-payload, but the templates type it at the schema rather than by each document. And an exchange's address is a
+declares several errors the value carries the error's tag. And an exchange's address is a
 content-addressed identity -- versioned, unambiguous across every service a gateway fronts, with no registry.
+
+**Revision 39's dependent fields do not replace the per-exchange closure.** A record field typed `kind!` is read per
+instance against the type its sibling `kind` names, so one generic envelope, `call => { method: meta.ref<exchange>
+request?: method! }`, would type the request by the exchange the packet addresses. It is refused: a sibling must be a
+type reference over a constructor (`meta.type_ref`, a `meta.ref<C>`), and `meta.ref<exchange>` names values. What the
+form does reach is `{ request_type: meta.type_ref  request?: request_type! }`, a request typed by a type name the
+packet carries, which ties it to no exchange the address names; pinning `request_type` per exchange in a refinement is
+the template application spelled longer. `DependentEnvelopeProbe` measures both forms: the exchange-keyed envelope
+is a `SCHEMA_ERROR` at load, and the type-keyed one reads each body against the type it names, pointing a violation
+into the body and refusing an exchange's qualified name at the sibling. Typing a payload by a value's own member (an
+exchange's `request`) needs a projection through a value reference, which the revision does not have. Nor is a payload
+typed by a foreign schema pushed at the slot: that form is gone, and the revision proposes no external form in its
+place.
 
 ## Order of work
 

@@ -59,8 +59,9 @@ message).
 map nested in its document's root as an entry, `meta => !schema { … }`, which is how a library has a namespace of its
 own; `policy.tn` declares `policy => !schema { … }` the same way. `meta.ref<T>` is the one reference spelling: over a
 constructor it names the types built with it (`meta.ref<net.media_type_type>`), over any other type the values of it
-(`meta.ref<exchange>`), and `meta.type_ref` is the reference over `meta.type`. `media_type` and `uri_reference` come
-from `net.tn` through core, which is where `meta-service.tn` and `problem.tn` take them.
+(`meta.ref<exchange>`), and `meta.type_ref` is the reference over `meta.type`. Neither admits a sibling reference
+(`kind!`), which stands only at a record field's type, typed `meta.field_type_ref`. `media_type` and `uri_reference`
+come from `net.tn` through core, which is where `meta-service.tn` and `problem.tn` take them.
 
 ## Media type and file extension
 
@@ -99,7 +100,7 @@ rejects. It has caught every addition so far. Keep it.
 **Project-owned schema `!!id`** follows tson-java's convention with this repo's own group:
 `https://tson.io/2026/39/io/ltr8/http/<name>.tn` — `/2026/39` the spec revision, `io/ltr8` the publisher, `http`
 the subsystem, `<name>` the schema, and **no version in the name**. That covers `problem.tn`, `deployment.tn`,
-`meta-service.tn` and the experiment's meta layers. The demos' example application (`schemas.example.com/…/app/`)
+`meta-service.tn` and the experiments' schemas. The demos' example application (`schemas.example.com/…/app/`)
 is not project-owned and keeps its numbered names, deliberately: `order-1.tn` beside `order-2.tn` is what
 `TsonSchemaVersions` exists to route, an application that has published two versions.
 
@@ -129,8 +130,10 @@ the build is the check.
   bite: a default needs the name marked (`page?: int32 ~ 1`; `page: int32 ~ 1` is refused), and a pin on an
   unmarked name (`status: int32 = 404`) is a **marker** the document must write and is never injected — only
   `status?: int32 = 404` injects. A refinement cannot move a field from required to omissible, so a base whose
-  subtypes should inject a pin has to declare the name marked. Bound values cannot tell the three
-  optional-ish spellings apart; only a tree keeps whether `_` was written.
+  subtypes should inject a pin has to declare the name marked; and a restated field's type is the inherited one or a
+  type IS-A it ([TSON-SCHEMA] §5.7, judged at link), so `[int8]` does not restate `[int32]`, nor `int32` a choice
+  holding it. Bound values cannot tell the three optional-ish spellings apart; only a tree keeps whether `_` was
+  written.
 - **A `text` field accepts any token, including `42`, `true` and `2026-01-01`.** It rejects only what is
   not a token at all — an array, a record. Correct per spec, and it reliably reads as a bug: [TSON-DATA]
   §4 says base type resolution does not apply at a schema-typed position, and §7.1's "form is not meaning"

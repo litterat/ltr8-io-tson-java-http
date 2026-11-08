@@ -55,7 +55,9 @@ import java.util.function.Function;
  *       any type labels it; every other endpoint writes a TSON value, so it lists only media types a codec this
  *       library holds can write one in, {@code application/json} and {@code application/tson+json} beside {@code
  *       application/tson};</li>
- *   <li>no two endpoints share a verb and path, across every {@code http} the description holds.</li>
+ *   <li>no two endpoints share a verb and path, across every {@code http} the description holds;</li>
+ *   <li>a bound request record's dependent field lets a sender name only types this server binds
+ *       ({@link ChosenTypes}).</li>
  * </ul>
  *
  * @see TsonApiCoverage for holding a server to the routes
@@ -103,6 +105,10 @@ public final class TsonApiDescription {
                 routes.add(route);
             }
         });
+        for (Route route : routes) {
+            route.request().ifPresent(request ->
+                    ChosenTypes.requireBound(route.key(), request, entries::get, tson.dataBindContext()));
+        }
         return new TsonApiDescription(tson, schemaId, routes);
     }
 

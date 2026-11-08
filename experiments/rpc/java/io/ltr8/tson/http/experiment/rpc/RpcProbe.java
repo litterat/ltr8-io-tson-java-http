@@ -171,7 +171,7 @@ class RpcProbe {
         assertEquals(template, wire.applicationOf(entry).orElseThrow().name(), entry + " closes the wrong template");
         Map<String, String> fields = new LinkedHashMap<>();
         assertInstanceOf(RecordBody.class, closed).fields()
-                .forEach((name, field) -> fields.put(name, field.type().name()));
+                .forEach((name, field) -> fields.put(name, field.type().text()));
         return fields;
     }
 }

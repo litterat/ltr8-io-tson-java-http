@@ -8,7 +8,7 @@ import io.ltr8.tson.base.DiagnosticsReceiver;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.source.SchemaAccess;
-import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
+import io.ltr8.tson.compiler.config.SchemaModelNameBinder;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -52,7 +52,7 @@ class MapKeyPointerTest {
         Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(uri -> SCHEMA))
                 .withDataBindContext(DataBindContext.builder()
                         .nameBinder(DataNameBinder.ofMap(Map.of("point", Point.class, "tally", Tally.class))
-                                .orElse(SchemaMetaNameBinder.INSTANCE))
+                                .orElse(SchemaModelNameBinder.INSTANCE))
                         .registerAtoms(AtomContext.hostTypes()).build()));
         tson.resolve(SCHEMA);
         return tson;

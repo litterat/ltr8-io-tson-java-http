@@ -12,7 +12,7 @@ import io.ltr8.tson.base.SchemaFetchException;
 import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.compiler.TsonDiagnostics;
-import io.ltr8.tson.compiler.config.SchemaMetaNameBinder;
+import io.ltr8.tson.compiler.config.SchemaModelNameBinder;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,7 +71,7 @@ class TsonHttpCodecTest {
         // Object binding needs the schema type name mapped to a class; the class handed to readObject is the
         // expected result, not the mapping. Without this, `order` compiles fine and then has no reader.
         DataNameBinder binder = name -> "order".equals(name) ? Order.class
-                : SchemaMetaNameBinder.INSTANCE.resolve(name);
+                : SchemaModelNameBinder.INSTANCE.resolve(name);
         DataBindContext bind =
                 DataBindContext.builder().nameBinder(binder).registerAtoms(AtomContext.hostTypes()).build();
         Tson tson = Tson.of(ProcessorConfig.defaults()
