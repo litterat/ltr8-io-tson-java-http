@@ -45,7 +45,7 @@ responses, and serving and fetching schema documents over HTTP. It is a **consum
 it. The library is the sibling repo [ltr8-io-tson-java](https://github.com/litterat/ltr8-io-tson-java), checked out at
 `../ltr8-io-tson-java` and consumed as a Gradle included build (below). Destination remote: `https://github.com/litterat/`.
 
-**Built against Revision 39**, on the sibling's `r2026-39-proposal` branch; CI checks out the sibling's default branch.
+**Built against Revision 39**, as published on the sibling's `main`, which CI checks out.
 Every identity in this repo carries `/2026/39/` and `tson.version` names `0.39.0-SNAPSHOT`. The revision series changes
 without compatibility guarantees, so a `git pull` of the sibling can move the whole identity space;
 `design/schema-authoring.md` says what a bump touches.

@@ -1,8 +1,8 @@
 # One level: schemas without the meta ladder
 
-**Status: design direction, adopted under the rule below, and implemented by Revision 39** on the sibling's
-`r2026-39-proposal` branch: one namespace per schema, `!!import` the one directive, and a value entry an ordinary
-value. [`OneLevelProbe`](java/io/ltr8/tson/http/experiment/onelevel/OneLevelProbe.java) and
+**Status: design direction, adopted under the rule below, and implemented by Revision 39**, as published: one namespace per
+schema, `!!import` the one directive, and a value entry an ordinary value.
+[`OneLevelProbe`](java/io/ltr8/tson/http/experiment/onelevel/OneLevelProbe.java) and
 [`NamespaceTemplateProbe`](java/io/ltr8/tson/http/experiment/onelevel/NamespaceTemplateProbe.java) pin Revision 39's
 behaviour, and where an outcome quoted below differs, the probe is the record. Revision 39 also lands the reference
 atom (`meta.ref<T>` the one spelling, `meta.type_ref` and `meta.identifier_ref` its kernel instances), makes a namespace
