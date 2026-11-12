@@ -35,7 +35,8 @@ Each under ~20 KB and opening with its invariants. Pick by what you are about to
 Other root documents: `BACKLOG.md` (outstanding work), `UPSTREAM.md` (changes wanted in tson-java and spec feedback
 staged for its `SPEC-FEEDBACK.md`; holds only what is open), `SCHEMA-HEADER.md` (the design record behind [TSON-JSON]
 §3.5; cite §3.5 for the rules), `experiments/README.md` (design explorations kept compiling), and the consumer-facing
-`README.md`, which `ReadmeTest` executes against the real demo.
+`README.md`, which `ReadmeTest` executes against the real demo. `proposal/` holds proposals for this project's own
+vocabulary and layer, each measured by a probe and adopted or dropped by the user.
 
 ## Project
 
