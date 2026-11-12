@@ -1,8 +1,7 @@
 # Computation beside TSON, never inside it
 
 **Status: future-dreaming.** Ideas kept so they aren't lost, not explored and not planned. Nothing here constrains the
-one-level design ([`README.md`](README.md)) or the slots reading ([`SLOTS.md`](SLOTS.md)), and nothing in this project
-waits on it.
+schema system or the agent sketches ([`README.md`](README.md)), and nothing in this project waits on it.
 
 ## The idea
 
@@ -50,10 +49,10 @@ keeps the shape/value invariant: types still never depend on values, only contro
 | plans | straight-line; effects only through calls | one forward pass | `agent.tn`, `agent-vm.tn` |
 | programs | structured branching, loops, functions | a real type checker | a Truffle-style interpreter |
 
-**The middle layer has a use in this project.** The checks that stay in Java in the one-level design ("`query` names
-fields of the record at `request`", "a path template matches its PATH parameters") are total predicates. As total
-expressions in TSON, any implementation could run them. They would belong to the description reader's layer, not to
-schemas, so schemas stay free of computation.
+**The middle layer has a use in this project.** The checks `TsonApiDescription` and `RequestPlacement` make in Java
+when a service description is read ("`query` names fields of the record at `request`", "a path template matches its
+PATH parameters") are total predicates. As total expressions in TSON, any implementation could run them. They would
+belong to the description reader's layer, not to schemas, so schemas stay free of computation.
 
 ## What keeps it from leaking
 

@@ -8,9 +8,9 @@ probed for that reason and no other. **Do not build toward them, and do not let 
 move the descriptor.** Nothing in `experiments/rpc/`'s order of work waits on them.
 
 The protocol a plan calls is the orders example that ships as `tson-http`'s test fixture (`OrdersExamples`); each
-CALL an agent executes is one `call` of `rpc.tn` (`experiments/rpc/`). `experiments/one-level/` reads these layers as
-evidence for its own direction: a plan is a one-level document, and the VM's admission is the resolver's algorithm
-(`one-level/COMPUTATION.md`, `SLOTS.md`, and the agent section of its README).
+CALL an agent executes is one `call` of `rpc.tn` (`experiments/rpc/`). Two notes beside the sketches look further
+out: [`COMPUTATION.md`](COMPUTATION.md), on computation as a layer beside TSON, a plan being its straight-line middle;
+and [`IDENTITY.md`](IDENTITY.md), on whose plans they are and what an agent may do on someone's behalf.
 
 ## Three layers, as a compiler has
 
@@ -77,14 +77,26 @@ stand only where a slot is typed `meta.ref<exchange>`, never as a tag. A referen
 a value, is a name judged against the closure the document imports, and an application there is a validation error
 ([TSON-SCHEMA] §3.3.4): at `m: meta.ref<exchange>`, `orders.place_order` reads and `orders.no_such` is refused ("'orders'
 has no key 'no_such'"), and at `m: meta.ref<order>` a value entry `o1` reads while `order`, a type, is refused
-(`experiments/one-level/README.md`, "What a reference names").
+(`UpstreamGapsTest.aValueReferenceInADataDocumentIsJudged`).
 The URL namespace being hierarchical (`/orders/{id}/items` under `/orders/{id}`) while a resource key in
 `meta-service.tn` is a flat template is the same question, and one answer should serve both.
+
+**The pool's `type` and `method` entries are typed `name`** in `agent-vm.tn`, and want to be `meta.type_ref` and
+`meta.ref<exchange>`, judged on read as any reference in data is. The names they hold are the interface's, while a
+reference resolves in the governing schema's closure, and a field naming the scope for later fields (`interface: uri`)
+is a dependent pair no dependent field reaches, its sibling naming a schema rather than a type. The answer TSON has is
+to make the scope visible instead of computed: the plan governed by a derived schema importing both `agent.tn` and the
+interface, the pattern `experiments/rpc/orders-wire-1.tn` uses for RPC packets. That fits decision 1 if a plan names
+one protocol, and retires `interface: uri` as a field.
 
 ## Files
 
 - `agent.tn` -- the plan (AST); the plan-reading rules for the surface layer are in its header `@doc`.
 - `agent-vm.tn` -- the agent (bytecode) it compiles to: pool, slots, stack code; the execution model in its `@doc`.
+- `COMPUTATION.md` -- future-dreaming: computation as layers beside TSON, never inside it, and why LLMs change
+  programmable middleware.
+- `IDENTITY.md` -- future-dreaming: a research map of identity, delegation and attestation for agents acting on
+  someone's behalf, and where TSON's properties could help.
 - `java/…/experiment/agent/AgentProbe` -- both layers resolve; a plan of references and a compiled agent read; a
   constant names its own type, across schemas, and one naming none is refused; a malformed or mixed-script step name
   is refused by the `name` role; and an untagged instruction reads at the disjoint choice.

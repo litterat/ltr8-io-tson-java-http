@@ -7,7 +7,8 @@ there too.
 
 **Invariants**
 
-- Data can name a schema; only a schema can name a type. Anything whose job is to relate types is a schema.
+- A document that exports a namespace is a schema; a document with at most a local scope is data; any document may
+  refer to a type or a value in the namespace it names. Anything others refer into is a schema.
 - The description is a schema importing `meta-service.tn`, resolved at startup (`tson.resolve(API)` then
   `TsonApiSchema.describedBy`); an unsound description fails startup.
 - Naming is the resolver's (references, `type_ref`, `ref<…>`), except a reference inside an annotation's value,
@@ -26,22 +27,27 @@ there too.
   document written in it.
 - A business error composes `problem` and is written by the handler, not thrown.
 
-## Data can name a schema; only a schema can name a type
+## A schema exports a namespace; data refers into one
 
-Type-name resolution happens at type-ref positions in a **schema** document and nowhere else. A data document imports
-its schemas (`!!import`) and selects a type among them by its root's tag (a `!order` annotation), but a type name in a
-value position is a reference only where the slot is typed by a reference (`meta.type_ref`, a `meta.ref<…>`), where it
-is a name and never an application, and an inert token anywhere else; a directive inside a value is a parse error, so
-nothing switches scope mid-document.
+A data document declares nothing others resolve against. It imports its schemas (`!!import`), selects a type among
+them by its root's tag (a `!order` annotation), and may refer into the closure it imports: a name in a value position
+is a reference where the slot is typed by a reference (`meta.type_ref`, a `meta.ref<…>`), to a type or to a value
+alike, judged against that closure and never an application (`UpstreamGapsTest.aValueReferenceInADataDocumentIsJudged`),
+and an inert token anywhere else. A directive inside a value is a parse error, so nothing switches scope mid-document.
+
+So the line is not whether a document may name a type: **a document that exports a namespace is a schema, a document
+with at most a local scope is data, and any document may refer to a type or a value in the namespace it names.**
 
 Two consequences:
 
-- **Anything whose job is to relate types must be a schema**, not a data document governed by one. That is why the
-  service description is a schema importing `meta-service.tn`, and why a description written as *data* cannot check
-  anything it says.
-- **The recurring `(schema identity, root type name)` pair is the data layer's workaround for this.**
-  `describing(…)`, `readObjectAs(…)`, the `TSON-Schema` header plus a route-supplied type: two strings reassembled at
-  every call site, because the thing they name cannot be referenced.
+- **Anything others refer into must be a schema**, not a data document governed by one. That is why the service
+  description is a schema importing `meta-service.tn`: a binding's `ref<exchange>`, a claim in `@binds`, and
+  `TsonApiCoverage` naming an operation all refer into it. A description written as data could refer into a schema's
+  types, but nothing could refer into it. The deployment descriptor is data for the same reason turned round
+  (`design/deployment-descriptor.md`).
+- **The recurring `(schema identity, root type name)` pair is how the data layer names a type from outside any
+  document.** `describing(…)`, `readObjectAs(…)`, the `TSON-Schema` header plus a route-supplied type: two strings
+  reassembled at every call site, because a reference exists only inside a document that imports the closure.
 
 ## The layer: a protocol, and an http projection of it
 

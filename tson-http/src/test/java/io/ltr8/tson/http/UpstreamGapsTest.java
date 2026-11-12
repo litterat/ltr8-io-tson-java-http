@@ -17,11 +17,13 @@ import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.json.Json;
 import io.ltr8.tson.schema.meta.ChoiceBody;
 import io.ltr8.tson.schema.meta.FieldRole;
+import io.ltr8.tson.schema.meta.Namespace;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.RecordField;
 import io.ltr8.tson.schema.meta.Top;
 import io.ltr8.tson.schema.meta.TypeInline;
 import io.ltr8.tson.schema.meta.TypeRef;
+import io.ltr8.tson.schema.meta.ValueEntry;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -596,6 +598,8 @@ class UpstreamGapsTest {
                   methods  => !meta.namespace { key_type: meta.identifier  value_type: method }
                   iface    => { methods: methods }
                   ifaces   => !meta.namespace { key_type: meta.identifier  value_type: iface }
+                  plain    => { methods: {meta.identifier => method} }
+                  plains   => !meta.namespace { key_type: meta.identifier  value_type: plain }
                   binding  => { method: meta.ref<method> }
                   bindings => !meta.namespace { key_type: meta.identifier  value_type: binding }""");
         String interfaces =
@@ -609,6 +613,94 @@ class UpstreamGapsTest {
         assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), problems.stream().map(Diagnostic::code).toList(),
                 () -> "" + problems);
         assertTrue(problems.getFirst().message().contains("cancel"), problems.getFirst().message());
+
+        String plain = governed("  order => { sku: text }\n  p => !plains { orders => { methods: { place => {"
+                + " request: order } } } }\n  b => !bindings { q => { method: p.orders.methods.place } }");
+        List<Diagnostic> unentered = tson(metaSource, plain, "io.ltr8.tson.http.probe.field").validateSchema(plain);
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), unentered.stream().map(Diagnostic::code).toList(),
+                () -> "" + unentered);
+        assertTrue(unentered.getFirst().message().contains("a map that is no namespace, so it is not entered by name"),
+                unentered.getFirst().message());
+    }
+
+    // ── not a gap: a reference slot judges the name, whatever component it binds to ─────────────────
+
+    /**
+     * <b>A {@code meta.ref<T>} slot bound to a {@code String} component receives the qualified name as text, judged
+     * all the same.</b> {@code binding_name}'s {@code method} is the slot that {@link
+     * #aReferenceThroughARecordValuesFieldIsJudged} delivers as a {@code TypeRef}: here it arrives as {@code
+     * "orders.get"}, and a name reaching no entry is refused as there. This is the measured alternative to
+     * delivering a reference over values as a {@code TypeRef}, which {@code UPSTREAM.md}'s spec entry on the typing
+     * field's everyday name lives with. Pinned because a component other than {@code TypeRef} is how a consumer
+     * avoids that host today.
+     */
+    @Test
+    void aReferenceSlotBoundToAStringComponentIsJudged() {
+        String metaSource = meta("""
+                  method        => { request?: meta.type_ref }
+                  methods       => !meta.namespace { key_type: meta.identifier  value_type: method }
+                  binding_name  => { method: meta.ref<method> }
+                  binding_names => !meta.namespace { key_type: meta.identifier  value_type: binding_name }""");
+        String orders = "  order => { sku: text }\n  orders => !methods { get => { request: order } }";
+
+        String sound = governed(orders + "\n  b => !binding_names { one => { method: orders.get } }");
+        Tson tson = tson(metaSource, sound, "io.ltr8.tson.http.probe.field");
+        assertEquals(List.of(), tson.validateSchema(sound));
+        var entry = assertInstanceOf(ValueEntry.class,
+                tson.schemaRegistry().get(API_ID).orElseThrow().schema().entries().get("b"));
+        var bound = assertInstanceOf(io.ltr8.tson.http.probe.field.BindingName.class,
+                assertInstanceOf(Namespace.class, entry.value()).get("one"));
+        assertEquals("orders.get", bound.method());
+
+        String unsound = governed(orders + "\n  b => !binding_names { one => { method: nobody.get } }");
+        List<Diagnostic> problems = tson(metaSource, unsound, "io.ltr8.tson.http.probe.field").validateSchema(unsound);
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), problems.stream().map(Diagnostic::code).toList(),
+                () -> "" + problems);
+        assertTrue(problems.getFirst().message().contains("'nobody' is no entry of this schema or its imports"),
+                problems.getFirst().message());
+    }
+
+    // ── not a gap: a reference in a data document is judged ──────────────────────────────────────────
+
+    /**
+     * <b>In a data document a reference, to a type or to a value, is a name judged against the closure the document
+     * imports</b> ([TSON-SCHEMA] §3.3.4, §5.12). At {@code m: meta.ref<order>} the value entry {@code o1} reads, while
+     * an undeclared name and the type {@code order} are refused; at {@code m: meta.ref<exchange>} the exchange {@code
+     * orders.place_order} reads, reached through the namespace value by key, and a key the namespace does not hold is
+     * refused. {@link #EXCHANGES} supplies {@code exchange} and {@code protocol}. Pinned because an agent plan's
+     * {@code method} would be checked this way ({@code experiments/agent/}).
+     */
+    @Test
+    void aValueReferenceInADataDocumentIsJudged() {
+        String doc = governed("""
+                  order    => { sku: text }
+                  rpick    => { m: meta.ref<order> }
+                  o1       => !order { sku: "x" }
+                  orders   => !protocol { place_order => { request: order } }
+                  pick     => { m: meta.ref<exchange> }""");
+        Tson tson = tson(EXCHANGES, doc);
+        assertEquals(List.of(), tson.validateSchema(doc));
+        String data = "!!import:\"" + API_ID + "\"\n";
+
+        assertEquals(List.of(), tson.validate(data + "!rpick { m: o1 }"));
+        assertEquals(List.of(), tson.validate(data + "!pick { m: orders.place_order }"));
+
+        Diagnostic undeclared = onlyViolation(tson.validate(data + "!rpick { m: no_such }"));
+        assertEquals(Optional.of("/m"), undeclared.path());
+        assertTrue(undeclared.message().contains("'no_such' is no entry of this schema or its imports"),
+                undeclared.message());
+
+        String aType = onlyViolation(tson.validate(data + "!rpick { m: order }")).message();
+        assertTrue(aType.contains("this reference wants an 'order'") && aType.contains("which is no 'order'"), aType);
+
+        String noKey = onlyViolation(tson.validate(data + "!pick { m: orders.no_such }")).message();
+        assertTrue(noKey.contains("'orders' has no key 'no_such'"), noKey);
+    }
+
+    private static Diagnostic onlyViolation(List<Diagnostic> problems) {
+        assertEquals(List.of(Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION), problems.stream().map(Diagnostic::code)
+                .toList(), () -> "" + problems);
+        return problems.getFirst();
     }
 
     // ── decided upstream: an application at a kind slot in a value is named through a declaration ──

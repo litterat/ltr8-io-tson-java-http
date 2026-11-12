@@ -138,6 +138,12 @@ The four entries are in build order.
 - [ ] **Response headers an endpoint sets** — A `Location` on a 201, a cache directive on a safe GET: declared on the
   endpoint the way `headers` places request fields, so a conformance test can hold the server to them. Same constraints
   as the security scheme.
+- [ ] **A description's own refinement of `operation`** — Decide whether `meta-service.tn` and `TsonApiDescription`
+  admit an endpoint shape declared in the description itself (`paged_get => operation & { … }`, fixing what every
+  paged list shares, its endpoints then written `!paged_get { … }`). Without it a CRUD family is written out operation
+  by operation. Measure what the resolver does with such an entry, then decide whether the reader accepts an endpoint
+  whose type refines `operation` and what `TsonApiSchema.bindings()` binds it to. Same constraints as the security
+  scheme.
 
 ## Documentation
 

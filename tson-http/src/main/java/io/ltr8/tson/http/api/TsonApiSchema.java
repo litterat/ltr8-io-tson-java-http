@@ -33,9 +33,10 @@ import java.util.Map;
  *
  * <p><b>{@code order} there is a type reference, not a string, and {@code orders.place_order} is a reference to a
  * value</b> -- the protocol's entry, then the exchange's key. The compiler resolves both and refuses a name nothing
- * declares — which is the whole reason to describe a service at the schema layer. A description written as data can
- * name a schema but cannot hold a reference, so it carries bare names and every consumer needs its own resolver for
- * them — in every language that reads it.
+ * declares. A description is a schema because others refer into it: a data document may hold references into the
+ * schemas it imports, but nothing can refer into a data document, so a binding or a coverage claim naming an exchange
+ * of one would carry bare names, and every consumer would need its own resolver for them, in every language that
+ * reads it.
  *
  * <h2>Wiring</h2>
  *

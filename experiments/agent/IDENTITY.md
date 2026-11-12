@@ -40,8 +40,8 @@ The most directly useful area, because "an agent acting on behalf of a person" *
   - Biscuit: attenuable tokens whose caveats are Datalog;
   - UCAN: delegation chains between decentralised identifiers;
   - ZCAP-LD: the W3C Credentials Community Group's authorization capabilities.
-- **Object-capability foundations:** Mark Miller's "Robust Composition" and the E language. Newspeak (`SLOTS.md`) is the
-  same principle in a language.
+- **Object-capability foundations:** Mark Miller's "Robust Composition" and the E language. Newspeak is the same
+  principle in a language.
 
 ### Decentralised identity and credentials
 
@@ -148,13 +148,12 @@ grant => {
 }
 ```
 
-This lands on threads from the one-level note:
-- A data document holding a checked type name works today (a field typed by a type reference, measured by `OneLevelProbe`).
-- A reference to a method can't be typed in a schema that governs data at all: `ref` is declared only in a
-  kernel-governed schema, so `ref<method>` there is an unresolved name (`OneLevelProbe`). A reference in a data
-  document is a Revision 39 question.
-- A grant names methods in the *interface's* namespace, not its own schema's: the same scope problem as an agent plan,
-  with the same candidate answers (a derived governing schema, or a §7.8 scope push).
+What the grant's references need:
+- A reference in a data document, to a type or to a value, is a name judged against the closure the document imports,
+  so `method` and `request` are checked on read (`UpstreamGapsTest.aValueReferenceInADataDocumentIsJudged`).
+- A grant names methods in the *interface's* namespace, not its own schema's: the same scope problem as an agent plan
+  (`README.md`, "Open questions"), with the same answer, a derived governing schema importing both the delegation
+  schema and the interface.
 
 ### 5. Policy comes from the deployment, never the request
 

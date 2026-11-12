@@ -13,7 +13,6 @@ probe tests join `tson-http`'s test source set from `<experiment>/java`.
 - **The agent sketches (`agent/`) are future work.** They press on the protocol layer from a direction that is not
   HTTP so the layer is shaped by more than one consumer. Do not build toward them, and do not let a decision that is
   the agent's alone move the descriptor.
-- `one-level/` is the design direction the library implements; its probes pin Revision 40's behaviour.
 - `cognitive-load/` is a protocol for measuring the syntax against LLMs, not code; it has no probe, and its item banks
   are the existing probes and the bundled schemas. Do not run it from a session on your own initiative; it costs
   model calls the user decides on.

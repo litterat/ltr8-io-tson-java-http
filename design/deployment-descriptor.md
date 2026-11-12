@@ -33,9 +33,11 @@ document that imports `deployment.tn` and whose root is `!deployment { … }`. T
   property of the merged namespace rather than of any one schema.
 - **Not an API description**, which is a schema here and inherits both, and which would put policy in a
   contract — raising a token policy would mean publishing a new description.
-- **It is data**, and that line is the useful one: an API description *must* be a schema because
-  `request: order` is a type reference; a descriptor references no types, so nothing about it needs a
-  namespace.
+- **It is data**, for those reasons and not for what it references: as a schema it would certify itself and be
+  immutable at its identity, and nothing may name it, so it exports no namespace for anything to refer into
+  (`design/service-description.md`). An API description is a schema because others refer into it. A descriptor
+  referring *into* the API, a `meta.ref<operation>` for what this instance serves or `TsonApiCoverage.notServedHere`
+  exemptions as configuration, is data referring into a namespace it imports: possible, and not done.
 
 **Two rules, enforced by shape rather than by documentation.** `TsonDeployment.read` takes source text — there
 is no search path and there must not be one, because a runtime that loads whatever it finds lets a container

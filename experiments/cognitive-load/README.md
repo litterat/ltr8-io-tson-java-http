@@ -11,11 +11,10 @@ Given the schema syntax as written, which features does an LLM read and write co
 it effort, and which does it get wrong? It is asked with no proposal in hand: a proposal made before the baseline risks
 improving a feature that was never hard while the one that was goes unmeasured.
 
-The question is live now because of the one-level work in tson-java (the sibling repo, `../ltr8-io-tson-java`;
-[`../one-level/README.md`](../one-level/README.md) here). Under one level a schema's map is
-`schema => !namespace { key_type: type_name  value_type: declared }`, so every entry is a value of some declared type,
-and the author is still deciding the syntax that writes it. A measured profile is evidence for that decision; a list
-of suspicions is not.
+The question is live because the schema syntax is still moving in tson-java (the sibling repo,
+`../ltr8-io-tson-java`). A schema's map is `schema => !namespace { key_type: type_name  value_type: declared }`, so
+every entry is a value of some declared type, and the author is still deciding the syntax that writes it. A measured
+profile is evidence for that decision; a list of suspicions is not.
 
 ## The feature inventory
 
@@ -68,10 +67,9 @@ Phase 3 tool and is not built until a hypothesis calls for it.
   what was stripped is the rubric for comprehension items and the target for the unknowns experiment.
 - **The item banks already exist.** The bundled schemas, `meta-kernel.tn`, `meta.tn`, `core.tn` and `net.tn` in the
   sibling's `spec/m/`, and this repo's `meta-service.tn`, `deployment.tn`, `problem.tn` and the orders fixtures under
-  `tson-http/src/test/resources/io/ltr8/tson/http/api/orders/`. The pinned diagnostics in `UpstreamGapsTest`,
-  [`OneLevelProbe`](../one-level/java/io/ltr8/tson/http/experiment/onelevel/OneLevelProbe.java) and
-  `MediaTypeKindProbeTest` (`tson-http/src/test/java/io/ltr8/tson/http/probe/`): each is a planted error with its
-  exact message. Each item is tagged with the inventory features it exercises.
+  `tson-http/src/test/resources/io/ltr8/tson/http/api/orders/`. The pinned diagnostics in `UpstreamGapsTest` and
+  `MediaTypeKindProbeTest` (`tson-http/src/test/java/io/ltr8/tson/http/`): each is a planted error with its exact
+  message. Each item is tagged with the inventory features it exercises.
 - **Phase 3 variants are printed mechanically from one resolved form** (the sibling's `spec/m/*-resolved.tn` for the
   bundled layers), so they are semantically identical and a difference in outcome is one the syntax made. No prompt
   names a variant or says which is in use today.
@@ -242,7 +240,7 @@ on the line: the signature of a convention or an order dependence.
 4. Only then build the variant printer, rendering each variant from resolved output.
 5. Phase 3: rerun the experiments the hypotheses call for, over the variants.
 
-Nothing here changes the spec. The result feeds the one-level decision in tson-java, and `UPSTREAM.md` as spec
+Nothing here changes the spec. The result feeds tson-java's syntax decisions, and `UPSTREAM.md` as spec
 feedback if the spec should hear it.
 
 ## What this experiment is not

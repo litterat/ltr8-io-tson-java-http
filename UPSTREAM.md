@@ -487,6 +487,32 @@ facet picking among a closed vocabulary (§5.5, §5.7), would then want a word o
 not delivered as a `TypeRef`.
 
 **What this project does meanwhile:** writes "sibling" for the typing field only, and lives with `TypeRef` on an
-exchange's name.
+exchange's name. A `String` component on such a slot receives the qualified name as text, judged all the same, which
+is the measured alternative to the `TypeRef` host (`UpstreamGapsTest.aReferenceSlotBoundToAStringComponentIsJudged`).
 
 **Priority:** low.
+
+### To file: who may declare constructors
+
+**Sections:** [TSON-SCHEMA] §4.1 (a constructor is an entry that is `meta.top` or IS-A it; a namespace type is an
+instance of `meta.namespace`), §3.3.1 and §5.5 (a document may apply a constructor it declares itself), §11.2 and
+§11.3 (`!!import` as the channel that selects a vocabulary), §11.5 (resource limits for schemas).
+
+**Kind:** gap. Any schema may declare constructors and namespace types and apply them, the kernel being reachable
+through `core.tn`'s own imports. So a schema named by a request body can extend the vocabulary it is read in, and a
+reviewer reading its header no longer learns that it cannot redefine what a record or a namespace means: whether a
+schema defines vocabulary is visible only entry by entry. §11 gives a deployment ways to bound which schemas it reads
+at all (an import allowlist, hash pins, limits) and none to say what kind of schema it admits: nothing lets a
+deployment accept ordinary type declarations only and refuse a schema that composes `meta.top`.
+
+**A suggestion:** a header-level opt-in. A document that declares a constructor says so once in its header, so that
+explicitness survives at document grain and a deployment policy has something to refuse. Two spellings: a directive
+of its own, or a direct `!!import` of the kernel, if imports were made non-transitive for visibility, so that
+`meta.top` is in a schema's namespace only when its header imports the kernel. The policy that refuses one belongs
+beside §11.5's limits, in the processor's policy rather than in any schema.
+
+**What this project does meanwhile:** bounds which schemas are fetched at all: `allowHost` and `mapHost` restrict an
+`!!import` URL in a request body to approved hosts, and `SchemaSource.ofMap` serves a fixed set
+(`design/schema-sources.md`). A schema those admit may declare constructors.
+
+**Priority:** medium.

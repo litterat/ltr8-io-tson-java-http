@@ -23,10 +23,11 @@
   in a contract -- raising a token policy would mean publishing a new description, which is the friction that
   gets a control switched off.
 
-  THIS DOCUMENT IS DATA, NOT A SCHEMA, and the line is worth stating. An API description must be a schema
-  because `request: order` is a type reference the resolver resolves; that is the whole argument for it. A
-  descriptor references no types: a level is an enum member, a host is text, and a schema host is an
-  identity, which is a URI. Nothing here needs a namespace, so nothing here needs to be a schema.
+  THIS DOCUMENT IS DATA, NOT A SCHEMA, and the line is worth stating. A document that exports a namespace is
+  a schema, and any document may refer to a type or a value in the namespace it imports. An API description
+  is a schema because others refer into it. A descriptor configures one instance, may move without minting
+  an identity, and exports nothing, since nothing may name it (rule 2 below), so nothing here needs to be a
+  schema.
 
   Two rules hold, or self-certification returns by the back door:
 
