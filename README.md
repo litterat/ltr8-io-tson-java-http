@@ -32,15 +32,15 @@ Each starts the same server and prints what to try. The same commands work again
 
 ```
 $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binary '
-  !!import:"https://schemas.example.com/2026/39/app/order-1.tn"
+  !!import:"https://schemas.example.com/2026/40/app/order-1.tn"
   !order { sku: "ABC-1"  quantity: 3 }'
-!!import:"https://schemas.example.com/2026/39/app/order-1.tn"
+!!import:"https://schemas.example.com/2026/40/app/order-1.tn"
 !order { sku: "ABC-1" quantity: 6 }
 
 $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binary '
-  !!import:"https://schemas.example.com/2026/39/app/order-1.tn"
+  !!import:"https://schemas.example.com/2026/40/app/order-1.tn"
   !order { }'
-!!import:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
+!!import:"https://tson.io/2026/40/io/ltr8/http/problem.tn"
 !problem { status: 400 title: "Invalid TSON document" detail: "the request body has 2 problems" errors: [
   { path: "/sku" schema_pointer: "/order/sku" code: "FIELD_REQUIRED"
     message: "missing required field \'sku\' for \'order\'" data_position: "3:8:70" ... }
@@ -62,7 +62,7 @@ $ curl -s localhost:8080/orders -H 'Content-Type: application/json' -H 'Accept: 
 ### Problem types
 
 `type` is the member to match on: it is stable where `title` is prose. Every failure this project produces
-carries one of these, under `https://ltr8.io/2026/39/http/problems/` — the implementation's own host, kept apart
+carries one of these, under `https://ltr8.io/2026/40/http/problems/` — the implementation's own host, kept apart
 from the specification's `tson.io`, where schema identities live.
 
 | `type` | Status | Raised when |
@@ -94,8 +94,8 @@ Both replies name the schema that governs them, and the server publishes both do
 validate what it received with nothing told out of band:
 
 ```
-$ curl -s localhost:8080/2026/39/io/ltr8/http/problem.tn | head -1
-!!id:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
+$ curl -s localhost:8080/2026/40/io/ltr8/http/problem.tn | head -1
+!!id:"https://tson.io/2026/40/io/ltr8/http/problem.tn"
 ```
 
 ```java
@@ -130,7 +130,7 @@ difference in code, message or source position between the two is a finding.
 The request is itself a TSON document, governed by a schema the service publishes:
 
 ```
-!!import:"https://schemas.example.com/2026/39/app/validate-1.tn"
+!!import:"https://schemas.example.com/2026/40/app/validate-1.tn"
 !validation_request {
   schema: "!!id:\"...the schema under test...\" ..."
   data:   "!!import:\"...that same identity...\" ..."
@@ -162,15 +162,14 @@ sets a token policy, which you can see refuse a document the default would accep
 
 ```
 $ curl -s localhost:8080/.well-known/tson-deployment
-!!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
+!!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
 !acceptance_profile { name: "validator-demo" policy: {
   identifier_policy: { level: "HIGHLY_RESTRICTIVE" per_segment: false skeleton_distinctness: true permitting: [] }
   token_policy: { level: "SINGLE_SCRIPT" permitting: [] }
   unicode_data_version: "16.0" limits: { max_depth: 64 max_token_length: 1048576 max_text_length: 1048576
     max_numeric_literal_length: 4096 max_binary_size: 16777216 max_document_size: 16777216 max_elements: 1048576
     max_entries: 1048576 max_fields: 65536 max_annotations: 64 max_values: 16777216 max_import_closure: 64
-    max_schema_entries: 65536 max_alias_chain: 64 max_supertype_chain: 64 max_materialisation_depth: 64
-    max_wait_depth: 64 } } }
+    max_schema_entries: 65536 max_alias_chain: 64 max_supertype_chain: 64 max_wait_depth: 64 } } }
 ```
 
 That is the policy **in force**, in `policy.tn`'s `policy.processor` shape — the shape the descriptor states its

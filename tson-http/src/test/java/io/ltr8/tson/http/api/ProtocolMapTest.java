@@ -27,18 +27,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ProtocolMapTest {
 
-    static final String PROBE_META_ID = "https://tson.io/2026/39/io/ltr8/http/meta-probe.tn";
-    static final String DOC_ID = "https://schemas.example.com/2026/39/app/probe-1.tn";
+    static final String PROBE_META_ID = "https://tson.io/2026/40/io/ltr8/http/meta-probe.tn";
+    static final String DOC_ID = "https://schemas.example.com/2026/40/app/probe-1.tn";
 
     /** The layer, served under a probe identity. */
     static final String META = TsonApiSchema.source()
-            .replace("https://tson.io/2026/39/io/ltr8/http/meta-service.tn", PROBE_META_ID);
+            .replace("https://tson.io/2026/40/io/ltr8/http/meta-service.tn", PROBE_META_ID);
 
     static String doc(String entries) {
         return """
         !!id:"%s"
         !!import:"%s"
-        !!import:"https://tson.io/2026/39/m/core.tn"
+        !!import:"https://tson.io/2026/40/m/core.tn"
         !schema {
           order     => { sku: text  quantity: int32 }
           order_ref => { id: text }

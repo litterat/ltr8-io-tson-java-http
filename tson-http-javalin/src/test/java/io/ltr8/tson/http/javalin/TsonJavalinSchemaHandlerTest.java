@@ -27,12 +27,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TsonJavalinSchemaHandlerTest {
 
     private static final String HOST = "schemas.example.com";
-    private static final String SCHEMA_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
-    private static final String SCHEMA_PATH = "/2026/39/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://schemas.example.com/2026/40/app/order-1.tn";
+    private static final String SCHEMA_PATH = "/2026/40/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
                 order => { sku: text  quantity: int32 }
             }""";
@@ -66,7 +66,7 @@ class TsonJavalinSchemaHandlerTest {
 
     @Test
     void servesEachSchemaAtItsOwnIdentityPath() throws Exception {
-        assertEquals(Set.of(SCHEMA_PATH, "/2026/39/io/ltr8/http/problem.tn"),
+        assertEquals(Set.of(SCHEMA_PATH, "/2026/40/io/ltr8/http/problem.tn"),
                 TsonSchemaHandler.of(SCHEMA, TsonProblemSchema.source()).paths());
 
         HttpResponse<String> response = get(SCHEMA_PATH);
@@ -89,7 +89,7 @@ class TsonJavalinSchemaHandlerTest {
 
     @Test
     void anUnknownPathIs404() throws Exception {
-        assertEquals(404, get("/2026/39/app/nope-1.tn").statusCode());
+        assertEquals(404, get("/2026/40/app/nope-1.tn").statusCode());
     }
 
     /**

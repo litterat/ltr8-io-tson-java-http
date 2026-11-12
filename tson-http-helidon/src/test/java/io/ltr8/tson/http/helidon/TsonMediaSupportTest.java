@@ -39,11 +39,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonMediaSupportTest {
 
-    private static final String SCHEMA_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://schemas.example.com/2026/40/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
                 order => { sku: text  quantity: int32 }
             }""";

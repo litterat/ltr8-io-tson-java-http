@@ -63,7 +63,7 @@ field on a response through `TsonSchemaHeader.format`, a List of one.
 - `TsonHttpCodec` — reads bodies (tree or bound, self-describing or against a stated schema and type),
   writes bodies, and gates on `Content-Type` and `Accept`.
 - `TsonHttpException` — status plus diagnostics. **`from(RuntimeException)` is the entire status policy**;
-  put nothing status-shaped anywhere else. Problem `type` URIs live under `https://ltr8.io/2026/39/http/problems/`
+  put nothing status-shaped anywhere else. Problem `type` URIs live under `https://ltr8.io/2026/40/http/problems/`
   — `ltr8.io` is the implementation resource, kept apart from the specification's `tson.io`, where schema
   identities live. The revision rides in it too, so a spec bump moves it with everything else.
 - `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem.tn` — the error body, its schema,

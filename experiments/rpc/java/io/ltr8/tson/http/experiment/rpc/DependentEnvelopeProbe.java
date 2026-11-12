@@ -27,13 +27,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class DependentEnvelopeProbe {
 
-    static final String ENVELOPE_ID = "https://schemas.example.com/2026/39/experiment/rpc/envelope-1.tn";
+    static final String ENVELOPE_ID = "https://schemas.example.com/2026/40/experiment/rpc/envelope-1.tn";
 
     static String envelope(String declarations) {
         return """
                 !!id:"%s"
-                !!import:"https://tson.io/2026/39/m/meta.tn"
-                !!import:"https://tson.io/2026/39/m/core.tn"
+                !!import:"https://tson.io/2026/40/m/meta.tn"
+                !!import:"https://tson.io/2026/40/m/core.tn"
                 !!import:"%s"
                 !!import:"%s"
                 !schema {
@@ -59,7 +59,7 @@ class DependentEnvelopeProbe {
 
     /**
      * A reference to values is no sibling: {@code meta.ref<exchange>} holds exchanges, and an exchange names no type.
-     * The refusal names the sibling by its synthetic entry rather than as written.
+     * The refusal names the sibling's type as written, {@code meta.ref<exchange>}.
      */
     @Test
     void anEnvelopeKeyedByTheExchangeIsRefused() {
@@ -67,7 +67,7 @@ class DependentEnvelopeProbe {
         Diagnostic refused = only(tson(schema).validateSchema(schema));
         assertEquals(Diagnostic.Code.SCHEMA_ERROR, refused.code());
         assertTrue(refused.message().contains("'by_exchange': field 'body' takes its type from 'exchange', which is"
-                + " typed 'reference_type_exchange_false_"), refused.message());
+                + " typed 'meta.ref<exchange>'"), refused.message());
         assertTrue(refused.message().contains("a sibling is typed by a reference whose values name types,"
                 + " meta.type_ref, a meta.ref<C> over a constructor, or a refinement of either"), refused.message());
     }

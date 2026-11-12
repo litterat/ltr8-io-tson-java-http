@@ -41,7 +41,7 @@ class TsonHttpSchemaSourceIntegrationTest {
 
     private static final String SCHEMA = """
             !!id:"%s"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
                 order => { sku: text  quantity: int32 }
             }""";
@@ -49,7 +49,7 @@ class TsonHttpSchemaSourceIntegrationTest {
     /** A schema with a field a body might try to name a foreign schema at. */
     private static final String ENVELOPE = """
             !!id:"%s"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
                 envelope => { attachment: text  note?: text }
             }""";

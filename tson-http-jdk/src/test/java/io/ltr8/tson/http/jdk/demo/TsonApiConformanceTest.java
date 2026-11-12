@@ -152,8 +152,8 @@ class TsonApiConformanceTest {
         assertEquals("schema_ref", getSchema.request().orElseThrow().name());
         assertEquals(Map.of("schemaPath", RequestPlacement.Location.PATH), getSchema.placement().fields());
 
-        assertResponseMatches(getSchema, get("/2026/39/app/order-1.tn"), 200);
-        assertResponseMatches(getSchema, get("/2026/39/app/nope-1.tn"), 404);
+        assertResponseMatches(getSchema, get("/2026/40/app/order-1.tn"), 200);
+        assertResponseMatches(getSchema, get("/2026/40/app/nope-1.tn"), 404);
     }
 
     /** The description is served at its own identity's path, by the catalog like every other schema. */

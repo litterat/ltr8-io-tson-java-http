@@ -33,17 +33,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonSchemaHeaderRoutingTest {
 
-    private static final String V1_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
-    private static final String V2_ID = "https://schemas.example.com/2026/39/app/order-2.tn";
+    private static final String V1_ID = "https://schemas.example.com/2026/40/app/order-1.tn";
+    private static final String V2_ID = "https://schemas.example.com/2026/40/app/order-2.tn";
 
     private static final String V1 = """
-            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema { order => { sku: text  quantity: int32 } }""";
 
     private static final String V2 = """
-            !!id:"https://schemas.example.com/2026/39/app/order-2.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/order-2.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema { order => { sku: text  quantity: int32  currency: text } }""";
 
     private static final SchemaSource SOURCE = SchemaSource.ofMap(Map.of(V1_ID, V1, V2_ID, V2));

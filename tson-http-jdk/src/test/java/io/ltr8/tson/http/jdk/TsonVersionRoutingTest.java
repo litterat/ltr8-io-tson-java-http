@@ -32,25 +32,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonVersionRoutingTest {
 
-    private static final String V1_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
-    private static final String V2_ID = "https://schemas.example.com/2026/39/app/order-2.tn";
+    private static final String V1_ID = "https://schemas.example.com/2026/40/app/order-1.tn";
+    private static final String V2_ID = "https://schemas.example.com/2026/40/app/order-2.tn";
 
     private static final String V1 = """
-            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema { order => { sku: text  quantity: int32 } }""";
 
     private static final String V2 = """
-            !!id:"https://schemas.example.com/2026/39/app/order-2.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/order-2.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema { order => { sku: text  quantity: int32  currency: text } }""";
 
     /** A schema a body imports beside its version: never a version itself. */
-    private static final String MONEY_ID = "https://schemas.example.com/2026/39/app/money.tn";
+    private static final String MONEY_ID = "https://schemas.example.com/2026/40/app/money.tn";
 
     private static final String MONEY = """
-            !!id:"https://schemas.example.com/2026/39/app/money.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/money.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema { amount => { value: int32  currency: text } }""";
 
     private static final SchemaSource SOURCE = SchemaSource.ofMap(Map.of(V1_ID, V1, V2_ID, V2, MONEY_ID, MONEY));
@@ -154,7 +154,7 @@ class TsonVersionRoutingTest {
     @Test
     void anUnservedVersionIs400() throws Exception {
         HttpResponse<String> response =
-                post(order("https://schemas.example.com/2026/39/app/order-3.tn", "{ sku: \"A\" quantity: 1 }"));
+                post(order("https://schemas.example.com/2026/40/app/order-3.tn", "{ sku: \"A\" quantity: 1 }"));
         assertEquals(400, response.statusCode());
         assertTrue(response.body().contains("order-3"), response.body());
         assertTrue(response.body().contains("order-1"), "and names what it does serve: " + response.body());
@@ -199,7 +199,7 @@ class TsonVersionRoutingTest {
     /** Both schemas are published, so a client can fetch whichever version governs it. */
     @Test
     void bothVersionsArePublished() throws Exception {
-        for (String path : new String[] {"/2026/39/app/order-1.tn", "/2026/39/app/order-2.tn"}) {
+        for (String path : new String[] {"/2026/40/app/order-1.tn", "/2026/40/app/order-2.tn"}) {
             HttpResponse<String> response = client.send(
                     HttpRequest.newBuilder(URI.create(base + path)).GET().build(),
                     HttpResponse.BodyHandlers.ofString());

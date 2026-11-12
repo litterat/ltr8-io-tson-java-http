@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The agent's two resolved layers -- {@code agent.tn}, the plan a surface grammar reads to, and
- * {@code agent-vm.tn}, the agent it compiles to -- resolve and read, up to one gap.
+ * {@code agent-vm.tn}, the agent it compiles to -- resolve and read.
  *
  * <p>Read here: a plan whose arguments are references only ({@code arg} recursing through {@code record} to a
  * {@code selector}); a compiled agent whose pool holds names, a type and a method, and whose {@code code} mixes
@@ -35,8 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class AgentProbe {
 
-    static final String PLAN_ID = "https://tson.io/2026/39/io/ltr8/http/agent.tn";
-    static final String AGENT_ID = "https://tson.io/2026/39/io/ltr8/http/agent-vm.tn";
+    static final String PLAN_ID = "https://tson.io/2026/40/io/ltr8/http/agent.tn";
+    static final String AGENT_ID = "https://tson.io/2026/40/io/ltr8/http/agent-vm.tn";
     static final String ORDERS_ID = OrdersExamples.id("orders-1.tn");
     static final String ORDER_TYPES_ID = OrdersExamples.id("orders-types-1.tn");
 
@@ -88,8 +88,8 @@ class AgentProbe {
     }
 
     /**
-     * A compiled agent: names, a type and a method in the pool; mnemonics beside labelled operands. Tagged,
-     * because the reader does not yet admit an untagged value at a disjoint choice -- pinned below.
+     * A compiled agent: names, a type and a method in the pool; mnemonics beside labelled operands, each written
+     * with its tag here. The same instructions read untagged, {@link #anUntaggedInstructionReadsAtADisjointChoice}.
      */
     @Test
     void aCompiledAgentReads() {
@@ -114,23 +114,23 @@ class AgentProbe {
     }
 
     /**
-     * <b>Open, upstream:</b> {@code instruction} is declared {@code @disjoint}, the resolver accepts the assertion
-     * (an enum beside a record: string class beside brace class), and §5.4 lets a disjoint choice be read
-     * tag-free -- but the reader still demands the tag. The gap is specific: {@code (text | integer)} IS read
-     * untagged, so tag-free dispatch exists; it is the <em>enum</em> variant it does not cover -- {@code (flag |
-     * rec)} refuses an untagged {@code A} exactly as {@code instruction} refuses a bare {@code RET}. So the VM's
-     * "two discrimination classes, so the choice is tag-free" is true of the schema and not yet of the
-     * implementation. Written to fail the day it is.
+     * <b>An untagged instruction reads at a disjoint choice.</b> {@code instruction} is declared {@code @disjoint}
+     * (an enum beside a record: string class beside brace class), and [TSON-SCHEMA] §5.4 reads a disjoint choice
+     * tag-free, an enum variant included, so a bare {@code RET} and an untagged {@code { call: … }} each select
+     * their variant by their form. The VM's "two discrimination classes, so the choice is tag-free" holds of the
+     * implementation as of the schema.
      */
     @Test
-    void anUntaggedInstructionIsStillRefusedAtADisjointChoice() {
+    void anUntaggedInstructionReadsAtADisjointChoice() {
         String agent = """
             !!import:"%s"
             !agent { version: 2  interface: "%s"  pool: [ { method: get_order } ]  max_stack: 1  slots: 0
                      code: [ { call: { method: 0 } }  RET ] }""".formatted(AGENT_ID, ORDERS_ID);
-        List<Diagnostic> problems = tson().validate(agent);
-        assertTrue(problems.stream().anyMatch(d -> d.message().contains("'instruction' is a choice")
-                && d.message().contains("requires an explicit type annotation")), () -> "" + problems);
+        assertEquals(List.of(), tson().validate(agent));
+
+        TsonValue value = tson().treeReader().read(agent);
+        assertEquals("RET", value.at("/code/1").asString().orElseThrow());
+        assertEquals(0, value.at("/code/0/call/method").asInt().orElseThrow());
     }
 
     /**

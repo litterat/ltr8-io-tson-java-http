@@ -28,11 +28,11 @@ there too.
 
 ## Data can name a schema; only a schema can name a type
 
-Type-name resolution happens at type-ref positions in a **schema** document and nowhere else. A data document
-imports its schemas (`!!import`) and selects a type among them by its root's tag (a `!order` annotation), but a type
-name in a value position is a reference only where the slot is typed by a reference (`meta.type_ref`, a
-`meta.ref<…>`), and an inert token anywhere else; a directive inside a value is a parse error, so nothing switches
-scope mid-document.
+Type-name resolution happens at type-ref positions in a **schema** document and nowhere else. A data document imports
+its schemas (`!!import`) and selects a type among them by its root's tag (a `!order` annotation), but a type name in a
+value position is a reference only where the slot is typed by a reference (`meta.type_ref`, a `meta.ref<…>`), where it
+is a name and never an application, and an inert token anywhere else; a directive inside a value is a parse error, so
+nothing switches scope mid-document.
 
 Two consequences:
 
@@ -132,8 +132,8 @@ startup failure rather than a published contract no client can act on:
   (`RequestPlacement`): a `{segment}` binds the field of that name, `query` and `headers` name fields, `body` names one
   field carried unwrapped, and the remainder is the body, or the query for a GET or HEAD; a field in the path, query or
   a header is a scalar (an array of scalars in a query or header, which may repeat). A dependent field (`payload:
-  kind!`, a `SiblingRef` in `RecordField.type()`'s sealed `Reference`) travels in the remainder body with its sibling,
-  the one place a record instance holds both;
+  kind!`, a `TypeInline` holding a `DependentBody` in `RecordField.type()`, its sibling's name in
+  `RecordField.sibling()`) travels in the remainder body with its sibling, the one place a record instance holds both;
 - a bound request record holding a dependent field loads only if every type a sender may name in its sibling binds
   (`ChosenTypes`): a free `meta.type_ref` sibling admits the kernel's records and never does, while a pinned sibling
   or a discriminator over bound subtypes does;
@@ -220,10 +220,12 @@ the second and concluding `@doc` is dropped looks exactly like a library bug
 in for it: `"/orders" => { POST => … }` for `{ endpoints: { POST => … } }`. A second required field withdraws the
 positional form, and every document written in it stops parsing, so a new field there is optional or a new type.
 
-**A templated projection is applied by name.** An endpoint is no entry, so a template holds a whole `!http` value:
-`fetching => <T> !http { "/orders/{id}" => { … response: T … } }` declares, and `orders => fetching<order>` resolves to
-the namespace value with the argument substituted ([TSON-SCHEMA] §8.2), which `TsonApiDescription` finds by what the
-entry is (`UpstreamGapsTest.aTemplatedHttpProjectionIsAppliedByName`).
+**A projection is a value of its own, never a template's application.** An endpoint is no entry, so the one thing a
+template could hold is a whole `!http` value, and a template's body is a record body ([TSON-SCHEMA] §5.10):
+`fetching => <T> !http { "/orders/{id}" => { … response: T … } }` is refused at its declaration, the diagnostic naming
+the remedy, one value per instantiation (`UpstreamGapsTest.aTemplateOverAnHttpValueIsRefused`). Each projection is
+written as an `!http` value of its own, and `TsonApiDescription` finds every one by what the entry is, a value of the
+namespace type `http`, never by its name.
 
 **Deliberately absent**, each a decision: security schemes, response headers, links, callbacks, examples, tags,
 servers, more than one success response, custom and WebDAV verbs (`http_verb` is a closed enum), and a declaration of
@@ -238,7 +240,7 @@ document, a media type it lists), one at a business error's fixed status that er
 `problem`.
 
 **What builds on the protocol, and is not built.** `experiments/rpc/` is its wire form, `call` and `return` as
-templates closed per exchange, next in the order of work and outside `tson-http` once it lands. `experiments/agent/`, a
+templates applied per exchange, next in the order of work and outside `tson-http` once it lands. `experiments/agent/`, a
 plan of calls, is **future work** kept so a consumer that is not HTTP shapes the layer: do not build toward it, and do
 not let a decision that is the agent's alone move the layer.
 

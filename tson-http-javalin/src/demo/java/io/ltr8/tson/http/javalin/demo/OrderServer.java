@@ -37,7 +37,7 @@ import java.util.Optional;
 public final class OrderServer {
 
     /** The identity of the order schema. It names a host; where it is served is separate. */
-    public static final String SCHEMA_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
+    public static final String SCHEMA_ID = "https://schemas.example.com/2026/40/app/order-1.tn";
 
     /**
      * The schema this server governs orders by, and the business errors it answers with.
@@ -61,7 +61,7 @@ public final class OrderServer {
      * order} and {@code orders.place_order} are resolved when this schema loads, so a description
      * naming a type or an exchange nothing declares does not start this server.
      */
-    public static final String API_ID = "https://schemas.example.com/2026/39/app/orders-api-1.tn";
+    public static final String API_ID = "https://schemas.example.com/2026/40/app/orders-api-1.tn";
 
     public static final String API = schema("orders-api-1.tn");
 

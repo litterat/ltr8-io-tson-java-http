@@ -1,6 +1,6 @@
-!!id:"https://schemas.example.com/2026/39/app/validate-1.tn"
-!!import:"https://tson.io/2026/39/m/core.tn"
-!!import:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
+!!id:"https://schemas.example.com/2026/40/app/validate-1.tn"
+!!import:"https://tson.io/2026/40/m/core.tn"
+!!import:"https://tson.io/2026/40/io/ltr8/http/problem.tn"
 @doc:"""
   The validator demo's own envelope: a schema and a document go in, the diagnostics come back.
 

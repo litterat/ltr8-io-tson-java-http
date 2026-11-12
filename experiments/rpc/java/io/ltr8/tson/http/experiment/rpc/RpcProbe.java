@@ -29,17 +29,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * exchange by a wire schema ({@code orders-wire-1.tn}), so that a packet is a fully typed document. The protocol is
  * {@code tson-http}'s own {@link OrdersExamples}.
  *
- * <p>Measured: both schemas resolve, a choice of errors included as a template argument; a packet's request is
- * checked against the protocol's own types ({@code quantity: two} is an {@code int32} violation at
- * {@code /request/order/quantity}); an error arm carries the declared error with its status pin enforced, and
- * where an exchange declares several the value takes the error's tag; a return has exactly one outcome; the
- * envelope reads, {@code deadline} as a duration; and the wire schema is what the protocol determines. Nothing
- * here needs a scope push: the templates type the payload at the schema, so no packet names its own.
+ * <p>Measured: both schemas resolve, each template argument a declared name (a choice of errors is declared under
+ * a name before it is passed); a packet's request is checked against the protocol's own types ({@code quantity:
+ * two} is an {@code int32} violation at {@code /request/order/quantity}); an error arm carries the declared error
+ * with its status pin enforced, and where an exchange declares several the value takes the error's tag; a return
+ * has exactly one outcome; the envelope reads, {@code deadline} as a duration; and the wire schema is what the
+ * protocol determines. Nothing here needs a scope push: the templates type the payload at the schema, so no packet
+ * names its own.
  */
 class RpcProbe {
 
-    static final String RPC_ID = "https://tson.io/2026/39/io/ltr8/http/rpc.tn";
-    static final String WIRE_ID = "https://schemas.example.com/2026/39/experiment/rpc/orders-wire-1.tn";
+    static final String RPC_ID = "https://tson.io/2026/40/io/ltr8/http/rpc.tn";
+    static final String WIRE_ID = "https://schemas.example.com/2026/40/experiment/rpc/orders-wire-1.tn";
     static final String ORDERS_ID = OrdersExamples.id("orders-1.tn");
 
     static String read(String file) {
@@ -102,7 +103,7 @@ class RpcProbe {
                 "!place_order_return { id: c1  response: { sku: A-100  quantity: 4 } }")));
         assertEquals(List.of(), tson.validate(packet("""
             !place_order_return { id: c1
-              error: { type: "https://ltr8.io/2026/39/http/problems/sku-not-found"  title: "No such SKU"
+              error: { type: "https://ltr8.io/2026/40/http/problems/sku-not-found"  title: "No such SKU"
                        status: 404  sku: A-100  errors: [] } }""")));
 
         List<Diagnostic> wrongStatus = tson.validate(packet(

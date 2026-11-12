@@ -18,7 +18,7 @@ publishes at `/.well-known/tson-deployment`. Current form only.
 
 **The third artifact kind**, beside a schema (what a document must be) and an API description (what an
 endpoint offers): how *one instance* is configured. [TSON-DATA] §8.2 says no document may name, import or otherwise
-select the policy it is judged under, and the spec bundles `policy.tn` (`https://tson.io/2026/39/m/policy.tn`, which
+select the policy it is judged under, and the spec bundles `policy.tn` (`https://tson.io/2026/40/m/policy.tn`, which
 imports `meta.tn` alone) as the policy's vocabulary. Its entries are members of a schema map `policy` nested in its root
 (`policy => !schema { … }`), so each is written by path: `policy.restriction_level`, `policy.script_policy`,
 `policy.identifier_policy`, `policy.limit`, `policy.limits`, and `policy.processor`, the shape a deployment writes its

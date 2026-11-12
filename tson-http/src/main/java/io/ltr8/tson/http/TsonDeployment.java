@@ -53,7 +53,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
                              @Field("schema_hosts") List<String> schemaHosts) {
 
     /** The schema a descriptor names. Published like any other, unlike the descriptors it governs. */
-    public static final String ID = "https://tson.io/2026/39/io/ltr8/http/deployment.tn";
+    public static final String ID = "https://tson.io/2026/40/io/ltr8/http/deployment.tn";
 
     private static final String SOURCE = readResource("/deployment.tn");
 
@@ -180,7 +180,6 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
                              @Field("max_schema_entries") long maxSchemaEntries,
                              @Field("max_alias_chain") long maxAliasChain,
                              @Field("max_supertype_chain") long maxSupertypeChain,
-                             @Field("max_materialisation_depth") long maxMaterialisationDepth,
                              @Field("max_wait_depth") long maxWaitDepth) {
 
             /** {@code limits} as this record, every value as the library holds it. */
@@ -189,7 +188,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
                         limits.maxNumericLiteralLength(), limits.maxBinarySize(), limits.maxDocumentSize(),
                         limits.maxElements(), limits.maxEntries(), limits.maxFields(), limits.maxAnnotations(),
                         limits.maxValues(), limits.maxImportClosure(), limits.maxSchemaEntries(), limits.maxAliasChain(),
-                        limits.maxSupertypeChain(), limits.maxMaterialisationDepth(), limits.maxWaitDepth());
+                        limits.maxSupertypeChain(), limits.maxWaitDepth());
             }
 
             /**
@@ -203,7 +202,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
                         capped(maxNumericLiteralLength), maxBinarySize, maxDocumentSize, capped(maxElements),
                         capped(maxEntries), capped(maxFields), capped(maxAnnotations), capped(maxValues),
                         capped(maxImportClosure), capped(maxSchemaEntries), capped(maxAliasChain),
-                        capped(maxSupertypeChain), capped(maxMaterialisationDepth), capped(maxWaitDepth));
+                        capped(maxSupertypeChain), capped(maxWaitDepth));
             }
 
             private static int capped(long limit) {

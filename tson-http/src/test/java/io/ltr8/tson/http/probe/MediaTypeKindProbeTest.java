@@ -40,11 +40,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class MediaTypeKindProbeTest {
 
-    static final String META = "https://tson.io/2026/39/m/meta.tn";
-    static final String CORE = "https://tson.io/2026/39/m/core.tn";
-    static final String NET = "https://tson.io/2026/39/m/net.tn";
-    static final String LAYER_ID = "https://schemas.example.com/2026/39/media/layer-1.tn";
-    static final String ID = "https://schemas.example.com/2026/39/media/s-1.tn";
+    static final String META = "https://tson.io/2026/40/m/meta.tn";
+    static final String CORE = "https://tson.io/2026/40/m/core.tn";
+    static final String NET = "https://tson.io/2026/40/m/net.tn";
+    static final String LAYER_ID = "https://schemas.example.com/2026/40/media/layer-1.tn";
+    static final String ID = "https://schemas.example.com/2026/40/media/s-1.tn";
 
     /** RFC 9110's token, twice: the pattern {@code meta-service.tn}'s own {@code media_type} used. */
     static final String TOKEN = "[!#$%&'*+.^_`|~0-9A-Za-z-]+";
@@ -212,6 +212,11 @@ class MediaTypeKindProbeTest {
      * the {@link TypeRef} {@code media_type}, and so does {@code host}: the kind cannot narrow to media types. A
      * record's name is refused as no atom, a name the closure does not declare as no type, and the literal {@code
      * "application/json"} as no type name.
+     *
+     * <p>The literal's refusal names the token through the parser event's {@code toString}, a Java record's rendering
+     * carrying a zero position ({@code TokenEvent[text=application/json, …, position=Position[line=0, …]]}), rather
+     * than as the token written. Asserted here by the fragments either side of it, so a fix to that rendering does not
+     * fail this test.
      */
     @Test
     void aKernelKindHoldsATypeNameAndRefusesAMediaTypeValue() {
@@ -238,11 +243,10 @@ class MediaTypeKindProbeTest {
         Diagnostic problem = only(tson(ATOM_KIND_LAYER, literal, KindEp.class).validateSchema(literal));
         assertEquals(Diagnostic.Code.SCHEMA_ERROR, problem.code());
         assertTrue(problem.message().startsWith("'x': the body is no value of the type 'eps' -- at /one/media_types/0: "
-                + "expected a type's name, found TokenEvent[text=application/json, form=SINGLE_LINE_QUOTED"),
-                problem.message());
+                + "expected a type's name, found "), problem.message());
         assertTrue(problem.message().endsWith("-- a position typed by a kind holds the name of a type, one bare "
-                + "token; to name an application here, declare an alias for it (order_box => box<order>) and write "
-                + "its name"), problem.message());
+                + "token; to name an application here, declare it under a name (order_box => box<order>) and write "
+                + "that name"), problem.message());
     }
 
     /** A schema importing core, typing one field by the kind and one by the type. */

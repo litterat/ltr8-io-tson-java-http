@@ -5,7 +5,7 @@ touches, and the schema-language rules that read like bugs when they bite. Curre
 
 **Invariants**
 
-- Project-owned `!!id`: `https://tson.io/2026/39/io/ltr8/http/<name>.tn`, no version in the name. The demos' example
+- Project-owned `!!id`: `https://tson.io/2026/40/io/ltr8/http/<name>.tn`, no version in the name. The demos' example
   application keeps numbered names on purpose.
 - A header is `!!id`, then `!!import`s; a schema's root is `!schema { … }`. A data document imports its schemas and its
   root names its type. `!!meta` and `!!schema` are parse errors.
@@ -26,8 +26,8 @@ touches, and the schema-language rules that read like bugs when they bite. Curre
 of `!!import`s, and a document is a schema exactly when its root is tagged `!schema`:
 
 ```
-!!id:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
-!!import:"https://tson.io/2026/39/m/core.tn"
+!!id:"https://tson.io/2026/40/io/ltr8/http/problem.tn"
+!!import:"https://tson.io/2026/40/m/core.tn"
 !schema {
   problem => { … }
 }
@@ -43,7 +43,7 @@ level: any schema may declare a constructor or a namespace type, and an import c
 entries, so `text` there is an unresolved reference with no word about where `text` lives (`UPSTREAM.md` carries the
 message).
 
-**The bundled documents** live under `https://tson.io/2026/39/m/`:
+**The bundled documents** live under `https://tson.io/2026/40/m/`:
 
 | Document | Imports | Its root |
 |---|---|---|
@@ -57,11 +57,12 @@ message).
 `meta.identifier_ref`, `meta.ref<T>`, `!meta.namespace { key_type: K  value_type: V }`, `!unicode.text_type { … }`,
 `!numeric.integer_type { … }`, `numeric.count` and `net.media_type_type` by path. A path's first segment is a schema
 map nested in its document's root as an entry, `meta => !schema { … }`, which is how a library has a namespace of its
-own; `policy.tn` declares `policy => !schema { … }` the same way. `meta.ref<T>` is the one reference spelling: over a
-constructor it names the types built with it (`meta.ref<net.media_type_type>`), over any other type the values of it
-(`meta.ref<exchange>`), and `meta.type_ref` is the reference over `meta.type`. Neither admits a sibling reference
-(`kind!`), which stands only at a record field's type, typed `meta.field_type_ref`. `media_type` and `uri_reference`
-come from `net.tn` through core, which is where `meta-service.tn` and `problem.tn` take them.
+own; `policy.tn` declares `policy => !schema { … }` the same way. `meta.ref<T>` is the one reference spelling, sugar
+for the construction `!meta.ref { of: T }`: over a constructor it names the types built with it
+(`meta.ref<net.media_type_type>`), over any other type the values of it (`meta.ref<exchange>`), and `meta.type_ref` is
+the reference over `meta.type`. `kind!` is no reference and no value: it is the schema grammar's sugar for a dependent
+type written in place, `{ of: !meta.dependent { on: kind } }`, and stands only at a record field's type. `media_type`
+and `uri_reference` come from `net.tn` through core, which is where `meta-service.tn` and `problem.tn` take them.
 
 ## Media type and file extension
 
@@ -98,7 +99,7 @@ upstream revision adding a code is otherwise invisible here until an error body 
 rejects. It has caught every addition so far. Keep it.
 
 **Project-owned schema `!!id`** follows tson-java's convention with this repo's own group:
-`https://tson.io/2026/39/io/ltr8/http/<name>.tn` — `/2026/39` the spec revision, `io/ltr8` the publisher, `http`
+`https://tson.io/2026/40/io/ltr8/http/<name>.tn` — `/2026/40` the spec revision, `io/ltr8` the publisher, `http`
 the subsystem, `<name>` the schema, and **no version in the name**. That covers `problem.tn`, `deployment.tn`,
 `meta-service.tn` and the experiments' schemas. The demos' example application (`schemas.example.com/…/app/`)
 is not project-owned and keeps its numbered names, deliberately: `order-1.tn` beside `order-2.tn` is what
@@ -131,8 +132,10 @@ the build is the check.
   unmarked name (`status: int32 = 404`) is a **marker** the document must write and is never injected — only
   `status?: int32 = 404` injects. A refinement cannot move a field from required to omissible, so a base whose
   subtypes should inject a pin has to declare the name marked; and a restated field's type is the inherited one or a
-  type IS-A it ([TSON-SCHEMA] §5.7, judged at link), so `[int8]` does not restate `[int32]`, nor `int32` a choice
-  holding it. Bound values cannot tell the three optional-ish spellings apart; only a tree keeps whether `_` was
+  type IS-A it ([TSON-SCHEMA] §5.7, judged at link), so `int32` does not restate a choice holding it. A type written
+  in place is IS-A nothing but itself and narrows only to an equal one, so `[int8]` does not restate `[int32]`; and a
+  name never restates as its construction or the reverse: over `text_list => [text]`, a field `tags: text_list` is not
+  restated `tags: [text]`. Bound values cannot tell the three optional-ish spellings apart; only a tree keeps whether `_` was
   written.
 - **A `text` field accepts any token, including `42`, `true` and `2026-01-01`.** It rejects only what is
   not a token at all — an array, a record. Correct per spec, and it reliably reads as a bug: [TSON-DATA]

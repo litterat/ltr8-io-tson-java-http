@@ -1,6 +1,6 @@
-!!id:"https://schemas.example.com/2026/39/orders/orders-api-1.tn"
-!!import:"https://tson.io/2026/39/io/ltr8/http/meta-service.tn"
-!!import:"https://schemas.example.com/2026/39/orders/orders-1.tn"
+!!id:"https://schemas.example.com/2026/40/orders/orders-api-1.tn"
+!!import:"https://tson.io/2026/40/io/ltr8/http/meta-service.tn"
+!!import:"https://schemas.example.com/2026/40/orders/orders-1.tn"
 @doc:"""
   Both: the protocol of orders-1.tn, and the http projection that binds it. Every endpoint is a `!binding`
   naming an exchange and borrowing its signature. The exchange is a reference the resolver judges, a

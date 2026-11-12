@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TsonDeploymentTest {
 
     private static final String FULL = """
-            !!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
+            !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
             !deployment {
               name:     "production"
               listener: { host: "127.0.0.1"  port: 8080 }
@@ -36,7 +36,7 @@ class TsonDeploymentTest {
     /** A descriptor whose policy is {@code policy}. */
     private static String withPolicy(String policy) {
         return """
-                !!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
+                !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
                 !deployment { name: "n"  policy: %s }""".formatted(policy);
     }
 
@@ -139,7 +139,7 @@ class TsonDeploymentTest {
     /** A descriptor with this {@code schema_hosts} and, where given, this {@code listener.host}. */
     private static String withHosts(String hosts, String listenerHost) {
         return """
-                !!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
+                !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
                 !deployment { name: "n"  %s schema_hosts: [%s] }""".formatted(
                 listenerHost == null ? "" : "listener: { host: " + listenerHost + " }", hosts);
     }
@@ -213,7 +213,7 @@ class TsonDeploymentTest {
     @Test
     void anAbsentPolicyIsNotAPermissiveOne() {
         TsonDeployment deployment = TsonDeployment.read("""
-                !!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
+                !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
                 !deployment { name: "minimal" }""");
 
         assertTrue(deployment.processorPolicy().isEmpty());
@@ -308,7 +308,7 @@ class TsonDeploymentTest {
     @Test
     void aDescriptorWithNoPolicyPublishesTheDefaults() {
         TsonDeployment.Policy policy = profileOf(TsonDeployment.read("""
-                !!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
+                !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
                 !deployment { name: "minimal" }""")).policy();
 
         assertEquals(TsonDeployment.Policy.of(ProcessorPolicy.defaults()), policy);

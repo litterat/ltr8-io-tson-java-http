@@ -31,10 +31,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonHttpCodecJsonTest {
 
-    private static final String SCHEMA_ID = "https://s.example.com/2026/39/app/note-1.tn";
+    private static final String SCHEMA_ID = "https://s.example.com/2026/40/app/note-1.tn";
     private static final String SCHEMA = """
-            !!id:"https://s.example.com/2026/39/app/note-1.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://s.example.com/2026/40/app/note-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
                 note => { title: text  body?: text  subtitle?: text?  count: int32 }
             }""";

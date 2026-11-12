@@ -17,8 +17,8 @@ import java.util.stream.Collectors;
  * parse the body can still read them.
  *
  * <pre>{@code
- * TSON-Schema: "https://schemas.example.com/2026/39/app/order-1.tn"
- * TSON-Schema: "https://schemas.example.com/2026/39/app/order-1.tn", "https://example.com/2026/39/money.tn"
+ * TSON-Schema: "https://schemas.example.com/2026/40/app/order-1.tn"
+ * TSON-Schema: "https://schemas.example.com/2026/40/app/order-1.tn", "https://example.com/2026/40/money.tn"
  * }</pre>
  *
  * <p><b>It is a projection of the body's binding, not an alternative to it.</b> The body's {@code !!import}s remain

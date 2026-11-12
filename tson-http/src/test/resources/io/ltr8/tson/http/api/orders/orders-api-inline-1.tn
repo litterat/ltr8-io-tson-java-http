@@ -1,7 +1,7 @@
-!!id:"https://schemas.example.com/2026/39/orders/orders-api-inline-1.tn"
-!!import:"https://tson.io/2026/39/io/ltr8/http/meta-service.tn"
-!!import:"https://schemas.example.com/2026/39/orders/orders-types-1.tn"
-!!import:"https://schemas.example.com/2026/39/orders/orders-errors-1.tn"
+!!id:"https://schemas.example.com/2026/40/orders/orders-api-inline-1.tn"
+!!import:"https://tson.io/2026/40/io/ltr8/http/meta-service.tn"
+!!import:"https://schemas.example.com/2026/40/orders/orders-types-1.tn"
+!!import:"https://schemas.example.com/2026/40/orders/orders-errors-1.tn"
 @doc:"""
   Web service only: an http projection on its own terms, with no protocol behind it and no `@binds`, so every
   endpoint is an `!operation` carrying its signature inline. The verb and the path are the keys an endpoint

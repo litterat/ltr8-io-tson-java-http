@@ -21,8 +21,8 @@ import java.util.Map;
  * carry a signature inline, or answer a document:
  *
  * <pre>{@code
- * !!import:"https://tson.io/2026/39/io/ltr8/http/meta-service.tn"
- * !!import:"https://schemas.example.com/2026/39/app/order-1.tn"
+ * !!import:"https://tson.io/2026/40/io/ltr8/http/meta-service.tn"
+ * !!import:"https://schemas.example.com/2026/40/app/order-1.tn"
  * !schema {
  *   orders => !protocol { place_order => { request: order  response: order } }
  *
@@ -53,7 +53,7 @@ import java.util.Map;
 public final class TsonApiSchema {
 
     /** This schema's identity — the {@code !!id} it declares and the URL it is served at. */
-    public static final String ID = "https://tson.io/2026/39/io/ltr8/http/meta-service.tn";
+    public static final String ID = "https://tson.io/2026/40/io/ltr8/http/meta-service.tn";
 
     private static final String SOURCE = readResource("/meta-service.tn");
 

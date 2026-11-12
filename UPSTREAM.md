@@ -71,7 +71,7 @@ entries: `a => { b: text  c: integer }` there gets *"'a' field 'b' has an unreso
 diagnostic for the record's first such field, with no word that `text` is `meta.tn`'s.
 
 **The change:** the bundled documents are fixed and known (`TsonBundledSchemas`), so where an unresolved reference
-is a name one of them declares, the diagnostic can say so — *"… 'ipv4', which `https://tson.io/2026/39/m/net.tn`
+is a name one of them declares, the diagnostic can say so — *"… 'ipv4', which `https://tson.io/2026/40/m/net.tn`
 declares; import it, or core.tn"* — as `expected`, or in the message. No resolution changes; a schema still has to
 import what it uses.
 
@@ -97,24 +97,7 @@ load flips when it is fixed.
 
 ---
 
-## 5. A template's bare name as a field type resolves silently
-
-**Hit:** found migrating this project's schemas. `x => { s: tmpl }`, with `tmpl` a template, loads with no
-diagnostic, declared locally or brought by an import, although a template is not a type until it is applied and the
-field has no shape to read a value at. The first sign is a read: every value at the field is refused with *"no schema
-in this closure declares a subtype of 'tmpl', and it is abstract, so nothing can stand here"*, which blames the
-closure for a slip in the schema. A missing argument list is an easy slip in a description applying one template at
-several endpoints.
-
-**The change:** refuse the name where a type belongs, naming the template's parameters — *"'tmpl' is a template of
-one parameter; apply it"*.
-
-**Workaround in place:** none; nothing here writes the form. Pinned by
-`UpstreamGapsTest.aTemplatesBareNameAsAFieldTypeResolvesSilently`.
-
----
-
-## 6. `Tson.validate` on a schema document blames Class 1
+## 5. `Tson.validate` on a schema document blames Class 1
 
 **Hit:** `Tson.validate` handed a document whose root is tagged `!schema` reports one `VALIDATION_ERROR`, *"this is a
 TSON schema document (its root is tagged !schema); a Class 1 (data-format-only) processor does not support schema
@@ -128,7 +111,7 @@ schema into the data box.
 
 ---
 
-## 7. The JSON reader states one schema, where a `TSON-Schema` List states several
+## 6. The JSON reader states one schema, where a `TSON-Schema` List states several
 
 **Hit:** a JSON body sent with a `TSON-Schema` List of two members, its version and a schema it also uses. [TSON-JSON]
 §3.5 makes the field a List because a binding is a set, read as one namespace (§3.4). tson-java's TSON readers read
@@ -143,7 +126,7 @@ name. Pinned by `UpstreamGapsTest.theJsonReadersStateOneSchema`.
 
 ---
 
-## 8. A component narrower than its field's value space binds, and fails at the read
+## 7. A component narrower than its field's value space binds, and fails at the read
 
 **Hit:** found migrating `TsonDeployment.Policy.Limits` to `policy.tn`'s `policy.limit`, an `int64`. Strict binding
 accepts an `int` record component against an `int64` field: the bind registry prepares the schema, so `prepareToRead`
@@ -161,7 +144,7 @@ schema is prepared, naming the field, its type and the component, as an undeclar
 
 ---
 
-## 9. A mapped class that cannot be analysed is deferred as a missing binding
+## 8. A mapped class that cannot be analysed is deferred as a missing binding
 
 **Hit:** found binding a request record that holds a dependent field (`payload: kind!`), whose component is `Object`.
 Under a bind context that does not register `Object` as an atom, the class the map names cannot be analysed, and the
@@ -180,42 +163,40 @@ naming the type, the class and the component, as a disagreeing class already is.
 
 ---
 
-## 10. `RecordField` states one fact through several accessors, and one of them throws
+## 9. `RecordField` states one fact through several accessors, and one of them throws
 
 **Hit:** reading a schema this project did not write, at startup, to place a request's fields over HTTP
 (`RequestPlacement`) and to check what a dependent field's sender may name (`ChosenTypes`). A record field's type is
-one fact, and `RecordField` answers it four ways: `type()` returns the sealed `Reference` (a `TypeRef` or a
-`SiblingRef`); `typeRef()` returns a `TypeRef` and throws `IllegalStateException` on a `SiblingRef`; `namedType()`
-returns an `Optional<TypeRef>`; and `sibling()` the sibling's field name as an `Optional<String>`. `typeRef()` is the one
-a consumer reaches for, since every other reference slot of the model is typed `TypeRef`, and called on a record that
-holds a dependent field it turns a property of a valid schema into an unchecked exception: at this project's startup a
-description refused with a stack trace rather than a message, and on any path that walks a schema per request, a 500.
-`RecordTemplateField` has the same split one level down: its `type` is an `Optional<Reference>` beside `type_param`,
-`closed()` throws `IllegalStateException` while a parameter remains, and `RecordField.typeRef(Reference)` is the
-throwing accessor's static form for both.
+one fact, and `RecordField` answers it four ways: `type()` returns the `TypeExpr` (a `TypeRef`, or a `TypeInline` for
+a type written in place, the dependent type among them); `ownType()` returns an `Optional<TypeExpr>`, empty for a
+dependent field; `sibling()` the sibling's field name as an `Optional<String>`; and `typeExpr()` returns the
+`TypeExpr` and throws `IllegalStateException` on a dependent field. `typeExpr()` is the one a consumer reaches for,
+since its name reads as "the field's type", and called on a record that holds a dependent field it turns a property
+of a valid schema into an unchecked exception: at this project's startup a description refused with a stack trace
+rather than a message, and on any path that walks a schema per request, a 500.
 
-**The change:** the sealed `Reference` as the one surface, read with a `switch`, and `typeRef()` and `namedType()`
-gone; short of that, `typeRef()` returning `Optional<TypeRef>`, so that no accessor throws on a schema that loaded. The
-same for the record template field.
+**The change:** no accessor that throws on a schema that loaded: `type()` read with a `switch` as the one surface and
+`typeExpr()` gone, or `ownType()` the only accessor for the type a field holds.
 
-**Workaround in place:** `RequestPlacement` and `ChosenTypes` match on `Reference` (`instanceof SiblingRef`, `instanceof
-TypeRef`). `ChosenTypes` calls `typeRef()` once, on a dependent field's sibling, which the linker guarantees names a
-type: a sibling that is itself a dependent field is a schema error. Pinned by
-`UpstreamGapsTest.aDependentFieldsTypeRefThrowsWhereItsTypeIsASiblingRef`.
+**Workaround in place:** `RequestPlacement` and `ChosenTypes` ask `sibling()` first and switch on `type()` (`TypeRef`,
+`TypeInline`), never calling `typeExpr()`. Pinned by
+`UpstreamGapsTest.aDependentFieldsTypeExprThrowsWhereItsTypeIsADependentType`.
 
 ---
 
-## 11. What a dependent field's sender may name, and whether a name binds, are reached through casts and catches
+## 10. What a dependent field's sender may name, and whether a name binds, are reached through casts and catches
 
 **Hit:** checking at startup that every type a sender may name at a dependent field binds (`ChosenTypes`). Nothing
-answers "the types a value at this field may be read against". The answer is assembled: take the compiled schema's
-entry for the sibling's type (`compiled.schema().entries()`), follow its `Alias` hops, cast to `ReferenceBody` and call
-`memberNames()`; a pinned sibling and a discriminator, which narrow that set, are worked out again by hand from
-`FieldRole.FIXED` pins and `chain().subtypes()`. Two yes-or-no questions are answered only by exception. "Is this name
-the kernel's vocabulary" is `SchemaModelNameBinder.INSTANCE.resolve(name)` and `catch (DataBindException)`, the set it
-consults (`Vocabulary.NAMES`) being private. "Does this type bind" is `DataBindContext.getDescriptor(name)` and the
-same catch, which cannot tell a name no class is mapped to from a mapped class that cannot be analysed without asking
-`nameBinder().resolve(name)` the same way first.
+answers "the types a value at this field may be read against". The answer is assembled: take the sibling's type, the
+compiled schema's entry where it is named (`compiled.schema().entries()`) or the type a `TypeInline` holds where it is
+written in place, follow its `Alias` hops, cast to `ReferenceBody` and call `memberNames()`. A sibling may also be typed
+`meta.type_expr`, the type-slot choice whose names are such a reference's and whose other variant is a type written in
+place, one more shape the walk has to know. A pinned sibling and a discriminator, which narrow that set, are worked out
+again by hand from `FieldRole.FIXED` pins and `chain().subtypes()`. Two yes-or-no questions are answered only by
+exception. "Is this name the kernel's vocabulary" is `SchemaModelNameBinder.INSTANCE.resolve(name)` and
+`catch (DataBindException)`, the set it consults (`Vocabulary.NAMES`) being private. "Does this type bind" is
+`DataBindContext.getDescriptor(name)` and the same catch, which cannot tell a name no class is mapped to from a mapped
+class that cannot be analysed without asking `nameBinder().resolve(name)` the same way first.
 
 **The change:** public predicates for both (a vocabulary test on `SchemaModelNameBinder`, and a `DataBindContext`
 query answering with the descriptor or the reason as a value), and an accessor on the compiled schema for the types a
@@ -227,57 +208,60 @@ context (item 2). Not yet pinned in `UpstreamGapsTest`.
 
 ---
 
-## 12. Two diagnostics name internals, and one misses the fault
+## 11. A name at a type-naming slot that resolves to a value is refused with the closure, not the fault
 
-**Hit:** both met writing an rpc envelope with a dependent payload, and measured by `DependentEnvelopeProbe`.
+**Hit:** met writing an rpc envelope with a dependent payload, and measured by `DependentEnvelopeProbe`. The envelope
+`by_type => { request: meta.type_ref  body: request! }`, read with `request: orders.place_order` (an exchange's
+qualified name), is refused `ATOM_CONSTRAINT_VIOLATION` at `/request` with *"'meta.type_ref': 'orders.place_order' is
+not a member of this kind -- expected the name of a type whose value IS-A 'meta.type', one of […]"*. The list is every
+member of the closure, the kernel's records among them, and the same list is the diagnostic's `expected` (*"one of
+(…)"*), so a diagnostic printed whole carries it twice. What it never says is the fault: the name resolves, to a value
+of `exchange`, and a value names no type.
 
-- **A minted name where the author wrote a reference.** The envelope
-  `by_exchange => { exchange: meta.ref<exchange>  body: exchange! }` is refused, rightly (spec feedback below, "a
-  payload typed by its exchange has no spelling"), with *"'by_exchange':
-  field 'body' takes its type from 'exchange', which is typed 'reference_type_exchange_false_34db4f25' -- a sibling is
-  typed by a reference whose values name types, meta.type_ref, a meta.ref<C> over a constructor, or a refinement of
-  either, so that every value it holds names a type to read 'body' against (§5.2)"*. The author wrote
-  `meta.ref<exchange>`; the message names the entry the inline application lifted to, spelled from its arguments, the
-  `allow_sibling` it pins and a hash.
-- **A member list in place of the fault.** The envelope `by_type => { request: meta.type_ref  body: request! }`,
-  read with `request: orders.place_order` (an exchange's qualified name), is refused `ATOM_CONSTRAINT_VIOLATION`
-  at `/request` with *"'meta.type_ref': 'orders.place_order' is not a member of this kind -- expected the name of
-  a type whose value IS-A 'meta.type', one of [[array_text_1_c67f2b5e; 1..], [cidr4], [cidr6], [diagnostic], …,
-  {http_verb => endpoint}, {meta.field_name => header_name}]"*. The list is every member of the closure: the
-  kernel's records, minted entries shown by their application (`[text; 1..]`, `{http_verb => endpoint}`), one still
-  minted inside its brackets (`[array_text_1_c67f2b5e; 1..]`), and references (`meta.ref<exchange>`). The same list
-  is the diagnostic's `expected` (*"one of (…)"*), so a diagnostic printed whole carries it twice. What it never says
-  is the fault: the name resolves, to a value of `exchange`, and a value names no type.
-
-**The change:** name a reference as written, as the reader already does for an application in data
-(`TypeNameRefParser`: *"An application is named as written, never by the entry minted for it"*); where a name at a
-type-naming slot resolves to a value entry, say so (*"'orders.place_order' names a value of 'exchange', not a type"*),
-and drop or cap the member list, in the message and in `expected` alike. The minted name inside a shown form is
-`ReferenceBody.shownMembers` applying its display rule one level only.
+**The change:** where a name at a type-naming slot resolves to a value entry, say so (*"'orders.place_order' names a
+value of 'exchange', not a type"*), and drop or cap the member list, in the message and in `expected` alike.
 
 **Workaround in place:** none needed; nothing in the HTTP layer names an exchange where a type is wanted. Pinned over
-a minimal protocol layer by `UpstreamGapsTest.aSiblingTypedByAnInlineValueReferenceIsRefusedUnderAMintedName` and
-`UpstreamGapsTest.anExchangesNameAtATypeRefSlotIsRefusedWithTheClosureListedTwice`, which flip when the reference is
-named as written, the fault is named, or `expected` stops repeating the list; `DependentEnvelopeProbe` measures both
-over the orders protocol.
+a minimal protocol layer by `UpstreamGapsTest.anExchangesNameAtATypeRefSlotIsRefusedWithTheClosureListedTwice`, which
+flips when the fault is named or `expected` stops repeating the list; `DependentEnvelopeProbe` measures it over the
+orders protocol.
 
 ---
 
-## 13. `TypeRef` names three types, and the reference types each name two
+## 12. `TypeRef` names three types, and the reference types each name two
 
 **Hit:** importing the reference types. `tson-compiler` exports `io.ltr8.tson.compiler.ast.schema` and
 `io.ltr8.tson.compiler.stream`, so three public `TypeRef`s are in reach: `io.ltr8.tson.schema.meta.TypeRef`, the
-model's, a sealed `Reference` over `NameRef` and `ApplicationRef`; `io.ltr8.tson.compiler.ast.schema.TypeRef`, the
-AST's, the same shape; and `io.ltr8.tson.compiler.stream.TypeRef`, a stream event carrying a value's `!name` tag.
-`Reference`, `SiblingRef`, `NameRef` and `ApplicationRef` each exist in both `schema.meta` and `compiler.ast.schema`.
+model's, sealed over `NameRef`, `ApplicationRef` and `ParamRef` and extending `TypeExpr`;
+`io.ltr8.tson.compiler.ast.schema.TypeRef`, the AST's, sealed over `NameRef` and `ApplicationRef` and extending the
+AST's own `TypeExpr`; and `io.ltr8.tson.compiler.stream.TypeRef`, a stream event carrying a value's `!name` tag.
+`TypeExpr`, `NameRef` and `ApplicationRef` each exist in both `schema.meta` and `compiler.ast.schema`.
 An IDE's import offers every one, and the wrong one compiles until it meets a method only the other has. The AST
-mirrors the model's names deliberately upstream (the naming proposal staged there for [TSON-SCHEMA] §12.1's
-`type-ref`), so this asks that choice to be revisited for what a consumer sees.
+mirrors the model's names deliberately upstream, as both follow [TSON-SCHEMA] §12.1's `type-expr` and `type-ref`, so
+this asks that choice to be revisited for what a consumer sees.
 
 **The change:** distinct names for the AST's forms and for the stream event (a `!name` tag is no reference), or the
 two compiler packages kept from consumers that have no use for them.
 
 **Workaround in place:** none needed; this project takes the reference types from `io.ltr8.tson.schema.meta` alone.
+
+---
+
+## 13. A quoted token at a kind slot in a value body is refused through an event's `toString`
+
+**Hit:** a namespace value whose endpoint lists a media type as `"application/json"` at a kind slot
+(`[meta.ref<net.media_type_type>]`, and alike at `[meta.ref<meta.atom>]`), where a type's name belongs. The refusal is
+right, and its message embeds *"expected a type's name, found TokenEvent[text=application/json, form=SINGLE_LINE_QUOTED,
+position=Position[line=0, column=0, byteOffset=0]]"*: a Java record's `toString`, with a position of zero where the
+token stands somewhere else entirely. A schema author reads a parser's internals and a location that points nowhere.
+
+**The change:** name the token as written (*"found the quoted token \"application/json\""*) and report its real
+position.
+
+**Workaround in place:** none needed; the status is right and nothing here shows the message to a client. Pinned by
+`MediaTypeKindProbeTest.kindOfMediaTypeTypeHoldsATypeName`, over `[meta.ref<net.media_type_type>]`, which asserts the
+`toString` rendering and flips when it is fixed; `aKernelKindHoldsATypeNameAndRefusesAMediaTypeValue`, over
+`[meta.ref<meta.atom>]`, asserts only the fragments around it and survives the fix.
 
 ---
 
@@ -290,7 +274,7 @@ shape: a `### To file:` heading, the spec sections, the gap, what this project d
 ### To file: every root name of a closure is reserved, so a vocabulary collides with a library it never named
 
 **Sections:** [TSON-SCHEMA] §2.2.3 (two documents of a closure declaring one name collide), §3.3 (one namespace per
-schema), §9 (the bundled documents' roots), as the Revision 39 proposal states them.
+schema), §9 (the bundled documents' roots).
 
 **Kind:** the cost of a design decision, with evidence from a consumer. A schema's namespace is its own entries and
 its whole import closure's, and a name two documents of the closure declare is a collision wherever it is declared,
@@ -299,7 +283,7 @@ schema importing `core.tn` reserves `text`, `int64`, `schema`, `date`, `time`, `
 `hostname`, `uri`, `uri_reference`, `media_type`, `title`, `comment` and the rest, and the map names `meta`, `atom`,
 `numeric`, `unicode`, `net`, `binary` and `temporal`; one importing `policy.tn` reserves `policy` as well.
 
-**Where it bit.** `meta-service.tn` declared its own `media_type`. Revision 39's `net.tn` declares one at its root,
+**Where it bit.** `meta-service.tn` declared its own `media_type`. `net.tn` declares one at its root,
 and a service description imports `meta-service.tn` and `core.tn`, so every description failed to load on a name it
 never wrote, though neither import is wrong and each document resolves on its own. `meta-service.tn` dropped its own
 and imports `net.tn`'s, which happens to fit; a vocabulary whose `media_type` meant something else would have had to
@@ -319,24 +303,7 @@ syntax for a problem the resolver can settle.
 **What this project does meanwhile:** `meta-service.tn` takes `media_type` from `net.tn`, and no schema here declares
 a bundled root name.
 
-**Priority:** medium-high: every vocabulary published against Revision 39 is exposed to every later root addition.
-
-### To file: an application at a kind slot in a value needs an alias per application
-
-**Sections:** [TSON-SCHEMA] §4.1 (value entries), §5.10 (templates and their applications), §8.2 (what a resolver
-mints).
-
-**Kind:** request for a later revision. A value body mints nothing, so at a kind-typed slot inside an entry applying
-a namespace type neither the braced record nor `page<order>` is admitted; both are refused naming the alias spelling,
-and `order_page => page<order>` is the one way to write it. A description applying one template at several endpoints
-declares an alias per application, each a name that exists to be referenced once and that reserves a root name in
-every importer (the reserved-roots item above). A data document's kind slot already admits an application the closure
-closed, matched by structural identity; a value body could take the same rule, or mint as a type body does.
-
-**What this project does meanwhile:** aliases. Pinned by
-`UpstreamGapsTest.aTemplateApplicationAtAKindSlotInAValueIsNamedThroughAnAlias`.
-
-**Priority:** low-medium: verbose rather than blocking.
+**Priority:** medium-high: every published vocabulary is exposed to every later root addition.
 
 ### To file: a format this project needs and the vocabulary cannot state — `json_pointer`
 
@@ -459,21 +426,20 @@ being over types.
 
 ### To file: a dependent field lets the sender choose the type a value is read against
 
-**Sections:** [TSON-SCHEMA] §5.2 (dependent fields, as proposed), §5.12 (a reference's members); [TSON-JSON] §6.1.6.
+**Sections:** [TSON-SCHEMA] §5.2 (dependent fields), §5.12 (a reference's members); [TSON-JSON] §6.1.6.
 
 **Kind:** gap. A dependent field (`payload: kind!`) is read against the type its free sibling names, and the sibling
-is typed by a reference whose members are the closure's types, so the sender of a document chooses which type of the
-closure the receiver reads a value against. §5.2 says nothing about that choice: not that a receiver may hold a
-sender to fewer types than the reference admits, nor what a processor that binds types to classes does when the
-chosen type is one it does not bind. `meta.type_ref` admits the kernel's records and a closure's minted entries, so
-`kind: meta.record` makes a binding receiver build a schema-model value inside an application's request, and `kind:
-array_text_621f8dcb` is accepted though no author wrote that name. tson-java answers an unbound choice with
-`MissingBindingException`, a receiver's misconfiguration, where the sender made the choice.
+is typed by a reference whose members are the closure's types, or by `meta.type_expr`, which admits a type written in
+place beside them, so the sender of a document chooses which type the receiver reads a value against. §5.2 says
+nothing about that choice: not that a receiver may hold a sender to fewer types than the reference admits, nor what a
+processor that binds types to classes does when the chosen type is one it does not bind. `meta.type_ref` admits the
+kernel's records, so `kind: meta.record` makes a binding receiver build a schema-model value inside an application's
+request. tson-java answers an unbound choice with `MissingBindingException`, a receiver's misconfiguration, where the
+sender made the choice.
 
 **A suggestion:** say that the set a sender may choose from is the receiver's to narrow, and that a chosen type the
 receiver cannot read is the document's fault, not the receiver's. A processor would then refuse an unbound choice as a
-diagnostic at the sibling, as it refuses a name that is no member. Minted names would be no member of a reference
-whose values a sender writes.
+diagnostic at the sibling, as it refuses a name that is no member.
 
 **What this project does meanwhile:** `TsonApiDescription` refuses at startup a bound request record whose dependent
 field lets a sender name a type no class binds, or one of the kernel's vocabulary (`ChosenTypes`). A free
@@ -484,7 +450,7 @@ does. Pinned by `UpstreamGapsTest.aDependentFieldsSiblingNamingATypeNothingBinds
 
 ### To file: a free sibling's member order against an unordered JSON object
 
-**Sections:** [TSON-JSON] §6.1.6 (member order), [TSON-SCHEMA] §5.2 (dependent fields, as proposed); RFC 8259 §4.
+**Sections:** [TSON-JSON] §6.1.6 (member order), [TSON-SCHEMA] §5.2 (dependent fields); RFC 8259 §4.
 
 **Kind:** inconsistency with the host format. §6.1.6 requires a dependent field's free sibling to precede the
 dependent member, so `{"payload": {...}, "kind": "point"}` is a validation error where RFC 8259 §4 calls an object an
@@ -502,91 +468,25 @@ Pinned by `UpstreamGapsTest.aJsonBodyWritingADependentFieldBeforeItsSiblingIsRef
 
 **Priority:** medium: it bites any JSON client that does not control its key order.
 
-### To file: a payload typed by its exchange has no spelling
+### To file: the typing field has an everyday name, and a reference over values arrives as a `TypeRef`
 
-**Sections:** [TSON-SCHEMA] §5.2 (dependent fields, as proposed), §5.12 (values by name), §4.2 (a reference, and what
-its `of` names).
+**Sections:** [TSON-SCHEMA] §5.1 and §5.2 (selectors, dependent fields), §5.5 and §5.7 (selector facets), §4.2
+(`meta.type_ref`), §12.1 (`type-expr`, `type-ref`); [TSON-JSON] §5.6.
 
-**Kind:** gap, and a request to state a rule's reason. A request/reply envelope wants `body` read against the request
-type of the exchange another field of the packet addresses. A sibling must be a reference whose values name types, so
-`{ exchange: meta.ref<exchange>  body: exchange! }` is refused at load: *"… which is typed
-'reference_type_exchange_false_34db4f25' -- a sibling is typed by a reference whose values name types, meta.type_ref,
-a meta.ref<C> over a constructor, or a refinement of either, so that every value it holds names a type to read 'body'
-against (§5.2)"* (`DependentEnvelopeProbe`). The refusal is sound, since an exchange is a value and a reference over
-values names no type, but the type wanted is one hop away, in the exchange's `request` field, and nothing projects
-through a value reference to reach it (`exchange!.request`, in any spelling). The form that loads, `{ request:
-meta.type_ref  body: request! }`, reads each body against the type its packet names and ties that type to no
-exchange: a packet may address `orders.place_order` and carry any type the closure holds. Pinning `request` per
-exchange in a refinement is the template application spelled longer, so a record template closed per exchange stays
-the only typed envelope.
-
-**A suggestion:** when §5.2's text lands, state the refusal of a sibling typed by a reference over values, with its
-reason; the rule runs on the branch and is written nowhere a schema author reads. And record the projection as
-deliberately absent, naming the per-exchange template as the form, or propose it: a dependent field typed by a
-type-naming field of the value its sibling names, which needs that value resolved when the packet is read.
-
-**What this project does meanwhile:** the rpc experiment closes `rpc.tn`'s templates per exchange
-(`orders-wire-1.tn`). HTTP needs neither form, a route's request type being fixed by the description.
-
-**Priority:** medium for the rpc wire form; low for HTTP, which never needs it.
-
-### To file: "sibling" and "type reference" each carry several meanings
-
-**Sections:** [TSON-SCHEMA] §3.3.3, §3.3.5, §4.2, §5.5, §5.7, §5.10, §5.11, §8.1, §9 ("sibling"); §1.2, §5.1, §8.1,
-§8.3, §12.1 ("type reference", `type_ref`, `type-ref`); §5.2 (dependent fields, as proposed); [TSON-JSON] §5.6.
-
-**Kind:** editorial. In Part 2's draft, "sibling" means:
-
-- a same-named entry core declares beside the kernel's: "a fresh sibling (§3.3.5)" (§4.2, and so §3.3.3, §7.3 and
-  §9), "a core sibling remains a distinct type from its kernel original" (§5.10);
-- a family founded by construction: "Construction creates siblings, not subtypes" (§5.5), "constructing a fresh
-  sibling (`port => !integer_type { … }`, IS-A nothing)" (§8.1);
-- two refinements of one source: "two sibling refinements such as `int8` and `int32`" (§5.10);
-- a facet's neighbours: "`float_type`'s `allow_nan` and its three siblings" (§5.7);
-- a field group's other members: "contiguous with its sibling members" (§5.11).
-
-Revision 39 adds the field whose value types a dependent field (§5.2 as proposed), the one use that is a technical
-term: it is in a facet's name (`allow_sibling`), a grammar production (`sibling-ref`) and the diagnostics.
-
-"Type reference" means a value's `!name` tag ("Every type reference (`!name`)", §1.2); an alias declaration (`id =>
-uuid ; type reference (§8.3)`, §5.1); the grammar's `type-ref`, which also covers the structural forms (§12.1); the
-kernel's `meta.type_ref`, the names of types with the sibling reference withdrawn; any reference over a constructor,
-which [TSON-JSON] §5.6 and the sibling's notes call a *kind*; and tson-java's `TypeRef`, which is delivered for a
-reference over values too, so this project holds a `meta.ref<exchange>` value in `Exemption.exchange` and builds
-`ExchangeName` from one, both typed `TypeRef` though an exchange is no type. The grammar's half is already staged
-upstream, a proposal to rename the production `type-expr` and keep `type-ref` for the reference; this adds the rest.
+**Kind:** editorial. Part 2 keeps "sibling" for the field whose value types a dependent field (§5.2), names the
+grammar's `type-expr` and `type-ref` apart (§12.1), and makes `meta.type_ref` the reference
+`!meta.reference_type { of: meta.type }` (§4.2). Two things remain. "Sibling" is a technical term spelled as an
+everyday word, in the text and in the diagnostics, while a family's discriminating field, which a sibling may be, is
+already a *selector* (§5.1, §5.2). And a reference over a constructor is a *kind* in [TSON-JSON] §5.6, while
+tson-java's `TypeRef` is delivered for a reference over values too, so this project holds a `meta.ref<exchange>` value
+in `Exemption.exchange` and builds `ExchangeName` from one, both typed `TypeRef` though an exchange is no type.
 
 **A suggestion:** one term for the typing field, kept for that use alone. "Selector" is this project's suggestion,
-offered as such: Part 2 already calls a family's discriminating field a selector (§5.1, §5.2), and a sibling may be a
-discriminator, so the term would extend rather than collide; its other use, a facet picking among a closed vocabulary
-(§5.5, §5.7), would then want a word of its own. And the grammar's names, the kernel's and the implementation's lining
-up: a reference over values not delivered as a `TypeRef`, and "type reference" not used for a `!` tag or an alias.
+offered as such: a sibling may be a discriminator, so the term would extend rather than collide; its other use, a
+facet picking among a closed vocabulary (§5.5, §5.7), would then want a word of its own. And a reference over values
+not delivered as a `TypeRef`.
 
-**What this project does meanwhile:** writes "sibling" for the typing field only, and "type reference" for
-`meta.type_ref` and a reference over a constructor, and lives with `TypeRef` on an exchange's name.
+**What this project does meanwhile:** writes "sibling" for the typing field only, and lives with `TypeRef` on an
+exchange's name.
 
 **Priority:** low.
-
-### To file: the Part 2 text lags the rules this project depends on
-
-**Sections:** [TSON-SCHEMA] §1.6, §4.1, §4.2, §5.6, §5.7, §5.10, §8.1, as proposed for Revision 39; the draft in the sibling
-repository is headed Revision 38.
-
-**Kind:** request to land the text. Each rule below runs on the branch, is already staged in tson-java's register,
-and is cited here "as proposed" because Part 2's draft does not hold it:
-
-- **`meta.type_ref` withdraws the sibling reference.** The kernel declares `type_ref => !meta.field_type_ref ^ {
-  allow_sibling: false }`, which is what keeps an exchange's `request`, `response` and `errors` (`meta-service.tn`'s
-  `signature`) naming a type and never a sibling. §4.2 and §8.1 still describe `type_kind`, `kind_type` and a
-  `type_ref` record.
-- **A restated field's type narrows by IS-A** (§5.7). The draft says a restatement may narrow a field's type, and not
-  by which relation; the branch judges it nominally at link, so `[int8]` does not restate `[int32]`.
-  `design/schema-authoring.md` cites the rule.
-- **A record template is its own constructor**, `meta.record_template`, and nothing reads or writes a value against
-  it. §5.10, with §1.6, §4.1 and §5.6, still makes it a `!record` with `parameters`. `experiments/rpc/README.md`
-  cites the rule.
-- **The kernel has no `type_argument` record**, while §8.1 is titled for it and declares it beside `type_ref`.
-
-**What this project does meanwhile:** cites the sections "as proposed" and cannot check its citations against text.
-
-**Priority:** medium, since this project's notes cite sections the draft does not yet hold.

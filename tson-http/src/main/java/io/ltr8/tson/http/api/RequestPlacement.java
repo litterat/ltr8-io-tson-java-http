@@ -4,9 +4,10 @@ import io.ltr8.tson.schema.meta.ArrayBody;
 import io.ltr8.tson.schema.meta.MapBody;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.RecordField;
-import io.ltr8.tson.schema.meta.SiblingRef;
 import io.ltr8.tson.schema.meta.TupleBody;
 import io.ltr8.tson.schema.meta.Top;
+import io.ltr8.tson.schema.meta.TypeExpr;
+import io.ltr8.tson.schema.meta.TypeInline;
 import io.ltr8.tson.schema.meta.TypeRef;
 
 import java.util.Collections;
@@ -85,13 +86,13 @@ public record RequestPlacement(Map<String, Location> fields) {
             inRecordOrder.put(field, where);
         }
         boolean remainderIsBody = !remainderIsQuery;
-        declared.forEach((field, declaration) -> {
-            if (declaration.type() instanceof SiblingRef sibling) {
-                requireInRemainderBody(name, field, sibling, field, inRecordOrder.get(field), placed, remainderIsBody);
-                requireInRemainderBody(name, field, sibling, sibling.field(), inRecordOrder.get(sibling.field()),
-                        placed, remainderIsBody);
-            }
-        });
+        declared.forEach((field, declaration) -> declaration.sibling().ifPresent(sibling -> {
+            String spelled = declaration.type().text();
+            requireInRemainderBody(name, field, spelled, sibling, field, inRecordOrder.get(field), placed,
+                    remainderIsBody);
+            requireInRemainderBody(name, field, spelled, sibling, sibling, inRecordOrder.get(sibling), placed,
+                    remainderIsBody);
+        }));
         return new RequestPlacement(Collections.unmodifiableMap(inRecordOrder));
     }
 
@@ -112,11 +113,12 @@ public record RequestPlacement(Map<String, Location> fields) {
     }
 
     /**
-     * Refuses {@code placedField} -- the dependent field {@code dependent} or its sibling -- anywhere but the
-     * remainder body, the one place both arrive in one record instance.
+     * Refuses {@code placedField} -- the dependent field {@code dependent}, typed {@code spelled}, or its sibling
+     * {@code sibling} -- anywhere but the remainder body, the one place both arrive in one record instance.
      */
-    private static void requireInRemainderBody(String entry, String dependent, SiblingRef sibling, String placedField,
-                                               Location where, Map<String, Location> placed, boolean remainderIsBody) {
+    private static void requireInRemainderBody(String entry, String dependent, String spelled, String sibling,
+                                               String placedField, Location where, Map<String, Location> placed,
+                                               boolean remainderIsBody) {
         boolean inRemainderBody = where == Location.BODY && remainderIsBody && !placed.containsKey(placedField);
         if (inRemainderBody) {
             return;
@@ -126,8 +128,8 @@ public record RequestPlacement(Map<String, Location> fields) {
         String which = placedField.equals(dependent) ? "'" + dependent + "'"
                 : "'" + placedField + "', the sibling of '" + dependent + "',";
         throw new IllegalArgumentException("'" + entry + "' places " + which + " " + how + ", but '" + dependent
-                + ": " + sibling.text() + "' is a dependent field whose type its sibling names per instance -- it"
-                + " travels in the remainder body with '" + sibling.field() + "', where one record holds both");
+                + ": " + spelled + "' is a dependent field whose type its sibling names per instance -- it"
+                + " travels in the remainder body with '" + sibling + "', where one record holds both");
     }
 
     /**
@@ -138,10 +140,10 @@ public record RequestPlacement(Map<String, Location> fields) {
      */
     private static void requireScalar(String entry, String name, RecordField field, Location where,
                                       Function<String, Top> entries) {
-        if (!(field.type() instanceof TypeRef reference)) {
+        if (field.sibling().isPresent()) {
             return;                                     // a dependent field: requireInRemainderBody refuses it
         }
-        Top type = entries.apply(reference.name());
+        Top type = body(field.type(), entries);
         if (type == null) {
             return;                                     // a built-in: text, int32, a date -- scalar by construction
         }
@@ -149,15 +151,23 @@ public record RequestPlacement(Map<String, Location> fields) {
             if (where == Location.PATH) {
                 refuse(entry, name, where, "an array, and a URL segment carries exactly one scalar");
             }
-            if (isContainer(entries.apply(array.elementType().name()))) {
-                refuse(entry, name, where, "an array of " + array.elementType().name()
+            if (isContainer(body(array.elementType(), entries))) {
+                refuse(entry, name, where, "an array of " + array.elementType().text()
                         + ", and a repeated " + where.name().toLowerCase(Locale.ROOT) + " value carries a scalar");
             }
             return;
         }
         if (isContainer(type)) {
-            refuse(entry, name, where, "a " + reference.text() + ", which is not a scalar");
+            refuse(entry, name, where, "a " + field.type().text() + ", which is not a scalar");
         }
+    }
+
+    /** The type {@code type} stands for: its entry when it is named, its body when it is written in place. */
+    private static Top body(TypeExpr type, Function<String, Top> entries) {
+        return switch (type) {
+            case TypeRef reference -> entries.apply(reference.name());
+            case TypeInline inline -> inline.of();
+        };
     }
 
     private static boolean isContainer(Top type) {

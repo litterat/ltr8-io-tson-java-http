@@ -19,7 +19,7 @@ Rules that bite here:
   `IllegalArgumentException` and the codec decides what it is worth.
 - `TsonHttpException.from(RuntimeException)` is the entire status policy. Put nothing status-shaped anywhere else, and
   key nothing on `Diagnostic.Code.verdict()` alone: it answers whether the document was judged, not who must act.
-- Problem `type` URIs live under `https://ltr8.io/2026/39/http/problems/`; `ltr8.io` is the implementation, `tson.io`
+- Problem `type` URIs live under `https://ltr8.io/2026/40/http/problems/`; `ltr8.io` is the implementation, `tson.io`
   the specification. `ReadmeTest` holds the README's problem-type table to the types minted in `src/main`.
 - `problem.tn` is this project's own schema and diverges from tson-cli's `diagnostics.tn` on purpose. Its
   `diagnostic_code` is a hand copy of `Diagnostic.Code`; `TsonProblemSchemaTest` keeps it current.

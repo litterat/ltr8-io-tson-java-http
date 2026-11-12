@@ -30,10 +30,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class OneLevelProbe {
 
-    static final String META = "https://tson.io/2026/39/m/meta.tn";
-    static final String CORE = "https://tson.io/2026/39/m/core.tn";
-    static final String ID = "https://schemas.example.com/2026/39/one-level/s-1.tn";
-    static final String LAYER_ID = "https://schemas.example.com/2026/39/one-level/layer-1.tn";
+    static final String META = "https://tson.io/2026/40/m/meta.tn";
+    static final String CORE = "https://tson.io/2026/40/m/core.tn";
+    static final String ID = "https://schemas.example.com/2026/40/one-level/s-1.tn";
+    static final String LAYER_ID = "https://schemas.example.com/2026/40/one-level/layer-1.tn";
 
     /** The probe's vocabulary: a record, and the namespace type a schema importing it applies to hold it. */
     static final String STEPS = "step => { takes: meta.type_ref }  "
@@ -182,8 +182,9 @@ class OneLevelProbe {
      * <b>A type definition read as data is checked for membership as well as shape.</b> Imported from {@code
      * meta.tn}, {@code !meta.record { … }} is an ordinary value: a misspelt field and a malformed name are refused,
      * and so is a name the reading closure does not declare, a kind in a data document being judged by membership
-     * whichever schema it is read under ({@link #aDataDocumentCanHoldACheckedTypeName}). Revision 38 admitted the
-     * undeclared name under {@code meta.tn}.
+     * whichever schema it is read under ({@link #aDataDocumentCanHoldACheckedTypeName}). A field's {@code type} is a
+     * {@code meta.type_expr}, a choice of a name or a type written in place, so {@code 42} is a type mismatch, fitting
+     * neither.
      */
     @Test
     void aTypeDefinitionReadAsDataIsJudgedForMembership() {
@@ -194,7 +195,7 @@ class OneLevelProbe {
                 tson.validate(data + "!meta.record { fields: { sku => { type: no_such } } }").stream()
                         .map(Diagnostic::code).toList());
         assertEquals(List.of(), tson.validate(data + "!meta.record { fields: { sku => { type: text } } }"));
-        assertEquals(List.of(Diagnostic.Code.ATOM_FORM_INVALID),
+        assertEquals(List.of(Diagnostic.Code.TYPE_MISMATCH),
                 tson.validate(data + "!meta.record { fields: { sku => { type: 42 } } }").stream()
                         .map(Diagnostic::code).toList());
         assertEquals(List.of(Diagnostic.Code.UNRECOGNIZED_FIELD, Diagnostic.Code.FIELD_REQUIRED),

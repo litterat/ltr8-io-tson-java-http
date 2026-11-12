@@ -31,13 +31,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonApiSchemaTest {
 
-    private static final String ORDER_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
-    private static final String API_ID = "https://schemas.example.com/2026/39/app/orders-api-1.tn";
+    private static final String ORDER_ID = "https://schemas.example.com/2026/40/app/order-1.tn";
+    private static final String API_ID = "https://schemas.example.com/2026/40/app/orders-api-1.tn";
 
     private static final String ORDER = """
-            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
-            !!import:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
+            !!id:"https://schemas.example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
+            !!import:"https://tson.io/2026/40/io/ltr8/http/problem.tn"
             !schema {
               non_empty_text => !text ^ { min_length: 1 }
               order          => { sku: non_empty_text  quantity: int32 }
@@ -46,11 +46,11 @@ class TsonApiSchemaTest {
 
     /** A protocol, an http projection binding it, and the schema route as a document. */
     private static final String API = """
-            !!id:"https://schemas.example.com/2026/39/app/orders-api-1.tn"
-            !!import:"https://tson.io/2026/39/io/ltr8/http/meta-service.tn"
-            !!import:"https://schemas.example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/orders-api-1.tn"
+            !!import:"https://tson.io/2026/40/io/ltr8/http/meta-service.tn"
+            !!import:"https://schemas.example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/io/ltr8/http/problem.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
               schema_ref => { schemaPath: text }
 
@@ -319,10 +319,10 @@ class TsonApiSchemaTest {
     // ── templates, in the shipping design ──
 
     private static final String PAGED = """
-            !!id:"https://schemas.example.com/2026/39/app/orders-api-1.tn"
-            !!import:"https://tson.io/2026/39/io/ltr8/http/meta-service.tn"
-            !!import:"https://schemas.example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/orders-api-1.tn"
+            !!import:"https://tson.io/2026/40/io/ltr8/http/meta-service.tn"
+            !!import:"https://schemas.example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
               page       => <T> { items: [T]  next?: uri  total: int32 }
               order_page => page<order>
@@ -351,20 +351,23 @@ class TsonApiSchemaTest {
 
     /**
      * <b>An application is named through an alias, never written inline.</b> {@code response} is typed by a kind,
-     * so it holds the name of a type: one bare token. An endpoint is a value body, where nothing lifts or mints, so
-     * an application written there would be the name of no entry. §5.6's braced form is therefore refused, naming
-     * the alias spelling that gives the application its entry, and so is the schema sugar {@code page<order>} in the
-     * same position, which reads as a reference and is refused for the same reason.
+     * so it holds the name of a type: one bare token. An endpoint is a value body, where a reference-typed slot holds
+     * a name and an application written there is a validation error. §5.6's braced form is therefore refused, naming
+     * the remedy, a declaration that gives the application its entry ({@code order_page => page<order>}), and so is
+     * the schema sugar {@code page<order>} in the same position, for the same reason.
      */
     @Test
     void anApplicationIsNamedThroughAnAliasNotInline() {
         String message = assertThrows(RuntimeException.class,
                 () -> resolved(PAGED.formatted("{ name: page  arguments: [ { name: order } ] }"))).getMessage();
-        assertTrue(message.contains("declare an alias"), "the refusal names the alias spelling: " + message);
+        assertTrue(message.contains("expected a type's name, found a record")
+                && message.contains("declare it under a name (order_box => box<order>) and write that name"),
+                "the refusal names the remedy: " + message);
 
         String sugar = assertThrows(RuntimeException.class, () -> resolved(PAGED.formatted("page<order>")))
                 .getMessage();
-        assertTrue(sugar.contains("found the reference page<order>") && sugar.contains("declare an alias"), sugar);
+        assertTrue(sugar.contains("expected a type's name, found the reference page<order>")
+                && sugar.contains("declare it under a name (order_box => box<order>) and write that name"), sugar);
     }
 
     /** A bad argument is caught where the application is spelled, which is the alias. */
@@ -390,7 +393,7 @@ class TsonApiSchemaTest {
         assertTrue(published.contains(TsonApiSchema.ID), "the meta layer, or the description will not resolve");
         assertTrue(published.contains(ORDER_ID));
         assertTrue(published.contains(TsonProblemSchema.ID));
-        assertFalse(published.stream().anyMatch(id -> id.startsWith("https://tson.io/2026/39/m/")),
+        assertFalse(published.stream().anyMatch(id -> id.startsWith("https://tson.io/2026/40/m/")),
                 () -> "the bundled standard library is not a service's to publish: " + published);
     }
 

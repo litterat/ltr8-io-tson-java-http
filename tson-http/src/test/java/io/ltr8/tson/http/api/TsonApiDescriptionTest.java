@@ -44,27 +44,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonApiDescriptionTest {
 
-    static final String ERR_ID = "https://schemas.example.com/2026/39/app/orders-errors-1.tn";
+    static final String ERR_ID = "https://schemas.example.com/2026/40/app/orders-errors-1.tn";
 
     /** Business errors, each fixing the status it inherits from {@code problem}. */
     static final String ERRORS = """
             !!id:"%s"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !!import:"%s"
             !schema {
               sku_not_found   => problem & { status: = 404  sku: text }
               order_not_found => problem & { status: = 404 }
             }""".formatted(ERR_ID, TsonProblemSchema.ID);
 
-    static final String PROTOCOL_ID = "https://schemas.example.com/2026/39/app/orders-1.tn";
-    static final String API_ID = "https://schemas.example.com/2026/39/app/orders-api-1.tn";
+    static final String PROTOCOL_ID = "https://schemas.example.com/2026/40/app/orders-1.tn";
+    static final String API_ID = "https://schemas.example.com/2026/40/app/orders-api-1.tn";
 
     /** The protocol: four exchanges over four request records, nothing HTTP in sight. */
     static final String PROTOCOL = """
         !!id:"%s"
         !!import:"%s"
-        !!import:"https://tson.io/2026/39/m/meta.tn"
-        !!import:"https://tson.io/2026/39/m/core.tn"
+        !!import:"https://tson.io/2026/40/m/meta.tn"
+        !!import:"https://tson.io/2026/40/m/core.tn"
         !!import:"%s"
         !schema {
           order       => { sku: text  quantity: int32 }
@@ -135,7 +135,7 @@ class TsonApiDescriptionTest {
         return """
         !!id:"%s"
         !!import:"%s"
-        !!import:"https://tson.io/2026/39/m/core.tn"
+        !!import:"https://tson.io/2026/40/m/core.tn"
         !!import:"%s"
         !schema {
         %s
@@ -636,11 +636,11 @@ class TsonApiDescriptionTest {
 
     // ── kept for comparison: an exchange as a TYPE, and the operation IS-A the exchange ──────────
 
-    static final String LIB_ID = "https://tson.io/2026/39/io/ltr8/http/service.tn";
+    static final String LIB_ID = "https://tson.io/2026/40/io/ltr8/http/service.tn";
 
     static final String LIB_B = """
         !!id:"%s"
-        !!import:"https://tson.io/2026/39/m/core.tn"
+        !!import:"https://tson.io/2026/40/m/core.tn"
         !schema {
           exchange    => <Req, Resp> { request: Req  response?: Resp  safe?: boolean ~ false  idempotent?: boolean ~ false }
           http_verb   => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
@@ -654,7 +654,7 @@ class TsonApiDescriptionTest {
      */
     static final String PROTOCOL_B = """
         !!id:"%s"
-        !!import:"https://tson.io/2026/39/m/core.tn"
+        !!import:"https://tson.io/2026/40/m/core.tn"
         !!import:"%s"
         !schema {
           order     => { sku: text  quantity: int32 }
@@ -665,7 +665,7 @@ class TsonApiDescriptionTest {
 
     static final String API_B = """
         !!id:"%s"
-        !!import:"https://tson.io/2026/39/m/core.tn"
+        !!import:"https://tson.io/2026/40/m/core.tn"
         !!import:"%s"
         !!import:"%s"
         !schema {
@@ -698,7 +698,7 @@ class TsonApiDescriptionTest {
         assertEquals(FieldRole.FIXED, fields.get("verb").role());
         assertEquals("POST", fields.get("verb").value().orElseThrow().text());
         assertEquals("/orders", fields.get("path").value().orElseThrow().text());
-        assertEquals("order", fields.get("request").typeRef().name());
+        assertEquals("order", ((TypeRef) fields.get("request").type()).name());
 
         String bare = """
             !!import:"%s"

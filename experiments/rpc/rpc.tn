@@ -1,6 +1,6 @@
-!!id:"https://tson.io/2026/39/io/ltr8/http/rpc.tn"
-!!import:"https://tson.io/2026/39/m/core.tn"
-!!import:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
+!!id:"https://tson.io/2026/40/io/ltr8/http/rpc.tn"
+!!import:"https://tson.io/2026/40/m/core.tn"
+!!import:"https://tson.io/2026/40/io/ltr8/http/problem.tn"
 @doc:"""
   The wire form of a protocol: one call of an exchange and its return. A packet is DATA, so this is a user
   schema, not part of the meta layer -- the meta layer says what a protocol IS; this says what calling one
@@ -52,14 +52,14 @@
 
   @doc:"""
     One outcome, and exactly one: the exchange's `response`, one of the `error`s its signature declared, or
-    a `fault`. `Resp` is the response type; `Err` is the declared error type, or a choice of them when the
-    exchange declares several -- a choice of records, so the value carries the error's tag, which is the
-    discriminator a caller wants. An error is a typed value composing `problem`, its status pinned on the
-    type, and the resolver enforces the pin. A `fault` is the transport's or the processor's own failure,
-    a `problem` whose `type` comes from the same small closed set the HTTP problem types use, so an http
-    gateway maps by table rather than by translation. The group is what keeps business errors and faults
-    apart, which is the distinction gRPC's single status channel blurs and the one a caller deciding
-    whether to retry needs.
+    a `fault`. `Resp` is the response type; `Err` is the declared error type, or a choice of them, declared
+    as an entry of its own, when the exchange declares several -- a choice of records, so the value carries
+    the error's tag, which is the discriminator a caller wants. An error is a typed value composing
+    `problem`, its status pinned on the type, and the resolver enforces the pin. A `fault` is the
+    transport's or the processor's own failure, a `problem` whose `type` comes from the same small closed
+    set the HTTP problem types use, so an http gateway maps by table rather than by translation. The group
+    is what keeps business errors and faults apart, which is the distinction gRPC's single status channel
+    blurs and the one a caller deciding whether to retry needs.
     """
   return => <Resp, Err> {
     id?: text

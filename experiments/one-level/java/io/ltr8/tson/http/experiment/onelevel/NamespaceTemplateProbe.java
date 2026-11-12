@@ -17,9 +17,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * <b>A namespace type is the map itself</b> ([TSON-SCHEMA] §4.1): a value of {@code iface => !meta.namespace { … }} is
  * written as the bare map, the names inside it judged, and entered by a qualified name key by key (§5.12), so {@code
- * meta.ref<T>}
- * reaches a member as {@code orders.get} with no reading-side rule. A record template closed over a map,
- * {@code ns => <M> { entries: M }}, would put a field between the entry and its keys ({@code orders.entries.get}).
+ * meta.ref<T>} reaches a member as {@code orders.get} with no reading-side rule. A template is an open record, so one
+ * taking the map as its argument, {@code ns => <M> { entries: M }} applied to a declared map, would put a field
+ * between the entry and its keys ({@code orders.entries.get}).
  */
 class NamespaceTemplateProbe {
 

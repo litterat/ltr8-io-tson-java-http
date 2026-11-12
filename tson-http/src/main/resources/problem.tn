@@ -1,5 +1,5 @@
-!!id:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
-!!import:"https://tson.io/2026/39/m/core.tn"
+!!id:"https://tson.io/2026/40/io/ltr8/http/problem.tn"
+!!import:"https://tson.io/2026/40/m/core.tn"
 @doc:"""
   The error body this project writes when a request cannot be fulfilled.
 

@@ -46,21 +46,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonJavalinAdapterTest {
 
-    private static final String SCHEMA_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://schemas.example.com/2026/40/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
                 order => { sku: text  quantity: int32 }
             }""";
 
     /** A schema a body imports beside the one its route reads: a second member of its binding. */
-    private static final String MONEY_ID = "https://schemas.example.com/2026/39/app/money.tn";
+    private static final String MONEY_ID = "https://schemas.example.com/2026/40/app/money.tn";
 
     private static final String MONEY = """
-            !!id:"https://schemas.example.com/2026/39/app/money.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/money.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema { amount => { value: int32  currency: text } }""";
 
     @Typename(name = "order")

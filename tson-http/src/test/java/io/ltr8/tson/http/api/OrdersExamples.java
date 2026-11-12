@@ -50,7 +50,7 @@ import java.util.Map;
 public final class OrdersExamples {
 
     /** The identity prefix every example declares; {@link #id} completes it. */
-    public static final String BASE = "https://schemas.example.com/2026/39/orders/";
+    public static final String BASE = "https://schemas.example.com/2026/40/orders/";
 
     /** Every example, dependencies first. */
     public static final List<String> FILES = List.of("orders-types-1.tn", "orders-errors-1.tn", "orders-1.tn",

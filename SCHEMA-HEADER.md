@@ -49,7 +49,7 @@ agreement check has nothing to compare against for a JSON body. `UPSTREAM.md` ca
 A header carrying the identity of the schema that governs the message body:
 
 ```
-TSON-Schema: "https://schemas.example.com/2026/39/app/order-1.tn"
+TSON-Schema: "https://schemas.example.com/2026/40/app/order-1.tn"
 ```
 
 **It is a projection of the body's binding, not an alternative to it.** That framing is the whole proposal. The
@@ -194,7 +194,7 @@ Define it as an RFC 9651 structured field whose members are **sf-strings**: a Li
 spelt exactly as a single String Item.
 
 ```
-TSON-Schema: "https://schemas.example.com/2026/39/app/order-1.tn"
+TSON-Schema: "https://schemas.example.com/2026/40/app/order-1.tn"
 ```
 
 **DECIDED: sf-string, so the quotes are mandatory.** Which also matches the directive: `!!import`'s argument
@@ -272,8 +272,8 @@ to hold one. Something has to say which version the reply is in, and only the cl
 as `Accept`'s quality values:
 
 ```
-TSON-Accept-Schema: "https://schemas.example.com/2026/39/app/order-2.tn",
-                    "https://schemas.example.com/2026/39/app/order-1.tn";q=0.5
+TSON-Accept-Schema: "https://schemas.example.com/2026/40/app/order-2.tn",
+                    "https://schemas.example.com/2026/40/app/order-1.tn";q=0.5
 ```
 
 The rules, each pinned by a test in `TsonSchemaVersionsTest`:

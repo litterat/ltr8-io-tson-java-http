@@ -1,6 +1,6 @@
-!!id:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
-!!import:"https://tson.io/2026/39/m/core.tn"
-!!import:"https://tson.io/2026/39/m/policy.tn"
+!!id:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
+!!import:"https://tson.io/2026/40/m/core.tn"
+!!import:"https://tson.io/2026/40/m/policy.tn"
 @doc:"""
   A deployment descriptor: how ONE INSTANCE is configured, as against what a document must be (a schema)
   or what an endpoint offers (an API description).

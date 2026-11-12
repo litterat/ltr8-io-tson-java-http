@@ -23,11 +23,11 @@ Prose inside a live entry follows the same rule: say what is left to do and what
 - [ ] **Publish resolvable artifacts** — `tson-http`, `tson-http-jdk`, `tson-http-javalin` and `tson-http-helidon`
   publish to mavenLocal only, behind the sibling's own mavenLocal-only publication, so a consumer needs a checkout of
   both. Publish tson-java to Maven Central (or an interim package registry) first, then this repo. The version should
-  carry the spec revision it is built against (`tson.version` in `gradle.properties`, every identity under `/2026/39/`),
+  carry the spec revision it is built against (`tson.version` in `gradle.properties`, every identity under `/2026/40/`),
   since the revision series changes without compatibility guarantees. Constraint: signing and a release decision in the
   sibling, recorded in `build.gradle.kts`.
 - [ ] **Dereferenceable meta identities** — `meta-service.tn`, `problem.tn` and `deployment.tn` carry `!!id`s under
-  `https://tson.io/2026/39/io/ltr8/http/` that nothing serves. Publish them at their identity so an `!!import`
+  `https://tson.io/2026/40/io/ltr8/http/` that nothing serves. Publish them at their identity so an `!!import`
   naming them resolves over HTTP without a bundled copy. Constraint: `design/schema-authoring.md` says a
   schema is edited in place until it is published; publishing freezes it under [TSON-JSON] §3.5.
 

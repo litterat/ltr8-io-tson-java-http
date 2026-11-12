@@ -35,21 +35,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TsonHttpCodecTest {
 
-    private static final String SCHEMA_ID = "https://example.com/2026/39/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://example.com/2026/40/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
                 order => { sku: text  quantity: int32 }
             }""";
 
     /** A second schema a body may import beside the first: a helper, not a version. */
-    private static final String MONEY_ID = "https://example.com/2026/39/app/money.tn";
+    private static final String MONEY_ID = "https://example.com/2026/40/app/money.tn";
 
     private static final String MONEY = """
-            !!id:"https://example.com/2026/39/app/money.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://example.com/2026/40/app/money.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema { amount => { value: int32  currency: text } }""";
 
     /**
@@ -259,7 +259,7 @@ class TsonHttpCodecTest {
     @Test
     void aBodyNamingAnotherSchemaThanTheStatedOneIsA400() {
         String elsewhere = """
-                !!import:"https://example.com/2026/39/app/other-1.tn"
+                !!import:"https://example.com/2026/40/app/other-1.tn"
                 !order { sku: "A"  quantity: 1 }""";
 
         TsonHttpException bound = assertThrows(TsonHttpException.class, () -> codec.readObjectAs(body(elsewhere),
@@ -415,7 +415,7 @@ class TsonHttpCodecTest {
     void aTypeNothingBindsIsAServerFaultNotALibraryGap() {
         String schema = """
                 !!id:"https://example.test/thing-1.tn"
-                !!import:"https://tson.io/2026/39/m/core.tn"
+                !!import:"https://tson.io/2026/40/m/core.tn"
                 !schema { thing => { a: text } }""";
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(uri -> schema))
@@ -453,7 +453,7 @@ class TsonHttpCodecTest {
     void aBoundClassRefusingWhatItsSchemaAdmitsIsAServerFault() {
         String schema = """
                 !!id:"https://example.test/positive-1.tn"
-                !!import:"https://tson.io/2026/39/m/core.tn"
+                !!import:"https://tson.io/2026/40/m/core.tn"
                 !schema { positive => { n: int32 } }""";
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(uri -> schema))

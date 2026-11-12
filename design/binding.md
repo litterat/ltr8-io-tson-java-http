@@ -69,12 +69,12 @@ are the server's own. Current form only.
   mode. `TsonHttpCodec.prepareToRead(schemaId)` forces that at startup and `TsonSchemaVersions` calls it —
   without it the same mistake is a 500 on the first request that reads one. `@Unbound` marks a component that
   is the class's own, and it means **not on the wire in both directions**: a response type carrying one leaves the
-  field out of the body. A field's type is a reference: a type reference, whose type fixes the component's class, or a
-  sibling reference (`value?: kind!`), whose dependent field is read per instance against the type its sibling `kind`
-  names, so its component is an `Object` receiving whatever that type binds to; a narrower class is a mismatch at
-  compile. **There is no lenient mode**, so a mismatch is a startup failure or nothing. **A
-  mismatch reaching the diagnostics channel is still reported as `SCHEMA_ERROR` and so becomes a 400** —
-  routing and `prepareToRead` are what keep it unreachable.
+  field out of the body. A field's type is a name or a type written in place, which fixes the component's class, or
+  a dependent type (`value?: kind!`), whose field is read per instance against the type its sibling `kind` names, so
+  its component is an `Object` receiving whatever that type binds to; a narrower class is a mismatch at compile.
+  **There is no lenient mode**, so a mismatch is a startup failure or nothing. **A mismatch reaching the diagnostics
+  channel is still reported as `SCHEMA_ERROR` and so becomes a 400** — routing and `prepareToRead` are what keep it
+  unreachable.
 - **`prepareToWrite` is a warm-up, not a correctness measure.** Keep calling it at startup to move first-write
   descriptor resolution off the request thread; nothing about concurrency depends on it.
 

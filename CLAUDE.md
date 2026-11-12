@@ -45,8 +45,8 @@ responses, and serving and fetching schema documents over HTTP. It is a **consum
 it. The library is the sibling repo [ltr8-io-tson-java](https://github.com/litterat/ltr8-io-tson-java), checked out at
 `../ltr8-io-tson-java` and consumed as a Gradle included build (below). Destination remote: `https://github.com/litterat/`.
 
-**Built against Revision 39**, as published on the sibling's `main`, which CI checks out.
-Every identity in this repo carries `/2026/39/` and `tson.version` names `0.39.0-SNAPSHOT`. The revision series changes
+**Built against Revision 40**, on the sibling's `r2026-40-proposal` branch; CI checks out the sibling's default branch.
+Every identity in this repo carries `/2026/40/` and `tson.version` names `0.40.0-SNAPSHOT`. The revision series changes
 without compatibility guarantees, so a `git pull` of the sibling can move the whole identity space;
 `design/schema-authoring.md` says what a bump touches.
 
@@ -124,7 +124,7 @@ Matching tson-java's conventions is what keeps the two repos readable as one bod
   number**: a `SPEC-FEEDBACK.md #N` is live only while the entry is open.
 - **`UpstreamGapsTest` pins every library gap and constraint this project depends on.** A fixed gap flips its assertion
   rather than losing it. Pin the gap, not the way it is delivered.
-- **Project-owned schema `!!id`:** `https://tson.io/2026/39/io/ltr8/http/<name>.tn`, no version in the name; `.tn`, never
+- **Project-owned schema `!!id`:** `https://tson.io/2026/40/io/ltr8/http/<name>.tn`, no version in the name; `.tn`, never
   `.tn1`. Nothing is published yet, so a schema is edited in place.
 
 ## Traps

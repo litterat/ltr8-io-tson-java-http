@@ -1,5 +1,5 @@
-!!id:"https://tson.io/2026/39/io/ltr8/http/agent.tn"
-!!import:"https://tson.io/2026/39/m/core.tn"
+!!id:"https://tson.io/2026/40/io/ltr8/http/agent.tn"
+!!import:"https://tson.io/2026/40/m/core.tn"
 @doc:"""
   TSON Agent AST — the structured middle representation
   (draft 2; the agent experiment, experiments/agent).

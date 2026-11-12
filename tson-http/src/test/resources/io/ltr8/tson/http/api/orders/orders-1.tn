@@ -1,7 +1,7 @@
-!!id:"https://schemas.example.com/2026/39/orders/orders-1.tn"
-!!import:"https://tson.io/2026/39/io/ltr8/http/meta-service.tn"
-!!import:"https://schemas.example.com/2026/39/orders/orders-types-1.tn"
-!!import:"https://schemas.example.com/2026/39/orders/orders-errors-1.tn"
+!!id:"https://schemas.example.com/2026/40/orders/orders-1.tn"
+!!import:"https://tson.io/2026/40/io/ltr8/http/meta-service.tn"
+!!import:"https://schemas.example.com/2026/40/orders/orders-types-1.tn"
+!!import:"https://schemas.example.com/2026/40/orders/orders-errors-1.tn"
 @doc:"""
   Protocol only: nothing HTTP in the document. A protocol is an entry applying `protocol`, a map of
   exchanges keyed by name -- an exchange's name is the key it sits under, scoped to its protocol, and a
