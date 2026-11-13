@@ -2,7 +2,7 @@
 
 **Status: future work, kept for what it says about the descriptor.** An agent executing a plan of calls is the
 consumer that presses hardest on a protocol -- it needs an exchange addressable, its request and response typed, and
-its errors declared -- so sketching it is how `meta-service.tn`'s protocol layer gets tested against something that
+its errors declared -- so sketching it is how `service.tn`'s protocol layer gets tested against something that
 is not HTTP, in the way a second implementation says whether an API holds up. The two layers are kept resolved and
 probed for that reason and no other. **Do not build toward them, and do not let a decision that is the agent's alone
 move the descriptor.** Nothing in `experiments/rpc/`'s order of work waits on them.
@@ -47,7 +47,7 @@ read per instance against the type its sibling `kind` names, so a constant could
 value: type! }`, its type a type reference in a field rather than a tag, binding to an `Object` component. Neither
 shape is chosen here: the tag is one token, the pair two fields, and both check the value in full. A step cannot type
 its parts that way. `or` is to validate against its method's response, which is a projection through `method` that
-[TSON-SCHEMA] §5.2 records as deliberately absent; and `method` itself, as `meta.ref<exchange>`, could not be a
+[TSON-SCHEMA] §5.2 records as deliberately absent; and `method` itself, as `meta.ref<service.exchange>`, could not be a
 sibling, which is typed by a reference over a constructor or by `meta.type_expr`, and never by a reference naming
 values. Neither is the plan's `interface: uri`, which names a schema. So a step's typing stays
 the admission verifier's.
@@ -70,19 +70,19 @@ the admission verifier's.
 
 ## Open questions
 
-**Which namespace may a document bind?** `!!import` binds the type namespace and `!name` resolves against it, one
-hop. A plan or batch document wants to bind a *protocol* -- to say `!place_order { request: { … } }` and have the
-step checked against the exchange -- and cannot: `place_order` is a key inside `orders`, not a type name, so it can
-stand only where a slot is typed `meta.ref<exchange>`, never as a tag. A reference in a data document, to a type or to
-a value, is a name judged against the closure the document imports ([TSON-SCHEMA] §3.3.4), and an argument list
-there is a parse error ([TSON-DATA] §7.2.5): at `m: meta.ref<exchange>`, `orders.place_order` reads and
-`orders.no_such` is refused ("'orders' has no key 'no_such'"), and at `m: meta.ref<order>` a value entry `o1` reads
-while `order`, a type, is refused (`UpstreamGapsTest.aValueReferenceInADataDocumentIsJudged`).
-The URL namespace being hierarchical (`/orders/{id}/items` under `/orders/{id}`) while a resource key in
-`meta-service.tn` is a flat template is the same question, and one answer should serve both.
+**Which namespace may a document bind?** `!!import` binds the type namespace and `!name` resolves against it, one hop. A plan
+or batch document wants to bind a *protocol* -- to say `!place_order { request: { … } }` and have the step checked against
+the exchange -- and cannot: `place_order` is a key inside `orders`, not a type name, so it can stand only where a slot is
+typed `meta.ref<service.exchange>`, never as a tag. A reference in a data document, to a type or to a value, is a name judged
+against the closure the document imports ([TSON-SCHEMA] §3.3.4), and an argument list there is a parse error ([TSON-DATA]
+§7.2.5): at `m: meta.ref<service.exchange>`, `orders.place_order` reads and `orders.no_such` is refused ("'orders' has no key
+'no_such'"), and at `m: meta.ref<order>` a value entry `o1` reads while `order`, a type, is refused
+(`UpstreamGapsTest.aValueReferenceInADataDocumentIsJudged`). The URL namespace being hierarchical (`/orders/{id}/items` under
+`/orders/{id}`) while a resource key in `service.tn` is a flat template is the same question, and one answer should serve
+both.
 
 **The pool's `type` and `method` entries are typed `name`** in `agent-vm.tn`, and want to be `meta.type_ref` and
-`meta.ref<exchange>`, judged on read as any reference in data is. The names they hold are the interface's, while a
+`meta.ref<service.exchange>`, judged on read as any reference in data is. The names they hold are the interface's, while a
 reference resolves in the governing schema's closure, and a field naming the scope for later fields (`interface: uri`)
 is a dependent pair no dependent field reaches, its sibling naming a schema rather than a type. The answer TSON has is
 to make the scope visible instead of computed: the plan governed by a derived schema importing both `agent.tn` and the

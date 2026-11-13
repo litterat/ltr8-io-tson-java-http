@@ -26,27 +26,31 @@ import java.util.function.Function;
 
 /**
  * The service a schema describes, read back from its resolved entries: every endpoint of every entry applying {@code
- * http}, each resolved into a {@link Route}.
+ * service.http}, each resolved into a {@link Route}.
  *
  * <h2>What the resolver checked, and what this does</h2>
  *
  * <p>Naming is the resolver's where it can judge a name, and it is done before this class sees anything: a payload
  * type nothing declares, or a binding's exchange the protocol does not hold, is refused at schema load, because
- * {@code meta-service.tn} types those slots {@code meta.type_ref} and {@code meta.ref<exchange>}. A qualified name
+ * {@code service.tn} types those slots {@code meta.type_ref} and {@code meta.ref<service.exchange>}. A qualified name
  * says which protocol it means ({@code orders.place_order}: the entry, then the key), so no name is ambiguous.
  *
- * <p>An http projection's {@code @binds} and {@code @not_bound} are annotations on its entry, since a value of a
- * namespace type is the map alone, and the resolver does not judge a reference inside an annotation's value. So
- * naming there is this class's: each {@code @binds} name must be an entry of the description applying {@code
- * protocol}, and each exemption's exchange a key of a protocol the projection binds.
+ * <p>An http projection's {@code @service.binds} and {@code @service.not_bound} are annotations on its entry, since a
+ * value of a namespace type is the map alone, and the resolver does not judge a reference inside an annotation's
+ * value. So naming there is this class's: each {@code @service.binds} name must be an entry of the description
+ * applying {@code service.protocol}, and each exemption's exchange a key of a protocol the projection binds.
+ *
+ * <p>Every name the layer declares sits under its one root map, {@code service}, so the reader matches entries and
+ * annotations by their qualified names: an entry's type is {@code service.protocol} or {@code service.http}, and an
+ * annotation is reported as written, {@code service.binds}, {@code service.safe}, {@code service.summary}.
  *
  * <p>What relates two things is this class's too, and it is checked when a description is read, so an unsound
  * description has no model -- a startup failure, as a payload type nothing declares is:
  *
  * <ul>
  *   <li>a binding's exchange belongs to a protocol its projection binds;</li>
- *   <li>the {@code @binds} claim holds -- every exchange of every bound protocol is bound, or exempted in
- *       {@code @not_bound} with a reason -- held per {@link ExchangeName}, never per name;</li>
+ *   <li>the {@code @service.binds} claim holds -- every exchange of every bound protocol is bound, or exempted in
+ *       {@code @service.not_bound} with a reason -- held per {@link ExchangeName}, never per name;</li>
  *   <li>each request record's fields are placed over the path, query, headers and body exactly once
  *       ({@link RequestPlacement});</li>
  *   <li>the verb agrees with what the exchange says about itself (GET safe, PUT and DELETE idempotent), and a
@@ -56,7 +60,7 @@ import java.util.function.Function;
  *       any type labels it; every other endpoint writes a TSON value, so it lists only media types a codec this
  *       library holds can write one in, {@code application/json} and {@code application/tson+json} beside {@code
  *       application/tson};</li>
- *   <li>no two endpoints share a verb and path, across every {@code http} the description holds;</li>
+ *   <li>no two endpoints share a verb and path, across every {@code service.http} the description holds;</li>
  *   <li>a bound request record's dependent field lets a sender name only types this server binds
  *       ({@link ChosenTypes}).</li>
  * </ul>
@@ -93,10 +97,10 @@ public final class TsonApiDescription {
         var compiled = tson.schemaRegistry().get(schemaId).orElseThrow(() -> new IllegalArgumentException(
                 "'" + schemaId + "' is not resolved -- resolve the description before reading it"));
         Namespace<Top> entries = compiled.schema().entries();
-        Map<String, Namespace<?>> protocols = applying(entries, "protocol");
+        Map<String, Namespace<?>> protocols = applying(entries, "service.protocol");
         List<Route> routes = new ArrayList<>();
         Map<String, Route> byKey = new LinkedHashMap<>();
-        applying(entries, "http").forEach((name, http) -> {
+        applying(entries, "service.http").forEach((name, http) -> {
             for (Route route : read(name, http, entries.getAnnotations(name), protocols, entries::get)) {
                 Route earlier = byKey.putIfAbsent(route.key(), route);
                 if (earlier != null) {
@@ -180,7 +184,7 @@ public final class TsonApiDescription {
                 Annotations fallback = docs;
                 routes.add(new Route(verb, path, exchange, request, response, errorStatuses(label, errors, entries),
                         endpoint.status(), document, mediaTypes, placement,
-                        text(onVerb, "summary").or(() -> text(fallback, "summary")),
+                        text(onVerb, "service.summary").or(() -> text(fallback, "service.summary")),
                         text(onVerb, "doc").or(() -> text(fallback, "doc"))));
             });
         });
@@ -209,7 +213,7 @@ public final class TsonApiDescription {
             if (!(endpoint instanceof Document) && !SPOKEN.contains(folded)) {
                 throw new IllegalArgumentException("'" + label + "' lists the media type '" + listed + "', which no "
                         + "codec this server holds can speak -- an endpoint answering a TSON value speaks "
-                        + new TreeSet<>(SPOKEN) + "; an endpoint answering bytes is a !document");
+                        + new TreeSet<>(SPOKEN) + "; an endpoint answering bytes is a !service.document");
             }
             spoken.add(folded);
         }
@@ -221,20 +225,21 @@ public final class TsonApiDescription {
     }
 
     /**
-     * The protocols an http projection's {@code @binds} names, each of which must be an entry of this description
-     * applying {@code protocol}. The resolver does not judge a reference inside an annotation's value, so a name
-     * nothing declares, or one naming an entry of another kind, reaches this check rather than failing at schema load.
+     * The protocols an http projection's {@code @service.binds} names, each of which must be an entry of this
+     * description applying {@code service.protocol}. The resolver does not judge a reference inside an annotation's
+     * value, so a name nothing declares, or one naming an entry of another kind, reaches this check rather than failing
+     * at schema load.
      */
     private static Map<String, Namespace<?>> bound(String httpName, Annotations claims,
                                                    Map<String, Namespace<?>> declared) {
         Map<String, Namespace<?>> protocols = new LinkedHashMap<>();
-        for (List<?> names : claims.values("binds", List.class)) {
+        for (List<?> names : claims.values("service.binds", List.class)) {
             for (Object element : names) {
                 String name = element instanceof ValueRef<?> reference ? reference.name() : String.valueOf(element);
                 Namespace<?> protocol = declared.get(name);
                 if (protocol == null) {
                     throw new IllegalArgumentException("'" + httpName + "' binds '" + name + "', which is no "
-                            + "entry of the description applying protocol -- protocols: " + declared.keySet());
+                            + "entry of the description applying service.protocol -- protocols: " + declared.keySet());
                 }
                 protocols.put(name, protocol);
             }
@@ -262,7 +267,7 @@ public final class TsonApiDescription {
         Set<ExchangeName> claimed = new LinkedHashSet<>();
         protocols.forEach((name, protocol) -> protocol.keySet().forEach(e -> claimed.add(new ExchangeName(name, e))));
         Set<ExchangeName> exempt = new LinkedHashSet<>();
-        for (List<?> exemptions : claims.values("not_bound", List.class)) {
+        for (List<?> exemptions : claims.values("service.not_bound", List.class)) {
             for (Object element : exemptions) {
                 ExchangeName exchange = ExchangeName.of(((Exemption) element).exchange());
                 if (!claimed.contains(exchange)) {
@@ -276,18 +281,19 @@ public final class TsonApiDescription {
                 .toList();
         if (!missing.isEmpty()) {
             throw new IllegalArgumentException("'" + httpName + "' binds protocols declaring " + missing
-                    + " but has no binding for them; bind each, or exempt it in @not_bound with a reason");
+                    + " but has no binding for them; bind each, or exempt it in @service.not_bound with a reason");
         }
     }
 
     /**
      * The projection checks its verb against what the exchange says about itself, and never derives one from the
-     * other ({@code @safe} implies {@code @idempotent}, so a safe exchange may be bound to PUT or DELETE). A verb
-     * whose contract the exchange does not claim is the one mismatch a client cannot see and a cache will act on.
+     * other ({@code @service.safe} implies {@code @service.idempotent}, so a safe exchange may be bound to PUT or
+     * DELETE). A verb whose contract the exchange does not claim is the one mismatch a client cannot see and a cache
+     * will act on.
      */
     private static void requireVerbAgrees(String label, HttpVerb verb, Annotations facts) {
-        boolean safe = facts.has("safe");
-        boolean idempotent = safe || facts.has("idempotent");
+        boolean safe = facts.has("service.safe");
+        boolean idempotent = safe || facts.has("service.idempotent");
         switch (verb) {
             case GET, HEAD, OPTIONS -> require(safe, label, verb, "safe");
             case PUT, DELETE -> require(idempotent, label, verb, "idempotent");
@@ -298,7 +304,7 @@ public final class TsonApiDescription {
     private static void require(boolean holds, String label, HttpVerb verb, String what) {
         if (!holds) {
             throw new IllegalArgumentException("'" + label + "': " + verb + " is " + what + ", but the exchange is "
-                    + "not marked @" + what + " -- mark it, or bind it to a verb that claims less");
+                    + "not marked @service." + what + " -- mark it, or bind it to a verb that claims less");
         }
     }
 
@@ -359,7 +365,7 @@ public final class TsonApiDescription {
 
     /**
      * Every schema identity a client needs in order to resolve this description — itself and its imports
-     * transitively, {@code meta-service.tn} among them, minus the bundled standard library.
+     * transitively, {@code service.tn} among them, minus the bundled standard library.
      *
      * <p><b>This is the set a server must publish</b>, and deriving it is the point: a description that
      * references a schema its own server does not serve is a contract nobody can act on, and hand-listing

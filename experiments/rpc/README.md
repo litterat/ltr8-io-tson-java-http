@@ -1,6 +1,6 @@
 # `rpc.tn` -- the wire form of a protocol
 
-**Status: not landed, and first in the order of work after the descriptor.** `meta-service.tn` describes a
+**Status: not landed, and first in the order of work after the descriptor.** `service.tn` describes a
 protocol, a web service over it, and the endpoints of both; this is what calling an exchange of that protocol looks
 like on a wire. The protocol it is measured against is the orders example that ships as `tson-http`'s test fixture
 (`OrdersExamples`, under `tson-http/src/test/resources/io/ltr8/tson/http/api/orders/`), so this directory holds only
@@ -65,9 +65,9 @@ declares several errors the value carries the error's tag. And an exchange's add
 content-addressed identity -- versioned, unambiguous across every service a gateway fronts, with no registry.
 
 **Dependent fields do not replace the per-exchange closure.** A record field typed `kind!` is read per
-instance against the type its sibling `kind` names, so one generic envelope, `call => { method: meta.ref<exchange>
+instance against the type its sibling `kind` names, so one generic envelope, `call => { method: meta.ref<service.exchange>
 request?: method! }`, would type the request by the exchange the packet addresses. It is refused: a sibling is typed
-by a reference over a constructor (`meta.type_ref`, a `meta.ref<C>`) or by `meta.type_expr`, and `meta.ref<exchange>`
+by a reference over a constructor (`meta.type_ref`, a `meta.ref<C>`) or by `meta.type_expr`, and `meta.ref<service.exchange>`
 names values ([TSON-SCHEMA] §5.2). What the
 form does reach is `{ request_type: meta.type_ref  request?: request_type! }`, a request typed by a type name the
 packet carries, which ties it to no exchange the address names; pinning `request_type` per exchange in a refinement is

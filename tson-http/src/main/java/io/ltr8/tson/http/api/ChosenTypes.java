@@ -131,7 +131,7 @@ final class ChosenTypes {
         }
         Top type = switch (declared.type()) {
             case TypeRef named -> entries.apply(named.name());
-            case TypeInline inPlace -> inPlace.of();         // written in place, as meta.ref<exchange> is
+            case TypeInline inPlace -> inPlace.of();         // written in place, as meta.ref<service.exchange> is
         };
         while (type instanceof Alias(TypeRef target)) {
             type = entries.apply(target.name());

@@ -40,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Whether a protocol and an http projection can be ordinary records -- declared fields beside one field typed by a
  * namespace -- so that a projection's claims are fields the resolver judges rather than annotations on its entry.
- * Measured against a minimal layer written here, not against {@code meta-service.tn}; {@code
+ * Measured against a minimal layer written here, not against {@code service.tn}; {@code
  * proposal/namespace-fields.md} is the proposal it measures. Every test pins Revision 40's outcome, and one failing
  * after a library change means the answer has moved.
  *

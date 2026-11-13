@@ -26,7 +26,7 @@ Each under ~20 KB and opening with its invariants. Pick by what you are about to
 | `acceptingJson`, `application/json` bodies, `respondDescribed`, `application/problem+json` | `json-encoding.md` |
 | `TsonSchemaVersions`, `TSON-Accept-Schema`, `@Profile`, two versions of one schema | `schema-versions.md` |
 | `allowHost`/`mapHost`, `SchemaSource.ofMap`, an `!!import` URL in a request body | `schema-sources.md` |
-| `meta-service.tn`, `io.ltr8.tson.http.api`, `TsonApiDescription`, `TsonApiCoverage`, business errors | `service-description.md` |
+| `service.tn`, `io.ltr8.tson.http.api`, `TsonApiDescription`, `TsonApiCoverage`, business errors | `service-description.md` |
 | The protocol layer, `tson-invoke`, the join (backlog) | `invoke.md` |
 | A `.tn` file this project owns, a `!!id`, `problem.tn`, a revision bump, a field spelling | `schema-authoring.md` |
 | `deployment.tn`, `TsonDeployment`, `/.well-known/tson-deployment`, `policy.tn` | `deployment-descriptor.md` |
@@ -53,7 +53,7 @@ without compatibility guarantees, so a `git pull` of the sibling can move the wh
 
 **Status.** All four modules are built and tested, each adapter with a runnable demo server and a concurrency suite
 driving it under load. Responses are self-describing in both directions, every adapter proves the serve-then-fetch loop,
-and a service publishes a description of itself (`meta-service.tn`) from which it derives what to publish and warm.
+and a service publishes a description of itself (`service.tn`) from which it derives what to publish and warm.
 What remains is polish, the open questions in `UPSTREAM.md`, and the outstanding work in `BACKLOG.md`.
 
 **Hard constraints:**
@@ -71,7 +71,7 @@ adapters never depend on each other. Each module's own `CLAUDE.md` says what it 
 
 | Module | Holds |
 |---|---|
-| `tson-http` (`io.ltr8.tson.http`) | Server-agnostic core: media types, `TsonHttpCodec`, `TsonHttpException` (the whole status policy), `problem.tn`, the two schema headers, `TsonSchemaCatalog`, `TsonSchemaVersions`, `TsonDeployment`, and the service description (`meta-service.tn`, `io.ltr8.tson.http.api`) |
+| `tson-http` (`io.ltr8.tson.http`) | Server-agnostic core: media types, `TsonHttpCodec`, `TsonHttpException` (the whole status policy), `problem.tn`, the two schema headers, `TsonSchemaCatalog`, `TsonSchemaVersions`, `TsonDeployment`, and the service description (`service.tn`, `io.ltr8.tson.http.api`) |
 | `tson-http-jdk` (`io.ltr8.tson.http.jdk`) | Adapter for `com.sun.net.httpserver`; zero dependencies; the reference the other two are read against |
 | `tson-http-javalin` (`io.ltr8.tson.http.javalin`) | Adapter for Javalin 6.7.0 (Jetty 11, `jakarta.*`) |
 | `tson-http-helidon` (`io.ltr8.tson.http.helidon`) | Adapter for Helidon 4.2.2 SE, plus `TsonMediaSupport` over Helidon's `MediaSupport` SPI |
@@ -165,9 +165,12 @@ One line each; the note carries the why. Read the note before touching the code 
   type is never named `int64`, `schema`, `host`, `date`, `uri`, `media_type` or `title`. (`schema-authoring.md`)
 - `problem.tn`'s `diagnostic_code` is a hand-written copy of `Diagnostic.Code`; `TsonProblemSchemaTest` is the only check.
   (`schema-authoring.md`)
-- An entry applying a namespace type is a value, never a type, and the map alone: an http projection's `@binds` and
-  `@not_bound` are annotations on its entry, whose names the reader checks. Only `resource` has the positional form,
-  and a second required field breaks every document written in it. (`service-description.md`)
+- Every name `service.tn` declares sits in its one root map and is written by its path, `!service.binding`,
+  `@service.safe`, `meta.ref<service.exchange>`, inside the layer too: a bare name there is unresolved, and the reader
+  asks `Annotations` for `service.binds`. (`service-description.md`)
+- An entry applying a namespace type is a value, never a type, and the map alone: an http projection's `@service.binds`
+  and `@service.not_bound` are annotations on its entry, whose names the reader checks. Only `service.resource` has the
+  positional form, and a second required field breaks every document written in it. (same)
 - An entry has two annotation positions that land in different places; reading only one looks like a library bug. (same)
 - `TsonHandler.install` is not optional with Helidon's `TsonMediaSupport`. (`tson-http-helidon/CLAUDE.md`)
 - A descriptor states its policy whole; an absent policy is not a permissive one. (`deployment-descriptor.md`)

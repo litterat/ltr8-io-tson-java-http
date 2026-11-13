@@ -141,7 +141,7 @@ class RpcProbe {
         assertEquals(List.of(), tson.validateSchema(OrdersExamples.source("orders-1.tn")));
         assertEquals(List.of(), tson.validateSchema(read("orders-wire-1.tn")));
         var protocol = OrdersExamples.applying(tson.schemaRegistry().get(ORDERS_ID).orElseThrow().schema().entries(),
-                "protocol").get("orders");
+                "service.protocol").get("orders");
         var wire = tson.schemaRegistry().get(WIRE_ID).orElseThrow().schema();
 
         protocol.forEach((name, held) -> {

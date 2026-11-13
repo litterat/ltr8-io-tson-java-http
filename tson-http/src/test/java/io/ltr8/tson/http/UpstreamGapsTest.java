@@ -65,7 +65,7 @@ class UpstreamGapsTest {
     private static final String META_ID = "https://tson.io/2026/40/io/ltr8/http/meta-probe.tn";
     private static final String API_ID = "https://schemas.example.com/2026/40/app/probe-1.tn";
 
-    /** A meta layer declaring namespace types of its own, standing in for meta-service without depending on its shape. */
+    /** A meta layer declaring namespace types of its own, standing in for service.tn without depending on its shape. */
     private static String meta(String declarations) {
         return """
                 !!id:"%s"
@@ -277,10 +277,10 @@ class UpstreamGapsTest {
 
     /**
      * <b>A template's body is a record body</b> ([TSON-SCHEMA] §5.10), so a template over an http projection, {@code
-     * fetching => <T> !http { … }}, is refused at its declaration: an {@code !http { … }} is a value of a namespace
-     * type, no type, and a template over a value is no record. The remedy the refusal names is one value per
-     * instantiation, which for an API description is the projection written out, {@code orders => !http { … }}, and
-     * that describes to its route the way any projection does. Asserted through {@link
+     * fetching => <T> !service.http { … }}, is refused at its declaration: a {@code !service.http { … }} is a value of
+     * a namespace type, no type, and a template over a value is no record. The remedy the refusal names is one value
+     * per instantiation, which for an API description is the projection written out, {@code orders => !service.http {
+     * … }}, and that describes to its route the way any projection does. Asserted through {@link
      * io.ltr8.tson.http.api.TsonApiDescription}, the consumer the projection is for.
      */
     @Test
@@ -290,8 +290,8 @@ class UpstreamGapsTest {
                   order_ref => { id: text }
                 """;
         String template = types + """
-                  fetching  => <T> !http { "/orders/{id}" => {
-                    @safe GET => !operation { request: order_ref  response: T } } }
+                  fetching  => <T> !service.http { "/orders/{id}" => {
+                    @service.safe GET => !service.operation { request: order_ref  response: T } } }
                   orders    => fetching<order>""";
 
         String refused = assertThrows(io.ltr8.tson.base.SchemaValidationException.class,
@@ -300,8 +300,8 @@ class UpstreamGapsTest {
                 && refused.contains("Declare one value per instantiation"), refused);
 
         String written = types + """
-                  orders    => !http { "/orders/{id}" => {
-                    @safe GET => !operation { request: order_ref  response: order } } }""";
+                  orders    => !service.http { "/orders/{id}" => {
+                    @service.safe GET => !service.operation { request: order_ref  response: order } } }""";
         var described = TsonApiSchema.describedBy(resolveAgainstServiceMeta(written), API_ID);
 
         assertEquals(List.of("GET /orders/{id}"),
@@ -320,7 +320,7 @@ class UpstreamGapsTest {
     void anHttpPathKeyIsJudgedAsTheNameWritten() {
         String body = """
                   order  => { sku: text }
-                  orders => !http { "%s" => { @safe GET => !operation { response: order } } }""";
+                  orders => !service.http { "%s" => { @service.safe GET => !service.operation { response: order } } }""";
 
         for (String path : List.of("/", "/x", "/orders/42", "/путь")) {
             var described = assertDoesNotThrow(() -> TsonApiSchema.describedBy(
@@ -333,7 +333,7 @@ class UpstreamGapsTest {
     }
 
     /**
-     * Resolves {@code declarations} as a schema governed by this project's own {@code meta-service.tn}. The probe
+     * Resolves {@code declarations} as a schema governed by this project's own {@code service.tn}. The probe
      * meta the other tests use would do for the parse, but not past it: once these declarations resolve far enough
      * to bind, its minimal records disagree with this project's bound classes. The real meta is also the one whose
      * payoff this is.
@@ -423,11 +423,11 @@ class UpstreamGapsTest {
 
     /**
      * A namespace type declares its facets and nothing else: a value of it is the map alone, so a field beyond the
-     * facets {@code meta.namespace} has as a refinement of {@code meta.map} -- {@code key_type} and {@code
-     * value_type}, {@code ordered}, {@code min_items} and {@code max_items} among them -- has nowhere to be written,
-     * and {@code meta.namespace}'s own record reader refuses it as an unknown field, listing the facets. That is
-     * why what {@code meta-service.tn}'s {@code http} says about the protocols behind it -- the claims {@code
-     * binds} and {@code not_bound} -- is annotation on the projection's entry rather than fields beside its paths.
+     * facets {@code meta.namespace} has as a refinement of {@code meta.map} -- {@code key_type} and {@code value_type},
+     * {@code ordered}, {@code min_items} and {@code max_items} among them -- has nowhere to be written, and {@code
+     * meta.namespace}'s own record reader refuses it as an unknown field, listing the facets. That is why what {@code
+     * service.tn}'s {@code service.http} says about the protocols behind it -- the claims {@code service.binds} and
+     * {@code service.not_bound} -- is annotation on the projection's entry rather than fields beside its paths.
      */
     @Test
     void aNamespaceTypeDeclaresOnlyItsFacets() {
@@ -458,10 +458,11 @@ class UpstreamGapsTest {
      * holding the name and never delivered: {@code isResolved()} is false and {@code get()} throws, where the same
      * reference in a field of a value entry is delivered when the schema links.
      *
-     * <p>{@code meta-service.tn} writes an http projection's {@code @binds} and {@code @not_bound} exactly this way,
-     * so {@code TsonApiDescription} checks both itself: each name is an entry applying {@code protocol}, each
-     * exemption a key of a protocol the projection binds. The layer keeps the {@code ref<…>} typing so the declaration says
-     * what it means; when this is fixed, the clean load below flips and the reader's checks become a second net.
+     * <p>{@code service.tn} writes an http projection's {@code @service.binds} and {@code @service.not_bound} exactly
+     * this way, so {@code TsonApiDescription} checks both itself: each name is an entry applying {@code
+     * service.protocol}, each exemption a key of a protocol the projection binds. The layer keeps the {@code ref<…>}
+     * typing so the declaration says what it means; when this is fixed, the clean load below flips and the reader's
+     * checks become a second net.
      */
     @Test
     void aReferenceInsideAnAnnotationValueIsNotJudged() {
@@ -512,9 +513,9 @@ class UpstreamGapsTest {
      * no default one. An {@code identifier_type} widened with {@code start_add} and {@code continue_add} is
      * admitted, and still carries a {@code pattern} that is enforced at the key.
      *
-     * <p>{@code meta-service.tn}'s {@code http} is keyed this way: {@code path_template} is an {@code identifier_type}
-     * starting with {@code /}, its {@code pattern} holding a URI template's structure, and §8.2's name hygiene
-     * reaches a path key as it reaches any name.
+     * <p>{@code service.tn}'s {@code service.http} is keyed this way: {@code service.path_template} is an {@code
+     * identifier_type} starting with {@code /}, its {@code pattern} holding a URI template's structure, and §8.2's name
+     * hygiene reaches a path key as it reaches any name.
      */
     @Test
     void aNamespaceKeyTypeMustBeAnIdentifierFamily() {
@@ -562,8 +563,8 @@ class UpstreamGapsTest {
      * and {@code !op { request: no_such }} is refused naming the full path. The reader built from the slot's
      * declaration records its type beside the name, so the linker never walks declared types back to it.
      *
-     * <p>{@code meta-service.tn} holds every {@code !operation} this way, in a {@code resource}'s map field under a
-     * path key of an {@code http}. Pinned because a gap here stops a sound schema resolving.
+     * <p>{@code service.tn} holds every {@code !service.operation} this way, in a {@code service.resource}'s map field
+     * under a path key of a {@code service.http}. Pinned because a gap here stops a sound schema resolving.
      */
     @Test
     void aKindSlotOnASubtypeBehindARecordFieldIsJudged() {
@@ -597,9 +598,9 @@ class UpstreamGapsTest {
      * <b>A {@code ref<T>} name past a record value's field is judged and delivered</b>, as a key-only walk is. An
      * interface held under a key that keeps its methods in a namespace-typed field is reached as {@code
      * i.orders.methods.place}, walking an entry, a key, a field and a key; the walk reads the field through the
-     * descriptor that bound the host. A key missing past the field is refused. {@code meta-service.tn}'s own
-     * {@code ref<exchange>} walks an entry and a key alone; this pins the longer walk so a regression to a gap fails
-     * here.
+     * descriptor that bound the host. A key missing past the field is refused. {@code service.tn}'s own {@code
+     * meta.ref<service.exchange>} walks an entry and a key alone; this pins the longer walk so a regression to a gap
+     * fails here.
      */
     @Test
     void aReferenceThroughARecordValuesFieldIsJudged() {
@@ -1325,7 +1326,7 @@ class UpstreamGapsTest {
      *
      * <ul>
      *   <li>a layer declaring a namespace type imports an ordinary library and uses its atom in a record the
-     *       namespace holds -- how {@code meta-service.tn} takes {@code net.tn}'s {@code media_type};</li>
+     *       namespace holds -- how {@code service.tn} takes {@code net.tn}'s {@code media_type};</li>
      *   <li>an ordinary schema imports a library applying a kernel constructor and uses the type it builds.</li>
      * </ul>
      *
@@ -1622,7 +1623,7 @@ class UpstreamGapsTest {
 
     // ── fixed upstream, pinned here: a sibling typed by a reference written in place is refused as written ─
 
-    /** A protocol layer as {@code meta-service.tn} has it: exchanges, each naming its request type, under a name. */
+    /** A protocol layer as {@code service.tn} has it: exchanges, each naming its request type, under a name. */
     private static final String EXCHANGES = meta("""
               exchange      => { request?: meta.type_ref }
               exchange_name => meta.identifier

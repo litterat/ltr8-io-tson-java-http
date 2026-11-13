@@ -1,5 +1,5 @@
 !!id:"https://schemas.example.com/2026/40/app/orders-api-1.tn"
-!!import:"https://tson.io/2026/40/io/ltr8/http/meta-service.tn"
+!!import:"https://tson.io/2026/40/io/ltr8/http/service.tn"
 !!import:"https://schemas.example.com/2026/40/app/order-1.tn"
 !!import:"https://tson.io/2026/40/io/ltr8/http/problem.tn"
 !!import:"https://tson.io/2026/40/m/core.tn"
@@ -7,23 +7,23 @@
   @doc:"Where a published schema is: the path component of its own !!id."
   schema_ref => { schemaPath: text }
 
-  orders => !protocol {
+  orders => !service.protocol {
     @doc:"Accept an order and confirm it with the quantity doubled."
     place_order => { request: order  response: order  errors: [sku_not_found] }
   }
 
-  @binds:[orders]
-  orders_http => !http {
+  @service.binds:[orders]
+  orders_http => !service.http {
     "/orders" => {
-      @summary:"Place an order"
-      POST => !binding { exchange: orders.place_order  status: 201
+      @service.summary:"Place an order"
+      POST => !service.binding { exchange: orders.place_order  status: 201
                          media_types: ["application/json" "application/tson+json"] }
     }
     "/{+schemaPath}" => {
-      @safe
-      @summary:"Fetch a published schema"
+      @service.safe
+      @service.summary:"Fetch a published schema"
       @doc:"Every schema this service names is served at its own identity's path."
-      GET => !document { request: schema_ref  media_types: ["application/tson"] }
+      GET => !service.document { request: schema_ref  media_types: ["application/tson"] }
     }
   }
 }

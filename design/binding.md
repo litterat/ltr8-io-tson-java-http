@@ -46,10 +46,10 @@ are the server's own. Current form only.
   whatever the map says, and `Tson.dataBindContext()` is that composed context.
 - **One context, schemas and data alike.** The context a `Tson` is built with binds a schema's value entries as it
   binds a data document's values. A value entry binds by the name of the type it applies, as a data value does: an
-  entry applying a record type (`!binding { … }`) binds to the class the map gives that name, and one applying a
+  entry applying a record type (`!service.binding { … }`) binds to the class the map gives that name, and one applying a
   namespace type is a `ValueEntry(type, Namespace)` whose values bind the same way. An entry no class binds is held as
   a tree: the schema loads, and the bind registry refuses it with `BIND_MISMATCH` at the entry. So a vocabulary a
-  schema imports belongs in the same map as the application's: `TsonApiSchema.bindings()` is `meta-service.tn`'s
+  schema imports belongs in the same map as the application's: `TsonApiSchema.bindings()` is `service.tn`'s
   records as an explicit map, and `bindingsWith(application)` merges the two, refusing a name both bind, since within
   one closure a name means one thing. The demos build their one context as
   `TsonBindings.of(TsonApiSchema.bindingsWith(bindings))`.
@@ -63,7 +63,7 @@ are the server's own. Current form only.
   where it is a diagnostic the client can act on. Pinned by
   `TsonHttpCodecTest.aBoundClassRefusingWhatItsSchemaAdmitsIsAServerFault`.
 - **A value's name binds to a `ValueRef` or a `String`, a type's name to a `TypeRef`.** A slot typed `meta.ref<T>`
-  with `T` no constructor (`exchange: meta.ref<exchange>`) holds a value by name. A `ValueRef<T>` component receives
+  with `T` no constructor (`exchange: meta.ref<service.exchange>`) holds a value by name. A `ValueRef<T>` component receives
   the name and, once delivered, the value it reaches through `get()`: a name in a schema's value entry is delivered
   when the schema links, one in a data document at the read, and one inside an annotation's value never
   (`isResolved()` false, `get()` throws). A `String` component receives the name alone. A `TypeRef` component there

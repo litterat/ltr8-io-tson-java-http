@@ -19,7 +19,9 @@ touches, and the schema-language rules that read like bugs when they bite. Curre
   `int64`, `schema`, `host`, `date`, `uri`, `media_type`, `title` or the like.
 - A vocabulary this project publishes declares its entries under one map named for itself, so it reserves one root name
   in every importer: every root name of a closure is reserved and a clash is unfixable by the importer
-  ([TSON-SCHEMA] §2.2.3). `meta-service.tn` is moved under this rule by the backlog item.
+  ([TSON-SCHEMA] §2.2.3). `service.tn` declares everything, annotations included, under `service`, and names its own
+  entries by the same path from inside the map; `problem.tn` and `deployment.tn` still declare at the root
+  (`BACKLOG.md`).
 - An optional field is `name?: T`; `name: T?` is a required field admitting `_`. A `text` field accepts any token.
   A `pattern` is I-Regexp and `^`/`$` are literal characters.
 
@@ -60,12 +62,13 @@ message).
 `meta.identifier_ref`, `meta.ref<T>`, `!meta.namespace { key_type: K  value_type: V }`, `!unicode.text_type { … }`,
 `!numeric.integer_type { … }`, `numeric.count` and `net.media_type_type` by path. A path's first segment is a schema
 map nested in its document's root as an entry, `meta => !schema { … }`, which is how a library has a namespace of its
-own; `policy.tn` declares `policy => !schema { … }` the same way. `meta.ref<T>` is the one reference spelling, sugar
-for the construction `!meta.ref { of: T }`: over a constructor it names the types built with it
-(`meta.ref<net.media_type_type>`), over any other type the values of it (`meta.ref<exchange>`), and `meta.type_ref` is
-the reference over `meta.type`. `kind!` is no reference and no value: it is the schema grammar's sugar for a dependent
-type written in place, `{ of: !meta.dependent { on: kind } }`, and stands only at a record field's type. `media_type`
-and `uri_reference` come from `net.tn` through core, which is where `meta-service.tn` and `problem.tn` take them.
+own; `policy.tn` declares `policy => !schema { … }` the same way, and this project's `service.tn` declares
+`service => !schema { … }`. `meta.ref<T>` is the one reference spelling, sugar for the construction
+`!meta.ref { of: T }`: over a constructor it names the types built with it (`meta.ref<net.media_type_type>`), over any
+other type the values of it (`meta.ref<service.exchange>`), and `meta.type_ref` is the reference over `meta.type`.
+`kind!` is no reference and no value: it is the schema grammar's sugar for a dependent type written in place,
+`{ of: !meta.dependent { on: kind } }`, and stands only at a record field's type. `media_type` and `uri_reference`
+come from `net.tn` through core, which is where `service.tn` and `problem.tn` take them.
 
 ## Media type and file extension
 
@@ -104,7 +107,7 @@ rejects. It has caught every addition so far. Keep it.
 **Project-owned schema `!!id`** follows tson-java's convention with this repo's own group:
 `https://tson.io/2026/40/io/ltr8/http/<name>.tn` — `/2026/40` the spec revision, `io/ltr8` the publisher, `http`
 the subsystem, `<name>` the schema, and **no version in the name**. That covers `problem.tn`, `deployment.tn`,
-`meta-service.tn` and the experiments' schemas. The demos' example application (`schemas.example.com/…/app/`)
+`service.tn` and the experiments' schemas. The demos' example application (`schemas.example.com/…/app/`)
 is not project-owned and keeps its numbered names, deliberately: `order-1.tn` beside `order-2.tn` is what
 `TsonSchemaVersions` exists to route, an application that has published two versions.
 
@@ -152,7 +155,7 @@ the build is the check.
   `date`, `time`, `period`, `uuid`, `email`, `host`, `hostname`, `uri`, `uri_reference`, `media_type`, `title`,
   `comment` among them — and the map names `meta`, `atom`, `numeric`, `unicode`, `net`, `binary`, `temporal`. A schema
   importing `policy.tn`, as `deployment.tn` does, reserves the map name `policy` too. So an application type is
-  never named after one, and a vocabulary this project publishes declares none: `meta-service.tn` takes `media_type`
+  never named after one, and a vocabulary this project publishes declares none: `service.tn` takes `media_type`
   from `net.tn` rather than declaring its own, since a description imports both it and core. The bundled roots are
   kept to what an author writes, so `record`, `identifier`, `field_name` and `kind` stay free. Core declares no sign
   bounds, no `non_empty_text` and no bare `identifier`, so a schema wanting one declares it — `non_empty_text =>
@@ -160,14 +163,17 @@ the build is the check.
   `meta.identifier`. A schema naming one it never declared fails as *"field 'sku' has an unresolved reference
   'non_empty_text'"*, which reads like a typo in the schema and is a library upgrade. A vocabulary
   this project publishes therefore declares its entries under one map named for itself, as `policy.tn` does, so that
-  it costs an importer one root name; `meta-service.tn`, which declares its vocabulary at the root, is moved under
-  that rule by the backlog item.
+  it costs an importer one root name. `service.tn` nests every entry and annotation under `service => !schema { … }`,
+  and an entry inside the map names another by its path, `exchange => service.signature & {}`, since a name resolves
+  in the schema's one namespace: a bare `signature` there is an unresolved reference. A description then writes
+  `!service.protocol` and `@service.binds`, and a bound class's `@Typename` is the qualified name. `problem.tn` and
+  `deployment.tn` still declare at the root (`BACKLOG.md`).
 
 - **A `pattern` is I-Regexp, and `^`/`$` are not anchors.** The kernel pins `regex` to RFC 9485
   ([TSON-SCHEMA] §4.2, "pinned to I-Regexp"), whose match is against the **whole** token — so a pattern needs
   no anchors, and writing them adds two literal characters no token has. It fails in the worst way: the
   schema compiles, and every value is refused with *"'Latn' does not match the required pattern
   `^[A-Za-z][A-Za-z_]*$`"* — a message that reads like the value is wrong when the pattern is. Reflex from
-  JSON Schema, which is unanchored and needs them. `meta-service.tn`'s `header_name` and `path_template` carry
-  patterns here.
+  JSON Schema, which is unanchored and needs them. `service.tn`'s `service.header_name` and `service.path_template`
+  carry patterns here.
 

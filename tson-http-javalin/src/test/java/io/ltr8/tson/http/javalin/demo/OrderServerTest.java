@@ -147,7 +147,7 @@ class OrderServerTest {
         assertTrue(OrderServer.SCHEMA.contains("!!import:\"" + TsonProblemSchema.ID + "\""),
                 "the error schema composes the CURRENT problem schema");
         assertTrue(OrderServer.API.contains("!!import:\"" + TsonApiSchema.ID + "\""),
-                "the description imports the CURRENT meta-service.tn");
+                "the description imports the CURRENT service.tn");
     }
 
 

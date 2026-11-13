@@ -39,9 +39,9 @@ written, and each item asks a model to **classify** a construct, **predict** whe
 | Container sugar | `[T]`, `{K => V}`, `[T, U]`, `[T; 1..]` | Classify the desugared constructor; predict at the size bounds. |
 | Templates | `<T> { item: T }`, `box<order>`, `uuid_pair => <B> { first: uuid  second: B }` | Predict the closed type an application yields. |
 | Name-holding slots | `meta.type_ref`, `meta.ref<T>`, `orders.place_order` | Predict which names the slot admits: a type's or a value's. |
-| Namespace types and values | `orders => !protocol { ... }` | Classify the entry; predict what its keys may hold. |
+| Namespace types and values | `orders => !service.protocol { ... }` | Classify the entry; predict what its keys may hold. |
 | Positional form | `"/orders" => { GET => ... }` | Predict what the map stands in for, and what a new required field breaks. |
-| Annotations | `doc => @annotation text`, `@binds:[x]` | Predict where an annotation on an entry lands. |
+| Annotations | `doc => @annotation text`, `@service.binds:[x]` | Predict where an annotation on an entry lands. |
 | Directives | `!!id`, `!!meta`, `!!import`, `!!schema` | Predict which names are visible, and at which level. |
 | Void and absence | `_`, an omitted key | Predict admission of each at `a?: T`, `a: T?` and `a: T`. |
 | Quoting | `"/orders/{id}"` | Predict whether a token needs quotes; write a key that does. |
@@ -63,10 +63,10 @@ Phase 3 tool and is not built until a hypothesis calls for it.
   charged with: a type applied where a constructor was needed, refinement of a finished entry, a facet body in field
   grammar, an unresolved constructor. An LLM judge is used only for prose, with a rubric drawn from the
   stripped documentation, and never to grade syntax.
-- **The stripped documentation is the answer key.** Stripping `@doc` and `@summary` from a layer produces the stimulus;
-  what was stripped is the rubric for comprehension items and the target for the unknowns experiment.
+- **The stripped documentation is the answer key.** Stripping `@doc` and `@service.summary` from a layer produces the
+  stimulus; what was stripped is the rubric for comprehension items and the target for the unknowns experiment.
 - **The item banks already exist.** The bundled schemas, `meta-kernel.tn`, `meta.tn`, `core.tn` and `net.tn` in the
-  sibling's `spec/m/`, and this repo's `meta-service.tn`, `deployment.tn`, `problem.tn` and the orders fixtures under
+  sibling's `spec/m/`, and this repo's `service.tn`, `deployment.tn`, `problem.tn` and the orders fixtures under
   `tson-http/src/test/resources/io/ltr8/tson/http/api/orders/`. The pinned diagnostics in `UpstreamGapsTest` and
   `MediaTypeKindProbeTest` (`tson-http/src/test/java/io/ltr8/tson/http/`): each is a planted error with its exact
   message. Each item is tagged with the inventory features it exercises.
@@ -226,7 +226,7 @@ on the line: the signature of a convention or an order dependence.
 **Weight: Low.** The most informative single artefact, but most attempts fail and grading is by hand.
 
 **Steps:**
-1. Give the stripped kernel and `meta.tn`; ask for a layer describing a service, in the shape of `meta-service.tn`.
+1. Give the stripped kernel and `meta.tn`; ask for a layer describing a service, in the shape of `service.tn`.
 2. Compile each attempt, and tag each diagnostic with its feature.
 3. Keep the diagnostics and the attempts as a record of the failure shapes per model.
 

@@ -9,7 +9,7 @@ are touching:
 | `TsonHttpException`, `TsonProblem*`, `problem.tn` | `status-classification.md`, `schema-authoring.md` |
 | `TsonSchemaVersions`, `TsonDocumentPeek` use | `schema-versions.md` |
 | `TsonBindings` | `binding.md` |
-| `api/` (`TsonApiSchema`, `TsonApiDescription`, `TsonApiCoverage`, the bound records), `meta-service.tn`, the `OrdersExamples` fixtures | `service-description.md` |
+| `api/` (`TsonApiSchema`, `TsonApiDescription`, `TsonApiCoverage`, the bound records), `service.tn`, the `OrdersExamples` fixtures | `service-description.md` |
 | `TsonDeployment`, `deployment.tn` | `deployment-descriptor.md` |
 | `probe/`, `UpstreamGapsTest` | `tson-api-surface.md`; `experiments/CLAUDE.md` for the probes that live there |
 
@@ -25,8 +25,9 @@ Rules that bite here:
   `diagnostic_code` is a hand copy of `Diagnostic.Code`; `TsonProblemSchemaTest` keeps it current.
 - `HttpSchemaSource` is upstream's. What stays here is the mapping of its failures to statuses and
   `TsonHttpSchemaSourceIntegrationTest`; do not retest upstream's policy.
-- A class in `io.ltr8.tson.http.api` binds to a `meta-service.tn` record only by being named in
-  `TsonApiSchema.bindings()`, an explicit map; a record added to the layer binds nothing until a line is added there,
-  and an application binding one of those names is refused by `bindingsWith`.
+- A class in `io.ltr8.tson.http.api` binds to a `service.tn` record only by being named in
+  `TsonApiSchema.bindings()`, an explicit map keyed by qualified name (`service.binding`), as its `@Typename` is; a
+  record added to the layer binds nothing until a line is added there, and an application binding one of those names
+  is refused by `bindingsWith`.
 - Experiments' probe tests join this module's test source set from `experiments/*/java`; a probe failing after a
   library change is information, not a regression.

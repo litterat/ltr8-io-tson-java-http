@@ -11,7 +11,7 @@ import java.util.Optional;
  * share. Its slots are typed {@code meta.type_ref}, so each name is a type the resolver judged; nothing here
  * declares that.
  */
-@Typename(name = "signature")
+@Typename(name = "service.signature")
 public record Signature(Optional<TypeRef> request, Optional<TypeRef> response, List<TypeRef> errors) {
 
     public Signature {

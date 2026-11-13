@@ -1,0 +1,334 @@
+!!id:"https://tson.io/2026/40/io/ltr8/http/service.tn"
+!!import:"https://tson.io/2026/40/m/meta.tn"
+!!import:"https://tson.io/2026/40/m/net.tn"
+@doc:"""
+  A vocabulary for describing a service: what it can be asked to do (exchanges, grouped into protocols)
+  and how HTTP exposes that (an http projection of endpoints). A schema importing this one is a service
+  description, and `TsonApiDescription` reads it.
+
+  ONE ROOT NAME. Every entry of this layer, its annotations included, is a member of the schema map
+  `service` nested in its root, and is named by its path from the root: `service.protocol`,
+  `service.binding`, `@service.binds`. Every root name of an import closure is reserved in each importer
+  ([TSON-SCHEMA] §2.2.3), and a description imports this layer beside the domain schemas it describes,
+  so a layer declaring `document` or `resource` at its root would forbid a domain those names. Nested in
+  one map, it reserves `service` alone. An entry refers to another by the same path, from inside the map
+  as from outside it, since a name resolves in the schema's one namespace.
+
+  The layer describes a service from the protocol's side, not the host language's. A protocol is a named
+  set of exchanges, each one request-and-reply: a request record, a response record and error records. An
+  http projection is HTTP's own constructs -- verbs, paths, headers, statuses, media types -- bridged to an
+  exchange's request record by placement. A language is reached from that side, through the join
+  (`design/invoke.md`), and no parameter list, return type or exception is ever written here.
+
+  One vocabulary, two constructors -- and only two. `service.protocol` and `service.http` are the entries a
+  description writes, so they are namespace types (§4.1): an entry applying one is a map from a name to a
+  value, and a value, never a type. A protocol maps exchange names to exchanges; an http projection maps
+  path templates to resources. Everything inside them -- `service.exchange`, `service.resource`,
+  `service.endpoint`, `service.operation`, `service.binding`, `service.document`, `service.exemption` -- is
+  an ordinary RECORD, because it only ever appears as a map value. A record composes (`service.operation =>
+  service.endpoint & service.signature`), is admitted as a subtype where its base is expected (§7.2), and is
+  never a constructor anyone applies at entry level.
+
+    orders => !service.protocol {
+      @service.safe get_order => { request: order_ref  response: order  errors: [order_not_found] }
+      place_order             => { request: new_order  response: order  errors: [sku_not_found] }
+    }
+
+    @service.binds:[orders]
+    orders_http => !service.http {
+      "/orders"      => { POST => !service.binding { exchange: orders.place_order  status: 201 } }
+      "/orders/{id}" => { GET  => !service.binding { exchange: orders.get_order } }
+    }
+
+  Exchanges are keys inside their protocol, and endpoints are values two maps down -- keyed by path, then
+  by verb -- so neither is a global entry: two protocols may both declare `get_order`, and an http
+  projection needs no invented operation names. An exchange's qualified name is its protocol's entry, then
+  its key.
+
+  What an http projection claims about the protocols behind it is ANNOTATION on its entry, written before
+  the name: `@service.binds` and `@service.not_bound`. A value of a namespace type is the map alone, with no
+  fields beside its keys, so a fact about the projection as a whole has nowhere else to be written. A
+  protocol lists its exchanges and nothing more; there is no inheritance between protocols, and a
+  projection binding two names both.
+
+  Three ways to use it:
+    protocol only     a `!service.protocol`; nothing HTTP in the document.
+    web service only  a `!service.http` of `!service.operation`s, each carrying its signature INLINE.
+    both              a `!service.protocol`, and a `!service.http` that `@service.binds` it with
+                      `!service.binding`s naming its exchanges.
+  An endpoint whose body is not a TSON value -- a schema document served as bytes, a page -- is a
+  `!service.document`, listing its media types where the others state a response type.
+
+  THE POSITIONAL FORM, AND WHAT IT COSTS. `service.resource` has exactly one bare REQUIRED field, so §5.6
+  lets the map stand in for it: `"/orders" => { GET => ... }` is `"/orders" => { endpoints: { GET => ... } }`,
+  and the tag is optional under the path key. It reads far better and the examples use it. The cost is a
+  versioning one and it is the reason this is written down: adding a SECOND required field to
+  `service.resource` withdraws the positional form from it, and every document written in it stops
+  parsing. So a new field there is optional or it is a new type.
+
+  WHAT THE RESOLVER CHECKS, AND WHAT THE READER DOES. A relation that names something is a reference.
+  A binding's `exchange` is a `meta.ref<service.exchange>` the resolver judges at schema load: a qualified
+  name walking an entry and its key -- `orders.place_order` -- so a name nothing declares, one naming the
+  wrong kind of thing, or an exchange key the protocol does not hold is refused there, and the qualified
+  name says which protocol it means. The resolver does not judge a reference inside an annotation's value,
+  so `@service.binds` and an exemption's `exchange` are typed as references here, saying what they mean,
+  and `TsonApiDescription` checks them itself: each `@service.binds` name is an entry applying
+  `service.protocol`, and each exemption names an exchange a bound protocol holds. What relates two things
+  beyond naming one is the reader's too, when it reads a description, and an unsound description has no
+  model: a binding's exchange belonging to a protocol the projection binds, the `@service.binds` claim, the
+  placement of a request record over a path, a verb or a status against what the exchange declares, an
+  error type fixing its status, a media type the server can speak, and no two endpoints sharing a verb and
+  a path.
+  """
+!schema {
+  service => !schema {
+    @doc:"""
+      The transport-neutral contract of one request-and-reply. A plain record on purpose: it is what
+      `exchange` and an inline `operation` share.
+
+      `request` absent means the exchange takes nothing; `response` absent means it returns nothing (an HTTP
+      204). `errors` lists BUSINESS errors -- the request was schema-valid and the domain said no -- each
+      a type composing `problem`. A transport's own refusals (a body failing its schema, an Accept it
+      cannot satisfy) are not listed: every exchange has them and the error boundary answers them.
+      """
+    signature => {
+      request?:         meta.type_ref
+      response?:        meta.type_ref
+      errors?:          [meta.type_ref]
+    }
+
+    @doc:"""
+      An exchange: one request-and-reply, a signature and nothing more. Its NAME is the key it sits under in a
+      protocol. A record, not a constructor: it is only ever a map value. The empty trailing body is what
+      makes it a type of its own -- `exchange => service.signature` would be an alias, and an alias is a hop to its
+      target, so the values would read back as signatures.
+      """
+    exchange => service.signature & {}
+
+    @doc:"""
+      A protocol: a named set of exchanges, keyed by name, and nothing else. A namespace type, so an entry
+      applying it is the map of exchanges itself, and a qualified name enters it -- a `meta.ref<service.exchange>`
+      reaches an exchange as `orders.place_order`, the entry and then the key. An exchange is a map VALUE under
+      its name, so its name is scoped to the protocol, and annotations written before the key -- `@doc`,
+      `@service.summary`, `@service.safe`, `@service.idempotent` -- document it and state its facts.
+      """
+    protocol => !meta.namespace { key_type: service.exchange_name  value_type: service.exchange }
+
+    @doc:"RFC 9110's request methods (§9), called verbs so that `method` names nothing in this layer."
+    http_verb => !enum [GET POST PUT PATCH DELETE HEAD OPTIONS]
+
+    @doc:"Refined, so 42 is not a status."
+    status_code => !integer ^ { min: 100  max: 599 }
+
+    @doc:"""
+      The naming roles of the namespaces this layer borrows -- one per namespace, as the kernel declares
+      `meta.type_name`, `meta.field_name` and `meta.param_name` over `meta.identifier`. A key typed by a role
+      enforces that namespace's grammar and names the namespace in the refusal ("'exchange_name': 'place
+      order': U+0020 cannot appear in an identifier"), where `type_name` would misname the namespace doing the
+      refusing. A namespace type's key is a name, so its role is an identifier family: where the authority's
+      grammar is wider than TSON's identifier, the role is a `unicode.identifier_type` widened with `start_add`
+      and `continue_add`, as `path_template` is. A map field's key may still be a text family carrying a
+      `pattern`, as `header_name` is; a `pattern` is I-Regexp, matched against the whole token, so no anchors.
+
+      An exchange's name: an identifier in its protocol's namespace, not a type name.
+      """
+    exchange_name => meta.identifier
+
+    @doc:"""
+      An http projection's key: an absolute path written as a URI template (RFC 6570) at levels 1 and 2, whose
+      variables name fields of the endpoint's request record. `{id}` expands a value percent-encoded;
+      `{+schemaPath}`, reserved expansion, leaves its `/` unencoded, which is what an identity path with
+      slashes in it needs. The fragment operator is not admitted, since a server never receives a fragment,
+      and nor are levels 3 and 4 -- several variables to an expression, query forms, prefixes and explode --
+      which describe expansion rather than a route a server can match. A variable name is ASCII letters,
+      digits and `_`.
+
+      An identifier family, because it keys a namespace: it starts with `/`, and continues with identifier
+      characters and RFC 3986's other path characters -- unreserved, sub-delimiters but `'`, `:`, `@`, a
+      percent-encoded octet -- plus a template's braces and `+`. The `pattern` holds the structure the
+      character set cannot: braces paired around one variable, and `%` followed by two hex digits. Being a
+      name, a path key meets [TSON-DATA] §8.2's name hygiene too, so a mixed-script path is refused.
+      """
+    path_template => !unicode.identifier_type {
+      start:        NONE
+      start_add:    "/"
+      continue_add: "/{}+%-._~!$&()*,;=:@"
+      pattern:      "/([^%{}]|%[0-9A-Fa-f]{2}|\\{[+]?[A-Za-z0-9_]+\\})*"
+    }
+
+    @doc:"""
+      A header field name: an RFC 9110 token, compared without case as RFC 9110 §5.1 has it -- held folded, so
+      `Idempotency-Key` is `idempotency-key`, the form HTTP/2 and HTTP/3 put on the wire. It keys a map field
+      rather than a namespace, so it is a text family with a `pattern`.
+      """
+    header_name => !unicode.text_type { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+"  normalization: NFKC_CASEFOLD }
+
+    @doc:"""
+      Where a request record's fields go: the bridge from HTTP's constructs to the exchange's request record,
+      and the place where a protocol and the http projection over it are allowed to look different. The verb
+      and the path are not here: they are the keys an operation sits under, in its resource and its
+      projection.
+
+      An exchange has one request record, and the endpoint distributes that record's fields across the HTTP
+      request: a `{segment}` in the resource's path binds the field of that name; `query` names fields
+      carried as query parameters; `headers` maps a field to the header that carries it; `body` names ONE
+      field carried as the whole body, unwrapped. Whatever is left is the remainder, and the remainder is
+      the body -- unless the verb is GET or HEAD, or `body` already named a field, in which case it is the
+      query. Every field lands in exactly one place, and a field carried in the path, the query or a
+      header must be a scalar -- a URL segment cannot carry a record. That is what makes the mapping
+      checkable: a field placed twice, a name the request does not declare, or a container in the path is
+      a bad endpoint rather than a surprise.
+
+      There is no parameter list. A parameter-only endpoint declares a one-field request record
+      (`schema_ref => { schemaPath: text }`) and binds it from the path -- an exchange that takes anything
+      takes exactly ONE record, which is what lets one rule serve every endpoint and the check see every
+      field. `request` on `service.signature` is optional because an exchange may take nothing at all, and such an
+      endpoint admits no placement: a `{segment}` on it is refused, having no field to bind. A request that is
+      present and is not a record is refused too, since there would be nothing to distribute.
+      """
+    placement => {
+      query?:   [meta.field_name]
+      headers?: {meta.field_name => service.header_name}
+      body?:    meta.field_name
+    }
+
+    @doc:"""
+      What sits under a verb, under a path, in an http projection: the base record of `operation`, `binding`
+      and `document`, carrying what each has -- the placement of a request record, the status of the response,
+      and the media types the endpoint speaks. A value at an `endpoint`-typed slot is tagged with the subtype it
+      is and admitted as that subtype (§7.2); a reader binds the base to a type with no bare form, so an
+      untagged value is refused naming the subtypes. The tag is the whole difference between the
+      one-declaration form and the two-declaration form, and it is read before anything else.
+
+      `status` is the status of the success response; there is no list of responses, because an exchange has
+      one response type. An error's status is the `status` member its own type pins --
+      `sku_not_found => problem & { status: = 404  sku: text }` -- so an error type an endpoint names MUST fix
+      it, and `TsonApiDescription` refuses one that does not. A transport's own refusals -- a body failing its
+      schema, an Accept nothing satisfies -- are not listed: every endpoint has them, and the error boundary
+      answers each with a `problem`.
+
+      Every endpoint but a `document` speaks `application/tson`; `media_types` (net.tn's `media_type`) lists
+      what it speaks beside it, absent meaning `application/tson` alone. One set serves both directions,
+      request body and response; a split between what an endpoint accepts and what it produces is a later
+      field, not this one. A label is listed, never implied: an endpoint answering JSON lists
+      `application/json`, `application/tson+json` or both, and Accept chooses among what is listed. Media
+      types, because the projection takes its vocabulary from HTTP's own registries (RFC 9110 §8.3.1), so a
+      new encoding is a new registered name and never an edit to this layer. `TsonApiDescription` refuses at
+      startup a media type no codec it serves can speak, so a description naming an encoding the server lacks
+      fails to start and never answers 500.
+
+      Documentation is annotation, not fields: `@doc` before the verb key is the long form and `@service.summary` the
+      short one, both surviving into the read value as the key's annotations, since an endpoint is a map value
+      and a map key carries annotations. A binding's exchange carries its own on its key in the protocol.
+
+      Deliberately absent, each a decision: security schemes, response headers, links, callbacks, examples,
+      tags, servers, and more than one success response. Adding one is a later version under §3.5 once this is
+      published, never an edit -- and a new kind of endpoint is a new record composing this one, admitted
+      wherever an `endpoint` is.
+      """
+    endpoint => service.placement & {
+      status?:       service.status_code ~ 200
+      media_types?:  [media_type]
+    }
+
+    @doc:"""
+      An endpoint whose body is not a TSON value: a schema document served as the bytes it was published as, a
+      page. Its `media_types` are the whole contract of its body -- usually one, `text/html` or the media type a
+      schema document was published as -- and `TsonApiDescription` refuses a document listing none.
+      `application/tson` is not implied for a document as it is for the other endpoint kinds. Its success body
+      is not judged as a value, only labelled. It may still take a request record to place and name business
+      errors.
+      """
+    document => service.endpoint & {
+      request?:   meta.type_ref
+      errors?:    [meta.type_ref]
+    }
+
+    @doc:"""
+      The short form of an endpoint's or an exchange's documentation, written before its key --
+      `@service.summary:"Place an order." POST => !service.binding { ... }`. Declared as the kernel declares `doc`;
+      `@doc` remains the long form. Not a field, because documentation is metadata about a declaration rather
+      than part of what it declares, and an annotation type declared here reaches every schema importing
+      this one.
+      """
+    summary => @meta.annotation text
+
+    @doc:"""
+      Two facts about an exchange that a caller composing calls needs -- an agent planning a batch, deciding what may be
+      retried or reordered -- and has no HTTP verb to read them from. Bare markers before the exchange's key:
+      `@service.safe get_order => { ... }`, `@service.idempotent cancel_order => { ... }`. `@service.safe` implies
+      `@service.idempotent`. Annotations rather than fields because they describe the exchange, not its request or
+      response; the http projection CHECKS its verb against them (GET must be safe; PUT and DELETE idempotent) and never
+      derives one from the other. They are RFC 9110's words for the same facts.
+      """
+    safe       => @meta.annotation void
+    idempotent => @meta.annotation void
+
+    @doc:"An endpoint with its signature INLINE -- the one-declaration form, for a projection with no protocol behind it."
+    operation => service.endpoint & service.signature
+
+    @doc:"""
+      An endpoint whose signature is an EXCHANGE's -- the two-declaration form. `exchange` is a reference the
+      resolver judges, its qualified name saying which protocol declares it (`orders.get_order`, the
+      protocol's entry and then the exchange's key), so no binding is ambiguous between two protocols
+      declaring one name. That the protocol is one the projection binds is the reader's check.
+      """
+    binding => service.endpoint & {
+      exchange: meta.ref<service.exchange>
+    }
+
+    @doc:"""
+      One path: its endpoints, keyed by verb. A record with one bare required field, so the map stands in
+      for it and the tag is optional under the path key -- `"/orders" => { POST => !service.binding { ... } }` and
+      `"/orders" => !service.resource { endpoints: { ... } }` read alike.
+      """
+    resource => {
+      endpoints: {service.http_verb => service.endpoint}
+    }
+
+    @doc:"""
+      Why a claimed exchange has no endpoint here: an exchange documented ahead of being built, or served by
+      another process behind the same proxy. `reason` is required, because an exemption somebody has to justify
+      in a greppable string is a decision where a boolean is a hole. `exchange` names exactly the exchange it
+      covers, as a binding's does -- `orders.refund` -- so it can never quietly cover a second protocol's
+      exchange of the same name. Typed `meta.ref<service.exchange>` for what it means; held inside an annotation's
+      value, it is not judged by the resolver, so `TsonApiDescription` refuses one naming no exchange of a
+      protocol the projection binds. A list of records rather than a map keyed by exchange: a map key is a
+      name in the map's own key family, never a reference.
+      """
+    exemption => {
+      exchange: meta.ref<service.exchange>
+      reason:   text
+    }
+
+    @doc:"""
+      An http projection: resources keyed by path template, each holding endpoints keyed by verb -- the shape
+      OpenAPI's `paths` has, arrived at from the key types rather than copied. A namespace type, so an entry
+      applying it is the map of paths itself. A path key is the URL namespace's own grammar -- a
+      `path_template` -- which is why an endpoint needs no invented name and why `/orders/{id}` needs no
+      identifier minted from it. Nothing references an endpoint, so no qualified name walks a path key.
+
+      Named for the transport it projects a protocol onto, as a gRPC projection of the same protocol would be: it is one
+      projection among several, not the description of the service. What it claims about the protocols behind it is
+      written as annotations before its entry's name, `@service.binds:[orders] @service.not_bound:[{ exchange:
+      orders.refund reason: "..." }] orders_http => !service.http { ... }`, because a value of a namespace type is the
+      map alone.
+      """
+    http => !meta.namespace { key_type: service.path_template  value_type: service.resource }
+
+    @doc:"""
+      The protocols an http projection binds, and a CLAIM the reader holds it to: every exchange of every protocol named
+      has a `binding` naming it, or an `exemption` in `@service.not_bound` giving the reason it does not. The word is
+      the one `!service.binding` and `@service.not_bound` use, since binding an exchange to HTTP is what the projection
+      does with it. The claim is held per (protocol, exchange), not per name: two bound protocols may both declare
+      `get_order`, and binding one of them says nothing about the other. A projection with no `@service.binds` is a web
+      service on its own terms, its endpoints `!service.operation`s. Typed `meta.ref<service.protocol>` for what it
+      means; held in an annotation's value, it is not judged by the resolver, so `TsonApiDescription` refuses a name
+      that is no entry applying `protocol`.
+      """
+    binds => @meta.annotation [meta.ref<service.protocol>]
+
+    @doc:"The exchanges an http projection's `@service.binds` claims and does not bind, each with the reason why."
+    not_bound => @meta.annotation [service.exemption]
+  }
+}

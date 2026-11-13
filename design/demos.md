@@ -22,7 +22,7 @@ the same `curl` commands work against each. Starting one prints what to try. The
 second demo, on the JDK adapter only.
 
 **One bind context, the description's and the application's.** A server publishes a description of itself
-(`orders-api-1.tn`, importing `meta-service.tn`), and the `Tson` that resolves it binds the description's value
+(`orders-api-1.tn`, importing `service.tn`), and the `Tson` that resolves it binds the description's value
 entries with the same context it binds an order with (`design/binding.md`). So each demo merges its own bindings
 with the vocabulary's, `TsonBindings.of(TsonApiSchema.bindingsWith(bindings))`, and hands that one context to
 `ProcessorConfig.withDataBindContext`; the validator does the same for `validate-api-1.tn`.

@@ -13,7 +13,7 @@ import java.util.Optional;
  * a page -- labelled by the media types it lists where an operation names a response type. {@code application/tson}
  * is not implied for a document, so {@link TsonApiDescription} refuses one listing none.
  */
-@Typename(name = "document")
+@Typename(name = "service.document")
 public record Document(List<String> query, Map<String, String> headers, Optional<String> body, int status,
                        @Field("media_types") List<String> mediaTypes, Optional<TypeRef> request,
                        List<TypeRef> errors) implements Endpoint {

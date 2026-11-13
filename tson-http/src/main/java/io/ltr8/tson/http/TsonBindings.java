@@ -19,7 +19,7 @@ import java.util.Objects;
  * configured binder and answers it first, so a map binds the application's names and nothing else.
  *
  * <p>One context binds a schema's value entries and a data document's values alike, so a vocabulary a schema
- * imports belongs in the same map: {@code TsonApiSchema.bindingsWith} adds {@code meta-service.tn}'s records to an
+ * imports belongs in the same map: {@code TsonApiSchema.bindingsWith} adds {@code service.tn}'s records to an
  * application's.
  *
  * <p><b>{@code Object} is registered as an atom</b>, so a dependent field ({@code payload: kind!}, [TSON-SCHEMA]

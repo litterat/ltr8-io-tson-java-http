@@ -204,7 +204,7 @@ class ReadmeTest {
     void theModuleTableNamesTheSchemasThatExist() {
         assertTrue(readme.contains("`problem.tn`"),
                 "the table should name the error-body schema it ships");
-        assertTrue(readme.contains("`meta-service.tn`"),
+        assertTrue(readme.contains("`service.tn`"),
                 "the table should name the service-description meta layer it ships");
         assertTrue(readme.contains(io.ltr8.tson.http.TsonProblemSchema.ID.substring(
                         io.ltr8.tson.http.TsonProblemSchema.ID.lastIndexOf('/') + 1)),

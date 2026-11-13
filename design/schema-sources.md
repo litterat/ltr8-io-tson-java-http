@@ -40,7 +40,7 @@ stack trace through the resolver.
 A schema the allow-list or the fixed map admits may declare constructors and namespace types, as any schema may
 ([TSON-SCHEMA] §2.2.3 allows no hiding and no rebinding, so such a declaration adds an entry and changes nothing
 existing), and nothing here refuses it: the boundary is which schemas are admitted and the limits they are read under
-(§11.5), not what kind of schema they are. A check would refuse this project's own `meta-service.tn`, which declares
+(§11.5), not what kind of schema they are. A check would refuse this project's own `service.tn`, which declares
 namespace types; should a harm ever be identified, whether a linked schema declares a constructor is derivable from its
 entries (`TsonLinkedSchema.isConstructor`, `originOf`).
 

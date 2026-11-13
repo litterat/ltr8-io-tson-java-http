@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /** An endpoint with its signature inline: the one-declaration form, for a projection with no protocol behind it. */
-@Typename(name = "operation")
+@Typename(name = "service.operation")
 public record Operation(Optional<TypeRef> request, Optional<TypeRef> response, List<TypeRef> errors,
                         List<String> query, Map<String, String> headers, Optional<String> body, int status,
                         @Field("media_types") List<String> mediaTypes) implements Endpoint {

@@ -3,10 +3,10 @@ package io.ltr8.tson.http.api;
 import io.ltr8.tson.schema.meta.ValueRef;
 
 /**
- * One exchange of one protocol: the unit an http projection's {@code @binds} claim is held in, never a name alone,
- * since two protocols may both declare {@code get_order}. {@code owner} is the name of the entry applying {@code
- * protocol} ({@code orders}), {@code name} the exchange's key in it, and the string form is the qualified name that
- * references the exchange ({@code orders.get_order}).
+ * One exchange of one protocol: the unit an http projection's {@code @service.binds} claim is held in, never a name
+ * alone, since two protocols may both declare {@code get_order}. {@code owner} is the name of the entry applying
+ * {@code service.protocol} ({@code orders}), {@code name} the exchange's key in it, and the string form is the
+ * qualified name that references the exchange ({@code orders.get_order}).
  */
 public record ExchangeName(String owner, String name) {
 

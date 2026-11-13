@@ -30,14 +30,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * A protocol declared on its own, and a web service in a second document that maps it, read through {@link
  * TsonApiDescription}.
  *
- * <p>The protocol is a map of exchanges; the http projection is a map of paths, each a map of verbs. A binding's
- * {@code exchange} is a reference the resolver judges, so a misspelt exchange and a reference to the wrong kind of
- * thing are refused at load, pinned here beside the rule that an endpoint is an {@code !operation} or a {@code
- * !binding}. The projection's {@code @binds} and {@code @not_bound} are annotations on its entry, whose references
- * the resolver does not judge, so a name there naming no protocol or no exchange is the reader's to refuse. What
- * relates two things is the reader's too: the placement of each exchange's request record, an exchange of a protocol
- * the projection does not bind, a container in a path, a verb or a status against the exchange, and the {@code
- * @binds} claim held to -- every exchange bound or exempted with a reason.
+ * <p>The protocol is a map of exchanges; the http projection is a map of paths, each a map of verbs. A binding's {@code
+ * exchange} is a reference the resolver judges, so a misspelt exchange and a reference to the wrong kind of thing are
+ * refused at load, pinned here beside the rule that an endpoint is a {@code !service.operation} or a {@code
+ * !service.binding}. The projection's {@code @service.binds} and {@code @service.not_bound} are annotations on its
+ * entry, whose references the resolver does not judge, so a name there naming no protocol or no exchange is the
+ * reader's to refuse. What relates two things is the reader's too: the placement of each exchange's request record, an
+ * exchange of a protocol the projection does not bind, a container in a path, a verb or a status against the exchange,
+ * and the {@code @service.binds} claim held to -- every exchange bound or exempted with a reason.
  *
  * <p>The last probe is the alternative model kept for comparison: an exchange as a <em>type</em> under plain
  * {@code meta.tn}, composing into an operation with fixed binding fields, and the cost that shows in its values.
@@ -73,41 +73,41 @@ class TsonApiDescriptionTest {
           order_page  => { items: [order]  next_page?: int32 }
           new_order   => { order: order  idempotency_key?: text }
 
-          orders => !protocol {
+          orders => !service.protocol {
             @doc:"Accept an order and confirm it with the quantity doubled."
             place_order  => { request: new_order    response: order       errors: [sku_not_found] }
-            @safe get_order    => { request: order_ref    response: order       errors: [order_not_found] }
-            @safe list_orders  => { request: order_query  response: order_page }
-            @idempotent cancel_order => { request: order_ref    errors: [order_not_found] }
+            @service.safe get_order    => { request: order_ref    response: order       errors: [order_not_found] }
+            @service.safe list_orders  => { request: order_query  response: order_page }
+            @service.idempotent cancel_order => { request: order_ref    errors: [order_not_found] }
           }
 
           @doc:"Refunds, offered beside orders: a projection offering both binds both."
-          orders_v2 => !protocol { @idempotent refund => { request: order_ref } }
+          orders_v2 => !service.protocol { @service.idempotent refund => { request: order_ref } }
 
           @doc:"Declares a name orders also declares; a qualified name says which is meant."
-          billing => !protocol { @safe get_order => { request: order_ref  response: order } }
+          billing => !service.protocol { @service.safe get_order => { request: order_ref  response: order } }
 
-          bulk => !protocol { @safe page_orders => { request: order_page  response: order_page } }
+          bulk => !service.protocol { @service.safe page_orders => { request: order_page  response: order_page } }
 
           order_search => { tags: [text]  status?: text }
           @doc:"A repeatable query parameter, and a second declaration of `list_orders`."
-          search => !protocol { @safe search_orders => { request: order_search  response: order_page }
-                                 @safe list_orders   => { request: order_query  response: order_page } }
+          search => !service.protocol { @service.safe search_orders => { request: order_search  response: order_page }
+                                 @service.safe list_orders   => { request: order_query  response: order_page } }
 
           @doc:"A request that is not a record at all, which the placement cannot distribute."
-          scalars => !protocol { by_text => { request: text } }
+          scalars => !service.protocol { by_text => { request: text } }
 
           @doc:"A dependent field: payload is read against the type kind names, per instance."
           typed_note => { note_id: text  kind: meta.type_ref  payload: kind! }
-          notes => !protocol { put_note         => { request: typed_note  response: order }
-                               @safe find_notes => { request: typed_note  response: order_page } }
+          notes => !service.protocol { put_note         => { request: typed_note  response: order }
+                               @service.safe find_notes => { request: typed_note  response: order_page } }
 
           @doc:"A dependent field whose sibling the sender cannot choose freely: pinned, and a discriminator."
           pinned_note => { note_id: text  kind?: meta.type_ref = order  payload: kind! }
           note_base   => abstract { kind: meta.type_ref =?  payload: kind! }
           order_note  => note_base & { kind?: = order }
           ref_note    => note_base & { kind?: = order_ref }
-          narrowed => !protocol { put_pinned => { request: pinned_note  response: order }
+          narrowed => !service.protocol { put_pinned => { request: pinned_note  response: order }
                                   put_based  => { request: note_base    response: order } }
         }""".formatted(PROTOCOL_ID, TsonApiSchema.ID, ERR_ID);
 
@@ -116,17 +116,17 @@ class TsonApiDescriptionTest {
      * as HTTP wants -- a body plus a header, a path segment, a query string, a bare DELETE.
      */
     static final String API = api("""
-          @binds:[orders]
-          orders_http => !http {
+          @service.binds:[orders]
+          orders_http => !service.http {
             "/orders" => {
               @doc:"Place an order."
-              POST => !binding { exchange: orders.place_order  status: 201
+              POST => !service.binding { exchange: orders.place_order  status: 201
                                  body: order  headers: { idempotency_key => "Idempotency-Key" } }
-              GET  => !binding { exchange: orders.list_orders }
+              GET  => !service.binding { exchange: orders.list_orders }
             }
             "/orders/{id}" => {
-              GET    => !binding { exchange: orders.get_order }
-              DELETE => !binding { exchange: orders.cancel_order  status: 204 }
+              GET    => !service.binding { exchange: orders.get_order }
+              DELETE => !service.binding { exchange: orders.cancel_order  status: 204 }
             }
           }
         """);
@@ -195,12 +195,15 @@ class TsonApiDescriptionTest {
         assertEquals("order_not_found", cancel.errorFor(404).orElseThrow().name());
     }
 
-    /** A web service on its own terms: no protocol, every endpoint an {@code !operation} with its signature inline. */
+    /**
+     * A web service on its own terms: no protocol, every endpoint a {@code !service.operation} with its signature
+     * inline.
+     */
     @Test
     void aProjectionWithNoProtocolCarriesItsSignaturesInline() {
         TsonApiDescription routes = routes(api("""
-              standalone => !http { "/orders/{id}" => {
-                @safe GET => !operation { request: order_ref  response: order } } }
+              standalone => !service.http { "/orders/{id}" => {
+                @service.safe GET => !service.operation { request: order_ref  response: order } } }
             """));
 
         Route fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
@@ -208,75 +211,80 @@ class TsonApiDescriptionTest {
         assertEquals(Map.of("id", Location.PATH), fetch.placement().fields());
     }
 
-    /** {@code @binds} is a claim: an exchange with no endpoint fails, and a reasoned exemption passes. */
+    /** {@code @service.binds} is a claim: an exchange with no endpoint fails, and a reasoned exemption passes. */
     @Test
     void theBindsClaimIsHeldTo() {
         String partial = api("""
-              @binds:[orders]
-              orders_http => !http { "/orders" => { POST => !binding { exchange: orders.place_order } } }
+              @service.binds:[orders]
+              orders_http => !service.http { "/orders" => { POST => !service.binding { exchange: orders.place_order } } }
             """);
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(partial))
                 .getMessage();
         assertTrue(refused.contains("[orders.get_order, orders.list_orders, orders.cancel_order]")
-                        && refused.contains("@not_bound"), refused);
+                        && refused.contains("@service.not_bound"), refused);
 
         routes(api("""
-              @binds:[orders]
-              @not_bound:[ { exchange: orders.get_order     reason: "served by the read replica" }
+              @service.binds:[orders]
+              @service.not_bound:[ { exchange: orders.get_order     reason: "served by the read replica" }
                            { exchange: orders.list_orders   reason: "not built yet" }
                            { exchange: orders.cancel_order  reason: "not built yet" } ]
-              orders_http => !http { "/orders" => { POST => !binding { exchange: orders.place_order } } }
+              orders_http => !service.http { "/orders" => { POST => !service.binding { exchange: orders.place_order } } }
             """));
     }
 
     /**
-     * {@code @binds} names protocols, and the resolver does not judge a reference inside an annotation's
+     * {@code @service.binds} names protocols, and the resolver does not judge a reference inside an annotation's
      * value, so the reader does: a name nothing declares, and an entry that is not a protocol, are both refused
      * when the description is read.
      */
     @Test
     void aBindsNamingNoProtocolIsRefusedByTheReader() {
         String unknown = assertThrows(IllegalArgumentException.class, () -> routes(api("""
-              @binds:[no_such]
-              a => !http { "/o" => { @safe GET => !operation { request: order_ref  response: order } } }
+              @service.binds:[no_such]
+              a => !service.http { "/o" => {
+                @service.safe GET => !service.operation { request: order_ref  response: order } } }
             """))).getMessage();
         assertTrue(unknown.contains("'a' binds 'no_such'") && unknown.contains("no entry of the description "
-                + "applying protocol"), unknown);
+                + "applying service.protocol"), unknown);
 
         String notAProtocol = assertThrows(IllegalArgumentException.class, () -> routes(api("""
-              @binds:[order]
-              a => !http { "/o" => { @safe GET => !operation { request: order_ref  response: order } } }
+              @service.binds:[order]
+              a => !service.http { "/o" => {
+                @service.safe GET => !service.operation { request: order_ref  response: order } } }
             """))).getMessage();
         assertTrue(notAProtocol.contains("'a' binds 'order'"), notAProtocol);
 
         String anHttp = assertThrows(IllegalArgumentException.class, () -> routes(api("""
-              other => !http { "/p" => { @safe GET => !operation { request: order_ref  response: order } } }
-              @binds:[other]
-              a => !http { "/o" => { @safe GET => !operation { request: order_ref  response: order } } }
+              other => !service.http { "/p" => {
+                @service.safe GET => !service.operation { request: order_ref  response: order } } }
+              @service.binds:[other]
+              a => !service.http { "/o" => {
+                @service.safe GET => !service.operation { request: order_ref  response: order } } }
             """))).getMessage();
         assertTrue(anHttp.contains("'a' binds 'other'"), anHttp);
     }
 
     /**
-     * An endpoint is an {@code !operation}, a {@code !binding} or a {@code !document}, and the tag says which: the
-     * base has no data of its own, so an untagged value is refused by the resolver naming the subtypes, and an exchange
-     * on an {@code !operation} is a field it does not have. The one-or-the-other rule needs no reader.
+     * An endpoint is a {@code !service.operation}, a {@code !service.binding} or a {@code !service.document}, and the
+     * tag says which: the base has no data of its own, so an untagged value is refused by the resolver naming the
+     * subtypes, and an exchange on a {@code !service.operation} is a field it does not have. The one-or-the-other rule
+     * needs no reader.
      */
     @Test
     void anEndpointIsTaggedOperationOrBinding() {
         String untagged = only(api("""
-              a => !http { "/orders" => { POST => { exchange: place_order } } }
+              a => !service.http { "/orders" => { POST => { exchange: place_order } } }
             """));
-        assertTrue(untagged.contains("'endpoint' has no data of its own to bind")
-                && untagged.contains("[document, operation, binding]"), untagged);
+        assertTrue(untagged.contains("'service.endpoint' has no data of its own to bind")
+                && untagged.contains("[service.document, service.operation, service.binding]"), untagged);
 
         String exchangeOnAnOperation = only(api("""
-              a => !http { "/orders" => { POST => !operation { exchange: place_order  request: order } } }
+              a => !service.http { "/orders" => { POST => !service.operation { exchange: place_order  request: order } } }
             """));
-        assertTrue(exchangeOnAnOperation.contains("unknown field 'exchange' on 'operation'"), exchangeOnAnOperation);
+        assertTrue(exchangeOnAnOperation.contains("unknown field 'exchange' on 'service.operation'"), exchangeOnAnOperation);
 
         String bareBase = only(api("""
-              a => !http { "/orders" => { POST => !endpoint { status: 201 } } }
+              a => !service.http { "/orders" => { POST => !service.endpoint { status: 201 } } }
             """));
         assertTrue(bareBase.contains("has no data of its own to bind"), bareBase);
     }
@@ -288,8 +296,8 @@ class TsonApiDescriptionTest {
     @Test
     void aMisspeltExchangeIsRefusedByTheResolver() {
         String refused = only(api("""
-              @binds:[orders]
-              orders_http => !http { "/orders" => { POST => !binding { exchange: orders.plaec_order } } }
+              @service.binds:[orders]
+              orders_http => !service.http { "/orders" => { POST => !service.binding { exchange: orders.plaec_order } } }
             """));
         assertTrue(refused.contains("'orders' has no key 'plaec_order' -- it holds place_order, get_order"), refused);
     }
@@ -298,18 +306,18 @@ class TsonApiDescriptionTest {
     @Test
     void aReferenceToTheWrongKindOfThingIsRefusedByTheResolver() {
         String notAnExchange = only(api("""
-              a => !http { "/orders" => { POST => !binding { exchange: orders } } }
+              a => !service.http { "/orders" => { POST => !service.binding { exchange: orders } } }
             """));
-        assertTrue(notAnExchange.contains("wants an 'exchange'")
-                && notAnExchange.contains("'orders' is an entry whose body is built by 'protocol'"), notAnExchange);
+        assertTrue(notAnExchange.contains("wants a 'service.exchange'")
+                && notAnExchange.contains("'orders' is an entry whose body is built by 'service.protocol'"), notAnExchange);
     }
 
     /** A sound reference to an exchange of a protocol the projection does not bind is the reader's to refuse. */
     @Test
     void anExchangeOfAProtocolNotBoundIsRefusedByTheReader() {
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
-              @binds:[orders]
-              a => !http { "/orders/{id}" => { GET => !binding { exchange: billing.get_order } } }
+              @service.binds:[orders]
+              a => !service.http { "/orders/{id}" => { GET => !service.binding { exchange: billing.get_order } } }
             """))).getMessage();
         assertTrue(refused.contains("'billing.get_order'") && refused.contains("does not bind")
                 && refused.contains("[orders]"), refused);
@@ -322,12 +330,12 @@ class TsonApiDescriptionTest {
     @Test
     void aQualifiedNameSaysWhichProtocol() {
         TsonApiDescription routes = routes(api("""
-              @binds:[orders billing]
-              @not_bound:[ { exchange: orders.place_order   reason: "elsewhere" }
+              @service.binds:[orders billing]
+              @service.not_bound:[ { exchange: orders.place_order   reason: "elsewhere" }
                            { exchange: orders.get_order     reason: "elsewhere" }
                            { exchange: orders.list_orders   reason: "elsewhere" }
                            { exchange: orders.cancel_order  reason: "elsewhere" } ]
-              a => !http { "/orders/{id}" => { GET => !binding { exchange: billing.get_order } } }
+              a => !service.http { "/orders/{id}" => { GET => !service.binding { exchange: billing.get_order } } }
             """));
         Route fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
         assertEquals(Optional.of(new ExchangeName("billing", "get_order")), fetch.exchange());
@@ -338,8 +346,8 @@ class TsonApiDescriptionTest {
     @Test
     void aContainerFieldCannotRideInThePath() {
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
-              @binds:[bulk]
-              a => !http { "/orders/{items}" => { GET => !binding { exchange: bulk.page_orders } } }
+              @service.binds:[bulk]
+              a => !service.http { "/orders/{items}" => { GET => !service.binding { exchange: bulk.page_orders } } }
             """))).getMessage();
 
         assertTrue(refused.contains("'items'") && refused.contains("carries exactly one scalar"), refused);
@@ -352,8 +360,8 @@ class TsonApiDescriptionTest {
     @Test
     void aRequestThatIsNotARecordIsRefused() {
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
-              @binds:[scalars]
-              a => !http { "/things" => { POST => !binding { exchange: scalars.by_text } } }
+              @service.binds:[scalars]
+              a => !service.http { "/things" => { POST => !service.binding { exchange: scalars.by_text } } }
             """))).getMessage();
 
         assertTrue(refused.contains("'text'") && refused.contains("not a record"), refused);
@@ -367,28 +375,28 @@ class TsonApiDescriptionTest {
      */
     @Test
     void aDependentFieldTravelsInTheRemainderBodyWithItsSibling() {
-        String exempt = "@not_bound:[ { exchange: notes.find_notes  reason: \"elsewhere\" } ]\n";
-        TsonApiDescription routes = routes(api("@binds:[notes]\n" + exempt
-                + "a => !http { \"/notes/{note_id}\" => { POST => !binding { exchange: notes.put_note } } }"));
+        String exempt = "@service.not_bound:[ { exchange: notes.find_notes  reason: \"elsewhere\" } ]\n";
+        TsonApiDescription routes = routes(api("@service.binds:[notes]\n" + exempt + "a => !service.http { "
+                + "\"/notes/{note_id}\" => { POST => !service.binding { exchange: notes.put_note } } }"));
         RequestPlacement placement = routes.route(HttpVerb.POST, "/notes/{note_id}").orElseThrow().placement();
         assertEquals(List.of("kind", "payload"), placement.at(Location.BODY));
         assertEquals(List.of("note_id"), placement.at(Location.PATH));
 
         String inPath = refusedPlacement(exempt,
-                "\"/notes/{payload}\" => { POST => !binding { exchange: notes.put_note } }");
+                "\"/notes/{payload}\" => { POST => !service.binding { exchange: notes.put_note } }");
         assertTrue(inPath.contains("places 'payload' in the PATH, but 'payload: kind!' is a dependent field")
                 && inPath.contains("travels in the remainder body with 'kind'"), inPath);
 
         String wholeBody = refusedPlacement(exempt,
-                "\"/notes\" => { POST => !binding { exchange: notes.put_note  body: payload } }");
+                "\"/notes\" => { POST => !service.binding { exchange: notes.put_note  body: payload } }");
         assertTrue(wholeBody.contains("places 'payload' as the whole body"), wholeBody);
 
         String sibling = refusedPlacement(exempt,
-                "\"/notes\" => { POST => !binding { exchange: notes.put_note  headers: { kind => \"X-Kind\" } } }");
+                "\"/notes\" => { POST => !service.binding { exchange: notes.put_note  headers: { kind => \"X-Kind\" } } }");
         assertTrue(sibling.contains("places 'kind', the sibling of 'payload', in the HEADER"), sibling);
 
-        String query = refusedPlacement("@not_bound:[ { exchange: notes.put_note  reason: \"elsewhere\" } ]\n",
-                "\"/notes\" => { GET => !binding { exchange: notes.find_notes } }");
+        String query = refusedPlacement("@service.not_bound:[ { exchange: notes.put_note  reason: \"elsewhere\" } ]\n",
+                "\"/notes\" => { GET => !service.binding { exchange: notes.find_notes } }");
         assertTrue(query.contains("places 'payload' in the QUERY as the remainder"), query);
     }
 
@@ -435,9 +443,9 @@ class TsonApiDescriptionTest {
                 "typed_note", TypedNote.class, "pinned_note", PinnedNote.class, "note_base", NoteBase.class,
                 "order_note", OrderNote.class, "ref_note", RefNote.class));
         String free = api("""
-              @binds:[notes]
-              @not_bound:[ { exchange: notes.find_notes  reason: "elsewhere" } ]
-              a => !http { "/notes/{note_id}" => { POST => !binding { exchange: notes.put_note } } }
+              @service.binds:[notes]
+              @service.not_bound:[ { exchange: notes.find_notes  reason: "elsewhere" } ]
+              a => !service.http { "/notes/{note_id}" => { POST => !service.binding { exchange: notes.put_note } } }
             """);
         String refused = assertThrows(IllegalArgumentException.class, () -> boundRoutes(free, bound)).getMessage();
         assertTrue(refused.contains("'POST /notes/{note_id}' takes 'typed_note', whose dependent field 'payload: kind!'"
@@ -447,9 +455,9 @@ class TsonApiDescriptionTest {
         boundRoutes(free, Map.of("order", Order.class));                // unbound, read as a tree: not checked
 
         String narrowed = api("""
-              @binds:[narrowed]
-              a => !http { "/pinned/{note_id}" => { POST => !binding { exchange: narrowed.put_pinned } }
-                           "/based"            => { POST => !binding { exchange: narrowed.put_based } } }
+              @service.binds:[narrowed]
+              a => !service.http { "/pinned/{note_id}" => { POST => !service.binding { exchange: narrowed.put_pinned } }
+                           "/based"            => { POST => !service.binding { exchange: narrowed.put_based } } }
             """);
         boundRoutes(narrowed, bound);
 
@@ -470,7 +478,7 @@ class TsonApiDescriptionTest {
 
     private static String refusedPlacement(String exempt, String path) {
         return assertThrows(IllegalArgumentException.class, () -> routes(api(
-                "@binds:[notes]\n" + exempt + "a => !http { " + path + " }"))).getMessage();
+                "@service.binds:[notes]\n" + exempt + "a => !service.http { " + path + " }"))).getMessage();
     }
 
     /**
@@ -481,40 +489,41 @@ class TsonApiDescriptionTest {
     @Test
     void aRepeatedQueryValueIsAnArrayOfScalars() {
         TsonApiDescription routes = routes(api("""
-              @binds:[search]
-              @not_bound:[ { exchange: search.list_orders  reason: "elsewhere" } ]
-              a => !http { "/search" => { GET => !binding { exchange: search.search_orders } } }
+              @service.binds:[search]
+              @service.not_bound:[ { exchange: search.list_orders  reason: "elsewhere" } ]
+              a => !service.http { "/search" => { GET => !service.binding { exchange: search.search_orders } } }
             """));
         assertEquals(List.of("tags", "status"),
                 routes.route(HttpVerb.GET, "/search").orElseThrow().placement().at(Location.QUERY));
 
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
-              @binds:[bulk]
-              a => !http { "/pages" => { GET => !binding { exchange: bulk.page_orders } } }
+              @service.binds:[bulk]
+              a => !service.http { "/pages" => { GET => !service.binding { exchange: bulk.page_orders } } }
             """))).getMessage();
         assertTrue(refused.contains("'items'") && refused.contains("array of order"), refused);
     }
 
     /**
-     * The projection checks its verb against what the exchange claims, and never derives one from the other: a GET
-     * must be safe, a PUT or DELETE idempotent, and {@code @safe} implies {@code @idempotent}. The mismatch is
-     * the one a client cannot see and a cache will act on.
+     * The projection checks its verb against what the exchange claims, and never derives one from the other: a GET must
+     * be safe, a PUT or DELETE idempotent, and {@code @service.safe} implies {@code @service.idempotent}. The mismatch
+     * is the one a client cannot see and a cache will act on.
      */
     @Test
     void aVerbMustAgreeWithWhatTheExchangeClaims() {
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
-              @binds:[orders]
-              a => !http { "/orders/{id}" => { GET => !binding { exchange: orders.cancel_order } } }
+              @service.binds:[orders]
+              a => !service.http { "/orders/{id}" => { GET => !service.binding { exchange: orders.cancel_order } } }
             """))).getMessage();
-        assertTrue(refused.contains("GET is safe") && refused.contains("@safe"), refused);
+        assertTrue(refused.contains("GET is safe") && refused.contains("@service.safe"), refused);
 
         // A safe exchange is idempotent too, so DELETE takes one without saying so twice.
         routes(api("""
-              @binds:[orders]
-              @not_bound:[ { exchange: orders.place_order   reason: "elsewhere" }
+              @service.binds:[orders]
+              @service.not_bound:[ { exchange: orders.place_order   reason: "elsewhere" }
                            { exchange: orders.list_orders   reason: "elsewhere" }
                            { exchange: orders.cancel_order  reason: "elsewhere" } ]
-              a => !http { "/orders/{id}" => { DELETE => !binding { exchange: orders.get_order  status: 204 } } }
+              a => !service.http { "/orders/{id}" => {
+                DELETE => !service.binding { exchange: orders.get_order  status: 204 } } }
             """));
     }
 
@@ -522,8 +531,8 @@ class TsonApiDescriptionTest {
     @Test
     void aResponselessEndpointCannotAnswer200() {
         String refused = assertThrows(IllegalArgumentException.class, () -> routes(api("""
-              @binds:[orders]
-              a => !http { "/orders/{id}" => { DELETE => !binding { exchange: orders.cancel_order } } }
+              @service.binds:[orders]
+              a => !service.http { "/orders/{id}" => { DELETE => !service.binding { exchange: orders.cancel_order } } }
             """))).getMessage();
         assertTrue(refused.contains("declares no response") && refused.contains("204"), refused);
     }
@@ -537,33 +546,34 @@ class TsonApiDescriptionTest {
     @Test
     void theClaimIsHeldPerProtocolNotPerName() {
         String bothClaimed = api("""
-              @binds:[orders search]
-              @not_bound:[ { exchange: orders.place_order    reason: "elsewhere" }
+              @service.binds:[orders search]
+              @service.not_bound:[ { exchange: orders.place_order    reason: "elsewhere" }
                            { exchange: orders.get_order      reason: "elsewhere" }
                            { exchange: orders.cancel_order   reason: "elsewhere" }
                            { exchange: search.search_orders  reason: "elsewhere" }
                            { exchange: search.list_orders    reason: "elsewhere" } ]
-              a => !http { "/orders" => { GET => !binding { exchange: orders.list_orders } } }
+              a => !service.http { "/orders" => { GET => !service.binding { exchange: orders.list_orders } } }
             """);
         // orders' list_orders is bound and search's exempted; neither stands in for the other.
         routes(bothClaimed);
 
         String twoProtocols = api("""
-              @binds:[orders orders_v2]
-              @not_bound:[ { exchange: orders.get_order     reason: "elsewhere" }
+              @service.binds:[orders orders_v2]
+              @service.not_bound:[ { exchange: orders.get_order     reason: "elsewhere" }
                            { exchange: orders.list_orders   reason: "elsewhere" }
                            { exchange: orders.cancel_order  reason: "elsewhere" } ]
-              a => !http { "/orders" => { POST => !binding { exchange: orders.place_order  status: 201 } } }
+              a => !service.http { "/orders" => { POST => !service.binding { exchange: orders.place_order  status: 201 } } }
             """);
         String refund = assertThrows(IllegalArgumentException.class, () -> routes(twoProtocols)).getMessage();
         assertTrue(refund.contains("[orders_v2.refund]"), refund);
-        routes(twoProtocols.replace("a => !http {",
-                "a => !http { \"/orders/{id}/refund\" => { PUT => !binding { exchange: orders_v2.refund  status: 204 } }"));
+        routes(twoProtocols.replace("a => !service.http {",
+                "a => !service.http { \"/orders/{id}/refund\" => { "
+                        + "PUT => !service.binding { exchange: orders_v2.refund  status: 204 } }"));
 
         String elsewhere = api("""
-              @binds:[orders]
-              @not_bound:[ { exchange: billing.get_order  reason: "elsewhere" } ]
-              a => !http { "/orders" => { POST => !binding { exchange: orders.place_order } } }
+              @service.binds:[orders]
+              @service.not_bound:[ { exchange: billing.get_order  reason: "elsewhere" } ]
+              a => !service.http { "/orders" => { POST => !service.binding { exchange: orders.place_order } } }
             """);
         String notClaimed = assertThrows(IllegalArgumentException.class, () -> routes(elsewhere))
                 .getMessage();
@@ -579,17 +589,17 @@ class TsonApiDescriptionTest {
     @Test
     void anExemptionNamingNoExchangeIsRefusedByTheReader() {
         String typo = assertThrows(IllegalArgumentException.class, () -> routes(api("""
-              @binds:[orders]
-              @not_bound:[ { exchange: orders.plaec_order  reason: "elsewhere" } ]
-              a => !http { "/orders" => { POST => !binding { exchange: orders.place_order } } }
+              @service.binds:[orders]
+              @service.not_bound:[ { exchange: orders.plaec_order  reason: "elsewhere" } ]
+              a => !service.http { "/orders" => { POST => !service.binding { exchange: orders.place_order } } }
             """))).getMessage();
         assertTrue(typo.contains("exempts 'orders.plaec_order'")
                 && typo.contains("not an exchange of a protocol it binds"), typo);
 
         String unqualified = assertThrows(IllegalArgumentException.class, () -> routes(api("""
-              @binds:[orders]
-              @not_bound:[ { exchange: 42  reason: "elsewhere" } ]
-              a => !http { "/orders" => { POST => !binding { exchange: orders.place_order } } }
+              @service.binds:[orders]
+              @service.not_bound:[ { exchange: 42  reason: "elsewhere" } ]
+              a => !service.http { "/orders" => { POST => !service.binding { exchange: orders.place_order } } }
             """))).getMessage();
         assertTrue(unqualified.contains("'42' is not an exchange's qualified name"), unqualified);
     }
@@ -611,20 +621,20 @@ class TsonApiDescriptionTest {
     @Test
     void theBorrowedNamespacesKeepTheirGrammarsAtTheKey() {
         String notAPath = only(api("""
-              a => !http { "orders" => { GET => !operation { request: order_ref } } }
+              a => !service.http { "orders" => { GET => !service.operation { request: order_ref } } }
             """));
-        assertTrue(notAPath.contains("'path_template'") && notAPath.contains("'orders'"), notAPath);
+        assertTrue(notAPath.contains("'service.path_template'") && notAPath.contains("'orders'"), notAPath);
 
         String notAToken = only(api("""
-              a => !http { "/orders" => {
-                POST => !operation { request: new_order  headers: { idempotency_key => "Idempotency Key" } } } }
+              a => !service.http { "/orders" => {
+                POST => !service.operation { request: new_order  headers: { idempotency_key => "Idempotency Key" } } } }
             """));
-        assertTrue(notAToken.contains("'header_name'"), notAToken);
+        assertTrue(notAToken.contains("'service.header_name'"), notAToken);
 
         String notAnExchangeName = only(api("""
-              x => !protocol { "place order" => { request: new_order } }
+              x => !service.protocol { "place order" => { request: new_order } }
             """));
-        assertTrue(notAnExchangeName.contains("'exchange_name': 'place order'"), notAnExchangeName);
+        assertTrue(notAnExchangeName.contains("'service.exchange_name': 'place order'"), notAnExchangeName);
     }
 
     /** The one diagnostic the resolver gives for {@code http}, or a failure naming them all. */

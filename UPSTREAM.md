@@ -83,9 +83,10 @@ names the library, and the import-nothing case by `UpstreamGapsTest.aSchemaImpor
 
 ## 4. A reference inside an annotation's value is not judged
 
-**Hit:** `meta-service.tn` declares `binds => @meta.annotation [meta.ref<protocol>]` and `not_bound =>
-@meta.annotation [exemption]`, the `exemption` record holding `exchange: meta.ref<exchange>`. The resolver checks the
-annotation value's shape (`@binds:42` is refused) but no name in it: a protocol nothing declares and an exchange key
+**Hit:** `service.tn` declares `service.binds => @meta.annotation [meta.ref<service.protocol>]` and
+`service.not_bound => @meta.annotation [service.exemption]`, the `service.exemption` record holding
+`exchange: meta.ref<service.exchange>`. The resolver checks the annotation value's shape (`@service.binds:42` is
+refused) but no name in it: a protocol nothing declares and an exchange key
 the protocol does not hold both load clean. Each arrives as a `ValueRef` holding the name and never delivered
 (`isResolved()` false), where the same reference in a field of a value entry is judged and delivered when the schema
 links.
@@ -218,7 +219,7 @@ qualified name), is refused `ATOM_CONSTRAINT_VIOLATION` at `/request` with *"'me
 not a member of this kind -- expected the name of a type whose value IS-A 'meta.type', one of […]"*. The list is every
 member of the closure, the kernel's records among them, and the same list is the diagnostic's `expected` (*"one of
 (…)"*), so a diagnostic printed whole carries it twice. What it never says is the fault: the name resolves, to a value
-of `exchange`, and a value names no type.
+of `service.exchange`, and a value names no type.
 
 **The change:** where a name at a type-naming slot resolves to a value entry, say so (*"'orders.place_order' names a
 value of 'exchange', not a type"*), and drop or cap the member list, in the message and in `expected` alike.
@@ -370,7 +371,7 @@ day it lands.
 
 **Deliberately not proposed:** `status_code`, `http_verb`, `header_name` and a URI template as bundled types. They are
 HTTP vocabulary rather than formats, and exactly the names converted schemas declare for themselves, so they belong
-with what uses them: here, `meta-service.tn` (below). A URI template in particular builds a URI rather than naming a
+with what uses them: here, `service.tn` (below). A URI template in particular builds a URI rather than naming a
 host, so it is not `net.tn`'s, and its uses outside describing an API — HAL links, OpenAPI and AsyncAPI paths, JSON
 Hyper-Schema — are all that same use. **Raise it again** if a consumer outside API description needs RFC 6570, or a
 description needs levels 3–4; the shape then is a constructor under `net.tn`'s `net` map beside `net.uri_type`, which
@@ -382,10 +383,10 @@ reserves no root name.
   RFC (§3.1.1, §3.1.5) and `TsonProblem.at` is typically handed a request path. Pinned by
   `TsonProblemSchemaTest.aRelativeTypeAndInstanceAreValid`.
 - `diagnostic.path` and `schema_pointer` stay `text` until 1 exists.
-- The HTTP vocabulary lives in `meta-service.tn`, which uses it — `http_verb`, `status_code`, `header_name` and
-  `path_template` (RFC 6570 levels 1–2, so `{+var}` is expressible) — and `media_type` is `net.tn`'s.
-  `TsonApiDescription` places each endpoint's request record over its path, which no pattern can. `problem.status`
-  stays `int32`.
+- The HTTP vocabulary lives in `service.tn`, which uses it — `service.http_verb`, `service.status_code`,
+  `service.header_name` and `service.path_template` (RFC 6570 levels 1–2, so `{+var}` is expressible) — and `media_type` is
+  `net.tn`'s. `TsonApiDescription` places each endpoint's request record over its path, which no pattern can.
+  `problem.status` stays `int32`.
 
 **Priority:** medium-high, since the library emits values its own schemas cannot describe.
 
@@ -400,7 +401,7 @@ data value is. The spec does not say which, and the answer decides whether a voc
 annotation and have it checked. tson-java takes the second reading (item 4, "A reference inside an annotation's value
 is not judged").
 
-**What this project does meanwhile:** `@binds` and an exemption's `exchange` keep their `meta.ref<…>` typing to say
+**What this project does meanwhile:** `@service.binds` and an exemption's `exchange` keep their `meta.ref<…>` typing to say
 what they mean, and `TsonApiDescription` checks the names.
 
 **Priority:** medium: it decides where a vocabulary's relation checks live.
@@ -409,17 +410,18 @@ what they mean, and `TsonApiDescription` checks the names.
 
 **Sections:** [TSON-SCHEMA] §4.1 (namespace types), §6 (annotations); `meta.tn`'s `meta.namespace`.
 
-**Kind:** request for a later revision. A value of a namespace type is the map alone, and a namespace type declaring
-a field beside its facets is refused (*"unknown field 'extends' on 'meta.namespace'"*,
+**Kind:** request for a later revision. A value of a namespace type is the map alone, and a namespace type declaring a field
+beside its facets is refused (*"unknown field 'extends' on 'meta.namespace'"*,
 `UpstreamGapsTest.aNamespaceTypeDeclaresOnlyItsFacets`). So a fact about a namespace as a whole has nowhere to sit.
-`meta-service.tn`'s http projection carries its claims, `binds` and `not_bound`, as annotations on its entry, where
-the references in them go unjudged (above). The alternative, a record held one key down, doubles every qualified
-name. A namespace value admitting declared fields beside its keys would make `@binds` a field, judged like any other.
+`service.tn`'s http projection carries its claims, `@service.binds` and `@service.not_bound`, as annotations on its entry,
+where the references in them go unjudged (above). The alternative, a record held one key down, doubles every qualified name.
+A namespace value admitting declared fields beside its keys would make the `@service.binds` claim a field, judged like any
+other.
 
-**Related:** a namespace is keyed by an identifier family (`UpstreamGapsTest.aNamespaceKeyTypeMustBeAnIdentifierFamily`),
-so `path_template` is an `identifier_type` widened to a path's characters, and §8.2's name hygiene reaches a path key.
-A revisit should keep that, and leave a text-keyed namespace and `&` over namespace values unproposed, composition
-being over types.
+**Related:** a namespace is keyed by an identifier family (`UpstreamGapsTest.aNamespaceKeyTypeMustBeAnIdentifierFamily`), so
+`service.path_template` is an `identifier_type` widened to a path's characters, and §8.2's name hygiene reaches a path key. A
+revisit should keep that, and leave a text-keyed namespace and `&` over namespace values unproposed, composition being over
+types.
 
 **Priority:** low: the annotation form works.
 

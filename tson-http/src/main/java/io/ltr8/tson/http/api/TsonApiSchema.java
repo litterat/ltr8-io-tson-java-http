@@ -12,22 +12,26 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * {@code meta-service.tn} — the vocabulary a schema imports to describe a service — as source text a server can
- * publish, and as the bindings that make it usable.
+ * {@code service.tn} — the vocabulary a schema imports to describe a service — as source text a server can publish,
+ * and as the bindings that make it usable.
  *
  * <h2>What this is for</h2>
  *
  * <p>A schema importing this one declares protocols of exchanges, and http projections whose endpoints bind them,
- * carry a signature inline, or answer a document:
+ * carry a signature inline, or answer a document. Every name the layer declares sits under its one root map, {@code
+ * service}, so it reserves that one root name in every importer and a description writes each tag and annotation
+ * qualified:
  *
  * <pre>{@code
- * !!import:"https://tson.io/2026/40/io/ltr8/http/meta-service.tn"
+ * !!import:"https://tson.io/2026/40/io/ltr8/http/service.tn"
  * !!import:"https://schemas.example.com/2026/40/app/order-1.tn"
  * !schema {
- *   orders => !protocol { place_order => { request: order  response: order } }
+ *   orders => !service.protocol { place_order => { request: order  response: order } }
  *
- *   @binds:[orders]
- *   orders_http => !http { "/orders" => { POST => !binding { exchange: orders.place_order  status: 201 } } }
+ *   @service.binds:[orders]
+ *   orders_http => !service.http {
+ *     "/orders" => { POST => !service.binding { exchange: orders.place_order  status: 201 } }
+ *   }
  * }
  * }</pre>
  *
@@ -54,14 +58,14 @@ import java.util.Map;
 public final class TsonApiSchema {
 
     /** This schema's identity — the {@code !!id} it declares and the URL it is served at. */
-    public static final String ID = "https://tson.io/2026/40/io/ltr8/http/meta-service.tn";
+    public static final String ID = "https://tson.io/2026/40/io/ltr8/http/service.tn";
 
-    private static final String SOURCE = readResource("/meta-service.tn");
+    private static final String SOURCE = readResource("/service.tn");
 
-    private static final Map<String, Class<?>> BINDINGS = Map.of("exchange", Exchange.class, "signature",
-            Signature.class, "endpoint", Endpoint.class, "operation", Operation.class, "binding", Binding.class,
-            "document", Document.class, "resource", Resource.class, "exemption", Exemption.class, "http_verb",
-            HttpVerb.class);
+    private static final Map<String, Class<?>> BINDINGS = Map.of("service.exchange", Exchange.class,
+            "service.signature", Signature.class, "service.endpoint", Endpoint.class, "service.operation",
+            Operation.class, "service.binding", Binding.class, "service.document", Document.class, "service.resource",
+            Resource.class, "service.exemption", Exemption.class, "service.http_verb", HttpVerb.class);
 
     private TsonApiSchema() {
     }
@@ -91,11 +95,12 @@ public final class TsonApiSchema {
     }
 
     /**
-     * This vocabulary's records by name, mapped to the classes in this package: what {@code protocol} and {@code
-     * http} hold, and the {@code exemption} an http projection's {@code @not_bound} lists. {@code protocol} and
-     * {@code http} need no class: a value of a namespace type is a {@code Namespace}. The map is explicit, so a
-     * class in this package binds only by being named here, and a record no class binds -- {@code placement},
-     * folded into each endpoint -- is not listed.
+     * This vocabulary's records by their qualified names, mapped to the classes in this package: what {@code
+     * service.protocol} and {@code service.http} hold, and the {@code service.exemption} an http projection's
+     * {@code @service.not_bound} lists. {@code service.protocol} and {@code service.http} need no class: a value of a
+     * namespace type is a {@code Namespace}. The map is explicit, so a class in this package binds only by being
+     * named here, and a record no class binds -- {@code service.placement}, folded into each endpoint -- is not
+     * listed.
      *
      * <p>A description will not read without them: an entry no class binds is held as a tree, and {@link
      * #describedBy} reads bound records.
@@ -115,7 +120,7 @@ public final class TsonApiSchema {
         BINDINGS.forEach((name, bound) -> {
             if (merged.putIfAbsent(name, bound) != null) {
                 throw new IllegalArgumentException("'" + name + "' is bound by the application and by "
-                        + "meta-service.tn's vocabulary; within one closure a name means one thing");
+                        + "service.tn's vocabulary; within one closure a name means one thing");
             }
         });
         return Map.copyOf(merged);

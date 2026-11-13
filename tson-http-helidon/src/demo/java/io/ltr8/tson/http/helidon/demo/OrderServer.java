@@ -57,7 +57,7 @@ public final class OrderServer {
     public static final String SCHEMA = schema("order-1.tn");
 
     /**
-     * A description of this service, as a schema importing {@code meta-service.tn} -- published, resolved at
+     * A description of this service, as a schema importing {@code service.tn} -- published, resolved at
      * startup, and checked by a conformance test.
      *
      * <p><b>The payload types and the exchange a binding names are references, not strings.</b> {@code request:
@@ -126,7 +126,7 @@ public final class OrderServer {
         Map<String, String> schemas = new HashMap<>(Map.of(SCHEMA_ID, SCHEMA,
                 TsonProblemSchema.ID, TsonProblemSchema.source(), API_ID, API));
         schemas.putAll(TsonApiSchema.publishedById());
-        // One bind context for the data and the description: without meta-service.tn's records in it, the API
+        // One bind context for the data and the description: without service.tn's records in it, the API
         // schema below holds its endpoints as trees and nothing can read them.
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(schemas)))

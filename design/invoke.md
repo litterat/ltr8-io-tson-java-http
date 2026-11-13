@@ -12,7 +12,7 @@ split", says what each module holds and in what order they land.
 - The bridge absorbs the language. A parameter list, a return type, a thrown exception, a future or whatever a
   language's idiom is are bridged into the request shape and the outcome union, as tson-bind's `DataClassBridge` stands
   a language form in for a data form.
-- The join compares like with like: a resolved `!protocol` against a descriptor in the same view, so the check is
+- The join compares like with like: a resolved `!service.protocol` against a descriptor in the same view, so the check is
   between two statements of one call and never between a schema and a language idiom.
 - An exchange's identity is its name in its protocol (`ExchangeName`), never the request type: two exchanges may take
   the same record.
@@ -22,7 +22,7 @@ split", says what each module holds and in what order they land.
 ## Why the data view, and not the language's
 
 An rpc call is a request record, a response record and a set of error records. That is what a method is once the
-language's spelling is bridged away, and it is what an exchange in a `!protocol` of `meta-service.tn` already says:
+language's spelling is bridged away, and it is what an exchange in a `!service.protocol` of `service.tn` already says:
 `request`, `response`, `errors`. A language says the same thing in its own idiom: Java with a parameter list, a return
 type and a `throws` clause; a functional language with a function from a product to a sum; C with arguments and an
 out-parameter. The two views differ only slightly in shape. They differ decisively in direction.
@@ -73,7 +73,7 @@ the one handle, and a client-side stub in any of them is the one proxy.
 
 ## The join
 
-The join lives in `tson-service`, the layer that knows both sides. It holds a resolved `!protocol` against an invoke
+The join lives in `tson-service`, the layer that knows both sides. It holds a resolved `!service.protocol` against an invoke
 descriptor at startup, by naming convention (`place_order` to `placeOrder`), and fails startup on a mismatch in either
 direction: a Java method with no exchange, an exchange with no Java method, a request or response bound to a record
 other than the exchange's, or an outcome member that is neither the response nor a declared error. It is the
@@ -82,12 +82,12 @@ exchange-level counterpart of `prepareToRead` (`design/binding.md`): a mismatch 
 Because both sides are in the data view, every check is a comparison of shapes the join already has words for: a
 request record against a request record, a union against a union. None of it asks what a Java exception or a
 `CompletableFuture` means; the bridges answered that before the join ran. The same holds for the other direction, a
-`!protocol` document written from a descriptor: it writes the data view the descriptor already holds, and only what
-has no language counterpart (`@safe`, `@idempotent`) must come from elsewhere.
+`!service.protocol` document written from a descriptor: it writes the data view the descriptor already holds, and only what
+has no language counterpart (`@service.safe`, `@service.idempotent`) must come from elsewhere.
 
 ## The same paradigm one layer up: the HTTP projection
 
-The projection is the data view of HTTP, as the descriptor is the data view of a call. `meta-service.tn` takes its
+The projection is the data view of HTTP, as the descriptor is the data view of a call. `service.tn` takes its
 vocabulary from the protocol's own registries and nothing else: RFC 9110's verbs, a header name as an RFC 9110 token
 held folded as HTTP/2 and HTTP/3 put it on the wire, a media type per RFC 9110 §8.3.1, a path as an RFC 6570 template,
 a status code. It describes an HTTP exchange in HTTP's terms, never in a framework's or a language's.
@@ -100,14 +100,14 @@ no TSON knowledge of its own (`design/adapters.md`), and why three frameworks sh
 HTTP's semantics are version-independent, as RFC 9110 is written to be, so HTTP/3 over QUIC changes nothing in the
 vocabulary. What it adds is a reason the call's facts matter on the wire: QUIC's 0-RTT early data may be replayed, and
 RFC 8470 admits only a safe or idempotent request in it, answering 425 (Too Early) to one that must not be replayed.
-`@safe` and `@idempotent` on an exchange, which the projection checks against the verb, are exactly what a client needs to
-decide on early data and a server needs to refuse it: a projection-level fact derived from a call-level one, which is
-the layering doing its job. Priorities (RFC 9218) and trailers are the other constructs of that era a projection could
-name. A streaming endpoint, over a long-lived stream or WebTransport, would be a new record composing `endpoint`, the
-way the layer's own doc says a new kind of endpoint arrives.
+`@service.safe` and `@service.idempotent` on an exchange, which the projection checks against the verb, are exactly what
+a client needs to decide on early data and a server needs to refuse it: a projection-level fact derived from a
+call-level one, which is the layering doing its job. Priorities (RFC 9218) and trailers are the other constructs of that
+era a projection could name. A streaming endpoint, over a long-lived stream or WebTransport, would be a new record
+composing `service.endpoint`, the way the layer's own doc says a new kind of endpoint arrives.
 
 The constructor's name follows the same paradigm: a projection is named for the transport it projects a protocol onto,
-so `tson-http` implements `!http` as a gRPC projection of the same protocol would be `!grpc`, one projection among
+so `tson-http` implements `!service.http` as a gRPC projection of the same protocol would be `!grpc`, one projection among
 several and not the description of the service.
 
 ## What this layer is not

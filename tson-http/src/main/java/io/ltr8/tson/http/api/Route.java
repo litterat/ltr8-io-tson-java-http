@@ -24,7 +24,7 @@ import java.util.Set;
  * @param mediaTypes  every media type the endpoint speaks, in both directions, folded to lower case:
  *                    {@code application/tson} first and always, then those listed, for an endpoint answering a TSON
  *                    value; exactly those listed for a document
- * @param summary     the short documentation: the verb key's {@code @summary}, else the exchange's
+ * @param summary     the short documentation: the verb key's {@code @service.summary}, else the exchange's
  * @param doc         the long documentation: the verb key's {@code @doc}, else the exchange's
  */
 public record Route(HttpVerb verb, String path, Optional<ExchangeName> exchange, Optional<TypeRef> request,

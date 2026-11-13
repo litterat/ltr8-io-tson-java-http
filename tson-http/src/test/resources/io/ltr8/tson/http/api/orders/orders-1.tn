@@ -1,35 +1,35 @@
 !!id:"https://schemas.example.com/2026/40/orders/orders-1.tn"
-!!import:"https://tson.io/2026/40/io/ltr8/http/meta-service.tn"
+!!import:"https://tson.io/2026/40/io/ltr8/http/service.tn"
 !!import:"https://schemas.example.com/2026/40/orders/orders-types-1.tn"
 !!import:"https://schemas.example.com/2026/40/orders/orders-errors-1.tn"
 @doc:"""
   Protocol only: nothing HTTP in the document. A protocol is an entry applying `protocol`, a map of
   exchanges keyed by name -- an exchange's name is the key it sits under, scoped to its protocol, and a
-  `@doc` before the key documents it. The `!exchange` tag is optional under the typed slot. An exchange's
+  `@doc` before the key documents it. The `!service.exchange` tag is optional under the typed slot. An exchange's
   qualified name is the protocol's entry and then its key (`orders.place_order`). A protocol lists its
   exchanges and nothing more: `orders_v2` declares only what it adds, and an http projection offering both
   binds both.
   """
 !schema {
   @doc:"The orders protocol."
-  orders => !protocol {
-    @summary:"Place an order."
+  orders => !service.protocol {
+    @service.summary:"Place an order."
     @doc:"Accept an order and confirm it with the quantity doubled."
     place_order  => { request: new_order    response: order       errors: [sku_not_found] }
-    @safe
+    @service.safe
     @doc:"One order, by reference."
     get_order    => { request: order_ref    response: order       errors: [order_not_found] }
-    @safe
+    @service.safe
     @doc:"A page of orders, filtered by status."
     list_orders  => { request: order_query  response: order_page }
-    @idempotent
+    @service.idempotent
     @doc:"Cancel an order. Cancelling twice is the same as cancelling once."
     cancel_order => { request: order_ref    errors: [order_not_found] }
   }
 
   @doc:"Refunds, offered beside orders."
-  orders_v2 => !protocol {
-    @idempotent
+  orders_v2 => !service.protocol {
+    @service.idempotent
     refund => { request: order_ref }
   }
 }

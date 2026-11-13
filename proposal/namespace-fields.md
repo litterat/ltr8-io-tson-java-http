@@ -1,42 +1,46 @@
 # A protocol and an http projection as records with a namespace field
 
 **Status:** proposal, measured by `tson-http/src/test/java/io/ltr8/tson/http/probe/NamespaceFieldProbeTest.java`;
-nothing adopted. It concerns this project's own vocabulary, `meta-service.tn`, and asks nothing of tson-java or the
+nothing adopted. It concerns this project's own vocabulary, `service.tn`, and asks nothing of tson-java or the
 spec.
 
 ## Summary
 
-`protocol` and `http` stop being namespace types and become ordinary records: declared fields, plus one field typed
-by a namespace (`exchanges`, `resources`) that holds the keyed map they are today. A qualified name walks through that
-field, `orders.exchanges.place_order`, which the resolver already judges. What an http projection claims about the
-protocols behind it, `binds` and `not_bound`, become fields, judged at schema load like any other reference, where today
-they are annotations on the projection's entry that the resolver does not judge and `TsonApiDescription` checks by hand.
-The kernel and the spec are left as they are: the walk through a record value's field is Revision 40 as published
-(`UpstreamGapsTest.aReferenceThroughARecordValuesFieldIsJudged`).
+`service.protocol` and `service.http` stop being namespace types and become ordinary records: declared fields, plus one
+field typed by a namespace (`exchanges`, `resources`) that holds the keyed map they are today. A qualified name walks
+through that field, `orders.exchanges.place_order`, which the resolver already judges. What an http projection claims
+about the protocols behind it, `@service.binds` and `@service.not_bound`, become fields, judged at schema load like any
+other reference, where today they are annotations on the projection's entry that the resolver does not judge and
+`TsonApiDescription` checks by hand. The kernel and the spec are left as they are: the walk through a record value's
+field is Revision 40 as published (`UpstreamGapsTest.aReferenceThroughARecordValuesFieldIsJudged`).
 
-## What it changes in `meta-service.tn`
+## What it changes in `service.tn`
 
-The two namespace declarations are renamed for what they hold, and two records take the old names:
+The two namespace declarations are renamed for what they hold, and two records take the old names, all of them
+members of the layer's one root map `service` and naming each other by their paths from it:
 
 ```
-exchanges => !meta.namespace { key_type: exchange_name  value_type: exchange }
-protocol  => {
-  version?:   text
-  exchanges:  exchanges
-}
+service => !schema {
+  exchanges => !meta.namespace { key_type: service.exchange_name  value_type: service.exchange }
+  protocol  => {
+    version?:   text
+    exchanges:  service.exchanges
+  }
 
-resources => !meta.namespace { key_type: path_template  value_type: resource }
-http      => {
-  binds?:     [meta.ref<protocol>]
-  not_bound?: [exemption]
-  base?:      uri_reference
-  resources:  resources
+  resources => !meta.namespace { key_type: service.path_template  value_type: service.resource }
+  http      => {
+    binds?:     [meta.ref<service.protocol>]
+    not_bound?: [service.exemption]
+    base?:      uri_reference
+    resources:  service.resources
+  }
 }
 ```
 
-`binds => @meta.annotation [meta.ref<protocol>]` and `not_bound => @meta.annotation [exemption]` are deleted.
-`exchange`, `resource`, `endpoint`, `binding`, `operation`, `document` and `exemption` are unchanged; `binding.exchange`
-and `exemption.exchange` stay `meta.ref<exchange>`, now spelled through the field. `uri_reference` is `net.tn`'s,
+`service.binds => @meta.annotation [meta.ref<service.protocol>]` and `service.not_bound => @meta.annotation
+[service.exemption]` are deleted. `service.exchange`, `service.resource`, `service.endpoint`, `service.binding`,
+`service.operation`, `service.document` and `service.exemption` are unchanged; a binding's and an exemption's
+`exchange` stay `meta.ref<service.exchange>`, now spelled through the field. `uri_reference` is `net.tn`'s,
 which the layer already imports. `version` and `base` are new facts with no reader yet (see Open questions); they are
 shown because a record is the shape that can hold them, and a namespace value cannot
 (`UpstreamGapsTest.aNamespaceTypeDeclaresOnlyItsFacets`).
@@ -46,27 +50,27 @@ shown because a record is the shape that can hold them, and a namespace value ca
 ```
 !schema {
   @doc:"The orders protocol."
-  orders => !protocol {
+  orders => !service.protocol {
     exchanges: {
-      @summary:"Place an order."
+      @service.summary:"Place an order."
       @doc:"Accept an order and confirm it with the quantity doubled."
       place_order  => { request: new_order    response: order       errors: [sku_not_found] }
-      @safe
+      @service.safe
       @doc:"One order, by reference."
       get_order    => { request: order_ref    response: order       errors: [order_not_found] }
-      @safe
+      @service.safe
       @doc:"A page of orders, filtered by status."
       list_orders  => { request: order_query  response: order_page }
-      @idempotent
+      @service.idempotent
       @doc:"Cancel an order. Cancelling twice is the same as cancelling once."
       cancel_order => { request: order_ref    errors: [order_not_found] }
     }
   }
 
   @doc:"Refunds, offered beside orders."
-  orders_v2 => !protocol {
+  orders_v2 => !service.protocol {
     exchanges: {
-      @idempotent
+      @service.idempotent
       refund => { request: order_ref }
     }
   }
@@ -80,23 +84,23 @@ A protocol writing no `version` may keep today's text exactly, the map standing 
 
 ```
 !schema {
-  orders_http => !http {
+  orders_http => !service.http {
     binds: [orders]
     resources: {
       "/orders" => {
-        @summary:"Place an order."
+        @service.summary:"Place an order."
         @doc:"""
           Accepts a new order and confirms it. Repeating the request with the same Idempotency-Key returns the
           original confirmation rather than placing a second order.
           """
-        POST => !binding { exchange: orders.exchanges.place_order  status: 201
-                           body: order  headers: { idempotency_key => "Idempotency-Key" } }
-        @summary:"Search orders."
-        GET  => !binding { exchange: orders.exchanges.list_orders }
+        POST => !service.binding { exchange: orders.exchanges.place_order  status: 201
+                                   body: order  headers: { idempotency_key => "Idempotency-Key" } }
+        @service.summary:"Search orders."
+        GET  => !service.binding { exchange: orders.exchanges.list_orders }
       }
       "/orders/{id}" => {
-        GET    => !binding { exchange: orders.exchanges.get_order }
-        DELETE => !binding { exchange: orders.exchanges.cancel_order  status: 204 }
+        GET    => !service.binding { exchange: orders.exchanges.get_order }
+        DELETE => !service.binding { exchange: orders.exchanges.cancel_order  status: 204 }
       }
     }
   }
@@ -104,12 +108,14 @@ A protocol writing no `version` may keep today's text exactly, the map standing 
 ```
 
 Each document's `@doc` changes its prose to match: "`binds: [orders]` is a claim the reader holds it to" for
-"`@binds:[orders]`, written before the projection's entry", and the three-segment spelling throughout.
+"`@service.binds:[orders]`, written before the projection's entry", and the three-segment spelling throughout.
 
 ## What is measured
 
 Each point is a test of `NamespaceFieldProbeTest`, run against a minimal layer written in the probe (the shape above,
-with `http_verb` cut to `GET POST` and `binding` to `exchange` and `status`), not against `meta-service.tn`.
+declared at the probe's root rather than under `service`, with `http_verb` cut to `GET POST` and `binding` to
+`exchange` and `status`), not against `service.tn`. So the documents and messages below spell the probe's bare names,
+where the layer would write `!service.protocol` and report `'service.protocol'`.
 
 **Resolution** (`aProtocolAndAnHttpProjectionAsRecordsResolve`). The layer and a schema applying it, `orders =>
 !protocol { version: "1"  exchanges: { place_order => { request: order } } }` and `orders_http => !http { binds:
@@ -142,11 +148,11 @@ message begins *'orders_http' at /resources/~1orders/endpoints/POST/exchange*, t
 So the spelling is decided: the field name is a segment, and the resolver's refusal of the two-segment form names the
 fields a protocol declares, which tells an author the remedy.
 
-**The positional form** (`thePositionalFormStandsInForTheNamespaceField`). `protocol` and `http` each have one bare
-required field, so [TSON-SCHEMA] §5.6 lets a value writing nothing else write the map alone: `!protocol { place_order
-=> … }` and `!http { "/orders" => … }` resolve and bind as the full form does. The reference still spells the field the
-document did not write, `orders.exchanges.place_order`. A projection writing `binds` cannot use it: a brace holding a
-field and then a key is a parse error, *expected a record field's ':', found '=>'* (`VALIDATION_ERROR`).
+**The positional form** (`thePositionalFormStandsInForTheNamespaceField`). `service.protocol` and `service.http` each
+have one bare required field, so [TSON-SCHEMA] §5.6 lets a value writing nothing else write the map alone: `!protocol {
+place_order => … }` and `!http { "/orders" => … }` resolve and bind as the full form does. The reference still spells
+the field the document did not write, `orders.exchanges.place_order`. A projection writing `binds` cannot use it: a
+brace holding a field and then a key is a parse error, *expected a record field's ':', found '=>'* (`VALIDATION_ERROR`).
 
 **A path key is no qualified-name segment** (`aPathKeyIsNoQualifiedNameSegment`). A segment is an identifier
 ([TSON-DATA] §7.7) and a path key starts with `/`. At `r: meta.ref<resource>`, `orders_http.resources."/orders"` is a
@@ -165,8 +171,8 @@ today, so nothing is lost; the proposal does not make a resource addressable.
 | `AnnotatedMap<String, Exchange>` | `AnnotatedMap` | kept | kept |
 | `Namespace<Exchange>` | `Namespace`, `type()` `exchanges` | kept | kept |
 
-`TsonApiDescription` reads `@safe` and `@idempotent` from an exchange's key and walks routes in written order, so the
-component is `Namespace<Exchange>` (or `AnnotatedMap`), never `Map`.
+`TsonApiDescription` reads `@service.safe` and `@service.idempotent` from an exchange's key and walks routes in written
+order, so the component is `Namespace<Exchange>` (or `AnnotatedMap`), never `Map`.
 
 **What a judged reference carries** (`aClaimFieldArrivesAsADeliveredValueRefAndAnAnnotationsAsUndelivered`,
 `anEndpointsExchangeArrivesAsAValueRefOfThreeSegments`). In the schema's own value entry, `binds: [orders]` arrives as a
@@ -189,35 +195,38 @@ an `io.ltr8.net.Iri`.
   kind. Its `toString`, today the reference spelling `orders.get_order`, either becomes `orders.exchanges.get_order`,
   staying the reference spelling, or stays two-segment as an identity label (Open questions).
 - **`TsonApiDescription`**. `applying(entries, type)` matches `ValueEntry(String, Namespace<?>)`; a protocol and a
-  projection now hold bound records, so it matches `ValueEntry("protocol", Protocol p)` and `ValueEntry("http", Http
-  h)`. The protocol map becomes `Map<String, Protocol>`, reached by `p.exchanges().get(name)` and
-  `p.exchanges().getAnnotations(name)` for an exchange's facts and documentation. `read` takes the `Http` and walks
-  `h.resources()`. `bound()` reads `h.binds()` rather than `claims.values("binds", …)`, and `requireComplete` reads
-  `h.notBound()` rather than `claims.values("not_bound", …)`; `entries.getAnnotations(name)` drops out of the claim
-  path entirely. The name checks there ("no entry of the description applying protocol", an exemption naming a key no
-  protocol holds) become unreachable for a schema the resolver loaded and can go, or stay as a net with a comment
-  saying so. What stays the reader's is relating, unchanged: a binding's or an exemption's exchange belonging to a
-  protocol *this* projection binds, and the claim held per `ExchangeName`.
-- **`TsonApiSchema.bindings()`** gains `"protocol" -> Protocol.class` and `"http" -> Http.class`, two new records in
-  `io.ltr8.tson.http.api`; its Javadoc's "`protocol` and `http` need no class: a value of a namespace type is a
-  `Namespace`" goes. `exemption` stays bound. `Exchange`'s Javadoc ("read from the entry's `Namespace`") and
-  `Exemption`'s (held in an annotation's value, checked by the reader) are rewritten.
+  projection now hold bound records, so it matches `ValueEntry("service.protocol", Protocol p)` and
+  `ValueEntry("service.http", Http h)`. The protocol map becomes `Map<String, Protocol>`, reached by
+  `p.exchanges().get(name)` and `p.exchanges().getAnnotations(name)` for an exchange's facts and documentation. `read`
+  takes the `Http` and walks `h.resources()`. `bound()` reads `h.binds()` rather than `claims.values("service.binds",
+  …)`, and `requireComplete` reads `h.notBound()` rather than `claims.values("service.not_bound", …)`;
+  `entries.getAnnotations(name)` drops out of the claim path entirely. The name checks there ("no entry of the
+  description applying service.protocol", an exemption naming a key no protocol holds) become unreachable for a schema
+  the resolver loaded and can go, or stay as a net with a comment saying so. What stays the reader's is relating,
+  unchanged: a binding's or an exemption's exchange belonging to a protocol *this* projection binds, and the claim held
+  per `ExchangeName`.
+- **`TsonApiSchema.bindings()`** gains `"service.protocol" -> Protocol.class` and `"service.http" -> Http.class`, two
+  new records in `io.ltr8.tson.http.api`, each `@Typename` its qualified name; its Javadoc's "`service.protocol` and
+  `service.http` need no class: a value of a namespace type is a `Namespace`" goes. `service.exemption` stays bound.
+  `Exchange`'s Javadoc ("read from the entry's `Namespace`") and `Exemption`'s (held in an annotation's value, checked
+  by the reader) are rewritten.
 - **`TsonApiCoverage`** keys on `Route.key()`, the declared verb and path template, and names no exchange, so it is
   unchanged.
 - **Tests.** `ProtocolMapTest` measures a protocol as the map itself and is rewritten for the record; the
-  `TsonApiDescriptionTest` cases for an unknown `@binds` name or exemption become schema-load refusals; `OrdersExamples`
-  and the demos' `orders-api-1.tn` follow the documents. `UpstreamGapsTest.aReferenceInsideAnAnnotationValueIsNotJudged`
-  stays, since the gap is still upstream's, but stops describing `meta-service.tn`.
-- **Notes.** `design/service-description.md` loses the invariant "`protocol` and `http` are namespace types, so a
-  value of either is the map alone; a projection's claims … are annotations on its entry" and the paragraph "An entry
-  applying a namespace type is a value, never a type … A namespace value is the map alone"; the first stays true of the
-  library, but no longer explains this layer. The "Naming is the resolver's … except a reference inside an annotation's
-  value" invariant loses its exception for this layer. `CLAUDE.md`'s trap "An entry applying a namespace type is a
-  value, never a type, and the map alone: an http projection's `@binds` and `@not_bound` are annotations on its entry,
-  whose names the reader checks" is rewritten to the record form; the trap "An entry has two annotation positions that
-  land in different places" stays, since `@doc` on an entry still has two positions, but no claim depends on it.
-  `UPSTREAM.md` item 4 loses its "Hit" in this project, and the spec entry "a namespace value with declared fields
-  beside its keys" loses its motivating case.
+  `TsonApiDescriptionTest` cases for an unknown `@service.binds` name or exemption become schema-load refusals;
+  `OrdersExamples` and the demos' `orders-api-1.tn` follow the documents.
+  `UpstreamGapsTest.aReferenceInsideAnAnnotationValueIsNotJudged` stays, since the gap is still upstream's, but stops
+  describing `service.tn`.
+- **Notes.** `design/service-description.md` loses the invariant "`service.protocol` and `service.http` are namespace
+  types, so a value of either is the map alone; a projection's claims … are annotations on its entry" and the paragraph
+  "An entry applying a namespace type is a value, never a type … A namespace value is the map alone"; the first stays
+  true of the library, but no longer explains this layer. The "Naming is the resolver's … except a reference inside an
+  annotation's value" invariant loses its exception for this layer. `CLAUDE.md`'s trap "An entry applying a namespace
+  type is a value, never a type, and the map alone: an http projection's `@service.binds` and `@service.not_bound` are
+  annotations on its entry, whose names the reader checks" is rewritten to the record form; the trap "An entry has two
+  annotation positions that land in different places" stays, since `@doc` on an entry still has two positions, but no
+  claim depends on it. `UPSTREAM.md` item 4 loses its "Hit" in this project, and the spec entry "a namespace value with
+  declared fields beside its keys" loses its motivating case.
 
 ## Costs
 
@@ -227,9 +236,9 @@ an `io.ltr8.net.Iri`.
   it, so a document using the positional form names a field it never wrote.
 - **One extra nesting level per document that writes a field**: a projection with `binds` always, a protocol with a
   `version`. A protocol-only or web-service-only document using the positional form keeps today's text.
-- **The positional form becomes a versioning trap in two more places.** As with `resource`, adding a second required
-  field to `protocol` or `http` withdraws the form and breaks every document written in it, so new fields there are
-  optional or a new type.
+- **The positional form becomes a versioning trap in two more places.** As with `service.resource`, adding a second
+  required field to `service.protocol` or `service.http` withdraws the form and breaks every document written in it, so
+  new fields there are optional or a new type.
 - **Documents to rewrite**: `orders-api-1.tn` in the test resources and `demo/schemas/orders-api-1.tn` (claim and
   references); `orders-1.tn`, `orders-api-inline-1.tn` and `tson-http-jdk/src/demo/resources/validate-api-1.tn` only if
   the full form is preferred over the positional one. Nothing is published, so each is edited in place
@@ -252,7 +261,7 @@ Nothing measured fails: every shape the proposal needs resolves, binds and is ju
 
 ## Order of work, if adopted
 
-1. `meta-service.tn`: the four declarations, the two annotation declarations deleted, its `@doc` rewritten.
+1. `service.tn`: the four declarations, the two annotation declarations deleted, its `@doc` rewritten.
 2. `Protocol` and `Http` records in `io.ltr8.tson.http.api`, bound in `TsonApiSchema.bindings()`.
 3. `ExchangeName.of` over segments; `TsonApiDescription` reading the records and their fields.
 4. The description documents and their `@doc`s; `OrdersExamples`; `ProtocolMapTest` and `TsonApiDescriptionTest`.

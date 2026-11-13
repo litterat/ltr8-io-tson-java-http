@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The orders examples: real documents governed by {@code meta-service.tn}, one per use of the layer, under
+ * The orders examples: real documents governed by {@code service.tn}, one per use of the layer, under
  * {@code orders/} beside this class. {@link OrdersExamplesTest} resolves every one against the shipped layer on each
  * build, so they cannot drift from it; the experiments under {@code experiments/} build on them as the protocol
  * their wire form and plans call.
@@ -33,16 +33,16 @@ import java.util.Map;
  * and {@code orders_v2} beside it declaring only {@code refund}.</li>
  * <li>{@code orders-api-inline-1.tn} (web service only) -- an http projection with no protocol behind it, every
  * endpoint an
- * {@code !operation} with its signature inline; a parameter-only endpoint as a one-field record placed from the
+ * {@code !service.operation} with its signature inline; a parameter-only endpoint as a one-field record placed from the
  * path.</li>
- * <li>{@code orders-api-1.tn} (both) -- an http projection whose entry claims {@code @binds:[orders]}, every
+ * <li>{@code orders-api-1.tn} (both) -- an http projection whose entry claims {@code @service.binds:[orders]}, every
  * endpoint a
- * {@code !binding} with its placement.</li>
+ * {@code !service.binding} with its placement.</li>
  * </ul>
  *
  * <p>Both spellings of a resource appear, deliberately: most write their one required field positionally -- {@code
  * "/orders" => { POST => … }} for {@code "/orders" => { endpoints: { POST => … } }}, which [TSON-SCHEMA] §5.6 admits
- * because {@code resource} has exactly one bare required field -- and one is tagged {@code !resource}.
+ * because {@code resource} has exactly one bare required field -- and one is tagged {@code !service.resource}.
  *
  * <p>Each file is served at the identity its own {@code !!id} declares, so the examples name each other the way
  * published documents do, literally.

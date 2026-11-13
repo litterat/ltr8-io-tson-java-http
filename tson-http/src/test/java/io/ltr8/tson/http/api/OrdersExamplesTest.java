@@ -46,7 +46,7 @@ class OrdersExamplesTest {
         List<Diagnostic> problems = tson.validateSchema(OrdersExamples.source(file));
         assertEquals(List.of(), problems, () -> file + ": " + problems);
         var entries = tson.schemaRegistry().get(OrdersExamples.id(file)).orElseThrow().schema().entries();
-        return OrdersExamples.applying(entries, "http").get(httpName);
+        return OrdersExamples.applying(entries, "service.http").get(httpName);
     }
 
     static Resource resource(Namespace<?> http, String path) {
@@ -62,12 +62,12 @@ class OrdersExamplesTest {
         }
     }
 
-    /** Documentation is annotation on the key: {@code @summary} the short form, {@code @doc} the long. */
+    /** Documentation is annotation on the key: {@code @service.summary} the short form, {@code @doc} the long. */
     @Test
     void anEndpointsSummaryAndDocRideOnItsKey() {
         var http = httpOf(tson(), "orders-api-1.tn", "orders_http");
         var post = resource(http, "/orders").endpoints().getAnnotations("POST");
-        assertEquals("Place an order.", post.value("summary", String.class).orElseThrow());
+        assertEquals("Place an order.", post.value("service.summary", String.class).orElseThrow());
         assertTrue(post.value("doc", String.class).orElseThrow().startsWith("Accepts a new order"));
     }
 
@@ -78,7 +78,7 @@ class OrdersExamplesTest {
         assertEquals(List.of(), problems, () -> "" + problems);
 
         var entries = tson.schemaRegistry().get(OrdersExamples.id("orders-1.tn")).orElseThrow().schema().entries();
-        var protocols = OrdersExamples.applying(entries, "protocol");
+        var protocols = OrdersExamples.applying(entries, "service.protocol");
         Namespace<?> orders = protocols.get("orders");
         assertEquals(List.of("place_order", "get_order", "list_orders", "cancel_order"), List.copyOf(orders.keySet()));
         assertInstanceOf(Exchange.class, orders.get("place_order"));
@@ -87,9 +87,9 @@ class OrdersExamplesTest {
         assertEquals(List.of("refund"), List.copyOf(protocols.get("orders_v2").keySet()),
                 "a protocol lists its own exchanges and nothing more");
         // Facts about an exchange are bare annotations on its key, not fields of its signature.
-        assertTrue(orders.getAnnotations("get_order").has("safe"));
-        assertTrue(orders.getAnnotations("cancel_order").has("idempotent"));
-        assertFalse(orders.getAnnotations("place_order").has("safe"));
+        assertTrue(orders.getAnnotations("get_order").has("service.safe"));
+        assertTrue(orders.getAnnotations("cancel_order").has("service.idempotent"));
+        assertFalse(orders.getAnnotations("place_order").has("service.safe"));
     }
 
     @Test
@@ -102,7 +102,7 @@ class OrdersExamplesTest {
         assertEquals(201, routes.route(HttpVerb.POST, "/orders").orElseThrow().status());
         // On an operation the marker sits before the verb key, the same way -- and the reader checks it.
         var http = httpOf(tson(), "orders-api-inline-1.tn", "orders_http");
-        assertTrue(resource(http, "/orders/{id}/items").endpoints().getAnnotations("GET").has("safe"));
+        assertTrue(resource(http, "/orders/{id}/items").endpoints().getAnnotations("GET").has("service.safe"));
     }
 
     @Test

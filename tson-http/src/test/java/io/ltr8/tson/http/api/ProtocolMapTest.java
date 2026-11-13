@@ -19,11 +19,11 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * A protocol as a map of exchanges, measured on the layer's own {@code protocol}: a value entry of it holds the
- * map, read back as a {@code Namespace} of {@link Exchange}s; a value under the typed slot needs no {@code !exchange}
- * tag; an unresolved reference inside a value is caught at load, because the slot is typed by a kind; and the
- * annotations written before an exchange's key survive into {@code Namespace.getAnnotations}, which is where a reader
- * finds an exchange's documentation and facts.
+ * A protocol as a map of exchanges, measured on the layer's own {@code protocol}: a value entry of it holds the map,
+ * read back as a {@code Namespace} of {@link Exchange}s; a value under the typed slot needs no {@code
+ * !service.exchange} tag; an unresolved reference inside a value is caught at load, because the slot is typed by a
+ * kind; and the annotations written before an exchange's key survive into {@code Namespace.getAnnotations}, which is
+ * where a reader finds an exchange's documentation and facts.
  */
 class ProtocolMapTest {
 
@@ -32,7 +32,7 @@ class ProtocolMapTest {
 
     /** The layer, served under a probe identity. */
     static final String META = TsonApiSchema.source()
-            .replace("https://tson.io/2026/40/io/ltr8/http/meta-service.tn", PROBE_META_ID);
+            .replace("https://tson.io/2026/40/io/ltr8/http/service.tn", PROBE_META_ID);
 
     static String doc(String entries) {
         return """
@@ -62,7 +62,7 @@ class ProtocolMapTest {
         assertEquals(List.of(), problems, () -> "" + problems);
         Top entry = tson.schemaRegistry().get(DOC_ID).orElseThrow().schema().entries().get("orders");
         ValueEntry value = assertInstanceOf(ValueEntry.class, entry);
-        assertEquals("protocol", value.type());
+        assertEquals("service.protocol", value.type());
         return assertInstanceOf(Namespace.class, value.value());
     }
 
@@ -70,10 +70,10 @@ class ProtocolMapTest {
     @Test
     void aProtocolIsTheMapOfExchangesItself() {
         Namespace<?> orders = resolvedProtocol("""
-                  orders => !protocol { place_order  => !exchange { request: order  response: order }
-                                        cancel_order => !exchange { request: order_ref } }""");
+                  orders => !service.protocol { place_order  => !service.exchange { request: order  response: order }
+                                        cancel_order => !service.exchange { request: order_ref } }""");
 
-        assertEquals("protocol", orders.type());
+        assertEquals("service.protocol", orders.type());
         assertEquals(List.of("place_order", "cancel_order"), List.copyOf(orders.keySet()));
         assertEquals("order", assertInstanceOf(Exchange.class, orders.get("place_order")).request().orElseThrow().name());
     }
@@ -81,7 +81,7 @@ class ProtocolMapTest {
     /** The slot's type supplies the record, so the tag is optional -- as at any typed position. */
     @Test
     void aValueUnderAnExchangeTypedSlotNeedsNoTag() {
-        Namespace<?> orders = resolvedProtocol("  orders => !protocol { place_order => { request: order } }");
+        Namespace<?> orders = resolvedProtocol("  orders => !service.protocol { place_order => { request: order } }");
 
         assertInstanceOf(Exchange.class, orders.get("place_order"));
     }
@@ -89,7 +89,7 @@ class ProtocolMapTest {
     /** A name inside a map value is judged at load: the slot is typed by a kind, so the read records it. */
     @Test
     void anUnresolvedReferenceInsideAMapValueIsCaughtAtLoad() {
-        String doc = doc("  orders => !protocol { place_order => !exchange { request: no_such } }");
+        String doc = doc("  orders => !service.protocol { place_order => !service.exchange { request: no_such } }");
         List<Diagnostic> problems = tson(doc).validateSchema(doc);
 
         assertEquals(1, problems.size(), () -> "" + problems);
@@ -104,9 +104,9 @@ class ProtocolMapTest {
     @Test
     void anAnnotationOnAnExchangeKeySurvivesIntoTheNamespace() {
         Namespace<?> orders = resolvedProtocol(
-                "  orders => !protocol { @safe @doc:\"Fetch it.\" get_order => { request: order_ref } }");
+                "  orders => !service.protocol { @service.safe @doc:\"Fetch it.\" get_order => { request: order_ref } }");
 
         assertEquals("Fetch it.", orders.getAnnotations("get_order").value("doc", String.class).orElseThrow());
-        assertTrue(orders.getAnnotations("get_order").has("safe"));
+        assertTrue(orders.getAnnotations("get_order").has("service.safe"));
     }
 }

@@ -1,8 +1,8 @@
 !!id:"https://schemas.example.com/2026/40/orders/orders-api-1.tn"
-!!import:"https://tson.io/2026/40/io/ltr8/http/meta-service.tn"
+!!import:"https://tson.io/2026/40/io/ltr8/http/service.tn"
 !!import:"https://schemas.example.com/2026/40/orders/orders-1.tn"
 @doc:"""
-  Both: the protocol of orders-1.tn, and the http projection that binds it. Every endpoint is a `!binding`
+  Both: the protocol of orders-1.tn, and the http projection that binds it. Every endpoint is a `!service.binding`
   naming an exchange and borrowing its signature. The exchange is a reference the resolver judges, a
   qualified name through the protocol's entry and its key -- `orders.place_order` -- so a misspelt exchange
   fails at load. What a binding adds is the placement of that exchange's one request record over the HTTP
@@ -14,26 +14,26 @@
     GET    /orders        order_query { status  page  page_size } all three in the query (a GET's remainder)
     DELETE /orders/{id}   order_ref   { id }                      id from the path; nothing left over
 
-  `@binds:[orders]`, written before the projection's entry, is a claim the reader holds it to: every
-  exchange of `orders` has a binding here, or an entry in `@not_bound` giving the reason it does not.
+  `@service.binds:[orders]`, written before the projection's entry, is a claim the reader holds it to: every
+  exchange of `orders` has a binding here, or an entry in `@service.not_bound` giving the reason it does not.
   """
 !schema {
-  @binds:[orders]
-  orders_http => !http {
+  @service.binds:[orders]
+  orders_http => !service.http {
     "/orders" => {
-      @summary:"Place an order."
+      @service.summary:"Place an order."
       @doc:"""
         Accepts a new order and confirms it. Repeating the request with the same Idempotency-Key returns the
         original confirmation rather than placing a second order.
         """
-      POST => !binding { exchange: orders.place_order  status: 201
+      POST => !service.binding { exchange: orders.place_order  status: 201
                          body: order  headers: { idempotency_key => "Idempotency-Key" } }
-      @summary:"Search orders."
-      GET  => !binding { exchange: orders.list_orders }
+      @service.summary:"Search orders."
+      GET  => !service.binding { exchange: orders.list_orders }
     }
     "/orders/{id}" => {
-      GET    => !binding { exchange: orders.get_order }
-      DELETE => !binding { exchange: orders.cancel_order  status: 204 }
+      GET    => !service.binding { exchange: orders.get_order }
+      DELETE => !service.binding { exchange: orders.cancel_order  status: 204 }
     }
   }
 }
