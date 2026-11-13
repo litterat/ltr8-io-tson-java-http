@@ -56,6 +56,11 @@ driving it under load. Responses are self-describing in both directions, every a
 and a service publishes a description of itself (`service.tn`) from which it derives what to publish and warm.
 What remains is polish, the open questions in `UPSTREAM.md`, and the outstanding work in `BACKLOG.md`.
 
+**Aim.** The project builds service capabilities that LLMs integrate with better than today's conventions allow, taking
+the Model Context Protocol and RFC 9880 as design input rather than targets: it emits no JSON Schema and does not
+implement the MCP specification as it stands, but builds an alternative that keeps what MCP gets right and goes beyond
+what it can do (`design/service-description.md`).
+
 **Hard constraints:**
 - Java 25 only (matches tson-java).
 - `tson-http` and `tson-http-jdk` take **no external runtime dependencies**. tson-java's own modules (`io.ltr8:tson`,

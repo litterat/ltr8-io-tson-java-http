@@ -1,11 +1,15 @@
 # The agent -- a plan of calls, and the agent it compiles to
 
-**Status: future work, kept for what it says about the descriptor.** An agent executing a plan of calls is the
-consumer that presses hardest on a protocol -- it needs an exchange addressable, its request and response typed, and
-its errors declared -- so sketching it is how `service.tn`'s protocol layer gets tested against something that
-is not HTTP, in the way a second implementation says whether an API holds up. The two layers are kept resolved and
-probed for that reason and no other. **Do not build toward them, and do not let a decision that is the agent's alone
-move the descriptor.** Nothing in `experiments/rpc/`'s order of work waits on them.
+**Status: the draft of the LLM-facing projection of a protocol** (`BACKLOG.md`, "An LLM-facing projection of a
+protocol"), which is what these sketches are built toward: service capabilities a model integrates with better than
+today's conventions allow, taking the Model Context Protocol and RFC 9880 as design input rather than targets, with no
+JSON Schema emitted and the MCP specification not implemented as it stands (`design/service-description.md`). An
+agent executing a plan of calls is the consumer that presses hardest on a protocol -- it needs an exchange
+addressable, its request and response typed, and its errors declared -- so sketching it is also how `service.tn`'s
+protocol layer gets tested against something that is not HTTP, in the way a second implementation says whether an API
+holds up. **A fact a model needs about an exchange belongs to the protocol, as `@service.destructive` does; a decision
+that is the projection's alone lands in the projection and never moves the descriptor.** Nothing in
+`experiments/rpc/`'s order of work waits on them.
 
 The protocol a plan calls is the orders example that ships as `tson-http`'s test fixture (`OrdersExamples`); each
 CALL an agent executes is one `call` of `rpc.tn` (`experiments/rpc/`). Two notes beside the sketches look further

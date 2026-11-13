@@ -81,13 +81,14 @@ class OrdersExamplesTest {
         var orders = protocols.get("orders").exchanges();
         assertEquals(List.of("place_order", "get_order", "list_orders", "cancel_order"), List.copyOf(orders.keySet()));
         assertInstanceOf(Exchange.class, orders.get("place_order"));
-        assertEquals("Cancel an order. Cancelling twice is the same as cancelling once.",
-                orders.getAnnotations("cancel_order").value("doc", String.class).orElseThrow());
+        assertEquals("Cancel an order. Cancelling twice is the same as cancelling once, and a cancelled order stays "
+                + "cancelled.", orders.getAnnotations("cancel_order").value("doc", String.class).orElseThrow());
         assertEquals(List.of("refund"), List.copyOf(protocols.get("orders_v2").exchanges().keySet()),
                 "a protocol lists its own exchanges and nothing more");
         // Facts about an exchange are bare annotations on its key, not fields of its signature.
         assertTrue(orders.getAnnotations("get_order").has("service.safe"));
         assertTrue(orders.getAnnotations("cancel_order").has("service.idempotent"));
+        assertTrue(orders.getAnnotations("cancel_order").has("service.destructive"));
         assertFalse(orders.getAnnotations("place_order").has("service.safe"));
     }
 
@@ -115,8 +116,12 @@ class OrdersExamplesTest {
         assertEquals("new_order", create.request().orElseThrow().name());
         assertEquals(List.of("status", "page", "page_size"),
                 routes.route(HttpVerb.GET, "/orders").orElseThrow().placement().at(RequestPlacement.Location.QUERY));
-        assertEquals(Map.of("id", RequestPlacement.Location.PATH),
-                routes.route(HttpVerb.DELETE, "/orders/{id}").orElseThrow().placement().fields());
+        Route cancel = routes.route(HttpVerb.DELETE, "/orders/{id}").orElseThrow();
+        assertEquals(Map.of("id", RequestPlacement.Location.PATH), cancel.placement().fields());
+        assertTrue(cancel.idempotent() && cancel.destructive() && !cancel.safe(),
+                "the exchange's facts arrive on the route that binds it");
+        Route fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
+        assertTrue(fetch.safe() && fetch.idempotent() && !fetch.destructive(), "safe implies idempotent");
         assertEquals(Optional.of(new ExchangeName("orders", "place_order")), create.exchange(),
                 "the qualified name: the protocol's entry, its exchanges field, then the exchange's key");
         assertEquals(List.of("orders"), httpOf(tson(), "orders-api-1.tn", "orders_http").binds().stream()

@@ -83,8 +83,9 @@ The four entries are in build order.
   error, as `prepareToRead` fails a bound-class mismatch. The outcome is a union of the response and the errors, so whether a
   projection throws or writes an error is the projection's choice and the protocol layer makes none. The other direction
   lives here too: a `!service.protocol` document written from an invoke descriptor, so a `!service.http` can be built over a
-  Java interface or object that already exists; `@service.safe` and `@service.idempotent` have no Java counterpart and must
-  come from somewhere the writer reads. The rpc wire form (`call` and `return` documents addressed by `ExchangeName`, and the
+  Java interface or object that already exists; `@service.safe`, `@service.idempotent` and `@service.destructive` have no
+  Java counterpart and must come from somewhere the writer reads.
+  The rpc wire form (`call` and `return` documents addressed by `ExchangeName`, and the
   code taking a call to an invocation and the outcome to a return) is a capability of the service, not a module of its own;
   `experiments/rpc/` is its draft. One HTTP fact stays in this reader on purpose: a business error's pinned `status`, read by
   field name from the error type, is the `!service.http` projection's rule and needs no import of `problem.tn`. Constraint:
@@ -103,6 +104,24 @@ The four entries are in build order.
   startup from the `!service.protocol` with no protobuf: one `MethodDescriptor` per `ExchangeName`, its full name in gRPC's
   `package.Service/Method` form, and the service's wire serialisation for the request and outcome. The first external
   dependency on the service side, stopping at that module.
+
+## Projections
+
+- [ ] **An LLM-facing projection of a protocol** — A projection of a `!service.protocol` beside `service.http`, for a
+  caller that is a model: service capabilities a model integrates with better than today's conventions allow. The Model
+  Context Protocol and RFC 9880 are design input, not targets; nothing here emits JSON Schema or implements the MCP
+  specification as it stands, and the work is an alternative that builds on what MCP gets right and goes beyond what it can
+  do. Take from MCP the shape that fits: discovery of the server and the versions it serves; the protocol's exchanges
+  offered as callable tools, `@doc` and `@service.summary` what the model selects on and `@service.safe`,
+  `@service.idempotent` and `@service.destructive` the facts a client acts on (retry, reorder, confirm); the catalog's
+  schemas and the description offered as resources at their identities; one POST route taking call documents for the whole
+  protocol, the interface endpoint kind "`tson-http` becomes the HTTP projection" adds; and change subscriptions, where the
+  `!service.stream` endpoint kind `proposal/affordances.md` proposes lands. Go beyond it where TSON does: a tool's request
+  and response are the description's own TSON types, self-describing on the wire and judged, with no JSON Schema rendering;
+  a declared business error is an outcome a model can act on, typed and composing `problem.details`, rather than text; a
+  reference is a judged name; and a security scheme is declared in the description, not negotiated. Constraints: depends on
+  the module split's join (`tson-service`) and on the interface endpoint kind; `experiments/agent/` is its draft, and this
+  item is what those experiments are built toward.
 
 ## Adapters
 
@@ -125,17 +144,13 @@ The four entries are in build order.
 
 ## Client
 
-- [ ] **A client built from the description** — For an agent or any LLM-driven caller the client surface is REST, which is
-  the published description, the self-describing responses and the deployment descriptor; a Java client built from the
-  description is therefore a conformance and testing tool. It reads a description, reverses `RequestPlacement` to build a
-  request from a record (path variables, query, headers, body), sends it with the right `Content-Type` and
-  `TSON-Accept-Schema`, and validates the reply by the schema it names, which is the other half of the contract, proven from
-  the server side only. `TsonApiConformanceTest` holds that logic against the demo; extract it into a reusable client and
-  make the conformance test its consumer.
-- [ ] **A tool manifest derived from a `!service.http`** — An LLM tool or function definition per endpoint, derived from the
-  description's routes, request records and summaries, as a projection of the description like the gRPC front-end is of the
-  protocol. Constraint: `experiments/agent/` is future work the layer is not built toward (`design/service-description.md`),
-  and this item derives from the description only; it decides nothing for the agent.
+- [ ] **A client built from the description** — For a caller that is not a model the client surface is REST, which is the
+  published description, the self-describing responses and the deployment descriptor (a model has its own projection,
+  "Projections" above); a Java client built from the description is therefore a conformance and testing tool. It reads a
+  description, reverses `RequestPlacement` to build a request from a record (path variables, query, headers, body), sends
+  it with the right `Content-Type` and `TSON-Accept-Schema`, and validates the reply by the schema it names, which is the
+  other half of the contract, proven from the server side only. `TsonApiConformanceTest` holds that logic against the demo;
+  extract it into a reusable client and make the conformance test its consumer.
 
 ## The description
 

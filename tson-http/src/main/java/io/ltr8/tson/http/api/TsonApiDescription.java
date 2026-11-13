@@ -50,8 +50,10 @@ import java.util.function.Function;
  *       not_bound} with a reason -- held per {@link ExchangeName}, never per name;</li>
  *   <li>each request record's fields are placed over the path, query, headers and body exactly once
  *       ({@link RequestPlacement});</li>
- *   <li>the verb agrees with what the exchange says about itself (GET safe, PUT and DELETE idempotent), and a
- *       response-less endpoint answers a status that carries no body;</li>
+ *   <li>an exchange is never marked both {@code @service.safe} and {@code @service.destructive}, which exclude each
+ *       other;</li>
+ *   <li>the verb agrees with what the exchange says about itself (GET safe, PUT and DELETE idempotent, and nothing
+ *       destructive at GET or HEAD), and a response-less endpoint answers a status that carries no body;</li>
  *   <li>each business error fixes its status, which is how a response is told from an error by status alone;</li>
  *   <li>a {@code document} lists at least one media type, since none is implied for it, and its body is bytes, so
  *       any type labels it; every other endpoint writes a TSON value, so it lists only media types a codec this
@@ -136,6 +138,9 @@ public final class TsonApiDescription {
 
     private static List<Route> read(String httpName, Http http, Function<String, Top> entries) {
         Map<String, Protocol> protocols = bound(http);
+        // Every exchange the projection claims, bound or exempted, states facts that must agree with each other.
+        protocols.forEach((name, protocol) -> protocol.exchanges().keySet().forEach(key -> requireFactsExclusive(
+                new ExchangeName(name, key).toString(), protocol.exchanges().getAnnotations(key))));
         List<Route> routes = new ArrayList<>();
         Set<ExchangeName> bound = new LinkedHashSet<>();
         http.resources().forEach((path, resource) -> {
@@ -174,7 +179,13 @@ public final class TsonApiDescription {
                 }
                 RequestPlacement placement = RequestPlacement.of(label, verb, path, endpoint.query(),
                         endpoint.headers(), endpoint.body(), request, entries);
-                requireVerbAgrees(label, verb, facts);
+                if (exchange.isEmpty()) {
+                    requireFactsExclusive(label, facts);
+                }
+                boolean safe = facts.has("service.safe");
+                boolean idempotent = safe || facts.has("service.idempotent");
+                boolean destructive = facts.has("service.destructive");
+                requireVerbAgrees(label, verb, safe, idempotent, destructive);
                 boolean document = endpoint instanceof Document;
                 if (!document) {
                     requireStatusAgrees(label, endpoint.status(), response);
@@ -186,7 +197,7 @@ public final class TsonApiDescription {
                         .map(ValueRef::get).toList();
                 Annotations fallback = docs;
                 routes.add(new Route(verb, path, exchange, request, response, errorStatuses(label, errors, entries),
-                        endpoint.status(), document, mediaTypes, placement,
+                        endpoint.status(), safe, idempotent, destructive, document, mediaTypes, placement,
                         text(onVerb, "service.summary").or(() -> text(fallback, "service.summary")),
                         text(onVerb, "doc").or(() -> text(fallback, "doc")), security, endpoint.responseHeaders()));
             });
@@ -309,16 +320,34 @@ public final class TsonApiDescription {
     }
 
     /**
+     * {@code @service.safe} and {@code @service.destructive} exclude each other: a safe exchange has no effect, so it
+     * has none a caller cannot undo. {@code named} is the exchange's qualified name, or an operation's endpoint.
+     */
+    private static void requireFactsExclusive(String named, Annotations facts) {
+        if (facts.has("service.safe") && facts.has("service.destructive")) {
+            throw new IllegalArgumentException("'" + named + "' is marked both @service.safe and @service.destructive, "
+                    + "which exclude each other -- a safe exchange has no effect to undo; drop one");
+        }
+    }
+
+    /**
      * The projection checks its verb against what the exchange says about itself, and never derives one from the
      * other ({@code @service.safe} implies {@code @service.idempotent}, so a safe exchange may be bound to PUT or
      * DELETE). A verb whose contract the exchange does not claim is the one mismatch a client cannot see and a cache
-     * will act on.
+     * will act on. A destructive exchange is refused at a safe verb outright, since no verb implies {@code
+     * @service.destructive} and a safe one denies it.
      */
-    private static void requireVerbAgrees(String label, HttpVerb verb, Annotations facts) {
-        boolean safe = facts.has("service.safe");
-        boolean idempotent = safe || facts.has("service.idempotent");
+    private static void requireVerbAgrees(String label, HttpVerb verb, boolean safe, boolean idempotent,
+                                          boolean destructive) {
         switch (verb) {
-            case GET, HEAD, OPTIONS -> require(safe, label, verb, "safe");
+            case GET, HEAD, OPTIONS -> {
+                if (destructive) {
+                    throw new IllegalArgumentException("'" + label + "': " + verb + " is safe, but the exchange is "
+                            + "marked @service.destructive -- a destructive exchange is bound to a verb that is not "
+                            + "safe");
+                }
+                require(safe, label, verb, "safe");
+            }
             case PUT, DELETE -> require(idempotent, label, verb, "idempotent");
             case POST, PATCH -> { }
         }

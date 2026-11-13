@@ -7,8 +7,10 @@
   whose `exchanges` maps exchange names to exchanges -- an exchange's name is the key it sits under, scoped to
   its protocol, and a `@doc` before the key documents it. The `!service.exchange` tag is optional under the
   typed slot. An exchange's qualified name is the protocol's entry, its `exchanges` field and then its key
-  (`orders.exchanges.place_order`). A protocol lists its exchanges and nothing more: `orders_v2` declares only
-  what it adds, and an http projection offering both binds both.
+  (`orders.exchanges.place_order`). The facts an exchange states about itself are bare markers before its key:
+  `cancel_order` is idempotent and destructive, so a caller may retry it and should confirm it first. A protocol
+  lists its exchanges and nothing more: `orders_v2` declares only what it adds, and an http projection offering
+  both binds both.
   """
 !schema {
   @doc:"The orders protocol."
@@ -24,7 +26,8 @@
       @doc:"A page of orders, filtered by status."
       list_orders  => { request: order_query  response: order_page }
       @service.idempotent
-      @doc:"Cancel an order. Cancelling twice is the same as cancelling once."
+      @service.destructive
+      @doc:"Cancel an order. Cancelling twice is the same as cancelling once, and a cancelled order stays cancelled."
       cancel_order => { request: order_ref    errors: [order_not_found] }
     }
   }

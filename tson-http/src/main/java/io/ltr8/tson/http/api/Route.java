@@ -15,11 +15,16 @@ import java.util.function.Function;
 
 /**
  * One endpoint of a description, resolved: the verb and the path it sits under, its signature -- inline for an
- * {@link Operation}, the exchange's for a {@link Binding} -- the media types it speaks, and everything {@link
- * TsonApiDescription} checked about it.
+ * {@link Operation}, the exchange's for a {@link Binding} -- the facts it states about itself, the media types it
+ * speaks, and everything {@link TsonApiDescription} checked about it.
  *
  * @param exchange    the exchange a binding borrows; empty for an operation or a document
  * @param errors      each business error, by the status its type fixes
+ * @param safe        whether the exchange is marked {@code @service.safe}: the exchange's own key for a binding, the
+ *                    verb key for an operation or a document
+ * @param idempotent  whether it is marked {@code @service.idempotent}, or safe, which implies it
+ * @param destructive whether it is marked {@code @service.destructive}: its effect cannot be undone, and a caller
+ *                    should confirm before invoking it. Never true with {@code safe}
  * @param document    whether this is a {@link Document}, its success body bytes labelled by a media type rather than
  *                    a TSON value
  * @param mediaTypes  every media type the endpoint speaks, in both directions, folded to lower case:
@@ -34,9 +39,10 @@ import java.util.function.Function;
  *                    literal; {@link #expandResponseHeaders} expands them
  */
 public record Route(HttpVerb verb, String path, Optional<ExchangeName> exchange, Optional<TypeRef> request,
-                    Optional<TypeRef> response, Map<Integer, TypeRef> errors, int status, boolean document,
-                    Set<String> mediaTypes, RequestPlacement placement, Optional<String> summary,
-                    Optional<String> doc, List<SecurityScheme> security, Map<String, String> responseHeaders) {
+                    Optional<TypeRef> response, Map<Integer, TypeRef> errors, int status, boolean safe,
+                    boolean idempotent, boolean destructive, boolean document, Set<String> mediaTypes,
+                    RequestPlacement placement, Optional<String> summary, Optional<String> doc,
+                    List<SecurityScheme> security, Map<String, String> responseHeaders) {
 
     public Route {
         errors = Collections.unmodifiableMap(new LinkedHashMap<>(errors));

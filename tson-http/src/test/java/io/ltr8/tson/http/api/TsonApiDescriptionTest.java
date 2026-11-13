@@ -103,6 +103,16 @@ class TsonApiDescriptionTest {
                          @service.safe list_orders   => { request: order_query  response: order_page } }
           }
 
+          @doc:"An exchange whose effect cannot be undone, which no verb implies."
+          purge => !service.protocol {
+            exchanges: { @service.destructive purge_orders => { request: order_query  response: order_page } }
+          }
+
+          @doc:"An exchange claiming to be safe and destructive at once."
+          contradictory => !service.protocol {
+            exchanges: { @service.safe @service.destructive peek_purge => { request: order_query  response: order_page } }
+          }
+
           @doc:"A request that is not a record at all, which the placement cannot distribute."
           scalars => !service.protocol { exchanges: { by_text => { request: text } } }
 
@@ -566,6 +576,70 @@ class TsonApiDescriptionTest {
         routes(projection("orders", List.of("orders.exchanges.place_order", "orders.exchanges.list_orders",
                         "orders.exchanges.cancel_order"),
                 "\"/orders/{id}\" => { DELETE => !service.binding { exchange: orders.exchanges.get_order  status: 204 } }"));
+    }
+
+    /**
+     * The facts an exchange states about itself arrive on every route binding it, resolved: {@code @service.safe}
+     * implies {@code @service.idempotent}, and {@code @service.destructive} is its own fact, derived from no verb --
+     * here a POST, where nothing about the verb says so.
+     */
+    @Test
+    void anExchangesFactsArriveOnItsRoute() {
+        TsonApiDescription orders = routes(API);
+        Route fetch = orders.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
+        assertTrue(fetch.safe() && fetch.idempotent() && !fetch.destructive(), "safe implies idempotent");
+        Route cancel = orders.route(HttpVerb.DELETE, "/orders/{id}").orElseThrow();
+        assertTrue(!cancel.safe() && cancel.idempotent() && !cancel.destructive());
+        Route place = orders.route(HttpVerb.POST, "/orders").orElseThrow();
+        assertTrue(!place.safe() && !place.idempotent() && !place.destructive());
+
+        Route purge = routes(projection("purge", List.of(),
+                "\"/purge\" => { POST => !service.binding { exchange: purge.exchanges.purge_orders } }"))
+                .route(HttpVerb.POST, "/purge").orElseThrow();
+        assertTrue(purge.destructive() && !purge.safe() && !purge.idempotent());
+
+        // On an inline operation the marker sits before the verb key, and arrives the same way.
+        Route inline = routes(api("""
+              standalone => !service.http { resources: { "/purge" => {
+                @service.destructive POST => !service.operation { request: order_query  response: order_page } } } }
+            """)).route(HttpVerb.POST, "/purge").orElseThrow();
+        assertTrue(inline.destructive());
+    }
+
+    /**
+     * {@code @service.safe} and {@code @service.destructive} exclude each other: a safe exchange has no effect to
+     * undo. Refused on an exchange of a protocol the projection binds, named by its qualified name, and on an inline
+     * operation's verb key, named by its endpoint.
+     */
+    @Test
+    void anExchangeMarkedSafeAndDestructiveIsRefused() {
+        String refused = assertThrows(IllegalArgumentException.class, () -> routes(projection("contradictory",
+                List.of(), "\"/peek\" => { POST => !service.binding { exchange: contradictory.exchanges.peek_purge } }")))
+                .getMessage();
+        assertEquals("'contradictory.exchanges.peek_purge' is marked both @service.safe and @service.destructive, "
+                + "which exclude each other -- a safe exchange has no effect to undo; drop one", refused);
+
+        String inline = assertThrows(IllegalArgumentException.class, () -> routes(api("""
+              standalone => !service.http { resources: { "/peek" => {
+                @service.safe @service.destructive POST => !service.operation { request: order_query } } } }
+            """))).getMessage();
+        assertEquals("'standalone POST /peek' is marked both @service.safe and @service.destructive, which exclude "
+                + "each other -- a safe exchange has no effect to undo; drop one", inline);
+    }
+
+    /**
+     * A destructive exchange is refused at GET or HEAD, as an unsafe one is: no verb implies {@code
+     * @service.destructive}, and a safe verb denies it.
+     */
+    @Test
+    void aDestructiveExchangeIsRefusedAtASafeVerb() {
+        for (String verb : List.of("GET", "HEAD")) {
+            String refused = assertThrows(IllegalArgumentException.class, () -> routes(projection("purge", List.of(),
+                    "\"/purge\" => { " + verb + " => !service.binding { exchange: purge.exchanges.purge_orders } }")))
+                    .getMessage();
+            assertEquals("'a " + verb + " /purge': " + verb + " is safe, but the exchange is marked "
+                    + "@service.destructive -- a destructive exchange is bound to a verb that is not safe", refused);
+        }
     }
 
     /** A response-less endpoint answers with no body, and the default 200 says otherwise. */

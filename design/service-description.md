@@ -5,6 +5,16 @@ at startup. The orders examples under `tson-http/src/test/resources/io/ltr8/tson
 document per use of the layer, reached through `OrdersExamples`; `experiments/rpc/` and `experiments/agent/` read them
 there too.
 
+**What the layer is for.** This project builds service capabilities that a model, as a caller, integrates with better
+than today's conventions allow. The Model Context Protocol and RFC 9880 (SDF) are design input for those capabilities,
+not targets: nothing here emits JSON Schema or implements the MCP specification as it stands. The aim is an alternative
+that keeps what MCP gets right, discovery, callable tools, resources and change subscriptions, and goes beyond it where
+TSON does: payloads that are the description's own types, self-describing and judged; business errors a model acts on;
+references that are judged names; a security scheme declared, not negotiated. Its shape is a projection of a protocol
+beside `service.http` (`BACKLOG.md`, "An LLM-facing projection of a protocol"), and `experiments/agent/` is its draft.
+A fact a model needs about an exchange belongs to the protocol, as `@service.destructive` does; how a model is offered
+the protocol belongs to the projection.
+
 **Invariants**
 
 - A document that exports a namespace is a schema; a document with at most a local scope is data; any document may
@@ -97,7 +107,8 @@ and its module. Each is written by its path from that map: the words here are `s
 **One root name.** Every root name of an import closure is reserved in each importer, and a clash is unfixable by the
 importer ([TSON-SCHEMA] §2.2.3). A description imports the layer beside the domain schemas it describes, so a layer
 declaring `document`, `resource` or `operation` at its root would forbid a domain those names. So every entry of
-`service.tn`, `@service.summary`, `@service.safe` and `@service.idempotent` included, is a member of the schema map
+`service.tn`, `@service.summary` and the exchange markers `@service.safe`, `@service.idempotent` and
+`@service.destructive` included, is a member of the schema map
 `service => !schema { … }` nested in its root, as the sibling's `policy.tn` nests `policy`, and the layer costs an
 importer the one name `service`. A name resolves in the schema's one namespace, so an entry refers to another by its
 path from inside the map as from outside it, `exchange => service.signature & {}` and `value_type: service.exchange`; a
@@ -182,8 +193,14 @@ on:
 - a bound request record holding a dependent field loads only if every type a sender may name in its sibling binds
   (`ChosenTypes`): a free `meta.type_ref` sibling admits the kernel's records and never does, while a pinned sibling
   or a discriminator over bound subtypes does;
-- the verb agrees with what the exchange says about itself, `@service.safe` and `@service.idempotent` on its key: GET
-  safe, PUT and DELETE idempotent; and a response-less endpoint answers a status that carries no body;
+- the verb agrees with what the exchange says about itself, the markers on its key: GET safe, PUT and DELETE
+  idempotent, and nothing `@service.destructive` at GET or HEAD; and a response-less endpoint answers a status that
+  carries no body. `@service.destructive` is the third fact a caller composing calls needs beside RFC 9110's two: an
+  effect the caller cannot undo, to confirm before invoking. No verb implies it and nothing derives it from one, since
+  a `DELETE` may cancel a reservation and a `POST` may wipe a table; it excludes `@service.safe`, and an exchange
+  marked both is refused, a bound protocol's exempted exchanges included. Each route carries the three resolved,
+  `Route.safe()`, `idempotent()` (safe implies it) and `destructive()`, from the exchange's key for a binding and the
+  verb key for an operation;
 - each business error fixes its status (`sku_not_found => problem.details & { status: = 404 … }`), which is how a
   client tells an error from the response by status alone; two errors of one endpoint pinning one status is refused;
 - a `!service.document` lists a media type, and every other endpoint lists only types a codec here speaks (below);
@@ -326,8 +343,9 @@ at a business error's fixed status that error; and any other is a 4xx or 5xx `pr
 
 **What builds on the protocol, and is not built.** `experiments/rpc/` is its wire form, `call` and `return` as
 templates applied per exchange, next in the order of work and outside `tson-http` once it lands. `experiments/agent/`, a
-plan of calls, is **future work** kept so a consumer that is not HTTP shapes the layer: do not build toward it, and do
-not let a decision that is the agent's alone move the layer.
+plan of calls, is the draft of the LLM-facing projection (above): a consumer that is not HTTP, pressing on the protocol
+for what a model needs. A decision that is the projection's alone lands in the projection, never in the protocol
+layer.
 
 ## Business errors compose `problem.details`
 

@@ -84,7 +84,7 @@ Because both sides are in the data view, every check is a comparison of shapes t
 request record against a request record, a union against a union. None of it asks what a Java exception or a
 `CompletableFuture` means; the bridges answered that before the join ran. The same holds for the other direction, a
 `!service.protocol` document written from a descriptor: it writes the data view the descriptor already holds, and only what
-has no language counterpart (`@service.safe`, `@service.idempotent`) must come from elsewhere.
+has no language counterpart (`@service.safe`, `@service.idempotent`, `@service.destructive`) must come from elsewhere.
 
 ## The same paradigm one layer up: the HTTP projection
 
@@ -113,9 +113,10 @@ several and not the description of the service.
 
 ## What this layer is not
 
-- **Not a client library.** The agent-facing surface is REST: the published description, the self-describing
-  responses and the deployment descriptor (`BACKLOG.md`, "Client"). A proxy over the descriptor is a language
-  convenience, not the contract a caller is held to.
-- **Not the agent experiment.** `experiments/agent/` is future work the layer is not built toward
-  (`design/service-description.md`, "What builds on the protocol"); a decision that is the agent's alone does not
-  move the descriptor.
+- **Not a client library.** A model calls a projection of the protocol (`BACKLOG.md`, "An LLM-facing projection of a
+  protocol"), and any other caller REST: the published description, the self-describing responses and the deployment
+  descriptor (`BACKLOG.md`, "Client"). A proxy over the descriptor is a language convenience, not the contract a
+  caller is held to.
+- **Not the agent experiment.** `experiments/agent/` is the draft of the LLM-facing projection, which sits over the
+  protocol beside the HTTP one (`design/service-description.md`, "What the layer is for"); a decision that is the
+  projection's alone does not move the descriptor.

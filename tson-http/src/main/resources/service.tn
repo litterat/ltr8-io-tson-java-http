@@ -116,7 +116,7 @@
       `meta.ref<service.exchange>` reaches an exchange as `orders.exchanges.place_order`, the protocol's entry,
       this field and then the key. An exchange is a map VALUE under its name, so its name is scoped to the
       protocol, and annotations written before the key -- `@doc`, `@service.summary`, `@service.safe`,
-      `@service.idempotent` -- document it and state its facts.
+      `@service.idempotent`, `@service.destructive` -- document it and state its facts.
       """
     exchanges => !meta.namespace { key_type: service.exchange_name  value_type: service.exchange }
 
@@ -285,15 +285,25 @@
     summary => @meta.annotation text
 
     @doc:"""
-      Two facts about an exchange that a caller composing calls needs -- an agent planning a batch, deciding what may be
-      retried or reordered -- and has no HTTP verb to read them from. Bare markers before the exchange's key:
-      `@service.safe get_order => { ... }`, `@service.idempotent cancel_order => { ... }`. `@service.safe` implies
-      `@service.idempotent`. Annotations rather than fields because they describe the exchange, not its request or
-      response; the http projection CHECKS its verb against them (GET must be safe; PUT and DELETE idempotent) and never
-      derives one from the other. They are RFC 9110's words for the same facts.
+      Three facts about an exchange that a caller composing calls needs -- an agent planning a batch, deciding what may
+      be retried, reordered or must be confirmed first -- and has no HTTP verb to read them from. Bare markers before
+      the exchange's key: `@service.safe get_order => { ... }`, `@service.idempotent cancel_order => { ... }`.
+      `@service.safe` implies `@service.idempotent`. Annotations rather than fields because they describe the exchange,
+      not its request or response; the http projection CHECKS its verb against them (GET must be safe; PUT and DELETE
+      idempotent) and never derives one from the other. `safe` and `idempotent` are RFC 9110's words for the same
+      facts.
+
+      `@service.destructive` is the third: the exchange has an effect a caller cannot undo, and a caller should
+      confirm before invoking it -- `@service.idempotent @service.destructive cancel_order => { ... }`. It is the one
+      fact an LLM tool-calling convention asks for that the other two do not state. `@service.safe` and
+      `@service.destructive` exclude each other, since a safe exchange has no effect to undo, and the reader refuses an
+      exchange marked both. Nothing derives it from a verb and no verb implies it: a `DELETE` may cancel a reservation
+      that can be made again, and a `POST` may wipe a table. The http projection refuses a destructive exchange bound
+      at GET or HEAD, as it refuses an unsafe one there.
       """
-    safe       => @meta.annotation void
-    idempotent => @meta.annotation void
+    safe        => @meta.annotation void
+    idempotent  => @meta.annotation void
+    destructive => @meta.annotation void
 
     @doc:"An endpoint with its signature INLINE -- the one-declaration form, for a projection with no protocol behind it."
     operation => service.endpoint & service.signature

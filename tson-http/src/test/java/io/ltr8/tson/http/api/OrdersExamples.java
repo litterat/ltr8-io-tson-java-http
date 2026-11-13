@@ -30,7 +30,8 @@ import java.util.Map;
  * <li>{@code orders-errors-1.tn} (shared) -- business errors composing {@code problem.details} and pinning {@code status},
  * which is how an endpoint's {@code errors} get one.</li>
  * <li>{@code orders-1.tn} (protocol only) -- {@code orders} as a record whose {@code exchanges} hold a {@code @doc}
- * per exchange, and {@code orders_v2} beside it declaring only {@code refund}.</li>
+ * per exchange and its facts ({@code cancel_order} idempotent and destructive), and {@code orders_v2} beside it
+ * declaring only {@code refund}.</li>
  * <li>{@code orders-api-inline-1.tn} (web service only) -- an http projection with no protocol behind it, every
  * endpoint an
  * {@code !service.operation} with its signature inline; a parameter-only endpoint as a one-field record placed from the
