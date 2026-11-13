@@ -168,26 +168,26 @@ today, so nothing is lost; the proposal does not make a resource addressable.
 `TsonApiDescription` reads `@safe` and `@idempotent` from an exchange's key and walks routes in written order, so the
 component is `Namespace<Exchange>` (or `AnnotatedMap`), never `Map`.
 
-**What a judged reference carries** (`aClaimFieldArrivesAsATypeRefNamingNothingAsAnAnnotationsDoes`,
-`anEndpointsExchangeArrivesAsATypeRefOfThreeSegments`). In the schema's own value entry, `binds: [orders]` arrives as a
-`NameRef` `orders` whose `closure()` is `TypeRef.Closure.NONE`, so `referent()` is empty: identical to, and `equals`,
-the element of an annotation `@claims:[orders]`. The resolver judged the name and delivered only the name, as
-`TypeRef`'s Javadoc says of a reference "read inside a schema document being resolved". So the reader still finds the
-protocol by name among the entries; what it no longer has to do is refuse a bad name. The same reference read in a
-*data* document governed by the schema carries its closure, and its `referent()` is the `Exchange` value it reaches,
-through the tree reader and the object reader alike. The endpoint's exchange arrives as `orders.exchanges.place_order`,
-`segments()` `[orders, exchanges, place_order]`. An absent `not_bound` (or `binds`) arrives as `null`, so the bound
-record normalises it, as `api.Binding` does; `base` arrives as an `io.ltr8.net.Iri`.
+**What a judged reference carries** (`aClaimFieldArrivesAsADeliveredValueRefAndAnAnnotationsAsUndelivered`,
+`anEndpointsExchangeArrivesAsAValueRefOfThreeSegments`). In the schema's own value entry, `binds: [orders]` arrives as a
+`ValueRef` `orders`, delivered when the schema links: `get()` is the bound `Protocol`. The element of an annotation
+`@claims:[orders]` is a `ValueRef` of the same name and `equals` it, a reference's identity being its name, but is
+never delivered (`isResolved()` false). So the reader could take the protocol from the field rather than find it by
+name among the entries, and no longer has to refuse a bad name. The same reference read in a *data* document governed
+by the schema is delivered at the read, the `Exchange` value it reaches, through the tree reader and the object reader
+alike. The endpoint's exchange arrives as `orders.exchanges.place_order`, its `Exchange` delivered. An absent
+`not_bound` (or `binds`) arrives as `null`, so the bound record normalises it, as `api.Binding` does; `base` arrives as
+an `io.ltr8.net.Iri`.
 
 ## What changes in Java
 
 - **`ExchangeName.of`** splits on the *last* `.`, so `orders.exchanges.place_order` would become owner
   `orders.exchanges`, name `place_order`, and every binding would then fail `boundExchange` as naming a protocol the
-  projection does not bind. It becomes a split over `TypeRef.segments()`: three segments, the first the protocol's
-  entry, the second `exchanges`, the third the key. The record keeps `(owner, name)`, so the per-(protocol, exchange)
-  claim (`Set<ExchangeName>` in `requireComplete`) and `Route.exchange()` are unchanged in kind. Its `toString`, today
-  the reference spelling `orders.get_order`, either becomes `orders.exchanges.get_order`, staying the reference
-  spelling, or stays two-segment as an identity label (Open questions).
+  projection does not bind. It becomes a split of the `ValueRef`'s name into its three segments, the first the
+  protocol's entry, the second `exchanges`, the third the key. The record keeps `(owner, name)`, so the
+  per-(protocol, exchange) claim (`Set<ExchangeName>` in `requireComplete`) and `Route.exchange()` are unchanged in
+  kind. Its `toString`, today the reference spelling `orders.get_order`, either becomes `orders.exchanges.get_order`,
+  staying the reference spelling, or stays two-segment as an identity label (Open questions).
 - **`TsonApiDescription`**. `applying(entries, type)` matches `ValueEntry(String, Namespace<?>)`; a protocol and a
   projection now hold bound records, so it matches `ValueEntry("protocol", Protocol p)` and `ValueEntry("http", Http
   h)`. The protocol map becomes `Map<String, Protocol>`, reached by `p.exchanges().get(name)` and

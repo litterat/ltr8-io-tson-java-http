@@ -86,7 +86,9 @@ names the library, and the import-nothing case by `UpstreamGapsTest.aSchemaImpor
 **Hit:** `meta-service.tn` declares `binds => @meta.annotation [meta.ref<protocol>]` and `not_bound =>
 @meta.annotation [exemption]`, the `exemption` record holding `exchange: meta.ref<exchange>`. The resolver checks the
 annotation value's shape (`@binds:42` is refused) but no name in it: a protocol nothing declares and an exchange key
-the protocol does not hold both load clean, and each arrives as a `TypeRef` nobody resolved.
+the protocol does not hold both load clean. Each arrives as a `ValueRef` holding the name and never delivered
+(`isResolved()` false), where the same reference in a field of a value entry is judged and delivered when the schema
+links.
 
 **The change:** a `meta.ref<T>` in an annotation value judged as one in a field value is, if the spec question below
 is answered that way; at least, its name held to the qualified-name grammar.
@@ -232,10 +234,11 @@ orders protocol.
 
 **Hit:** importing the reference types. `tson-compiler` exports `io.ltr8.tson.compiler.ast.schema` and
 `io.ltr8.tson.compiler.stream`, so three public `TypeRef`s are in reach: `io.ltr8.tson.schema.meta.TypeRef`, the
-model's, sealed over `NameRef`, `ApplicationRef` and `ParamRef` and extending `TypeExpr`;
-`io.ltr8.tson.compiler.ast.schema.TypeRef`, the AST's, sealed over `NameRef` and `ApplicationRef` and extending the
-AST's own `TypeExpr`; and `io.ltr8.tson.compiler.stream.TypeRef`, a stream event carrying a value's `!name` tag.
-`TypeExpr`, `NameRef` and `ApplicationRef` each exist in both `schema.meta` and `compiler.ast.schema`.
+model's, sealed over `NameRef` and `ParamRef` and extending `TypeExpr`; `io.ltr8.tson.compiler.ast.schema.TypeRef`,
+the AST's, sealed over `NameRef` and `ApplicationRef` and extending the AST's own `TypeExpr`; and
+`io.ltr8.tson.compiler.stream.TypeRef`, a stream event carrying a value's `!name` tag. `TypeExpr` and `NameRef` each
+exist in both `schema.meta` and `compiler.ast.schema`, and the AST's `ApplicationRef` is the model's `ApplyBody`
+under another name.
 An IDE's import offers every one, and the wrong one compiles until it meets a method only the other has. The AST
 mirrors the model's names deliberately upstream, as both follow [TSON-SCHEMA] §12.1's `type-expr` and `type-ref`, so
 this asks that choice to be revisited for what a consumer sees.
@@ -247,21 +250,51 @@ two compiler packages kept from consumers that have no use for them.
 
 ---
 
-## 13. A quoted token at a kind slot in a value body is refused through an event's `toString`
+## 13. A quoted token or a tag at a kind slot in a value body is refused through an event's `toString`
 
 **Hit:** a namespace value whose endpoint lists a media type as `"application/json"` at a kind slot
 (`[meta.ref<net.media_type_type>]`, and alike at `[meta.ref<meta.atom>]`), where a type's name belongs. The refusal is
 right, and its message embeds *"expected a type's name, found TokenEvent[text=application/json, form=SINGLE_LINE_QUOTED,
 position=Position[line=0, column=0, byteOffset=0]]"*: a Java record's `toString`, with a position of zero where the
 token stands somewhere else entirely. A schema author reads a parser's internals and a location that points nowhere.
+A tagged value at the same slot, an application written as `!meta.apply { head: order  arguments: [order] }`, is
+refused the same way: *"found TypeRef[name=meta.apply, position=Position[line=0, column=0, byteOffset=0]]"*, the
+rendering of the tag's stream event `io.ltr8.tson.compiler.stream.TypeRef`, as far as this project can see by the
+same cause.
 
-**The change:** name the token as written (*"found the quoted token \"application/json\""*) and report its real
-position.
+**The change:** name the token or the tag as written (*"found the quoted token \"application/json\""*, *"found a
+value tagged !meta.apply"*) and report its real position.
 
 **Workaround in place:** none needed; the status is right and nothing here shows the message to a client. Pinned by
 `MediaTypeKindProbeTest.kindOfMediaTypeTypeHoldsATypeName`, over `[meta.ref<net.media_type_type>]`, which asserts the
-`toString` rendering and flips when it is fixed; `aKernelKindHoldsATypeNameAndRefusesAMediaTypeValue`, over
-`[meta.ref<meta.atom>]`, asserts only the fragments around it and survives the fix.
+`TokenEvent` rendering, and `aTaggedApplicationAtAKindSlotIsRefusedThroughTheTagEventsToString`, which asserts the
+`TypeRef[name=meta.apply` rendering; each flips when its case is fixed.
+`aKernelKindHoldsATypeNameAndRefusesAMediaTypeValue`, over `[meta.ref<meta.atom>]`, asserts only the fragments around
+the token and survives the fix.
+
+---
+
+## 14. An application in a data value is refused as its head, then as a missing separator
+
+**Hit:** an application at a reference slot of a data document, `!pick { m: page<order> }` with `m: meta.type_ref`.
+It is refused with two diagnostics, neither naming the form: an `ATOM_CONSTRAINT_VIOLATION` at `/m` on the head alone,
+*"'meta.type_ref': 'page' is not a member of this kind -- expected the name of a type whose value IS-A 'meta.type', one
+of […]"* with the closure's whole member list, then the generic parse error *"adjacent values must be separated by
+whitespace, a comma, or both"* at the `<`. The head was never a complete token, so the first refusal judges something
+the author did not write. The same application as a tag, `!page<order> { … }`, gets one diagnostic naming the remedy:
+*"'!page<...>' applies type arguments, which are schema syntax and not available in a data value (§3.2): a data
+type-ref is a bare name. Name the application in the schema ('my_type => page<...>') and write '!my_type' here"*. In a
+schema document's value entry the sugar gets the separator error alone.
+
+**The change:** one diagnostic, at the application, naming the form, as [TSON-DATA] §7.2.5 and §8.1 do (a special
+token the data grammar gives no role, `<` among them, so an argument list in a value): *"an argument list is no data
+syntax; declare the application under a name and write that name"*. No refusal of the head as a bare token first.
+
+**Workaround in place:** none needed; both bodies answer 400 `invalid-document` through `TsonHttpException.from`, the
+status a malformed document should get. Pinned by
+`UpstreamGapsTest.anApplicationInADataValueIsRefusedAsItsHeadThenASeparatorAndAsATagByItsRemedy`, which asserts both
+diagnostics in order and the tag's message and flips when the two become one;
+`aTemplateApplicationAtAKindSlotInAValueIsNamedThroughAnAlias` measures the schema-document case.
 
 ---
 
@@ -270,40 +303,6 @@ position.
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. That register renumbers each time a
 revision closes, so a finding here names spec sections, never a register number. A new finding goes here in the same
 shape: a `### To file:` heading, the spec sections, the gap, what this project does meanwhile, and a priority.
-
-### To file: every root name of a closure is reserved, so a vocabulary collides with a library it never named
-
-**Sections:** [TSON-SCHEMA] §2.2.3 (two documents of a closure declaring one name collide), §3.3 (one namespace per
-schema), §9 (the bundled documents' roots).
-
-**Kind:** the cost of a design decision, with evidence from a consumer. A schema's namespace is its own entries and
-its whole import closure's, and a name two documents of the closure declare is a collision wherever it is declared,
-whether or not anything names it. The bundled documents keep their roots to the vocabulary an author writes, so a
-schema importing `core.tn` reserves `text`, `int64`, `schema`, `date`, `time`, `period`, `uuid`, `email`, `host`,
-`hostname`, `uri`, `uri_reference`, `media_type`, `title`, `comment` and the rest, and the map names `meta`, `atom`,
-`numeric`, `unicode`, `net`, `binary` and `temporal`; one importing `policy.tn` reserves `policy` as well.
-
-**Where it bit.** `meta-service.tn` declared its own `media_type`. `net.tn` declares one at its root,
-and a service description imports `meta-service.tn` and `core.tn`, so every description failed to load on a name it
-never wrote, though neither import is wrong and each document resolves on its own. `meta-service.tn` dropped its own
-and imports `net.tn`'s, which happens to fit; a vocabulary whose `media_type` meant something else would have had to
-rename, and so break every document written against it.
-
-**Two consequences beyond this one.** A bundled library adding a root name is a breaking change for every published
-vocabulary that declares the name and every schema importing both — the `json_pointer` proposal below is one. And an
-application importing core cannot name its own type `host`, `date`, `uri` or `period`, plausible names in a domain
-schema, without a diagnostic that reads as its own mistake.
-
-**A suggestion:** a collision **on use**, not on declaration, as Java's on-demand imports have it. Each document's
-own references already resolve in its own closure, so a vocabulary's internal uses are unaffected; an importer that
-names a doubly-declared name is told both declaring identities, and one that does not is never troubled. The
-alternatives are worse: an importer's entry shadowing an import hides a meaning silently, and a qualified import adds
-syntax for a problem the resolver can settle.
-
-**What this project does meanwhile:** `meta-service.tn` takes `media_type` from `net.tn`, and no schema here declares
-a bundled root name.
-
-**Priority:** medium-high: every published vocabulary is exposed to every later root addition.
 
 ### To file: a format this project needs and the vocabulary cannot state — `json_pointer`
 
@@ -327,9 +326,9 @@ constructor under the library's map reserves nothing, so placement is decided pe
 `schemaPointer` RFC 6901 JSON Pointers (`/orders/3/total`). `problem.tn`'s `diagnostic` can type them only as `text`,
 and so can tson-cli's `diagnostics.tn`. A pattern states the grammar (`""` or `/`-prefixed segments, `~` only as
 `~0`/`~1`), but an atom gives a host value of decoded segments, which is what a consumer walking a pointer wants.
-Equality is `text`'s, since the escape is a bijection. `net.tn`, beside `uri`, is the nearest home; the name it
-reserves is the cost the reserved-roots item above describes. This one comes first because the library emits the
-values.
+Equality is `text`'s, since the escape is a bijection. `net.tn`, beside `uri`, is the nearest home; the root name it
+reserves in every importer is the cost, since every root name of a closure is reserved ([TSON-SCHEMA] §2.2.3). This one
+comes first because the library emits the values.
 
 **It needs a TSON profile of RFC 6901, and that is the larger half.** RFC 6901 assumes string keys; a TSON map key
 is any value ([TSON-DATA] §2.6), and the series does not say what a non-text key's reference token is. What
@@ -437,16 +436,26 @@ kernel's records, so `kind: meta.record` makes a binding receiver build a schema
 request. tson-java answers an unbound choice with `MissingBindingException`, a receiver's misconfiguration, where the
 sender made the choice.
 
-**A suggestion:** say that the set a sender may choose from is the receiver's to narrow, and that a chosen type the
-receiver cannot read is the document's fault, not the receiver's. A processor would then refuse an unbound choice as a
-diagnostic at the sibling, as it refuses a name that is no member.
+**What upstream will do, and what this waits on.** Upstream ruled against the suggestion made here: the set is the
+sibling's type, so it is the schema's to narrow (a pinned sibling, a discriminator over a family, or `meta.ref<C>`), and
+whether a host has a class for a type is invisible to the spec, so it cannot be a validity rule. Two pieces stay open.
+(a) Spec, [TSON-SCHEMA] §11 Security Considerations: a paragraph that a free sibling typed `meta.type_ref` or
+`meta.type_expr` hands the choice of type to the document's author, the kernel's vocabulary included and, for
+`meta.type_expr`, a type written in place, so a schema for untrusted input pins the sibling, makes it a discriminator,
+or narrows the reference. (b) Library: a schema obtained to bind is refused at load when a free sibling admits a type
+with no bound class, beside the rule that every value entry of a bound schema has a class, so no request can reach the
+fault. The consequences: a free `meta.type_expr` sibling never loads in bind mode; a free `meta.type_ref` sibling loads
+only when every type in the closure is bound, the kernel's records included since the library binds them, so refusing
+the kernel's vocabulary stays a receiver's own policy or is expressed as a family in the schema; a reference narrows
+by constructor, never to the subtypes of one record, which a family with a discriminator covers.
 
 **What this project does meanwhile:** `TsonApiDescription` refuses at startup a bound request record whose dependent
 field lets a sender name a type no class binds, or one of the kernel's vocabulary (`ChosenTypes`). A free
 `meta.type_ref` sibling therefore never loads in bind mode; a pinned sibling, or a discriminator over bound subtypes,
-does. Pinned by `UpstreamGapsTest.aDependentFieldsSiblingNamingATypeNothingBindsIsAMissingBinding`.
+does. Pinned by `UpstreamGapsTest.aDependentFieldsSiblingNamingATypeNothingBindsIsAMissingBinding`; the pin flips to
+a load-time refusal when (b) lands, and `BACKLOG.md` holds the follow-up.
 
-**Priority:** medium-high: in a binding receiver it is a server-fault status any client can produce.
+**Priority:** medium-high until (b) lands: in a binding receiver it is a server-fault status any client can produce.
 
 ### To file: a free sibling's member order against an unordered JSON object
 
@@ -468,51 +477,19 @@ Pinned by `UpstreamGapsTest.aJsonBodyWritingADependentFieldBeforeItsSiblingIsRef
 
 **Priority:** medium: it bites any JSON client that does not control its key order.
 
-### To file: the typing field has an everyday name, and a reference over values arrives as a `TypeRef`
+### To file: the typing field has an everyday name
 
-**Sections:** [TSON-SCHEMA] §5.1 and §5.2 (selectors, dependent fields), §5.5 and §5.7 (selector facets), §4.2
-(`meta.type_ref`), §12.1 (`type-expr`, `type-ref`); [TSON-JSON] §5.6.
+**Sections:** [TSON-SCHEMA] §5.1 and §5.2 (selectors, dependent fields), §5.5 and §5.7 (selector facets).
 
-**Kind:** editorial. Part 2 keeps "sibling" for the field whose value types a dependent field (§5.2), names the
-grammar's `type-expr` and `type-ref` apart (§12.1), and makes `meta.type_ref` the reference
-`!meta.reference_type { of: meta.type }` (§4.2). Two things remain. "Sibling" is a technical term spelled as an
+**Kind:** editorial. Part 2 keeps "sibling" for the field whose value types a dependent field (§5.2), and makes
+`meta.type_ref` the reference `!meta.ref { of: meta.type }` (§4.2). "Sibling" is a technical term spelled as an
 everyday word, in the text and in the diagnostics, while a family's discriminating field, which a sibling may be, is
-already a *selector* (§5.1, §5.2). And a reference over a constructor is a *kind* in [TSON-JSON] §5.6, while
-tson-java's `TypeRef` is delivered for a reference over values too, so this project holds a `meta.ref<exchange>` value
-in `Exemption.exchange` and builds `ExchangeName` from one, both typed `TypeRef` though an exchange is no type.
+already a *selector* (§5.1, §5.2).
 
 **A suggestion:** one term for the typing field, kept for that use alone. "Selector" is this project's suggestion,
 offered as such: a sibling may be a discriminator, so the term would extend rather than collide; its other use, a
-facet picking among a closed vocabulary (§5.5, §5.7), would then want a word of its own. And a reference over values
-not delivered as a `TypeRef`.
+facet picking among a closed vocabulary (§5.5, §5.7), would then want a word of its own.
 
-**What this project does meanwhile:** writes "sibling" for the typing field only, and lives with `TypeRef` on an
-exchange's name. A `String` component on such a slot receives the qualified name as text, judged all the same, which
-is the measured alternative to the `TypeRef` host (`UpstreamGapsTest.aReferenceSlotBoundToAStringComponentIsJudged`).
+**What this project does meanwhile:** writes "sibling" for the typing field only.
 
 **Priority:** low.
-
-### To file: who may declare constructors
-
-**Sections:** [TSON-SCHEMA] §4.1 (a constructor is an entry that is `meta.top` or IS-A it; a namespace type is an
-instance of `meta.namespace`), §3.3.1 and §5.5 (a document may apply a constructor it declares itself), §11.2 and
-§11.3 (`!!import` as the channel that selects a vocabulary), §11.5 (resource limits for schemas).
-
-**Kind:** gap. Any schema may declare constructors and namespace types and apply them, the kernel being reachable
-through `core.tn`'s own imports. So a schema named by a request body can extend the vocabulary it is read in, and a
-reviewer reading its header no longer learns that it cannot redefine what a record or a namespace means: whether a
-schema defines vocabulary is visible only entry by entry. §11 gives a deployment ways to bound which schemas it reads
-at all (an import allowlist, hash pins, limits) and none to say what kind of schema it admits: nothing lets a
-deployment accept ordinary type declarations only and refuse a schema that composes `meta.top`.
-
-**A suggestion:** a header-level opt-in. A document that declares a constructor says so once in its header, so that
-explicitness survives at document grain and a deployment policy has something to refuse. Two spellings: a directive
-of its own, or a direct `!!import` of the kernel, if imports were made non-transitive for visibility, so that
-`meta.top` is in a schema's namespace only when its header imports the kernel. The policy that refuses one belongs
-beside §11.5's limits, in the processor's policy rather than in any schema.
-
-**What this project does meanwhile:** bounds which schemas are fetched at all: `allowHost` and `mapHost` restrict an
-`!!import` URL in a request body to approved hosts, and `SchemaSource.ofMap` serves a fixed set
-(`design/schema-sources.md`). A schema those admit may declare constructors.
-
-**Priority:** medium.

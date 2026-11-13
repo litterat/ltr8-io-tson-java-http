@@ -12,6 +12,8 @@ does not say where to get it. `allowHost` is the security boundary, `mapHost` is
 - Never `computeIfAbsent` on a schema cache; `HttpSchemaSource` uses get-then-put.
 - A request body names its schemas in its header (`!!import`) and nowhere else. A directive inside a value is a parse
   error, so no value can make the server fetch.
+- The boundary admits schemas; it does not judge their kind. An admitted schema may declare constructors and namespace
+  types.
 - `HttpSchemaSource` lives upstream. The mapping of its failures to statuses is `design/status-classification.md`.
 
 ## Identity is not location
@@ -32,6 +34,15 @@ an identity. A mapping renames nothing: the loader still cross-checks the fetche
 Getting this backwards produces a confusing failure a long way from its cause: a port-carrying `!!import`
 fails inside `CanonicalIdentity.canonicalize` during resolution, with a message about identity and a
 stack trace through the resolver.
+
+## What the boundary does not refuse
+
+A schema the allow-list or the fixed map admits may declare constructors and namespace types, as any schema may
+([TSON-SCHEMA] §2.2.3 allows no hiding and no rebinding, so such a declaration adds an entry and changes nothing
+existing), and nothing here refuses it: the boundary is which schemas are admitted and the limits they are read under
+(§11.5), not what kind of schema they are. A check would refuse this project's own `meta-service.tn`, which declares
+namespace types; should a harm ever be identified, whether a linked schema declares a constructor is derivable from its
+entries (`TsonLinkedSchema.isConstructor`, `originOf`).
 
 ## Where a body can name a schema
 

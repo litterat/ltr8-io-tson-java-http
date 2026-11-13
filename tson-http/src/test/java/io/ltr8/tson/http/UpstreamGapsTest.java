@@ -7,6 +7,7 @@ import io.ltr8.tson.base.BindMismatchException;
 import io.ltr8.tson.base.CanonicalIdentity;
 import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.DiagnosticsReceiver;
+import io.ltr8.tson.base.ParseException;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.SchemaFetchException;
 import io.ltr8.tson.base.policy.LimitsPolicy;
@@ -24,8 +25,11 @@ import io.ltr8.tson.schema.meta.Top;
 import io.ltr8.tson.schema.meta.TypeInline;
 import io.ltr8.tson.schema.meta.TypeRef;
 import io.ltr8.tson.schema.meta.ValueEntry;
+import io.ltr8.tson.schema.meta.ValueRef;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -450,8 +454,9 @@ class UpstreamGapsTest {
      * whose value holds references -- {@code binds => @meta.annotation [meta.ref<protocol>]}, or a record carrying a
      * {@code meta.ref<exchange>} -- and the value's <em>shape</em> is checked ({@code @binds:42} is refused), but no
      * name in it is: an unknown protocol and an exchange key the protocol does not hold both load clean. The {@code
-     * [meta.ref<protocol>]} elements and the record's {@code meta.ref<exchange>} each arrive as a {@code TypeRef}
-     * nobody resolved.
+     * [meta.ref<protocol>]} elements and the record's {@code meta.ref<exchange>} each arrive as a {@code ValueRef}
+     * holding the name and never delivered: {@code isResolved()} is false and {@code get()} throws, where the same
+     * reference in a field of a value entry is delivered when the schema links.
      *
      * <p>{@code meta-service.tn} writes an http projection's {@code @binds} and {@code @not_bound} exactly this way,
      * so {@code TsonApiDescription} checks both itself: each name is an entry applying {@code protocol}, each
@@ -479,12 +484,17 @@ class UpstreamGapsTest {
 
         var annotations = tson.schemaRegistry().get(API_ID).orElseThrow().schema().entries().getAnnotations("holder");
         List<?> bound = annotations.value("binds", List.class).orElseThrow();
-        assertEquals(List.of("no_such"), bound.stream().map(e -> assertInstanceOf(TypeRef.class, e).name())
-                .toList(), "a [meta.ref<protocol>] element arrives as a TypeRef nobody resolved");
+        ValueRef<?> element = assertInstanceOf(ValueRef.class, bound.getFirst());
+        assertEquals(List.of("no_such"), bound.stream().map(e -> assertInstanceOf(ValueRef.class, e).name())
+                .toList(), "a [meta.ref<protocol>] element arrives as a ValueRef holding the name");
+        assertFalse(element.isResolved(), "and is never delivered");
+        assertEquals("'no_such' is not yet resolved: a reference is delivered when its schema links, and this one "
+                + "has not", assertThrows(IllegalStateException.class, element::get).getMessage());
         var exemption = assertInstanceOf(io.ltr8.tson.http.probe.annotation.Exemption.class,
                 annotations.value("not_bound", List.class).orElseThrow().getFirst());
         assertEquals("orders.no_such", exemption.exchange().name(),
-                "a meta.ref<exchange> arrives as an unresolved TypeRef");
+                "a meta.ref<exchange> arrives as a ValueRef holding the name");
+        assertFalse(exemption.exchange().isResolved(), "and is never delivered");
 
         String misshapen = governed("  @binds:42\n  holder => { a: text }");
         assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR),
@@ -623,16 +633,15 @@ class UpstreamGapsTest {
                 unentered.getFirst().message());
     }
 
-    // ── not a gap: a reference slot judges the name, whatever component it binds to ─────────────────
+    // ── a contract: a value's name binds to a ValueRef or a String, never a TypeRef ───────────────────
 
     /**
      * <b>A {@code meta.ref<T>} slot bound to a {@code String} component receives the qualified name as text, judged
-     * all the same.</b> {@code binding_name}'s {@code method} is the slot that {@link
-     * #aReferenceThroughARecordValuesFieldIsJudged} delivers as a {@code TypeRef}: here it arrives as {@code
-     * "orders.get"}, and a name reaching no entry is refused as there. This is the measured alternative to
-     * delivering a reference over values as a {@code TypeRef}, which {@code UPSTREAM.md}'s spec entry on the typing
-     * field's everyday name lives with. Pinned because a component other than {@code TypeRef} is how a consumer
-     * avoids that host today.
+     * all the same.</b> A value's name has two documented hosts: a {@code ValueRef}, which also receives the value the
+     * name reaches ({@link #aValueReferenceIsDeliveredToAValueRefAndRefusedAtATypeRef}), and a {@code String}, which
+     * receives the name alone. {@code binding_name}'s {@code method} is the slot {@link
+     * #aReferenceThroughARecordValuesFieldIsJudged} binds to a {@code ValueRef}: here it arrives as {@code
+     * "orders.get"}, and a name reaching no entry is refused as there. A contract pin: it holds the second host.
      */
     @Test
     void aReferenceSlotBoundToAStringComponentIsJudged() {
@@ -658,6 +667,96 @@ class UpstreamGapsTest {
                 () -> "" + problems);
         assertTrue(problems.getFirst().message().contains("'nobody' is no entry of this schema or its imports"),
                 problems.getFirst().message());
+    }
+
+    /**
+     * <b>A value's name is delivered to a {@code ValueRef} component, and a {@code TypeRef} component there is refused
+     * when the schema compiles for binding.</b> At {@code binding}'s {@code method: meta.ref<method>}, a value entry
+     * {@code b} writing {@code orders.get} binds a {@code ValueRef<Method>} that holds the name and, the schema linked,
+     * is delivered the bound {@code Method} the name reaches. The same name in a data document is delivered at the
+     * read. A {@code TypeRef} component at that slot is a {@code BIND_MISMATCH} naming both hosts, a value being no
+     * type: what {@code prepareToRead} turns into a startup failure. A reference inside an annotation's value is
+     * never delivered ({@link #aReferenceInsideAnAnnotationValueIsNotJudged}). A contract pin.
+     */
+    @Test
+    void aValueReferenceIsDeliveredToAValueRefAndRefusedAtATypeRef() {
+        String metaSource = meta("""
+                  method   => { request?: meta.type_ref }
+                  methods  => !meta.namespace { key_type: meta.identifier  value_type: method }
+                  binding  => { method: meta.ref<method> }
+                  bindings => !meta.namespace { key_type: meta.identifier  value_type: binding }""");
+        String sound = governed("  order => { sku: text }\n  orders => !methods { get => { request: order } }\n"
+                + "  b => !bindings { one => { method: orders.get } }");
+        Tson tson = tson(metaSource, sound, "io.ltr8.tson.http.probe.field");
+        assertEquals(List.of(), tson.validateSchema(sound));
+        var entry = assertInstanceOf(ValueEntry.class,
+                tson.schemaRegistry().get(API_ID).orElseThrow().schema().entries().get("b"));
+        var bound = assertInstanceOf(io.ltr8.tson.http.probe.field.Binding.class,
+                assertInstanceOf(Namespace.class, entry.value()).get("one"));
+        assertEquals("orders.get", bound.method().name());
+        assertTrue(bound.method().isResolved(), "delivered when the schema links");
+        assertEquals("order", assertInstanceOf(io.ltr8.tson.http.probe.field.Method.class, bound.method().get())
+                .request().name());
+
+        var inData = tson.objectReader().read("!!import:\"" + API_ID + "\"\n!binding { method: orders.get }",
+                io.ltr8.tson.http.probe.field.Binding.class);
+        assertInstanceOf(io.ltr8.tson.http.probe.field.Method.class, inData.method().get(), "delivered at the read");
+
+        List<Diagnostic> refused = tson(metaSource, sound, "io.ltr8.tson.http.probe.typeref").validateSchema(sound);
+        assertEquals(List.of(Diagnostic.Code.BIND_MISMATCH), refused.stream().map(Diagnostic::code).distinct()
+                .toList(), () -> "" + refused);
+        assertTrue(refused.getFirst().message().contains("field 'method' holds a value by name (meta.ref<method>), "
+                + "and component 'method' holds a TypeRef -- a value is no type, so declare it ValueRef, which "
+                + "receives the value its name reaches, or String, which receives the name"),
+                refused.getFirst().message());
+    }
+
+    // ── open: an application in a data value is refused as its head, then a separator ───────────────
+
+    /**
+     * <b>An application at a reference slot in a data value is refused twice, and neither names the form; the same
+     * application as a tag is refused once, naming the remedy.</b> {@code !pick { m: page<order> }} yields an {@code
+     * ATOM_CONSTRAINT_VIOLATION} at {@code /m} on the head {@code page} alone, read as a complete bare token and found
+     * no member of the kind, then the generic separator parse error at the {@code <}. {@code !page<order> { … }} yields
+     * one parse error saying an argument list is schema syntax and how to name the application. [TSON-DATA] §8.1 lists
+     * a special token the data grammar gives no role, {@code <} among them, as a parse error (§7.2.5). Both bodies are
+     * a 400 {@code invalid-document} through the codec. {@code UPSTREAM.md}'s entry: when fixed, the first refusal is one
+     * diagnostic at the application naming the form, and the assertions on it flip.
+     */
+    @Test
+    void anApplicationInADataValueIsRefusedAsItsHeadThenASeparatorAndAsATagByItsRemedy() {
+        String metaSource = meta("  pick => { m: meta.type_ref }");
+        String doc = governed("""
+                  order      => { sku: text }
+                  page       => <T> { items: [T] }
+                  order_page => page<order>""");
+        Tson tson = tson(metaSource, doc);
+        assertEquals(List.of(), tson.validateSchema(doc));
+        String data = "!!import:\"" + API_ID + "\"\n";
+        assertEquals(List.of(), tson.validate(data + "!pick { m: order_page }"));
+
+        List<Diagnostic> sugar = tson.validate(data + "!pick { m: page<order> }");
+        assertEquals(List.of(Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION, Diagnostic.Code.VALIDATION_ERROR),
+                sugar.stream().map(Diagnostic::code).toList(), () -> "" + sugar);
+        assertEquals(Optional.of("/m"), sugar.getFirst().path());
+        assertTrue(sugar.getFirst().message().startsWith("'meta.type_ref': 'page' is not a member of this kind -- "
+                + "expected the name of a type whose value IS-A 'meta.type', one of ["), sugar.getFirst().message());
+        assertEquals("adjacent values must be separated by whitespace, a comma, or both", sugar.get(1).message());
+
+        List<Diagnostic> tag = tson.validate(data + "!page<order> { items: [] }");
+        assertEquals(List.of(Diagnostic.Code.VALIDATION_ERROR), tag.stream().map(Diagnostic::code).toList(),
+                () -> "" + tag);
+        assertEquals("'!page<...>' applies type arguments, which are schema syntax and not available in a data value "
+                + "(§3.2): a data type-ref is a bare name. Name the application in the schema ('my_type => page<...>') "
+                + "and write '!my_type' here", tag.getFirst().message());
+
+        TsonHttpCodec codec = new TsonHttpCodec(tson);
+        for (String body : List.of("!pick { m: page<order> }", "!page<order> { items: [] }")) {
+            TsonHttpException refused = assertThrows(TsonHttpException.class, () -> codec.readTree(
+                    new ByteArrayInputStream((data + body).getBytes(StandardCharsets.UTF_8)), "application/tson"));
+            assertEquals(TsonHttpException.BAD_REQUEST, refused.status(), body);
+            assertEquals(Optional.of(TsonHttpException.TYPES + "invalid-document"), refused.problem().type(), body);
+        }
     }
 
     // ── not a gap: a reference in a data document is judged ──────────────────────────────────────────
@@ -707,10 +806,12 @@ class UpstreamGapsTest {
 
     /**
      * <b>Not a gap -- the spec's design, pinned because it decides how an API description applies a template.</b> A
-     * slot typed by a kind holds the name of a type, one bare token, and in a value body a reference-typed slot holds
-     * a name: an application written there is a validation error, whether as the braced record or as the sugar {@code
-     * page<order>}, and the refusal names the remedy. The declaration {@code order_page => page<order>} gives the
-     * application its entry, and its name is what the slot holds.
+     * slot typed by a kind holds the name of a type, one bare token, and a value holds no application: the braced
+     * record is refused as no type's name, and the sugar {@code page<order>} is a parse error at the {@code <}, the
+     * data grammar holding no argument list ([TSON-DATA] §7.2.5), so neither diagnostic names the remedy. The
+     * declaration {@code order_page => page<order>} gives the application its entry, and its name is what the slot
+     * holds. The sugar's refusal is the generic separator error, which {@code UPSTREAM.md}'s entry asks to name the form
+     * ({@link #anApplicationInADataValueIsRefusedAsItsHeadThenASeparatorAndAsATagByItsRemedy}).
      */
     @Test
     void aTemplateApplicationAtAKindSlotInAValueIsNamedThroughAnAlias() {
@@ -723,18 +824,21 @@ class UpstreamGapsTest {
                   order_page => page<order>
                   api        => !ops { op => { method: "GET"  path: "/x"  responses: [ %s ] } }""";
 
-        Map<String, String> found = Map.of(
-                "{ name: page  arguments: [ { name: order } ] }", "expected a type's name, found a record --",
-                "page<order>", "expected a type's name, found the reference page<order> --");
-        found.forEach((inline, fragment) -> {
-            String written = governed(body.formatted(inline));
-            String message = assertThrows(RuntimeException.class,
-                    () -> tson(metaSource, written, "io.ltr8.tson.http.probe").resolve(written)).getMessage();
-            assertTrue(message.contains(fragment)
-                    && message.contains("a position typed by a kind holds the name of a type")
-                    && message.contains("declare it under a name (order_box => box<order>) and write that name"),
-                    message);
-        });
+        String braced = governed(body.formatted("{ head: page  arguments: [order] }"));
+        List<Diagnostic> record = tson(metaSource, braced, "io.ltr8.tson.http.probe").validateSchema(braced);
+        assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), record.stream().map(Diagnostic::code).toList(),
+                () -> "" + record);
+        assertEquals("'api': the body is no value of the type 'ops' -- at /op/responses/0: expected a type's name, "
+                + "found a record -- a position typed by a kind holds the name of a type, one bare token",
+                record.getFirst().message());
+
+        String sugar = governed(body.formatted("page<order>"));
+        List<Diagnostic> parse = tson(metaSource, sugar, "io.ltr8.tson.http.probe").validateSchema(sugar);
+        assertEquals(List.of(Diagnostic.Code.VALIDATION_ERROR), parse.stream().map(Diagnostic::code).toList(),
+                () -> "" + parse);
+        assertEquals("adjacent values must be separated by whitespace, a comma, or both", parse.getFirst().message());
+        assertThrows(ParseException.class,
+                () -> tson(metaSource, sugar, "io.ltr8.tson.http.probe").resolve(sugar));
 
         String aliased = governed(body.formatted("order_page"));
         assertEquals(List.of(), tson(metaSource, aliased, "io.ltr8.tson.http.probe").validateSchema(aliased));

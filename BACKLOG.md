@@ -144,6 +144,19 @@ The four entries are in build order.
   by operation. Measure what the resolver does with such an entry, then decide whether the reader accepts an endpoint
   whose type refines `operation` and what `TsonApiSchema.bindings()` binds it to. Same constraints as the security
   scheme.
+- [ ] **A published vocabulary reserves one root name** — `meta-service.tn` declares its vocabulary at the root
+  (`protocol`, `exchange`, `binding`, `http`, `resource`, `document`, `operation`, `signature`, `method`, ...). A
+  description imports it beside the application's domain schema, so a domain declaring its own `document` or `resource`
+  collides with the layer, unfixable by the importer ([TSON-SCHEMA] §2.2.3). Move the layer's entries under one map
+  named for the vocabulary so a description tags `!<map>.protocol` and the layer reserves one root in every importer;
+  each bound record's `@Typename` and every description document (`demo/schemas`, test fixtures, README sample) follow.
+  Do it before anything is published, since it changes every description written against the layer. The map's name is
+  a decision for the user.
+- [ ] **A bound request record's dependent field is a pinned sibling or a discriminator over a family** — Once tson-java
+  refuses at load a bound schema whose free sibling admits an unbound type (`UPSTREAM.md`, the dependent-field entry),
+  make that the rule here and delete `ChosenTypes` with its closure walk and the remainder-body rule, rather than keep a
+  narrower copy refusing the kernel's and the layer's own records. A family declares the admitted set in the published
+  description, where a client can read it.
 
 ## Documentation
 

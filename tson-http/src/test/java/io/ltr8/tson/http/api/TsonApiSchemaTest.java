@@ -345,29 +345,30 @@ class TsonApiSchemaTest {
 
         // A declaration naming an application is that application's entry (§8.2): no hop onto a minted name.
         var resolved = tson.schemaRegistry().get(API_ID).orElseThrow().schema();
-        assertEquals("page", resolved.applicationOf("order_page").orElseThrow().name(),
+        assertEquals("page", resolved.applicationOf("order_page").orElseThrow().head().name(),
                 "§8.2 records the application that built it");
     }
 
     /**
      * <b>An application is named through an alias, never written inline.</b> {@code response} is typed by a kind,
      * so it holds the name of a type: one bare token. An endpoint is a value body, where a reference-typed slot holds
-     * a name and an application written there is a validation error. §5.6's braced form is therefore refused, naming
-     * the remedy, a declaration that gives the application its entry ({@code order_page => page<order>}), and so is
-     * the schema sugar {@code page<order>} in the same position, for the same reason.
+     * a name and nothing else. A record written there is refused as no type's name, and the schema sugar {@code
+     * page<order>} is a parse error, the data grammar holding no argument list ([TSON-DATA] §7.2.5). The remedy is a
+     * declaration that gives the application its entry ({@code order_page => page<order>}), whose name the slot holds.
      */
     @Test
     void anApplicationIsNamedThroughAnAliasNotInline() {
-        String message = assertThrows(RuntimeException.class,
-                () -> resolved(PAGED.formatted("{ name: page  arguments: [ { name: order } ] }"))).getMessage();
-        assertTrue(message.contains("expected a type's name, found a record")
-                && message.contains("declare it under a name (order_box => box<order>) and write that name"),
-                "the refusal names the remedy: " + message);
+        assertEquals("'orders_http': the body is no value of the type 'http' -- at /~1orders/endpoints/GET/response: "
+                        + "expected a type's name, found a record -- a position typed by a kind holds the name of a "
+                        + "type, one bare token",
+                only(PAGED.formatted("{ head: page  arguments: [order] }")));
 
-        String sugar = assertThrows(RuntimeException.class, () -> resolved(PAGED.formatted("page<order>")))
-                .getMessage();
-        assertTrue(sugar.contains("expected a type's name, found the reference page<order>")
-                && sugar.contains("declare it under a name (order_box => box<order>) and write that name"), sugar);
+        String sugar = PAGED.formatted("page<order>");
+        List<Diagnostic> problems = tson(sugar).validateSchema(sugar);
+        assertEquals(List.of(Diagnostic.Code.VALIDATION_ERROR), problems.stream().map(Diagnostic::code).toList(),
+                () -> "" + problems);
+        assertEquals("adjacent values must be separated by whitespace, a comma, or both",
+                problems.getFirst().message(), "the parser's ordinary refusal at the '<'");
     }
 
     /** A bad argument is caught where the application is spelled, which is the alias. */

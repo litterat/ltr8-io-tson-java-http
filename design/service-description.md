@@ -32,8 +32,9 @@ there too.
 A data document declares nothing others resolve against. It imports its schemas (`!!import`), selects a type among
 them by its root's tag (a `!order` annotation), and may refer into the closure it imports: a name in a value position
 is a reference where the slot is typed by a reference (`meta.type_ref`, a `meta.ref<…>`), to a type or to a value
-alike, judged against that closure and never an application (`UpstreamGapsTest.aValueReferenceInADataDocumentIsJudged`),
-and an inert token anywhere else. A directive inside a value is a parse error, so nothing switches scope mid-document.
+alike, judged against that closure (`UpstreamGapsTest.aValueReferenceInADataDocumentIsJudged`), and an inert token
+anywhere else. An argument list after a name is a parse error in any value ([TSON-DATA] §7.2.5), and so is a
+directive, so nothing switches scope mid-document.
 
 So the line is not whether a document may name a type: **a document that exports a namespace is a schema, a document
 with at most a local scope is data, and any document may refer to a type or a value in the namespace it names.**
@@ -125,7 +126,9 @@ binding's `exchange` is `ref<exchange>`, so a type nothing declares, a reference
 exchange key a protocol does not hold are refused at schema load; a qualified name says which protocol it means. **The
 exception is a reference inside an annotation's value**, which the resolver does not judge
 (`UpstreamGapsTest.aReferenceInsideAnAnnotationValueIsNotJudged`): `@binds` and an exemption's `exchange` keep their
-`ref<…>` typing to say what they mean, and the reader checks the names. **An unsound description has no model**, a
+`ref<…>` typing to say what they mean, and the reader checks the names. `Binding.exchange` and `Exemption.exchange`
+are `ValueRef<Exchange>`: a binding's is delivered its `Exchange` when the description links, an exemption's never is,
+and the reader builds `ExchangeName` from the name in both. **An unsound description has no model**, a
 startup failure rather than a published contract no client can act on:
 
 - each `@binds` name is an entry applying `protocol`, and each exemption's `exchange` a key of a protocol the

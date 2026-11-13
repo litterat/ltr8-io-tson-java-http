@@ -205,6 +205,23 @@ class MediaTypeKindProbeTest {
                 .contains("expected a type's name, found TokenEvent[text=application/json"));
     }
 
+    /**
+     * <b>An application written as a tagged {@code meta.apply} at a kind slot is refused through a stream event's
+     * {@code toString}.</b> {@code !meta.apply { head: order  arguments: [order] }} is no type's name, and the refusal
+     * says so as {@code found TypeRef[name=meta.apply, position=Position[line=0, …]]}: the record rendering of {@code
+     * io.ltr8.tson.compiler.stream.TypeRef}, the tag's event, with a zero position, as the quoted token's refusal in
+     * {@link #kindOfMediaTypeTypeHoldsATypeName} renders its {@code TokenEvent}. {@code UPSTREAM.md} #13; the fragment
+     * asserted here flips when the tag is named as written.
+     */
+    @Test
+    void aTaggedApplicationAtAKindSlotIsRefusedThroughTheTagEventsToString() {
+        String tagged = governed("!meta.apply { head: order  arguments: [order] }", CORE);
+        Diagnostic problem = only(tson(KIND_LAYER, tagged, KindEp.class).validateSchema(tagged));
+        assertEquals(Diagnostic.Code.SCHEMA_ERROR, problem.code());
+        assertTrue(problem.message().contains("at /one/media_types/0: expected a type's name, found TypeRef[name="
+                + "meta.apply, position=Position[line=0, column=0, byteOffset=0]]"), problem.message());
+    }
+
     static final String ATOM_KIND_LAYER = layer("ep => { media_types?: [meta.ref<meta.atom>] }");
 
     /**
@@ -245,8 +262,7 @@ class MediaTypeKindProbeTest {
         assertTrue(problem.message().startsWith("'x': the body is no value of the type 'eps' -- at /one/media_types/0: "
                 + "expected a type's name, found "), problem.message());
         assertTrue(problem.message().endsWith("-- a position typed by a kind holds the name of a type, one bare "
-                + "token; to name an application here, declare it under a name (order_box => box<order>) and write "
-                + "that name"), problem.message());
+                + "token"), problem.message());
     }
 
     /** A schema importing core, typing one field by the kind and one by the type. */

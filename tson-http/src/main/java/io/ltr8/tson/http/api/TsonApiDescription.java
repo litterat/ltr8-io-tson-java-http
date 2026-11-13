@@ -10,6 +10,7 @@ import io.ltr8.tson.schema.meta.RecordField;
 import io.ltr8.tson.schema.meta.Top;
 import io.ltr8.tson.schema.meta.TypeRef;
 import io.ltr8.tson.schema.meta.ValueEntry;
+import io.ltr8.tson.schema.meta.ValueRef;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -229,7 +230,7 @@ public final class TsonApiDescription {
         Map<String, Namespace<?>> protocols = new LinkedHashMap<>();
         for (List<?> names : claims.values("binds", List.class)) {
             for (Object element : names) {
-                String name = element instanceof TypeRef reference ? reference.name() : String.valueOf(element);
+                String name = element instanceof ValueRef<?> reference ? reference.name() : String.valueOf(element);
                 Namespace<?> protocol = declared.get(name);
                 if (protocol == null) {
                     throw new IllegalArgumentException("'" + httpName + "' binds '" + name + "', which is no "

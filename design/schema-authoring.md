@@ -17,6 +17,9 @@ touches, and the schema-language rules that read like bugs when they bite. Curre
   thing that catches it going stale. Keep it.
 - A schema importing core reserves every root name of the bundled documents, so an application type is never named
   `int64`, `schema`, `host`, `date`, `uri`, `media_type`, `title` or the like.
+- A vocabulary this project publishes declares its entries under one map named for itself, so it reserves one root name
+  in every importer: every root name of a closure is reserved and a clash is unfixable by the importer
+  ([TSON-SCHEMA] §2.2.3). `meta-service.tn` is moved under this rule by the backlog item.
 - An optional field is `name?: T`; `name: T?` is a required field admitting `_`. A `text` field accepts any token.
   A `pattern` is I-Regexp and `^`/`$` are literal characters.
 
@@ -155,8 +158,10 @@ the build is the check.
   bounds, no `non_empty_text` and no bare `identifier`, so a schema wanting one declares it — `non_empty_text =>
   !text ^ { min_length: 1 }`, `identifier => !unicode.identifier_type { continue_add: "-" }` — or writes
   `meta.identifier`. A schema naming one it never declared fails as *"field 'sku' has an unresolved reference
-  'non_empty_text'"*, which reads like a typo in the schema and is a library upgrade. `UPSTREAM.md` stages the cost
-  of the roots rule as spec feedback.
+  'non_empty_text'"*, which reads like a typo in the schema and is a library upgrade. A vocabulary
+  this project publishes therefore declares its entries under one map named for itself, as `policy.tn` does, so that
+  it costs an importer one root name; `meta-service.tn`, which declares its vocabulary at the root, is moved under
+  that rule by the backlog item.
 
 - **A `pattern` is I-Regexp, and `^`/`$` are not anchors.** The kernel pins `regex` to RFC 9485
   ([TSON-SCHEMA] §4.2, "pinned to I-Regexp"), whose match is against the **whole** token — so a pattern needs

@@ -1,6 +1,6 @@
 package io.ltr8.tson.http.api;
 
-import io.ltr8.tson.schema.meta.TypeRef;
+import io.ltr8.tson.schema.meta.ValueRef;
 
 /**
  * One exchange of one protocol: the unit an http projection's {@code @binds} claim is held in, never a name alone,
@@ -11,10 +11,11 @@ import io.ltr8.tson.schema.meta.TypeRef;
 public record ExchangeName(String owner, String name) {
 
     /**
-     * The exchange a {@code ref<exchange>} names: the qualified name split on its last {@code .}, the protocol's entry
-     * before it and the exchange's key after. An exchange name is an identifier, so it holds no {@code .}.
+     * The exchange a {@code ref<exchange>} names, read from its name alone, delivered or not: the qualified name split
+     * on its last {@code .}, the protocol's entry before it and the exchange's key after. An exchange name is an
+     * identifier, so it holds no {@code .}.
      */
-    static ExchangeName of(TypeRef reference) {
+    static ExchangeName of(ValueRef<?> reference) {
         String written = reference.name();
         int at = written.lastIndexOf('.');
         if (at <= 0 || at == written.length() - 1) {

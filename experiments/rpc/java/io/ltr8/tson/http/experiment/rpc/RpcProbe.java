@@ -169,7 +169,7 @@ class RpcProbe {
     static Map<String, String> closedOver(TsonSchema wire, String entry, String template) {
         Top closed = wire.entries().get(entry);
         assertNotNull(closed, "the wire schema declares no '" + entry + "'");
-        assertEquals(template, wire.applicationOf(entry).orElseThrow().name(), entry + " closes the wrong template");
+        assertEquals(template, wire.applicationOf(entry).orElseThrow().head().name(), entry + " closes the wrong template");
         Map<String, String> fields = new LinkedHashMap<>();
         assertInstanceOf(RecordBody.class, closed).fields()
                 .forEach((name, field) -> fields.put(name, field.type().text()));

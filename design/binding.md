@@ -19,6 +19,8 @@ are the server's own. Current form only.
   startup (`ChosenTypes`, `design/service-description.md`), so a sender's choice never reaches the 500 above.
 - A bound class guards its own optional lists in its compact constructor and never guards a required one.
 - A URI atom reads to `io.ltr8.net.Iri`, not `java.net.URI`.
+- A value's name (a `meta.ref<T>` slot, `T` no constructor) binds to `ValueRef<T>` or `String`; a `TypeRef` there is a
+  `BIND_MISMATCH` at `prepareToRead`. A type's name (`meta.type_ref`, a kind) binds to `TypeRef`.
 - `@Unbound` means not on the wire in both directions.
 
 ## Traps
@@ -60,6 +62,15 @@ are the server's own. Current form only.
   schema accepted gets a 500 with no detail, not a 400. A constraint a client is to be held to goes in the schema,
   where it is a diagnostic the client can act on. Pinned by
   `TsonHttpCodecTest.aBoundClassRefusingWhatItsSchemaAdmitsIsAServerFault`.
+- **A value's name binds to a `ValueRef` or a `String`, a type's name to a `TypeRef`.** A slot typed `meta.ref<T>`
+  with `T` no constructor (`exchange: meta.ref<exchange>`) holds a value by name. A `ValueRef<T>` component receives
+  the name and, once delivered, the value it reaches through `get()`: a name in a schema's value entry is delivered
+  when the schema links, one in a data document at the read, and one inside an annotation's value never
+  (`isResolved()` false, `get()` throws). A `String` component receives the name alone. A `TypeRef` component there
+  is a `BIND_MISMATCH` naming both hosts, which `prepareToRead` makes a startup failure
+  (`UpstreamGapsTest.aValueReferenceIsDeliveredToAValueRefAndRefusedAtATypeRef`). A slot naming a type
+  (`meta.type_ref`, `meta.ref<meta.record>`) binds to `TypeRef`, which is a name and never an application: an
+  application is `ApplyBody`, written in place only inside an open record.
 - **A URI atom reads to `io.ltr8.net.Iri`, not `java.net.URI`.** `uri`, `uri_reference`, `iri` and
   `iri_reference` all do, recognised to RFC 3986/3987 by `tson-net`, so `TsonValue.as(URI.class)` finds nothing;
   ask for `Iri` and read `text()`. A bound component may still declare `URI`.

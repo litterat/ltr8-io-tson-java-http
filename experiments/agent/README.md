@@ -74,10 +74,10 @@ the admission verifier's.
 hop. A plan or batch document wants to bind a *protocol* -- to say `!place_order { request: { … } }` and have the
 step checked against the exchange -- and cannot: `place_order` is a key inside `orders`, not a type name, so it can
 stand only where a slot is typed `meta.ref<exchange>`, never as a tag. A reference in a data document, to a type or to
-a value, is a name judged against the closure the document imports, and an application there is a validation error
-([TSON-SCHEMA] §3.3.4): at `m: meta.ref<exchange>`, `orders.place_order` reads and `orders.no_such` is refused ("'orders'
-has no key 'no_such'"), and at `m: meta.ref<order>` a value entry `o1` reads while `order`, a type, is refused
-(`UpstreamGapsTest.aValueReferenceInADataDocumentIsJudged`).
+a value, is a name judged against the closure the document imports ([TSON-SCHEMA] §3.3.4), and an argument list
+there is a parse error ([TSON-DATA] §7.2.5): at `m: meta.ref<exchange>`, `orders.place_order` reads and
+`orders.no_such` is refused ("'orders' has no key 'no_such'"), and at `m: meta.ref<order>` a value entry `o1` reads
+while `order`, a type, is refused (`UpstreamGapsTest.aValueReferenceInADataDocumentIsJudged`).
 The URL namespace being hierarchical (`/orders/{id}/items` under `/orders/{id}`) while a resource key in
 `meta-service.tn` is a flat template is the same question, and one answer should serve both.
 

@@ -17,10 +17,9 @@ import io.ltr8.tson.http.probe.namespacefield.Http;
 import io.ltr8.tson.http.probe.namespacefield.MapProtocol;
 import io.ltr8.tson.http.probe.namespacefield.Protocol;
 import io.ltr8.tson.http.probe.namespacefield.Resource;
-import io.ltr8.tson.schema.meta.NameRef;
 import io.ltr8.tson.schema.meta.Namespace;
-import io.ltr8.tson.schema.meta.TypeRef;
 import io.ltr8.tson.schema.meta.ValueEntry;
+import io.ltr8.tson.schema.meta.ValueRef;
 import io.ltr8.tson.tree.TsonAtom;
 import org.junit.jupiter.api.Test;
 
@@ -32,6 +31,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -51,8 +51,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * refused, and the walk spells the field even where the positional form left it unwritten. No qualified name
  * reaches a path key: a segment is an identifier ([TSON-DATA] §7.7), and neither the quoted nor the bare form
  * parses. A namespace-typed field binds to a {@link Map}, an {@link AnnotatedMap} or a {@link Namespace}, and only
- * the last two keep the keys' order and annotations. A reference judged at load still arrives in a schema's value
- * entry as a {@link TypeRef} naming nothing, exactly as one from an annotation does.
+ * the last two keep the keys' order and annotations. A reference judged at load arrives in a schema's value entry as
+ * a {@link ValueRef} delivered the value it names, where one from an annotation arrives undelivered.
  */
 class NamespaceFieldProbeTest {
 
@@ -317,30 +317,30 @@ class NamespaceFieldProbeTest {
             "  orders_http => !http { binds: [orders]  base: \"https://api.example.com/v1/\"  resources: {} }");
 
     /**
-     * <b>A claim field arrives as a {@link TypeRef} naming nothing, as a claim in an annotation does.</b> The
-     * resolver judged {@code binds: [orders]} at load, but the value entry holds a {@link NameRef} {@code orders}
-     * whose closure is {@link TypeRef.Closure#NONE}, so {@code referent()} is empty: the same, and equal, as the
-     * {@code @claims:[orders]} annotation's element. The win is the refusal at load, not a delivered referent. A
-     * reference read in a <em>data</em> document under the schema does carry its closure, and its {@code referent()}
-     * is the exchange the name reaches. An absent {@code not_bound} arrives as {@code null}, and {@code base} as an
-     * {@code Iri}.
+     * <b>A claim field arrives as a {@link ValueRef} delivered the value it names; a claim in an annotation arrives
+     * undelivered.</b> The resolver judged {@code binds: [orders]} at load, and the value entry holds a {@code
+     * ValueRef} {@code orders} whose {@code get()} is the bound {@link Protocol}. The {@code @claims:[orders]}
+     * annotation's element is a {@code ValueRef} of the same name, equal to it, since a reference's identity is its
+     * name, but never delivered: {@code isResolved()} is false. A reference read in a <em>data</em> document under the
+     * schema is delivered at the read, in a tree read and a bound one alike: the exchange the name reaches. An absent
+     * {@code not_bound} arrives as {@code null}, and {@code base} as an {@code Iri}.
      */
     @Test
-    void aClaimFieldArrivesAsATypeRefNamingNothingAsAnAnnotationsDoes() {
+    void aClaimFieldArrivesAsADeliveredValueRefAndAnAnnotationsAsUndelivered() {
         Tson tson = tson(CLAIMED);
         assertEquals(List.of(), tson.validateSchema(CLAIMED));
         Http http = assertInstanceOf(Http.class, entry(tson, "orders_http"));
-        NameRef field = assertInstanceOf(NameRef.class, http.binds().getFirst());
+        ValueRef<?> field = http.binds().getFirst();
         assertEquals("orders", field.name());
-        assertSame(TypeRef.Closure.NONE, field.closure());
-        assertEquals(Optional.empty(), field.referent());
+        assertTrue(field.isResolved());
+        assertEquals(Optional.of("1"), assertInstanceOf(Protocol.class, field.get()).version());
         assertNull(http.notBound());
         assertEquals("https://api.example.com/v1/", http.base().orElseThrow().toString());
 
         var annotations = tson.schemaRegistry().get(ID).orElseThrow().schema().entries().getAnnotations("holder");
-        TypeRef annotated = assertInstanceOf(NameRef.class,
+        ValueRef<?> annotated = assertInstanceOf(ValueRef.class,
                 annotations.value("claims", List.class).orElseThrow().getFirst());
-        assertSame(TypeRef.Closure.NONE, annotated.closure());
+        assertFalse(annotated.isResolved());
         assertEquals(field, annotated);
 
         String data = "!!import:\"" + ID + "\"\n!binding { exchange: orders.exchanges.place_order }";
@@ -348,29 +348,30 @@ class NamespaceFieldProbeTest {
         TsonAtom atom = assertInstanceOf(TsonAtom.class,
                 tson.treeReader().withDiagnostics(problems).read(data).at("/exchange"));
         assertEquals(List.of(), problems.diagnostics());
-        TypeRef inData = assertInstanceOf(TypeRef.class, atom.value());
-        Exchange reached = assertInstanceOf(Exchange.class, inData.referent().orElseThrow());
+        ValueRef<?> inData = assertInstanceOf(ValueRef.class, atom.value());
+        Exchange reached = assertInstanceOf(Exchange.class, inData.get());
         assertEquals("order", reached.request().orElseThrow().name());
         Binding bound = tson.objectReader().read(data, Binding.class);
-        assertInstanceOf(Exchange.class, bound.exchange().referent().orElseThrow());
+        assertEquals("order", bound.exchange().get().request().orElseThrow().name());
     }
 
     /**
-     * <b>An endpoint's exchange arrives as a {@link TypeRef} of three segments</b>, {@code orders.exchanges
-     * .place_order}, reached in the bound value as {@code resources."/orders".endpoints.POST}. A reader splitting it
-     * takes the first segment as the protocol's entry and the last as the exchange's key; the middle is the field
-     * name, fixed by the layer.
+     * <b>An endpoint's exchange arrives as a {@link ValueRef} of three segments</b>, {@code orders.exchanges
+     * .place_order}, reached in the bound value as {@code resources."/orders".endpoints.POST}, and delivered the
+     * {@link Exchange} it names. A reader splitting the name takes the first segment as the protocol's entry and the
+     * last as the exchange's key; the middle is the field name, fixed by the layer.
      */
     @Test
-    void anEndpointsExchangeArrivesAsATypeRefOfThreeSegments() {
+    void anEndpointsExchangeArrivesAsAValueRefOfThreeSegments() {
         Tson tson = tson(SOUND);
         assertEquals(List.of(), tson.validateSchema(SOUND));
         Http http = assertInstanceOf(Http.class, entry(tson, "orders_http"));
-        assertEquals(List.of("orders"), http.binds().stream().map(TypeRef::name).toList());
+        assertEquals(List.of("orders"), http.binds().stream().map(ValueRef::name).toList());
         assertEquals("resources", http.resources().type());
         Binding post = http.resources().get("/orders").endpoints().get("POST");
         assertEquals("orders.exchanges.place_order", post.exchange().name());
-        assertEquals(List.of("orders", "exchanges", "place_order"), post.exchange().segments());
+        assertEquals(List.of("orders", "exchanges", "place_order"), List.of(post.exchange().name().split("\\.")));
+        assertEquals("order", post.exchange().get().request().orElseThrow().name());
         assertEquals(Optional.of(201), post.status());
         assertEquals(Optional.of("1"), assertInstanceOf(Protocol.class, entry(tson, "orders")).version());
     }
