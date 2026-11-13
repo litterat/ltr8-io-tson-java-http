@@ -298,6 +298,33 @@ diagnostics in order and the tag's message and flips when the two become one;
 
 ---
 
+## 15. A data document importing two schemas throws at a reference through a record value's field
+
+**Hit:** an instance document for `proposal/affordances.md`, a data document whose `!!import`s name two schemas: a
+description declaring the value entry `orders => !protocol { exchanges: { get_order => … } }`, a record whose field
+`exchanges` holds a namespace, and a separate vocabulary importing the same layer and declaring the instance's types.
+The first reference walking that field, `exchange: orders.exchanges.get_order` at a `meta.ref<exchange>` slot, throws
+`IllegalStateException` rather than reporting: *"this reference names 'orders.exchanges.get_order', and
+'orders.exchanges' is a field of a record value, and this schema was linked with no bind context to read it through --
+link it with the context its values were bound under (TsonCompiledVocabularyRegistry.link)"*. `validate`, the tree
+reader and the object reader throw alike, whether or not the description was resolved first. The same document
+importing the description alone, with the instance's types declared in the layer, reads clean and delivers every
+reference. `TsonCompiledSchemaRegistry.get(List, …)` links a closure of several imports with no bind context, where
+the one-import path compiles the schema the registry linked with one.
+
+**The change:** link a several-import closure with the bind context the registry holds, as the one-import path does,
+so the walk reads the field. And in any case report a diagnostic rather than throw an unchecked exception: a data
+document naming two schemas is ordinary, a description and the domain schema it describes being two already.
+
+**Workaround in place:** none needed; nothing here depends on it. The affordances proposal's instance namespace would,
+and would otherwise have to declare its vocabulary inside `service.tn`. Pinned by
+`AffordanceProbeTest.anInstanceImportingTwoSchemasThrowsAtAReferenceThroughAField`, which asserts the exception type
+and message from all three entry points and flips when the read reports or succeeds.
+
+**Priority:** medium.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. That register renumbers each time a
