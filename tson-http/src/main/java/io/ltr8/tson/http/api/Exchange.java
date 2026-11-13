@@ -7,9 +7,9 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * An exchange: one request-and-reply, a signature held under its name in an entry applying {@code
- * service.protocol}. Its documentation and the facts it states about itself ({@code @service.safe} and
- * {@code @service.idempotent}) are annotations on that key, read from the entry's {@code Namespace}.
+ * An exchange: one request-and-reply, a signature held under its name in a {@link Protocol}'s {@code exchanges}. Its
+ * documentation and the facts it states about itself ({@code @service.safe} and {@code @service.idempotent}) are
+ * annotations on that key, read from {@link Protocol#exchanges}.
  */
 @Typename(name = "service.exchange")
 public record Exchange(Optional<TypeRef> request, Optional<TypeRef> response, List<TypeRef> errors) {

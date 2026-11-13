@@ -60,7 +60,8 @@ absence, not a special case: `cancel_order` in the orders fixtures declares no r
 `void`.
 
 **Identity.** The request type cannot address a call: `get_order` and `cancel_order` both take `order_ref` in the
-orders fixtures. The name does, as `ExchangeName` holds it: the protocol's entry and the exchange's key in it. A
+orders fixtures. The name does, as `ExchangeName` holds it: the protocol's entry and the exchange's key in it, written
+`orders.exchanges.get_order`, the reference that reaches it. A
 descriptor that keyed dispatch by request class would merge two calls the schema keeps apart.
 
 **Context.** A network call carries what a method does not: headers, an idempotency key, the caller. The service's

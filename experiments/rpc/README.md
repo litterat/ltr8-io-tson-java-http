@@ -91,9 +91,9 @@ waits on them.
 pair is not unambiguous: `orders-1.tn` declares two protocols at one `!!id`, and two unrelated ones declaring
 `place_order` would be indistinguishable in a call. The wire schema has the same flaw a layer up --
 `place_order_call` is a flat type name, so two protocols in one document declaring one exchange name collide there
-too. Either the address carries the qualified name (`orders.place_order`, the protocol's entry and then its key), or
-one protocol per document becomes a rule and `orders_v2` moves to its own file. Dispatch is the next item in the order,
-and this is what it dispatches on.
+too. Either the address carries the qualified name (`orders.exchanges.place_order`, the protocol's entry, its
+`exchanges` field and its key), or one protocol per document becomes a rule and `orders_v2` moves to its own file.
+Dispatch is the next item in the order, and this is what it dispatches on.
 
 **Streams are not modelled, until a use arrives.** A stream is a *sequence* of documents of the declared type --
 count unknown, each complete as it arrives -- a property of the call, not of the type, and so not `[order]`. Nothing

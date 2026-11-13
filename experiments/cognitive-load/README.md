@@ -38,10 +38,10 @@ written, and each item asks a model to **classify** a construct, **predict** whe
 | Labelled field groups | `{ ( on: date \| note: text ) }` | Predict a document with both members, with neither, with one. |
 | Container sugar | `[T]`, `{K => V}`, `[T, U]`, `[T; 1..]` | Classify the desugared constructor; predict at the size bounds. |
 | Templates | `<T> { item: T }`, `box<order>`, `uuid_pair => <B> { first: uuid  second: B }` | Predict the closed type an application yields. |
-| Name-holding slots | `meta.type_ref`, `meta.ref<T>`, `orders.place_order` | Predict which names the slot admits: a type's or a value's. |
-| Namespace types and values | `orders => !service.protocol { ... }` | Classify the entry; predict what its keys may hold. |
+| Name-holding slots | `meta.type_ref`, `meta.ref<T>`, `orders.exchanges.place_order` | Predict which names the slot admits: a type's or a value's. |
+| Namespace types and values | `exchanges => !meta.namespace { ... }`, `orders => !service.protocol { exchanges: { ... } }` | Classify the entry; predict what its keys may hold. |
 | Positional form | `"/orders" => { GET => ... }` | Predict what the map stands in for, and what a new required field breaks. |
-| Annotations | `doc => @annotation text`, `@service.binds:[x]` | Predict where an annotation on an entry lands. |
+| Annotations | `doc => @annotation text`, `@service.safe get_order => { ... }` | Predict where an annotation on an entry lands. |
 | Directives | `!!id`, `!!meta`, `!!import`, `!!schema` | Predict which names are visible, and at which level. |
 | Void and absence | `_`, an omitted key | Predict admission of each at `a?: T`, `a: T?` and `a: T`. |
 | Quoting | `"/orders/{id}"` | Predict whether a token needs quotes; write a key that does. |

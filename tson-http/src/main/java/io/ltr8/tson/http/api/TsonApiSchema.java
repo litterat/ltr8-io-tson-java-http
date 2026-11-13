@@ -26,18 +26,21 @@ import java.util.Map;
  * !!import:"https://tson.io/2026/40/io/ltr8/http/service.tn"
  * !!import:"https://schemas.example.com/2026/40/app/order-1.tn"
  * !schema {
- *   orders => !service.protocol { place_order => { request: order  response: order } }
+ *   orders => !service.protocol { exchanges: { place_order => { request: order  response: order } } }
  *
- *   @service.binds:[orders]
  *   orders_http => !service.http {
- *     "/orders" => { POST => !service.binding { exchange: orders.place_order  status: 201 } }
+ *     binds: [orders]
+ *     resources: {
+ *       "/orders" => { POST => !service.binding { exchange: orders.exchanges.place_order  status: 201 } }
+ *     }
  *   }
  * }
  * }</pre>
  *
- * <p><b>{@code order} there is a type reference, not a string, and {@code orders.place_order} is a reference to a
- * value</b> -- the protocol's entry, then the exchange's key. The compiler resolves both and refuses a name nothing
- * declares. A description is a schema because others refer into it: a data document may hold references into the
+ * <p><b>{@code order} there is a type reference, not a string, and {@code orders} in {@code binds} and {@code
+ * orders.exchanges.place_order} are references to values</b> -- a protocol, and an exchange reached through the
+ * protocol's entry, its {@code exchanges} field and the exchange's key. The compiler resolves each and refuses a name
+ * nothing declares. A description is a schema because others refer into it: a data document may hold references into the
  * schemas it imports, but nothing can refer into a data document, so a binding or a coverage claim naming an exchange
  * of one would carry bare names, and every consumer would need its own resolver for them, in every language that
  * reads it.
@@ -62,10 +65,12 @@ public final class TsonApiSchema {
 
     private static final String SOURCE = readResource("/service.tn");
 
-    private static final Map<String, Class<?>> BINDINGS = Map.of("service.exchange", Exchange.class,
-            "service.signature", Signature.class, "service.endpoint", Endpoint.class, "service.operation",
-            Operation.class, "service.binding", Binding.class, "service.document", Document.class, "service.resource",
-            Resource.class, "service.exemption", Exemption.class, "service.http_verb", HttpVerb.class);
+    private static final Map<String, Class<?>> BINDINGS = Map.ofEntries(Map.entry("service.protocol", Protocol.class),
+            Map.entry("service.exchange", Exchange.class), Map.entry("service.signature", Signature.class),
+            Map.entry("service.http", Http.class), Map.entry("service.resource", Resource.class),
+            Map.entry("service.endpoint", Endpoint.class), Map.entry("service.operation", Operation.class),
+            Map.entry("service.binding", Binding.class), Map.entry("service.document", Document.class),
+            Map.entry("service.exemption", Exemption.class), Map.entry("service.http_verb", HttpVerb.class));
 
     private TsonApiSchema() {
     }
@@ -95,11 +100,11 @@ public final class TsonApiSchema {
     }
 
     /**
-     * This vocabulary's records by their qualified names, mapped to the classes in this package: what {@code
-     * service.protocol} and {@code service.http} hold, and the {@code service.exemption} an http projection's
-     * {@code @service.not_bound} lists. {@code service.protocol} and {@code service.http} need no class: a value of a
-     * namespace type is a {@code Namespace}. The map is explicit, so a class in this package binds only by being
-     * named here, and a record no class binds -- {@code service.placement}, folded into each endpoint -- is not
+     * This vocabulary's records by their qualified names, mapped to the classes in this package: {@code
+     * service.protocol} and {@code service.http}, the two a description's entries apply, and what they hold. The
+     * namespace types {@code service.exchanges} and {@code service.resources} need no class: a field they type binds
+     * to a {@code Namespace} of the value type's class. The map is explicit, so a class in this package binds only by
+     * being named here, and a record no class binds -- {@code service.placement}, folded into each endpoint -- is not
      * listed.
      *
      * <p>A description will not read without them: an entry no class binds is held as a tree, and {@link

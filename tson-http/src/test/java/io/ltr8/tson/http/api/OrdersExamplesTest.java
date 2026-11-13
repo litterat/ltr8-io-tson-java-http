@@ -2,7 +2,6 @@ package io.ltr8.tson.http.api;
 
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.Diagnostic;
-import io.ltr8.tson.schema.meta.Namespace;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -41,16 +40,16 @@ class OrdersExamplesTest {
         return TsonApiSchema.describedBy(tson, OrdersExamples.id(file));
     }
 
-    /** The entry applying {@code http} named {@code httpName}: its keys are paths, each holding a {@link Resource}. */
-    static Namespace<?> httpOf(Tson tson, String file, String httpName) {
+    /** The entry applying {@code service.http} named {@code httpName}: its resources are keyed by path. */
+    static Http httpOf(Tson tson, String file, String httpName) {
         List<Diagnostic> problems = tson.validateSchema(OrdersExamples.source(file));
         assertEquals(List.of(), problems, () -> file + ": " + problems);
         var entries = tson.schemaRegistry().get(OrdersExamples.id(file)).orElseThrow().schema().entries();
-        return OrdersExamples.applying(entries, "service.http").get(httpName);
+        return OrdersExamples.applying(entries, Http.class).get(httpName);
     }
 
-    static Resource resource(Namespace<?> http, String path) {
-        return assertInstanceOf(Resource.class, http.get(path));
+    static Resource resource(Http http, String path) {
+        return assertInstanceOf(Resource.class, http.resources().get(path));
     }
 
     @Test
@@ -78,13 +77,13 @@ class OrdersExamplesTest {
         assertEquals(List.of(), problems, () -> "" + problems);
 
         var entries = tson.schemaRegistry().get(OrdersExamples.id("orders-1.tn")).orElseThrow().schema().entries();
-        var protocols = OrdersExamples.applying(entries, "service.protocol");
-        Namespace<?> orders = protocols.get("orders");
+        var protocols = OrdersExamples.applying(entries, Protocol.class);
+        var orders = protocols.get("orders").exchanges();
         assertEquals(List.of("place_order", "get_order", "list_orders", "cancel_order"), List.copyOf(orders.keySet()));
         assertInstanceOf(Exchange.class, orders.get("place_order"));
         assertEquals("Cancel an order. Cancelling twice is the same as cancelling once.",
                 orders.getAnnotations("cancel_order").value("doc", String.class).orElseThrow());
-        assertEquals(List.of("refund"), List.copyOf(protocols.get("orders_v2").keySet()),
+        assertEquals(List.of("refund"), List.copyOf(protocols.get("orders_v2").exchanges().keySet()),
                 "a protocol lists its own exchanges and nothing more");
         // Facts about an exchange are bare annotations on its key, not fields of its signature.
         assertTrue(orders.getAnnotations("get_order").has("service.safe"));
@@ -119,6 +118,8 @@ class OrdersExamplesTest {
         assertEquals(Map.of("id", RequestPlacement.Location.PATH),
                 routes.route(HttpVerb.DELETE, "/orders/{id}").orElseThrow().placement().fields());
         assertEquals(Optional.of(new ExchangeName("orders", "place_order")), create.exchange(),
-                "the two-hop name: the protocol's entry, then the exchange's key");
+                "the qualified name: the protocol's entry, its exchanges field, then the exchange's key");
+        assertEquals(List.of("orders"), httpOf(tson(), "orders-api-1.tn", "orders_http").binds().stream()
+                .map(reference -> reference.name()).toList(), "the claim, a field the resolver judged");
     }
 }

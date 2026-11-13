@@ -46,8 +46,9 @@ are the server's own. Current form only.
   whatever the map says, and `Tson.dataBindContext()` is that composed context.
 - **One context, schemas and data alike.** The context a `Tson` is built with binds a schema's value entries as it
   binds a data document's values. A value entry binds by the name of the type it applies, as a data value does: an
-  entry applying a record type (`!service.binding { … }`) binds to the class the map gives that name, and one applying a
-  namespace type is a `ValueEntry(type, Namespace)` whose values bind the same way. An entry no class binds is held as
+  entry applying a record type (`!service.protocol { … }`) is a `ValueEntry(type, value)` holding the class the map
+  gives that name, and a field typed by a namespace type binds to a `Namespace` whose values bind the same way, keeping
+  the keys' order and annotations where a `Map` component loses both. An entry no class binds is held as
   a tree: the schema loads, and the bind registry refuses it with `BIND_MISMATCH` at the entry. So a vocabulary a
   schema imports belongs in the same map as the application's: `TsonApiSchema.bindings()` is `service.tn`'s
   records as an explicit map, and `bindingsWith(application)` merges the two, refusing a name both bind, since within

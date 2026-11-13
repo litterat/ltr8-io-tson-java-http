@@ -9,50 +9,52 @@
   schema_ref => { schemaPath: text }
 
   validator => !service.http {
-    "/validate" => {
-      @service.summary:"Validate a document against a schema"
-      @doc:"""
-        Check a document against a schema and report every problem in one pass.
+    resources: {
+      "/validate" => {
+        @service.summary:"Validate a document against a schema"
+        @doc:"""
+          Check a document against a schema and report every problem in one pass.
 
-        The status is 200 for a document that does not conform, which reads wrong for about a second and
-        is right: the request was well-formed and the service answered it. The diagnostics ARE the
-        answer. A 400 here is always about the envelope -- a body that is not a valid validation_request
-        -- and never about the document under test, which would otherwise make a client unable to tell
-        "you asked badly" from "the thing you asked about is bad".
-        """
-      POST => !service.operation { request: validation_request  response: validation_result }
-    }
+          The status is 200 for a document that does not conform, which reads wrong for about a second and
+          is right: the request was well-formed and the service answered it. The diagnostics ARE the
+          answer. A 400 here is always about the envelope -- a body that is not a valid validation_request
+          -- and never about the document under test, which would otherwise make a client unable to tell
+          "you asked badly" from "the thing you asked about is bad".
+          """
+        POST => !service.operation { request: validation_request  response: validation_result }
+      }
 
-    "/" => {
-      @service.safe
-      @service.summary:"The validator page"
-      @doc:"The page itself: two editors, the scenarios, and the diagnostics."
-      GET => !service.document { media_types: ["text/html"] }
-    }
+      "/" => {
+        @service.safe
+        @service.summary:"The validator page"
+        @doc:"The page itself: two editors, the scenarios, and the diagnostics."
+        GET => !service.document { media_types: ["text/html"] }
+      }
 
-    "/.well-known/tson-deployment" => {
-      @service.safe
-      @service.summary:"What this deployment will accept"
-      @doc:"""
-        What this deployment will accept, as a projection of its descriptor.
+      "/.well-known/tson-deployment" => {
+        @service.safe
+        @service.summary:"What this deployment will accept"
+        @doc:"""
+          What this deployment will accept, as a projection of its descriptor.
 
-        A well-known path rather than an identity's, and the reason is the reason the descriptor exists: in this
-        series everything with an identity is served at its identity's path (§2.2.1), and a deployment descriptor
-        is precisely the artifact that must NOT have an identity -- so a well-known path is right for it for the
-        same reason it would be wrong for a schema.
+          A well-known path rather than an identity's, and the reason is the reason the descriptor exists: in this
+          series everything with an identity is served at its identity's path (§2.2.1), and a deployment descriptor
+          is precisely the artifact that must NOT have an identity -- so a well-known path is right for it for the
+          same reason it would be wrong for a schema.
 
-        What is served is DERIVED from the descriptor, never the descriptor: the fetch allow-list is internal
-        topology. And it is a hint -- it can be cached, and only the refusal a request actually receives says
-        what applied to that request.
-        """
-      GET => !service.operation { response: deployment.acceptance_profile }
-    }
+          What is served is DERIVED from the descriptor, never the descriptor: the fetch allow-list is internal
+          topology. And it is a hint -- it can be cached, and only the refusal a request actually receives says
+          what applied to that request.
+          """
+        GET => !service.operation { response: deployment.acceptance_profile }
+      }
 
-    "/{+schemaPath}" => {
-      @service.safe
-      @service.summary:"Fetch a published schema"
-      @doc:"Every schema this service names is served at its own identity's path."
-      GET => !service.document { request: schema_ref  media_types: ["application/tson"] }
+      "/{+schemaPath}" => {
+        @service.safe
+        @service.summary:"Fetch a published schema"
+        @doc:"Every schema this service names is served at its own identity's path."
+        GET => !service.document { request: schema_ref  media_types: ["application/tson"] }
+      }
     }
   }
 }

@@ -2,8 +2,8 @@ package io.ltr8.tson.http.experiment.rpc;
 
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.Diagnostic;
-import io.ltr8.tson.http.api.Exchange;
 import io.ltr8.tson.http.api.OrdersExamples;
+import io.ltr8.tson.http.api.Protocol;
 import io.ltr8.tson.schema.TsonSchema;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.Top;
@@ -141,11 +141,10 @@ class RpcProbe {
         assertEquals(List.of(), tson.validateSchema(OrdersExamples.source("orders-1.tn")));
         assertEquals(List.of(), tson.validateSchema(read("orders-wire-1.tn")));
         var protocol = OrdersExamples.applying(tson.schemaRegistry().get(ORDERS_ID).orElseThrow().schema().entries(),
-                "service.protocol").get("orders");
+                Protocol.class).get("orders").exchanges();
         var wire = tson.schemaRegistry().get(WIRE_ID).orElseThrow().schema();
 
-        protocol.forEach((name, held) -> {
-            Exchange exchange = (Exchange) held;
+        protocol.forEach((name, exchange) -> {
             Map<String, String> call = closedOver(wire, name + "_call", "call");
             assertEquals(exchange.request().map(TypeRef::name).orElse("void"), call.get("request"),
                     name + "_call closes call over the wrong request");

@@ -8,22 +8,26 @@
   schema_ref => { schemaPath: text }
 
   orders => !service.protocol {
-    @doc:"Accept an order and confirm it with the quantity doubled."
-    place_order => { request: order  response: order  errors: [sku_not_found] }
+    exchanges: {
+      @doc:"Accept an order and confirm it with the quantity doubled."
+      place_order => { request: order  response: order  errors: [sku_not_found] }
+    }
   }
 
-  @service.binds:[orders]
   orders_http => !service.http {
-    "/orders" => {
-      @service.summary:"Place an order"
-      POST => !service.binding { exchange: orders.place_order  status: 201
-                         media_types: ["application/json" "application/tson+json"] }
-    }
-    "/{+schemaPath}" => {
-      @service.safe
-      @service.summary:"Fetch a published schema"
-      @doc:"Every schema this service names is served at its own identity's path."
-      GET => !service.document { request: schema_ref  media_types: ["application/tson"] }
+    binds: [orders]
+    resources: {
+      "/orders" => {
+        @service.summary:"Place an order"
+        POST => !service.binding { exchange: orders.exchanges.place_order  status: 201
+                                   media_types: ["application/json" "application/tson+json"] }
+      }
+      "/{+schemaPath}" => {
+        @service.safe
+        @service.summary:"Fetch a published schema"
+        @doc:"Every schema this service names is served at its own identity's path."
+        GET => !service.document { request: schema_ref  media_types: ["application/tson"] }
+      }
     }
   }
 }

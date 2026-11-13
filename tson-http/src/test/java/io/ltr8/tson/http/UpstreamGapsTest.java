@@ -278,9 +278,9 @@ class UpstreamGapsTest {
     /**
      * <b>A template's body is a record body</b> ([TSON-SCHEMA] §5.10), so a template over an http projection, {@code
      * fetching => <T> !service.http { … }}, is refused at its declaration: a {@code !service.http { … }} is a value of
-     * a namespace type, no type, and a template over a value is no record. The remedy the refusal names is one value
-     * per instantiation, which for an API description is the projection written out, {@code orders => !service.http {
-     * … }}, and that describes to its route the way any projection does. Asserted through {@link
+     * the record type {@code service.http}, no type, and a template over a value is no record. The remedy the refusal
+     * names is one value per instantiation, which for an API description is the projection written out, {@code orders
+     * => !service.http { … }}, and that describes to its route the way any projection does. Asserted through {@link
      * io.ltr8.tson.http.api.TsonApiDescription}, the consumer the projection is for.
      */
     @Test
@@ -290,8 +290,8 @@ class UpstreamGapsTest {
                   order_ref => { id: text }
                 """;
         String template = types + """
-                  fetching  => <T> !service.http { "/orders/{id}" => {
-                    @service.safe GET => !service.operation { request: order_ref  response: T } } }
+                  fetching  => <T> !service.http { resources: { "/orders/{id}" => {
+                    @service.safe GET => !service.operation { request: order_ref  response: T } } } }
                   orders    => fetching<order>""";
 
         String refused = assertThrows(io.ltr8.tson.base.SchemaValidationException.class,
@@ -300,8 +300,8 @@ class UpstreamGapsTest {
                 && refused.contains("Declare one value per instantiation"), refused);
 
         String written = types + """
-                  orders    => !service.http { "/orders/{id}" => {
-                    @service.safe GET => !service.operation { request: order_ref  response: order } } }""";
+                  orders    => !service.http { resources: { "/orders/{id}" => {
+                    @service.safe GET => !service.operation { request: order_ref  response: order } } } }""";
         var described = TsonApiSchema.describedBy(resolveAgainstServiceMeta(written), API_ID);
 
         assertEquals(List.of("GET /orders/{id}"),
@@ -320,7 +320,9 @@ class UpstreamGapsTest {
     void anHttpPathKeyIsJudgedAsTheNameWritten() {
         String body = """
                   order  => { sku: text }
-                  orders => !service.http { "%s" => { @service.safe GET => !service.operation { response: order } } }""";
+                  orders => !service.http {
+                    resources: { "%s" => { @service.safe GET => !service.operation { response: order } } }
+                  }""";
 
         for (String path : List.of("/", "/x", "/orders/42", "/путь")) {
             var described = assertDoesNotThrow(() -> TsonApiSchema.describedBy(
@@ -425,9 +427,10 @@ class UpstreamGapsTest {
      * A namespace type declares its facets and nothing else: a value of it is the map alone, so a field beyond the
      * facets {@code meta.namespace} has as a refinement of {@code meta.map} -- {@code key_type} and {@code value_type},
      * {@code ordered}, {@code min_items} and {@code max_items} among them -- has nowhere to be written, and {@code
-     * meta.namespace}'s own record reader refuses it as an unknown field, listing the facets. That is why what {@code
-     * service.tn}'s {@code service.http} says about the protocols behind it -- the claims {@code service.binds} and
-     * {@code service.not_bound} -- is annotation on the projection's entry rather than fields beside its paths.
+     * meta.namespace}'s own record reader refuses it as an unknown field, listing the facets. That is why {@code
+     * service.tn}'s {@code service.protocol} and {@code service.http} are records holding one namespace-typed field,
+     * so that what a projection claims about the protocols behind it, {@code binds} and {@code not_bound}, are fields
+     * beside its {@code resources}.
      */
     @Test
     void aNamespaceTypeDeclaresOnlyItsFacets() {
@@ -458,11 +461,9 @@ class UpstreamGapsTest {
      * holding the name and never delivered: {@code isResolved()} is false and {@code get()} throws, where the same
      * reference in a field of a value entry is delivered when the schema links.
      *
-     * <p>{@code service.tn} writes an http projection's {@code @service.binds} and {@code @service.not_bound} exactly
-     * this way, so {@code TsonApiDescription} checks both itself: each name is an entry applying {@code
-     * service.protocol}, each exemption a key of a protocol the projection binds. The layer keeps the {@code ref<…>}
-     * typing so the declaration says what it means; when this is fixed, the clean load below flips and the reader's
-     * checks become a second net.
+     * <p>{@code service.tn} holds no reference inside an annotation's value: an http projection's claims are fields of
+     * {@code service.http}, judged at load and delivered, so nothing in this project depends on the gap. When it is
+     * fixed, the clean load below flips.
      */
     @Test
     void aReferenceInsideAnAnnotationValueIsNotJudged() {
@@ -513,7 +514,7 @@ class UpstreamGapsTest {
      * no default one. An {@code identifier_type} widened with {@code start_add} and {@code continue_add} is
      * admitted, and still carries a {@code pattern} that is enforced at the key.
      *
-     * <p>{@code service.tn}'s {@code service.http} is keyed this way: {@code service.path_template} is an {@code
+     * <p>{@code service.tn}'s {@code service.resources} is keyed this way: {@code service.path_template} is an {@code
      * identifier_type} starting with {@code /}, its {@code pattern} holding a URI template's structure, and §8.2's name
      * hygiene reaches a path key as it reaches any name.
      */
@@ -564,7 +565,7 @@ class UpstreamGapsTest {
      * declaration records its type beside the name, so the linker never walks declared types back to it.
      *
      * <p>{@code service.tn} holds every {@code !service.operation} this way, in a {@code service.resource}'s map field
-     * under a path key of a {@code service.http}. Pinned because a gap here stops a sound schema resolving.
+     * under a path key of a {@code service.resources}. Pinned because a gap here stops a sound schema resolving.
      */
     @Test
     void aKindSlotOnASubtypeBehindARecordFieldIsJudged() {
@@ -599,8 +600,8 @@ class UpstreamGapsTest {
      * interface held under a key that keeps its methods in a namespace-typed field is reached as {@code
      * i.orders.methods.place}, walking an entry, a key, a field and a key; the walk reads the field through the
      * descriptor that bound the host. A key missing past the field is refused. {@code service.tn}'s own {@code
-     * meta.ref<service.exchange>} walks an entry and a key alone; this pins the longer walk so a regression to a gap
-     * fails here.
+     * meta.ref<service.exchange>} walks an entry, a field and a key, {@code orders.exchanges.place_order}, so the layer
+     * depends on this walk, and a regression to a gap fails here as well as at every description.
      */
     @Test
     void aReferenceThroughARecordValuesFieldIsJudged() {
@@ -1623,7 +1624,7 @@ class UpstreamGapsTest {
 
     // ── fixed upstream, pinned here: a sibling typed by a reference written in place is refused as written ─
 
-    /** A protocol layer as {@code service.tn} has it: exchanges, each naming its request type, under a name. */
+    /** A protocol layer of namespace values: exchanges, each naming its request type, keyed under a protocol. */
     private static final String EXCHANGES = meta("""
               exchange      => { request?: meta.type_ref }
               exchange_name => meta.identifier

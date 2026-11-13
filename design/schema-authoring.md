@@ -168,7 +168,7 @@ the build is the check.
   it costs an importer one root name. `service.tn` nests every entry and annotation under `service => !schema { … }`,
   and an entry inside the map names another by its path, `exchange => service.signature & {}`, since a name resolves
   in the schema's one namespace: a bare `signature` there is an unresolved reference. A description then writes
-  `!service.protocol` and `@service.binds`, and a bound class's `@Typename` is the qualified name. `problem.tn` nests
+  `!service.protocol` and `@service.safe`, and a bound class's `@Typename` is the qualified name. `problem.tn` nests
   under `problem` and `deployment.tn` under `deployment` the same way, so an error body is `!problem.details { … }`, a
   business error composes `problem.details`, and a descriptor is `!deployment.descriptor { … }`.
 

@@ -70,16 +70,16 @@ the admission verifier's.
 
 ## Open questions
 
-**Which namespace may a document bind?** `!!import` binds the type namespace and `!name` resolves against it, one hop. A plan
-or batch document wants to bind a *protocol* -- to say `!place_order { request: { … } }` and have the step checked against
-the exchange -- and cannot: `place_order` is a key inside `orders`, not a type name, so it can stand only where a slot is
-typed `meta.ref<service.exchange>`, never as a tag. A reference in a data document, to a type or to a value, is a name judged
-against the closure the document imports ([TSON-SCHEMA] §3.3.4), and an argument list there is a parse error ([TSON-DATA]
-§7.2.5): at `m: meta.ref<service.exchange>`, `orders.place_order` reads and `orders.no_such` is refused ("'orders' has no key
-'no_such'"), and at `m: meta.ref<order>` a value entry `o1` reads while `order`, a type, is refused
-(`UpstreamGapsTest.aValueReferenceInADataDocumentIsJudged`). The URL namespace being hierarchical (`/orders/{id}/items` under
-`/orders/{id}`) while a resource key in `service.tn` is a flat template is the same question, and one answer should serve
-both.
+**Which namespace may a document bind?** `!!import` binds the type namespace and `!name` resolves against it, one hop. A
+plan or batch document wants to bind a *protocol* -- to say `!place_order { request: { … } }` and have the step checked
+against the exchange -- and cannot: `place_order` is a key inside `orders`' exchanges, not a type name, so it can stand only
+where a slot is typed `meta.ref<service.exchange>`, never as a tag. A reference in a data document, to a type or to a value,
+is a name judged against the closure the document imports ([TSON-SCHEMA] §3.3.4), and an argument list there is a parse
+error ([TSON-DATA] §7.2.5): at `m: meta.ref<service.exchange>`, `orders.exchanges.place_order` reads and
+`orders.exchanges.no_such` is refused ("'orders.exchanges' has no key 'no_such'"), and at `m: meta.ref<order>` a value entry
+`o1` reads while `order`, a type, is refused (`UpstreamGapsTest.aValueReferenceInADataDocumentIsJudged`). The URL namespace
+being hierarchical (`/orders/{id}/items` under `/orders/{id}`) while a resource key in `service.tn` is a flat template is
+the same question, and one answer should serve both.
 
 **The pool's `type` and `method` entries are typed `name`** in `agent-vm.tn`, and want to be `meta.type_ref` and
 `meta.ref<service.exchange>`, judged on read as any reference in data is. The names they hold are the interface's, while a

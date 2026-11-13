@@ -29,20 +29,22 @@ import java.util.Map;
  * one-field record for a parameter-only endpoint.</li>
  * <li>{@code orders-errors-1.tn} (shared) -- business errors composing {@code problem.details} and pinning {@code status},
  * which is how an endpoint's {@code errors} get one.</li>
- * <li>{@code orders-1.tn} (protocol only) -- {@code orders} as a map of exchanges with a {@code @doc} per exchange,
- * and {@code orders_v2} beside it declaring only {@code refund}.</li>
+ * <li>{@code orders-1.tn} (protocol only) -- {@code orders} as a record whose {@code exchanges} hold a {@code @doc}
+ * per exchange, and {@code orders_v2} beside it declaring only {@code refund}.</li>
  * <li>{@code orders-api-inline-1.tn} (web service only) -- an http projection with no protocol behind it, every
  * endpoint an
  * {@code !service.operation} with its signature inline; a parameter-only endpoint as a one-field record placed from the
  * path.</li>
- * <li>{@code orders-api-1.tn} (both) -- an http projection whose entry claims {@code @service.binds:[orders]}, every
- * endpoint a
- * {@code !service.binding} with its placement.</li>
+ * <li>{@code orders-api-1.tn} (both) -- an http projection claiming {@code binds: [orders]}, every endpoint a {@code
+ * !service.binding} with its placement.</li>
  * </ul>
  *
  * <p>Both spellings of a resource appear, deliberately: most write their one required field positionally -- {@code
  * "/orders" => { POST => … }} for {@code "/orders" => { endpoints: { POST => … } }}, which [TSON-SCHEMA] §5.6 admits
- * because {@code resource} has exactly one bare required field -- and one is tagged {@code !service.resource}.
+ * because {@code resource} has exactly one bare required field -- and one is tagged {@code !service.resource}. A
+ * protocol and a projection are written in full, {@code exchanges: { … }} and {@code resources: { … }}, though each
+ * has the positional form too: a reference into a protocol spells {@code exchanges} whether the document wrote it or
+ * not, and a projection writing {@code binds} cannot use the form.
  *
  * <p>Each file is served at the identity its own {@code !!id} declares, so the examples name each other the way
  * published documents do, literally.
@@ -99,14 +101,14 @@ public final class OrdersExamples {
     }
 
     /**
-     * Every value entry of the namespace type {@code type} -- {@code protocol} or {@code http} -- by its name, each
-     * as the {@code Namespace} it holds: a protocol's keys are its exchanges, an http projection's its paths.
+     * Every value entry whose bound value is a {@code bound} -- {@link Protocol} or {@link Http} -- by its name: a
+     * protocol's {@code exchanges} are keyed by exchange name, an http projection's {@code resources} by path.
      */
-    public static Map<String, Namespace<?>> applying(Namespace<Top> entries, String type) {
-        Map<String, Namespace<?>> found = new LinkedHashMap<>();
+    public static <T> Map<String, T> applying(Namespace<Top> entries, Class<T> bound) {
+        Map<String, T> found = new LinkedHashMap<>();
         entries.forEach((name, value) -> {
-            if (value instanceof ValueEntry(String applied, Namespace<?> namespace) && applied.equals(type)) {
-                found.put(name, namespace);
+            if (value instanceof ValueEntry(_, Object held) && bound.isInstance(held)) {
+                found.put(name, bound.cast(held));
             }
         });
         return found;

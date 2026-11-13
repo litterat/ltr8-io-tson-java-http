@@ -83,20 +83,19 @@ names the library, and the import-nothing case by `UpstreamGapsTest.aSchemaImpor
 
 ## 4. A reference inside an annotation's value is not judged
 
-**Hit:** `service.tn` declares `service.binds => @meta.annotation [meta.ref<service.protocol>]` and
-`service.not_bound => @meta.annotation [service.exemption]`, the `service.exemption` record holding
-`exchange: meta.ref<service.exchange>`. The resolver checks the annotation value's shape (`@service.binds:42` is
-refused) but no name in it: a protocol nothing declares and an exchange key
-the protocol does not hold both load clean. Each arrives as a `ValueRef` holding the name and never delivered
-(`isResolved()` false), where the same reference in a field of a value entry is judged and delivered when the schema
-links.
+**Hit:** a vocabulary stating a relation in an annotation's value. A layer declaring `binds => @meta.annotation
+[meta.ref<protocol>]`, or an annotation holding a record with `exchange: meta.ref<exchange>`, gets the value's shape
+checked (`@binds:42` is refused) but no name in it: a protocol nothing declares and an exchange key the protocol does
+not hold both load clean. Each arrives as a `ValueRef` holding the name and never delivered (`isResolved()` false),
+where the same reference in a field of a value entry is judged and delivered when the schema links. Measured on a probe
+layer, `UpstreamGapsTest.aReferenceInsideAnAnnotationValueIsNotJudged`, whose clean load flips when it is fixed.
 
 **The change:** a `meta.ref<T>` in an annotation value judged as one in a field value is, if the spec question below
 is answered that way; at least, its name held to the qualified-name grammar.
 
-**Workaround in place:** `TsonApiDescription` checks both names when it reads a description
-(`TsonApiDescriptionTest`). Pinned by `UpstreamGapsTest.aReferenceInsideAnAnnotationValueIsNotJudged`, whose clean
-load flips when it is fixed.
+**What this project does meanwhile:** nothing depends on the gap. `service.tn` carries an http projection's claims,
+`binds` and `not_bound`, as fields of `service.http`, so every name in them is judged at schema load and delivered its
+referent (`TsonApiDescriptionTest.aBindsNamingNoProtocolIsRefusedAtLoad`).
 
 ---
 
@@ -214,15 +213,15 @@ context (item 2). Not yet pinned in `UpstreamGapsTest`.
 ## 11. A name at a type-naming slot that resolves to a value is refused with the closure, not the fault
 
 **Hit:** met writing an rpc envelope with a dependent payload, and measured by `DependentEnvelopeProbe`. The envelope
-`by_type => { request: meta.type_ref  body: request! }`, read with `request: orders.place_order` (an exchange's
-qualified name), is refused `ATOM_CONSTRAINT_VIOLATION` at `/request` with *"'meta.type_ref': 'orders.place_order' is
-not a member of this kind -- expected the name of a type whose value IS-A 'meta.type', one of […]"*. The list is every
-member of the closure, the kernel's records among them, and the same list is the diagnostic's `expected` (*"one of
-(…)"*), so a diagnostic printed whole carries it twice. What it never says is the fault: the name resolves, to a value
-of `service.exchange`, and a value names no type.
+`by_type => { request: meta.type_ref  body: request! }`, read with `request: orders.exchanges.place_order` (an
+exchange's qualified name), is refused `ATOM_CONSTRAINT_VIOLATION` at `/request` with *"'meta.type_ref':
+'orders.exchanges.place_order' is not a member of this kind -- expected the name of a type whose value IS-A 'meta.type',
+one of […]"*. The list is every member of the closure, the kernel's records among them, and the same list is the
+diagnostic's `expected` (*"one of (…)"*), so a diagnostic printed whole carries it twice. What it never says is the
+fault: the name resolves, to a value of `service.exchange`, and a value names no type.
 
-**The change:** where a name at a type-naming slot resolves to a value entry, say so (*"'orders.place_order' names a
-value of 'exchange', not a type"*), and drop or cap the member list, in the message and in `expected` alike.
+**The change:** where a name at a type-naming slot resolves to a value entry, say so (*"'orders.exchanges.place_order'
+names a value of 'exchange', not a type"*), and drop or cap the member list, in the message and in `expected` alike.
 
 **Workaround in place:** none needed; nothing in the HTTP layer names an exchange where a type is wanted. Pinned over
 a minimal protocol layer by `UpstreamGapsTest.anExchangesNameAtATypeRefSlotIsRefusedWithTheClosureListedTwice`, which
@@ -253,7 +252,7 @@ two compiler packages kept from consumers that have no use for them.
 
 ## 13. A quoted token or a tag at a kind slot in a value body is refused through an event's `toString`
 
-**Hit:** a namespace value whose endpoint lists a media type as `"application/json"` at a kind slot
+**Hit:** an http projection whose endpoint lists a media type as `"application/json"` at a kind slot
 (`[meta.ref<net.media_type_type>]`, and alike at `[meta.ref<meta.atom>]`), where a type's name belongs. The refusal is
 right, and its message embeds *"expected a type's name, found TokenEvent[text=application/json, form=SINGLE_LINE_QUOTED,
 position=Position[line=0, column=0, byteOffset=0]]"*: a Java record's `toString`, with a position of zero where the
@@ -401,29 +400,10 @@ data value is. The spec does not say which, and the answer decides whether a voc
 annotation and have it checked. tson-java takes the second reading (item 4, "A reference inside an annotation's value
 is not judged").
 
-**What this project does meanwhile:** `@service.binds` and an exemption's `exchange` keep their `meta.ref<…>` typing to say
-what they mean, and `TsonApiDescription` checks the names.
+**What this project does meanwhile:** states no relation in an annotation's value. An http projection's claims are fields
+of `service.http`, judged and delivered, so `service.tn` does not depend on the answer.
 
 **Priority:** medium: it decides where a vocabulary's relation checks live.
-
-### To file: a namespace value with declared fields beside its keys
-
-**Sections:** [TSON-SCHEMA] §4.1 (namespace types), §6 (annotations); `meta.tn`'s `meta.namespace`.
-
-**Kind:** request for a later revision. A value of a namespace type is the map alone, and a namespace type declaring a field
-beside its facets is refused (*"unknown field 'extends' on 'meta.namespace'"*,
-`UpstreamGapsTest.aNamespaceTypeDeclaresOnlyItsFacets`). So a fact about a namespace as a whole has nowhere to sit.
-`service.tn`'s http projection carries its claims, `@service.binds` and `@service.not_bound`, as annotations on its entry,
-where the references in them go unjudged (above). The alternative, a record held one key down, doubles every qualified name.
-A namespace value admitting declared fields beside its keys would make the `@service.binds` claim a field, judged like any
-other.
-
-**Related:** a namespace is keyed by an identifier family (`UpstreamGapsTest.aNamespaceKeyTypeMustBeAnIdentifierFamily`), so
-`service.path_template` is an `identifier_type` widened to a path's characters, and §8.2's name hygiene reaches a path key. A
-revisit should keep that, and leave a text-keyed namespace and `&` over namespace values unproposed, composition being over
-types.
-
-**Priority:** low: the annotation form works.
 
 ### To file: a dependent field lets the sender choose the type a value is read against
 

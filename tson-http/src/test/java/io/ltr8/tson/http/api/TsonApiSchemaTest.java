@@ -55,20 +55,24 @@ class TsonApiSchemaTest {
               schema_ref => { schemaPath: text }
 
               orders => !service.protocol {
-                @doc:"Accept an order and confirm it, with the quantity doubled."
-                place_order => { request: order  response: order  errors: [sku_not_found] }
+                exchanges: {
+                  @doc:"Accept an order and confirm it, with the quantity doubled."
+                  place_order => { request: order  response: order  errors: [sku_not_found] }
+                }
               }
 
-              @service.binds:[orders]
               orders_http => !service.http {
-                "/orders" => {
-                  @service.summary:"Place an order"
-                  POST => !service.binding { exchange: orders.place_order  status: 201 }
-                }
-                "/{+schemaPath}" => {
-                  @service.safe
-                  @service.summary:"Fetch a published schema"
-                  GET => !service.document { request: schema_ref  media_types: ["application/tson"] }
+                binds: [orders]
+                resources: {
+                  "/orders" => {
+                    @service.summary:"Place an order"
+                    POST => !service.binding { exchange: orders.exchanges.place_order  status: 201 }
+                  }
+                  "/{+schemaPath}" => {
+                    @service.safe
+                    @service.summary:"Fetch a published schema"
+                    GET => !service.document { request: schema_ref  media_types: ["application/tson"] }
+                  }
                 }
               }
             }""";
@@ -303,8 +307,8 @@ class TsonApiSchemaTest {
     void twoEndpointsCannotShareAVerbAndPath() {
         String refused = assertThrows(IllegalArgumentException.class, () -> described(API.replace("\n}", """
 
-                  again => !service.http { "/{+schemaPath}" => {
-                    @service.safe GET => !service.document { request: schema_ref  media_types: ["text/plain"] } } }
+                  again => !service.http { resources: { "/{+schemaPath}" => {
+                      @service.safe GET => !service.document { request: schema_ref  media_types: ["text/plain"] } } } }
                 }"""))).getMessage();
         assertTrue(refused.contains("'GET /{+schemaPath}' is declared twice"), refused);
     }
@@ -327,8 +331,8 @@ class TsonApiSchemaTest {
               page       => <T> { items: [T]  next?: uri  total: int32 }
               order_page => page<order>
 
-              orders_http => !service.http { "/orders" => {
-                @service.safe GET => !service.operation { response: %s } } }
+              orders_http => !service.http { resources: { "/orders" => {
+                  @service.safe GET => !service.operation { response: %s } } } }
             }""";
 
     /**
@@ -359,7 +363,7 @@ class TsonApiSchemaTest {
     @Test
     void anApplicationIsNamedThroughAnAliasNotInline() {
         assertEquals("'orders_http': the body is no value of the type 'service.http' -- at "
-                        + "/~1orders/endpoints/GET/response: expected a type's name, found a record -- a position "
+                        + "/resources/~1orders/endpoints/GET/response: expected a type's name, found a record -- a position "
                         + "typed by a kind holds the name of a type, one bare token",
                 only(PAGED.formatted("{ head: page  arguments: [order] }")));
 

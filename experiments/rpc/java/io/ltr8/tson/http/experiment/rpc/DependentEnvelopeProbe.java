@@ -100,11 +100,11 @@ class DependentEnvelopeProbe {
         Tson tson = tson(schema);
 
         Diagnostic exchange = only(tson.validate(packet(
-                "!by_type { request: orders.place_order  body: { sku: A-100  quantity: 2 } }")));
+                "!by_type { request: orders.exchanges.place_order  body: { sku: A-100  quantity: 2 } }")));
         assertEquals(Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION, exchange.code());
         assertEquals("/request", exchange.path().orElseThrow());
-        assertTrue(exchange.message().startsWith("'meta.type_ref': 'orders.place_order' is not a member of this kind"
-                + " -- expected the name of a type whose value IS-A 'meta.type', one of ["), exchange.message());
+        assertTrue(exchange.message().startsWith("'meta.type_ref': 'orders.exchanges.place_order' is not a member of "
+                + "this kind -- expected the name of a type whose value IS-A 'meta.type', one of ["), exchange.message());
 
         Diagnostic late = only(tson.validate(packet("!by_type { body: { sku: A-100  quantity: 2 }  request: order }")));
         assertEquals(Diagnostic.Code.VALIDATION_ERROR, late.code());
