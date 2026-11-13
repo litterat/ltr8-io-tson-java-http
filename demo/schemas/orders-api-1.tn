@@ -25,8 +25,12 @@
       "/{+schemaPath}" => {
         @service.safe
         @service.summary:"Fetch a published schema"
-        @doc:"Every schema this service names is served at its own identity's path."
-        GET => !service.document { request: schema_ref  media_types: ["application/tson"] }
+        @doc:"""
+          Every schema this service names is served at its own identity's path. A published schema never changes
+          (§3.5), so a cache may keep it for good.
+          """
+        GET => !service.document { request: schema_ref  media_types: ["application/tson"]
+                                   response_headers: { Cache-Control => "public, max-age=31536000, immutable" } }
       }
     }
   }

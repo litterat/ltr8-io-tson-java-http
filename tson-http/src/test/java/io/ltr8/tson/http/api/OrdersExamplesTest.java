@@ -122,4 +122,22 @@ class OrdersExamplesTest {
         assertEquals(List.of("orders"), httpOf(tson(), "orders-api-1.tn", "orders_http").binds().stream()
                 .map(reference -> reference.name()).toList(), "the claim, a field the resolver judged");
     }
+
+    /**
+     * The schemes in force per endpoint, as the reader resolves them: the projection's default inherited, replaced by
+     * an endpoint's own list, and none where the endpoint writes {@code security: []}.
+     */
+    @Test
+    void theSecuredExampleResolvesTheSchemesInForce() {
+        TsonApiDescription routes = routesOf(tson(), "orders-api-secured-1.tn", "orders_http");
+        HttpAuth bearer = new HttpAuth("bearer");
+        ApiKey partner = new ApiKey(ApiKeyIn.header, "X-Api-Key");
+
+        assertEquals(List.of(bearer), routes.route(HttpVerb.POST, "/orders").orElseThrow().security(), "inherited");
+        assertEquals(List.of(partner), routes.route(HttpVerb.GET, "/orders").orElseThrow().security(), "replaced");
+        Route fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
+        assertEquals(List.of(), fetch.security(), "security: [] is open");
+        assertEquals(List.of(bearer, partner), routes.route(HttpVerb.DELETE, "/orders/{id}").orElseThrow().security());
+        assertEquals(Map.of("cache-control", "private, max-age=60"), fetch.responseHeaders(), "the name held folded");
+    }
 }

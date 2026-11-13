@@ -14,14 +14,21 @@ import java.util.Optional;
  * the exchange's key ({@code orders.exchanges.place_order}), and delivered the {@link Exchange} it names once the
  * description links. {@link TsonApiDescription} reads the exchange from the referent, and which protocol it belongs
  * to from the name's first segment.
+ *
+ * <p>An absent list or map is empty, but an absent {@code security} is {@link Optional#empty()}, which inherits the
+ * projection's, and {@code security: []} is a present empty list, which says the endpoint is open.
  */
 @Typename(name = "service.binding")
 public record Binding(List<String> query, Map<String, String> headers, Optional<String> body, int status,
-                      @Field("media_types") List<String> mediaTypes, ValueRef<Exchange> exchange) implements Endpoint {
+                      @Field("media_types") List<String> mediaTypes, Optional<List<ValueRef<SecurityScheme>>> security,
+                      @Field("response_headers") Map<String, String> responseHeaders,
+                      ValueRef<Exchange> exchange) implements Endpoint {
 
     public Binding {
         query = query == null ? List.of() : List.copyOf(query);
         headers = headers == null ? Map.of() : Map.copyOf(headers);
         mediaTypes = mediaTypes == null ? List.of() : List.copyOf(mediaTypes);
+        security = security == null ? Optional.empty() : security.map(List::copyOf);
+        responseHeaders = responseHeaders == null ? Map.of() : Map.copyOf(responseHeaders);
     }
 }

@@ -116,6 +116,12 @@ The four entries are in build order.
   Constraint: the framework dependency stops at the adapter and the module is a real JPMS module.
 - [ ] **A JAX-RS adapter** — `MessageBodyReader`/`MessageBodyWriter` and an `ExceptionMapper`, for Quarkus, Helidon MP
   and Jersey. Same constraints as the Spring adapter.
+- [ ] **Enforce declared security at the error boundary** — `Route.security()` reads the schemes a description declares
+  and nothing enforces them. Answer a route with a scheme and no credential for any of them with a `problem.details` at
+  401 (and `WWW-Authenticate` for an `http_auth` scheme, RFC 9110 §11.6.1). Needs a problem type under the problems
+  prefix and a place for the credential check, given the route, in each adapter's boundary; verifying a credential stays
+  the application's. Constraint: the status policy lives in `TsonHttpException.from` only, so the check raises what that
+  method classifies, and no adapter decides a status.
 
 ## Client
 
@@ -133,19 +139,12 @@ The four entries are in build order.
 
 ## The description
 
-- [ ] **A security scheme** — `design/service-description.md` lists `security` as the one deliberate absence that would
-  disqualify the layer for a real service. Even a declared scheme name per endpoint or per projection, with the reader
-  checking it names a declared scheme, closes it. Constraint: an edit in place until `service.tn` is published, a new
-  identity after; and `service.resource` keeps its one bare required field.
-- [ ] **Response headers an endpoint sets** — A `Location` on a 201, a cache directive on a safe GET: declared on the
-  endpoint the way `headers` places request fields, so a conformance test can hold the server to them. Same constraints
-  as the security scheme.
 - [ ] **A description's own refinement of `service.operation`** — Decide whether `service.tn` and `TsonApiDescription`
   admit an endpoint shape declared in the description itself (`paged_get => service.operation & { … }`, fixing what every
   paged list shares, its endpoints then written `!paged_get { … }`). Without it a CRUD family is written out operation
   by operation. Measure what the resolver does with such an entry, then decide whether the reader accepts an endpoint
-  whose type refines `service.operation` and what `TsonApiSchema.bindings()` binds it to. Same constraints as the security
-  scheme.
+  whose type refines `service.operation` and what `TsonApiSchema.bindings()` binds it to. Constraint: an edit in place
+  until `service.tn` is published, a new identity after; and `service.resource` keeps its one bare required field.
 - [ ] **A bound request record's dependent field is a pinned sibling or a discriminator over a family** — Once tson-java
   refuses at load a bound schema whose free sibling admits an unbound type (`UPSTREAM.md`, the dependent-field entry),
   make that the rule here and delete `ChosenTypes` with its closure walk and the remainder-body rule, rather than keep a

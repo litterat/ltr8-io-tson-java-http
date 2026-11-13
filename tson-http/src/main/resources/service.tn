@@ -20,14 +20,16 @@
   exchange's request record by placement. A language is reached from that side, through the join
   (`design/invoke.md`), and no parameter list, return type or exception is ever written here.
 
-  One vocabulary, two entries a description writes -- and only two. `service.protocol` and `service.http`
-  are RECORDS, each holding one field typed by a namespace (§4.1): a protocol's `exchanges`, a
+  One vocabulary, and two entries a description writes for what it serves. `service.protocol` and
+  `service.http` are RECORDS, each holding one field typed by a namespace (§4.1): a protocol's `exchanges`, a
   `service.exchanges` mapping exchange names to exchanges, and a projection's `resources`, a
   `service.resources` mapping path templates to resources. An entry applying either is a value, never a
   type. Everything inside them -- `service.exchange`, `service.resource`, `service.endpoint`,
   `service.operation`, `service.binding`, `service.document`, `service.exemption` -- is an ordinary record
   too. A record composes (`service.operation => service.endpoint & service.signature`) and is admitted as a
-  subtype where its base is expected (§7.2).
+  subtype where its base is expected (§7.2). Beside them a description may declare the security schemes its
+  projections and endpoints name, each a value entry tagged with a subtype of `service.security_scheme`:
+  `bearer => !service.http_auth { scheme: Bearer }`.
 
     orders => !service.protocol {
       exchanges: {
@@ -74,13 +76,15 @@
   WHAT THE RESOLVER CHECKS, AND WHAT THE READER DOES. A relation that names something is a reference the
   resolver judges at schema load. A binding's or an exemption's `exchange` is a `meta.ref<service.exchange>`,
   a qualified name walking an entry, its `exchanges` field and a key -- `orders.exchanges.place_order` --
-  and each name in `binds` a `meta.ref<service.protocol>`. So a name nothing declares, one naming the wrong
-  kind of thing, or an exchange key the protocol does not hold is refused there, and the qualified name
-  says which protocol it means. What relates two things beyond naming one is the reader's, when
-  `TsonApiDescription` reads a description, and an unsound description has no model: a binding's or an
-  exemption's exchange belonging to a protocol the projection binds, the `binds` claim, the placement of a
-  request record over a path, a verb or a status against what the exchange declares, an error type fixing
-  its status, a media type the server can speak, and no two endpoints sharing a verb and a path.
+  each name in `binds` a `meta.ref<service.protocol>`, and each name in a `security` a
+  `meta.ref<service.security_scheme>`. So a name nothing declares, one naming the wrong kind of thing, or an
+  exchange key the protocol does not hold is refused there, and the qualified name says which protocol it
+  means. What relates two things beyond naming one is the reader's, when `TsonApiDescription` reads a
+  description, and an unsound description has no model: a binding's or an exemption's exchange belonging to
+  a protocol the projection binds, the `binds` claim, the placement of a request record over a path, a verb
+  or a status against what the exchange declares, an error type fixing its status, a media type the server
+  can speak, no two endpoints sharing a verb and a path, and a response header's template expanding from a
+  scalar field of the response type.
   """
 !schema {
   service => !schema {
@@ -233,14 +237,29 @@
       short one, both surviving into the read value as the key's annotations, since an endpoint is a map value
       and a map key carries annotations. A binding's exchange carries its own on its key in the protocol.
 
-      Deliberately absent, each a decision: security schemes, response headers, links, callbacks, examples,
-      tags, servers, and more than one success response. Adding one is a later version under §3.5 once this is
-      published, never an edit -- and a new kind of endpoint is a new record composing this one, admitted
-      wherever an `endpoint` is.
+      `security` names the security schemes the endpoint accepts, as alternatives -- a credential for any one of
+      them will do -- each a reference to a value entry tagged with a subtype of `service.security_scheme`,
+      which the resolver judges at load. Present, it REPLACES the projection's `security` for this endpoint;
+      `security: []` written out says the endpoint is open; absent, the endpoint inherits the projection's; and
+      with both absent it is open. The description states a scheme and the reader reads it: nothing here
+      enforces one.
+
+      `response_headers` maps a header the success response carries to its value, an RFC 6570 level-1 template
+      over the fields of the endpoint's RESPONSE type -- `Location => "/orders/{id}"` -- or a literal when it
+      holds no variable -- `Cache-Control => "max-age=3600"`. A binding's response type is its exchange's. A
+      variable names a field of that record which is a scalar, and `TsonApiDescription` refuses one that does
+      not at startup, as it refuses a request field placed where it cannot travel; a `document`, or any
+      endpoint with no response type, admits a literal only. The header names are `header_name`s, held folded.
+
+      Deliberately absent, each a decision: links, callbacks, examples, tags, servers, and more than one success
+      response. Adding one is a later version under §3.5 once this is published, never an edit -- and a new kind
+      of endpoint is a new record composing this one, admitted wherever an `endpoint` is.
       """
     endpoint => service.placement & {
-      status?:       service.status_code ~ 200
-      media_types?:  [media_type]
+      status?:            service.status_code ~ 200
+      media_types?:       [media_type]
+      security?:          [meta.ref<service.security_scheme>]
+      response_headers?:  {service.header_name => text}
     }
 
     @doc:"""
@@ -334,13 +353,49 @@
       `binds` is a web service on its own terms, its endpoints `!service.operation`s. Each name and each
       exemption's exchange is a reference the resolver judges at schema load.
 
+      `security` is the projection's default: the security schemes every endpoint accepts, as alternatives,
+      unless the endpoint writes its own `security`, which replaces it. Each name is a reference to a value entry
+      tagged with a subtype of `service.security_scheme`, judged at load.
+
       Its one required field, `resources`, is bare, so a projection writing nothing else may write the map
       alone; one writing `binds` writes `resources:` too, since a brace holds fields or keys, never both.
       """
     http => {
       binds?:     [meta.ref<service.protocol>]
       not_bound?: [service.exemption]
+      security?:  [meta.ref<service.security_scheme>]
       resources:  service.resources
     }
+
+    @doc:"""
+      How a client proves who it is to an endpoint: the base record of `http_auth` and `api_key`. A description
+      declares a scheme as a VALUE ENTRY at its root, tagged with the subtype it is --
+      `bearer => !service.http_auth { scheme: Bearer }` -- and an http projection or an endpoint names it in
+      `security`, one segment, a reference the resolver judges. A reader binds the base to a type with no bare
+      form, so an untagged scheme is refused naming the subtypes, as an untagged `endpoint` is. It declares no
+      field: what a scheme says is its subtype's.
+      """
+    security_scheme => { }
+
+    @doc:"""
+      An HTTP authentication scheme (RFC 9110 §11): the client sends `Authorization: <scheme> <credentials>`.
+      `scheme` is the scheme's registered name -- `Bearer` (RFC 6750), `Basic` (RFC 7617) -- held folded.
+      """
+    http_auth => service.security_scheme & { scheme: service.auth_scheme }
+
+    @doc:"""
+      A key the client carries in a header or a query parameter: `in` says which, and `name` is the header's or
+      the parameter's name.
+      """
+    api_key => service.security_scheme & { in: service.api_key_in  name: text }
+
+    @doc:"""
+      An authentication scheme's name: an RFC 9110 token (§11.1), compared without case as RFC 9110 §11.1 has it
+      -- held folded, so `Bearer` is `bearer`. A text family with a `pattern`, as `header_name` is.
+      """
+    auth_scheme => !unicode.text_type { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+"  normalization: NFKC_CASEFOLD }
+
+    @doc:"Where an `api_key` travels: a request header or a query parameter."
+    api_key_in => !enum [header query]
   }
 }

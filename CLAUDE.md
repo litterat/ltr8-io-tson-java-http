@@ -173,6 +173,7 @@ One line each; the note carries the why. Read the note before touching the code 
   an exchange is `orders.exchanges.place_order`, and like `service.resource` each has the positional form: a second
   required field breaks every document written in it. A projection's claims, `binds` and `not_bound`, are fields. (same)
 - An entry has two annotation positions that land in different places; reading only one looks like a library bug. (same)
+- An endpoint's `security: []` is open and an absent one inherits the projection's; never fold absent into empty. (same)
 - `TsonHandler.install` is not optional with Helidon's `TsonMediaSupport`. (`tson-http-helidon/CLAUDE.md`)
 - A descriptor states its policy whole; an absent policy is not a permissive one. (`deployment-descriptor.md`)
 

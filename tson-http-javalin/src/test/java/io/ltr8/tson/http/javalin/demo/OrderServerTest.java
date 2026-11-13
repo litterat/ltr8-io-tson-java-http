@@ -5,6 +5,7 @@ import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonProblem;
 import io.ltr8.tson.http.TsonProblemSchema;
+import io.ltr8.tson.http.TsonSchemaCatalog;
 import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.json.Json;
 import io.ltr8.tson.json.tree.JsonValue;
@@ -18,6 +19,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -130,6 +132,19 @@ class OrderServerTest {
     void publishesBothSchemasAtTheirIdentityPaths() throws Exception {
         assertEquals(OrderServer.SCHEMA, get("/2026/40/app/order-1.tn").body());
         assertEquals(TsonProblemSchema.source(), get("/2026/40/io/ltr8/http/problem.tn").body());
+    }
+
+    /**
+     * The schema route carries the headers its description declares on a success, and a miss carries none of them,
+     * so a cache keeps a published schema and never a 404.
+     */
+    @Test
+    void theSchemaRouteCarriesTheHeadersItsDescriptionDeclares() throws Exception {
+        assertEquals(Optional.of(TsonSchemaCatalog.IMMUTABLE),
+                get("/2026/40/app/order-1.tn").headers().firstValue("Cache-Control"));
+        HttpResponse<String> miss = get("/2026/40/app/nope-1.tn");
+        assertEquals(404, miss.statusCode());
+        assertEquals(Optional.empty(), miss.headers().firstValue("Cache-Control"));
     }
     /**
      * <b>The schemas name their identities literally, so something has to hold them to the constants.</b>

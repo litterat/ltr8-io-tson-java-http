@@ -187,6 +187,22 @@ class TsonApiSchemaTest {
         assertEquals(List.of(TsonApiSchema.source()), TsonApiSchema.publishedSources());
     }
 
+    /**
+     * The security schemes bind as the endpoints do: the base to a sealed interface with no bare form, each subtype to
+     * its record, the enum as {@code http_verb} does; and an application binding one of those names is refused, since
+     * within one closure a name means one thing.
+     */
+    @Test
+    void theSecuritySchemesBindToTheirRecords() {
+        Map<String, Class<?>> bindings = TsonApiSchema.bindings();
+        assertEquals(SecurityScheme.class, bindings.get("service.security_scheme"));
+        assertEquals(HttpAuth.class, bindings.get("service.http_auth"));
+        assertEquals(ApiKey.class, bindings.get("service.api_key"));
+        assertEquals(ApiKeyIn.class, bindings.get("service.api_key_in"));
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> TsonApiSchema.bindingsWith(
+                Map.of("service.http_auth", String.class))).getMessage().contains("'service.http_auth'"));
+    }
+
     // ── paths, media types, documents and errors ──
 
     /** {@link #API} with the schema route's path replaced. */

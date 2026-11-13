@@ -162,6 +162,21 @@ public record RequestPlacement(Map<String, Location> fields) {
         }
     }
 
+    /**
+     * Why {@code field} is not one scalar, if it is not: what a URL segment carries, and what a response header's
+     * template expands a variable from. A dependent field, an array, a record, a map and a tuple are not.
+     */
+    static Optional<String> notOneScalar(RecordField field, Function<String, Top> entries) {
+        if (field.sibling().isPresent()) {
+            return Optional.of("a dependent field, whose type its sibling names per instance");
+        }
+        Top type = body(field.type(), entries);
+        if (type instanceof ArrayBody) {
+            return Optional.of("an array");
+        }
+        return isContainer(type) ? Optional.of("a " + field.type().text() + ", which is not a scalar") : Optional.empty();
+    }
+
     /** The type {@code type} stands for: its entry when it is named, its body when it is written in place. */
     private static Top body(TypeExpr type, Function<String, Top> entries) {
         return switch (type) {

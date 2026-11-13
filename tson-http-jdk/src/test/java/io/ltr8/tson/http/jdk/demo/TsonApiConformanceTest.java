@@ -8,6 +8,7 @@ import io.ltr8.tson.compiler.TsonDocumentHeader;
 import io.ltr8.tson.compiler.TsonDocumentPeek;
 import io.ltr8.tson.http.TsonBindings;
 import io.ltr8.tson.http.TsonMediaType;
+import io.ltr8.tson.http.TsonSchemaCatalog;
 import io.ltr8.tson.http.TsonSchemaHeader;
 import io.ltr8.tson.http.api.ExchangeName;
 import io.ltr8.tson.http.api.HttpVerb;
@@ -152,6 +153,9 @@ class TsonApiConformanceTest {
         assertEquals("schema_ref", getSchema.request().orElseThrow().name());
         assertEquals(Map.of("schemaPath", RequestPlacement.Location.PATH), getSchema.placement().fields());
 
+        assertEquals(Map.of("cache-control", TsonSchemaCatalog.IMMUTABLE), getSchema.responseHeaders(),
+                "a published schema never changes (§3.5), and the description says so to a cache");
+
         assertResponseMatches(getSchema, get("/2026/40/app/order-1.tn"), 200);
         assertResponseMatches(getSchema, get("/2026/40/app/nope-1.tn"), 404);
     }
@@ -240,6 +244,7 @@ class TsonApiConformanceTest {
         assertTrue(TsonMediaType.namesJson(mediaType), () -> "a JSON client was answered in " + mediaType);
         if (response.statusCode() == route.status()) {
             assertTrue(mediaType.startsWith(label), () -> "asked for " + label + ", answered " + mediaType);
+            assertDeclaredHeaders(route, response);
         }
         String type = declaredType(route, response.statusCode());
 
@@ -257,6 +262,20 @@ class TsonApiConformanceTest {
     }
 
     /**
+     * A success reply carries every literal response header the route declares, with the value declared. A template
+     * with a variable expands from the response value, which a client checks against the body it got; the demos
+     * declare none.
+     */
+    private static void assertDeclaredHeaders(Route route, HttpResponse<String> response) {
+        route.responseHeaders().forEach((name, value) -> {
+            if (!value.contains("{")) {
+                assertEquals(Optional.of(value), response.headers().firstValue(name),
+                        () -> route.key() + " declares '" + name + ": " + value + "' on a success");
+            }
+        });
+    }
+
+    /**
      * Holds one response to the description: a document's success must carry a media type it lists, and any other
      * reply must be self-describing -- its own {@code !!import} and type-ref the ones the description gives that status.
      * Responses being self-describing is what makes this checkable without the description carrying examples.
@@ -264,6 +283,9 @@ class TsonApiConformanceTest {
     private void assertResponseMatches(Route route, HttpResponse<String> response, int expectedStatus)
             throws Exception {
         assertEquals(expectedStatus, response.statusCode(), response.body());
+        if (response.statusCode() == route.status()) {
+            assertDeclaredHeaders(route, response);
+        }
         if (route.document() && response.statusCode() == route.status()) {
             String contentType = response.headers().firstValue("Content-Type").orElseThrow();
             assertTrue(route.mediaTypes().stream().anyMatch(contentType::startsWith),

@@ -32,6 +32,11 @@ there too.
   adding a second withdraws it and breaks every document written in it. A document writes a protocol and a projection
   in full.
 - A business error composes `problem.details` and is written by the handler, not thrown.
+- An endpoint's `security`, when written, replaces its projection's, and `security: []` is open; absent inherits, and
+  both absent is open. The bound records keep absent (`Optional.empty()`) apart from empty, and `Route.security()` is
+  the resolved list. Nothing enforces a scheme.
+- A response header's template variable names a scalar field of the endpoint's response type, checked at startup; an
+  endpoint with no response type, a document among them, declares literals only.
 
 ## A schema exports a namespace; data refers into one
 
@@ -156,7 +161,8 @@ binding's `exchange` is `meta.ref<service.exchange>`, so a type nothing declares
 thing, and an exchange key a protocol does not hold are refused at schema load; a qualified name says which protocol it
 means. A projection's claims are fields typed the same way: each name in `binds` is a `meta.ref<service.protocol>` and
 an exemption's `exchange` a `meta.ref<service.exchange>`, so a name naming no protocol, or no exchange, is refused at
-load too (`TsonApiDescriptionTest.aBindsNamingNoProtocolIsRefusedAtLoad`, `anExemptionNamingNoExchangeIsRefusedAtLoad`).
+load too (`TsonApiDescriptionTest.aBindsNamingNoProtocolIsRefusedAtLoad`, `anExemptionNamingNoExchangeIsRefusedAtLoad`),
+and so is a name in a `security` naming no scheme.
 Each reference is delivered its referent when the description links: `Http.binds` holds `ValueRef<Protocol>`s, and
 `Binding.exchange` and `Exemption.exchange` `ValueRef<Exchange>`s. The reader takes a bound protocol from `binds` and a
 binding's exchange from its reference, and builds `ExchangeName` from the name, whose first segment is the protocol's
@@ -181,7 +187,8 @@ on:
 - each business error fixes its status (`sku_not_found => problem.details & { status: = 404 … }`), which is how a
   client tells an error from the response by status alone; two errors of one endpoint pinning one status is refused;
 - a `!service.document` lists a media type, and every other endpoint lists only types a codec here speaks (below);
-- no two endpoints share a verb and a path, across every projection a description holds.
+- no two endpoints share a verb and a path, across every projection a description holds;
+- each response header's template expands from the response value (below).
 
 ## Media types
 
@@ -209,6 +216,43 @@ reader can require it.
 published bytes, `application/tson`) and the validator's page (`text/html`). Its media types are the whole contract of
 its body; it may still take a request record to place and name business errors, and its success is labelled, not
 judged.
+
+## Security schemes
+
+A description declares a scheme as a **value entry at its root**, tagged with its subtype, and names it by reference:
+`bearer => !service.http_auth { scheme: Bearer }`, `partner_key => !service.api_key { in: header  name: "X-Api-Key" }`.
+The base `service.security_scheme` is an empty record bound to the sealed interface `SecurityScheme`, so an untagged
+scheme is refused naming the subtypes, as an untagged endpoint is. An `http_auth` names an RFC 9110 §11 scheme, held
+folded (`bearer`); `api_key_in` is an enum whose Java constants are lower case, since an enum binds by name.
+
+`security?: [meta.ref<service.security_scheme>]` sits on `service.http`, the default, and on `service.endpoint`. The list
+is **alternatives**: a credential for any one scheme will do. The resolver judges every name at load, so a type or a
+protocol there is refused (`TsonApiDescriptionTest.aSecurityNamingNoSchemeIsRefusedAtLoad`), and each reference arrives
+delivered its `HttpAuth` or `ApiKey`.
+
+**The override rule**: an endpoint's `security`, when written, replaces the projection's whole; `security: []` says the
+endpoint is open; absent inherits; both absent is open. So an endpoint record types the field `Optional<List<ValueRef<
+SecurityScheme>>>`, which the binder delivers `Optional.empty()` when absent and a present empty list for `[]`
+(`anAbsentSecurityAndAnEmptyOneArriveApart`). `Route.security()` is the resolved list. **Stated, not enforced**: nothing
+here checks a credential; enforcement at the error boundary is backlog, its status `TsonHttpException.from`'s.
+
+## Response headers
+
+`response_headers?: {service.header_name => text}` on `service.endpoint` maps a header the **success** response carries
+to an RFC 6570 level-1 template over the endpoint's response type's fields, `Location => "/orders/{id}"`, or to a literal,
+`Cache-Control => "max-age=3600"`. Names are folded, as a request's `headers` are; a binding's response type is its
+exchange's.
+
+**The template is checked at startup**, as a request's placement is: each variable names a field of the response type
+that is one scalar, the rule for a path segment; a form beyond level 1 is refused; and an endpoint with no response type,
+a document or one answering no body, declares literals only. `Route.responseHeaders()` holds the templates, and
+`expandResponseHeaders(fields)` expands them from a function of field name to text that the server writes from its own
+reply, since reading a field of an arbitrary bound record would need reflection or the tree reader.
+
+The demos' schema route declares `Cache-Control => "public, max-age=31536000, immutable"`, the
+`TsonSchemaCatalog.IMMUTABLE` every schema handler already sends (§3.5: a published schema never changes). Each
+`OrderServer` sets a route's declared headers on a success only, so a schema 404 is never cached. The demo's `order` has
+no identifier, so nothing declares a `Location`.
 
 ## Wiring, and what a server derives
 
@@ -269,17 +313,16 @@ the diagnostic naming the remedy, one value per instantiation (`UpstreamGapsTest
 Each projection is written as a `!service.http` value of its own, and `TsonApiDescription` finds every one by what the
 entry is, a value of `service.http` bound to `Http`, never by its name.
 
-**Deliberately absent**, each a decision: security schemes, response headers, links, callbacks, examples, tags,
-servers, more than one success response, custom and WebDAV verbs (`service.http_verb` is a closed enum), and a declaration of
-the transport's own refusals, which every endpoint has and the error boundary answers with a `problem.details`. `security` is
-the one that would disqualify this for a real service. Adding any is an edit in place until this is published, and a
-new identity after.
+**Deliberately absent**, each a decision: links, callbacks, examples, tags, servers, more than one success response,
+custom and WebDAV verbs (`service.http_verb` is a closed enum), and a declaration of the transport's own refusals, which
+every endpoint has and the error boundary answers with a `problem.details`. Adding any is an edit in place until this is
+published, and a new identity after.
 
 **The description is checked, not just written.** `TsonApiConformanceTest` resolves it through a schema source
 fetching from the running server, proving that every referenced schema is published and every payload type exists,
 then holds the server to what no compiler can know: a reply at the success status carries the response type (a
-document, a media type it lists), one at a business error's fixed status that error, and any other is a 4xx or 5xx
-`problem.details`.
+document, a media type it lists) and every literal response header the endpoint declares, with the value declared; one
+at a business error's fixed status that error; and any other is a 4xx or 5xx `problem.details`.
 
 **What builds on the protocol, and is not built.** `experiments/rpc/` is its wire form, `call` and `return` as
 templates applied per exchange, next in the order of work and outside `tson-http` once it lands. `experiments/agent/`, a

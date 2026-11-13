@@ -37,6 +37,9 @@ import java.util.Map;
  * path.</li>
  * <li>{@code orders-api-1.tn} (both) -- an http projection claiming {@code binds: [orders]}, every endpoint a {@code
  * !service.binding} with its placement.</li>
+ * <li>{@code orders-api-secured-1.tn} (security) -- the same protocol bound again, with two security schemes declared
+ * as value entries, a projection default, an endpoint replacing it, one open by {@code security: []}, and a literal
+ * response header.</li>
  * </ul>
  *
  * <p>Both spellings of a resource appear, deliberately: most write their one required field positionally -- {@code
@@ -56,7 +59,7 @@ public final class OrdersExamples {
 
     /** Every example, dependencies first. */
     public static final List<String> FILES = List.of("orders-types-1.tn", "orders-errors-1.tn", "orders-1.tn",
-            "orders-api-inline-1.tn", "orders-api-1.tn");
+            "orders-api-inline-1.tn", "orders-api-1.tn", "orders-api-secured-1.tn");
 
     private OrdersExamples() {
     }

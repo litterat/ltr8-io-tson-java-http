@@ -660,6 +660,133 @@ class TsonApiDescriptionTest {
         assertTrue(notAnExchangeName.contains("'service.exchange_name': 'place order'"), notAnExchangeName);
     }
 
+    // ── security schemes and response headers ──
+
+    /** Two schemes, declared as value entries at the root, each tagged with the kind of scheme it is. */
+    static final String SCHEMES = """
+          bearer      => !service.http_auth { scheme: Bearer }
+          partner_key => !service.api_key { in: query  name: api_key }
+        """;
+
+    /** A GET on {@code path} answering an order, with {@code extra} written into its operation. */
+    static String safeGet(String path, String extra) {
+        return "\"" + path + "\" => { @service.safe GET => !service.operation { request: order_ref  response: order"
+                + (extra.isEmpty() ? "" : "  " + extra) + " } }";
+    }
+
+    /**
+     * The schemes in force for an endpoint: its own {@code security} when it writes one, which replaces the
+     * projection's; none when it writes {@code security: []}; the projection's when it writes none; and none when
+     * neither does. Each name arrives delivered, so the route holds the bound schemes themselves.
+     */
+    @Test
+    void anEndpointsSecurityReplacesItsProjectionsAndAnEmptyListIsOpen() {
+        TsonApiDescription routes = routes(api(SCHEMES + "secured => !service.http {\n  security: [bearer]\n"
+                + "  resources: { " + safeGet("/a", "") + "\n  " + safeGet("/b", "security: [partner_key]") + "\n  "
+                + safeGet("/c", "security: []") + " }\n}\n"
+                + "open => !service.http { resources: { " + safeGet("/d", "") + " } }"));
+        HttpAuth bearer = new HttpAuth("bearer");
+        ApiKey partner = new ApiKey(ApiKeyIn.query, "api_key");
+
+        assertEquals(List.of(bearer), routes.route(HttpVerb.GET, "/a").orElseThrow().security(),
+                "inherited, the scheme name held folded");
+        assertEquals(List.of(partner), routes.route(HttpVerb.GET, "/b").orElseThrow().security(), "replaced");
+        assertEquals(List.of(), routes.route(HttpVerb.GET, "/c").orElseThrow().security(), "security: [] is open");
+        assertEquals(List.of(), routes.route(HttpVerb.GET, "/d").orElseThrow().security(), "both absent is open");
+    }
+
+    /**
+     * Absent and empty arrive apart: an endpoint writing no {@code security} reads it {@link Optional#empty()}, one
+     * writing {@code security: []} a present empty list, and a reference is delivered the bound scheme.
+     */
+    @Test
+    void anAbsentSecurityAndAnEmptyOneArriveApart() {
+        String api = api(SCHEMES + "a => !service.http {\n  security: [bearer]\n  resources: { "
+                + safeGet("/a", "") + "\n  " + safeGet("/c", "security: []") + " }\n}");
+        Tson tson = tson(api);
+        assertEquals(List.of(), tson.validateSchema(api));
+        Http http = (Http) ((ValueEntry) tson.schemaRegistry().get(API_ID).orElseThrow().schema().entries().get("a"))
+                .value();
+        ValueRef<SecurityScheme> bearer = http.security().getFirst();
+        assertTrue(bearer.isResolved());
+        assertEquals(new HttpAuth("bearer"), bearer.get());
+        assertEquals(Optional.empty(), http.resources().get("/a").endpoints().get("GET").security());
+        assertEquals(Optional.of(List.of()), http.resources().get("/c").endpoints().get("GET").security());
+    }
+
+    /**
+     * A name in {@code security} is a reference the resolver judges at load: a type and a protocol are each refused
+     * there, naming the slot, on a projection and on an endpoint alike; an untagged scheme has no data of its own.
+     */
+    @Test
+    void aSecurityNamingNoSchemeIsRefusedAtLoad() {
+        assertEquals("'a' at /security/0 wants a 'service.security_scheme', and 'order' is an entry whose body is "
+                + "built by 'meta.record', which is no 'service.security_scheme'",
+                only(api("a => !service.http { security: [order]  resources: { " + safeGet("/o", "") + " } }")));
+        assertEquals("'a' at /security/0 wants a 'service.security_scheme', and 'orders' is an entry whose body is "
+                + "built by 'service.protocol', which is no 'service.security_scheme'",
+                only(api("a => !service.http { security: [orders]  resources: { " + safeGet("/o", "") + " } }")));
+
+        String onAnEndpoint = only(api("a => !service.http { resources: { " + safeGet("/o", "security: [order]")
+                + " } }"));
+        assertTrue(onAnEndpoint.contains("/security/0 wants a 'service.security_scheme', and 'order'"), onAnEndpoint);
+
+        String untagged = only(api("raw => { scheme: Bearer }\nk => !service.security_scheme { }"));
+        assertTrue(untagged.contains("'service.security_scheme' has no data of its own to bind")
+                && untagged.contains("[service.http_auth, service.api_key]"), untagged);
+    }
+
+    /**
+     * A response header is a literal or an RFC 6570 level-1 template over the response type's fields, and a server
+     * expands it against the response value: a variable percent-encoded, a literal as it is.
+     */
+    @Test
+    void aResponseHeaderTemplateExpandsFromTheResponseValue() {
+        Route create = routes(api("""
+              a => !service.http { resources: { "/orders" => {
+                POST => !service.operation { request: order  response: order  status: 201
+                        response_headers: { Location => "/orders/{sku}"  Cache-Control => "no-store" } } } } }
+            """)).route(HttpVerb.POST, "/orders").orElseThrow();
+        assertEquals(Map.of("location", "/orders/{sku}", "cache-control", "no-store"), create.responseHeaders(),
+                "the names held folded, the templates as written");
+        assertEquals(Map.of("location", "/orders/A%2F1%20%C3%A9", "cache-control", "no-store"),
+                create.expandResponseHeaders(Map.of("sku", "A/1 é")::get));
+        assertEquals("/orders/", create.expandResponseHeaders(field -> null).get("location"),
+                "an absent value expands to nothing");
+    }
+
+    /**
+     * A template's variables are checked against the response type at startup, as a request field's placement is: a
+     * name the response does not declare, a field that is not one scalar, a variable on an endpoint with no response
+     * type -- a document, or one answering no body -- and a form beyond level 1 are each refused.
+     */
+    @Test
+    void aResponseHeaderTemplateIsCheckedAgainstTheResponseType() {
+        assertEquals("'a GET /o' declares the response header 'location: /orders/{id}', but the response type 'order' "
+                + "declares no field 'id' -- it declares [sku, quantity]", refusedHeader(safeGet("/o",
+                "response_headers: { Location => \"/orders/{id}\" }")));
+
+        assertEquals("'a GET /p' declares the response header 'link: /p/{items}', but 'items' of 'order_page' is an "
+                + "array, and a header's variable expands from one scalar", refusedHeader("\"/p\" => { @service.safe "
+                + "GET => !service.operation { request: order_query  response: order_page  response_headers: { "
+                + "Link => \"/p/{items}\" } } }"));
+
+        assertEquals("'a GET /page' declares the response header 'location: /x/{id}', but the endpoint has no "
+                + "response type to expand 'id' from -- a document's header, or one answering no body, is a literal",
+                refusedHeader("\"/page\" => { @service.safe GET => !service.document { media_types: [\"text/html\"]  "
+                        + "response_headers: { Location => \"/x/{id}\" } } }"));
+
+        assertEquals("'a GET /o' declares the response header 'location: /orders/{+sku}', which is no level-1 "
+                + "template -- each expression is one variable of ASCII letters, digits and '_' in braces, '{id}', "
+                + "with no operator: a value is an RFC 6570 level-1 template", refusedHeader(safeGet("/o",
+                "response_headers: { Location => \"/orders/{+sku}\" }")));
+    }
+
+    private static String refusedHeader(String resources) {
+        return assertThrows(IllegalArgumentException.class,
+                () -> routes(api("a => !service.http { resources: { " + resources + " } }"))).getMessage();
+    }
+
     /** The one diagnostic the resolver gives for {@code http}, or a failure naming them all. */
     static String only(String api) {
         List<Diagnostic> problems = tson(api).validateSchema(api);

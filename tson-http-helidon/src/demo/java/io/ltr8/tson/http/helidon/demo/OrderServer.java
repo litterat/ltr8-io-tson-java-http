@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * The same server as the JDK and Javalin demos, on Helidon 4 SE. {@code ./gradlew :tson-http-helidon:runDemo}
@@ -188,22 +189,46 @@ public final class OrderServer {
                                     .send(SkuNotFound.of(order.sku()));
                             return;
                         }
-                        response.status(201).send(new Order(order.sku(), order.quantity() * 2));
+                        Order confirmed = new Order(order.sku(), order.quantity() * 2);
+                        // The headers a success carries are the description's, expanded against the reply's fields.
+                        create.expandResponseHeaders(fieldsOf(confirmed)).forEach(response::header);
+                        response.status(201).send(confirmed);
                     });
 
                     // Publishing at the identity path is what makes an !!import URL dereferenceable. any(),
                     // because the paths served are the schemas' own, not routes Helidon knows about -- and
                     // not the declared `{+schemaPath}` either, which is why a claim names the declared template.
                     // The API description is a schema too, so the catalog serves it like everything else.
-                    coverage.serving(HttpVerb.GET, "/{+schemaPath}");
+                    Route getSchema = coverage.serving(HttpVerb.GET, "/{+schemaPath}");
                     routing.any(TsonHandler.asHandler(codec,
-                            TsonSchemaHandler.of(catalog(described, schemas))));
+                            schemaRoute(getSchema, catalog(described, schemas))));
                     coverage.requireComplete();
                 })
                 .build()
                 .start();
     }
 
+
+    /** An order's fields as text, by name: what a response header's template expands from. */
+    private static Function<String, String> fieldsOf(Order order) {
+        return Map.of("sku", order.sku(), "quantity", String.valueOf(order.quantity()))::get;
+    }
+
+    /**
+     * The schema route, setting the headers its description declares on a success, before the catalog answers: a
+     * document's headers are literals, checked at startup, and a miss or a refused method is the error boundary's,
+     * carrying none of them.
+     */
+    private static TsonHandler schemaRoute(Route route, TsonSchemaCatalog catalog) {
+        TsonSchemaHandler served = TsonSchemaHandler.of(catalog);
+        return context -> {
+            if ((context.method().equals("GET") || context.method().equals("HEAD"))
+                    && catalog.find(context.path()).isPresent()) {
+                route.responseHeaders().forEach(context::setHeader);
+            }
+            served.handle(context);
+        };
+    }
 
     /**
      * What this server publishes, <b>derived from its own description</b> rather than listed: the description,

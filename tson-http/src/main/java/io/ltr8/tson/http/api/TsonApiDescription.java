@@ -59,8 +59,15 @@ import java.util.function.Function;
  *       application/tson};</li>
  *   <li>no two endpoints share a verb and path, across every {@code service.http} the description holds;</li>
  *   <li>a bound request record's dependent field lets a sender name only types this server binds
- *       ({@link ChosenTypes}).</li>
+ *       ({@link ChosenTypes});</li>
+ *   <li>each response header's template expands from the response value: every variable names a scalar field of
+ *       the endpoint's response type, and an endpoint with no response type, a document among them, declares
+ *       literals only.</li>
  * </ul>
+ *
+ * <p>The security schemes in force for an endpoint are resolved here too, {@link Route#security()}: the endpoint's
+ * own {@code security} when it writes one, an empty one meaning open, else its projection's. The resolver judged
+ * every name a scheme; nothing here or anywhere in this library enforces one.
  *
  * @see TsonApiCoverage for holding a server to the routes
  */
@@ -173,11 +180,15 @@ public final class TsonApiDescription {
                     requireStatusAgrees(label, endpoint.status(), response);
                 }
                 Set<String> mediaTypes = mediaTypes(label, endpoint);
+                requireTemplatesExpand(label, endpoint.responseHeaders(), response, entries);
+                // An endpoint's own list replaces the projection's, an empty one included: `security: []` is open.
+                List<SecurityScheme> security = endpoint.security().orElse(http.security()).stream()
+                        .map(ValueRef::get).toList();
                 Annotations fallback = docs;
                 routes.add(new Route(verb, path, exchange, request, response, errorStatuses(label, errors, entries),
                         endpoint.status(), document, mediaTypes, placement,
                         text(onVerb, "service.summary").or(() -> text(fallback, "service.summary")),
-                        text(onVerb, "doc").or(() -> text(fallback, "doc"))));
+                        text(onVerb, "doc").or(() -> text(fallback, "doc")), security, endpoint.responseHeaders()));
             });
         });
         requireComplete(httpName, http, protocols, bound);
@@ -210,6 +221,38 @@ public final class TsonApiDescription {
             spoken.add(folded);
         }
         return spoken;
+    }
+
+    /**
+     * Each response header's template expands from the response value: every variable names a field of the response
+     * type, and that field is one scalar, as a path segment's is. An endpoint with no response type -- a document, or
+     * one answering no body -- has nothing to expand a variable from, so its headers are literals.
+     */
+    private static void requireTemplatesExpand(String label, Map<String, String> headers, Optional<TypeRef> response,
+                                               Function<String, Top> entries) {
+        headers.forEach((header, template) -> {
+            for (String variable : HeaderTemplate.variables(label, header, template)) {
+                String declared = "'" + label + "' declares the response header '" + header + ": " + template + "'";
+                if (response.isEmpty()) {
+                    throw new IllegalArgumentException(declared + ", but the endpoint has no response type to expand '"
+                            + variable + "' from -- a document's header, or one answering no body, is a literal");
+                }
+                String type = response.get().name();
+                if (!(entries.apply(type) instanceof RecordBody record)) {
+                    throw new IllegalArgumentException(declared + ", but the response type '" + type + "' is not a "
+                            + "record, so it has no field '" + variable + "'");
+                }
+                RecordField field = record.fields().get(variable);
+                if (field == null) {
+                    throw new IllegalArgumentException(declared + ", but the response type '" + type + "' declares no "
+                            + "field '" + variable + "' -- it declares " + record.fields().keySet());
+                }
+                RequestPlacement.notOneScalar(field, entries).ifPresent(because -> {
+                    throw new IllegalArgumentException(declared + ", but '" + variable + "' of '" + type + "' is "
+                            + because + ", and a header's variable expands from one scalar");
+                });
+            }
+        });
     }
 
     private static Optional<String> text(Annotations annotations, String name) {
