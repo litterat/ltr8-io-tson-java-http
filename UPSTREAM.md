@@ -90,8 +90,9 @@ not hold both load clean. Each arrives as a `ValueRef` holding the name and neve
 where the same reference in a field of a value entry is judged and delivered when the schema links. Measured on a probe
 layer, `UpstreamGapsTest.aReferenceInsideAnAnnotationValueIsNotJudged`, whose clean load flips when it is fixed.
 
-**The change:** a `meta.ref<T>` in an annotation value judged as one in a field value is, if the spec question below
-is answered that way; at least, its name held to the qualified-name grammar.
+**The change:** a `meta.ref<T>` in an annotation's value is judged as one in a field's value: its name resolved in the
+annotating document's namespace, and in a schema document at link ([TSON-SCHEMA] §5.12, §6, §3.3.3). The spec rule
+stands as written; the library's failure to judge it in a schema document is work upstream's `BACKLOG.md` holds.
 
 **What this project does meanwhile:** nothing depends on the gap. `service.tn` carries an http projection's claims,
 `binds` and `not_bound`, as fields of `service.http`, so every name in them is judged at schema load and delivered its
@@ -191,7 +192,7 @@ rather than a message, and on any path that walks a schema per request, a 500.
 **Hit:** checking at startup that every type a sender may name at a dependent field binds (`ChosenTypes`). Nothing
 answers "the types a value at this field may be read against". The answer is assembled: take the sibling's type, the
 compiled schema's entry where it is named (`compiled.schema().entries()`) or the type a `TypeInline` holds where it is
-written in place, follow its `Alias` hops, cast to `ReferenceBody` and call `memberNames()`. A sibling may also be typed
+written in place, follow its `Alias` hops, cast to `RefBody` and call `memberNames()`. A sibling may also be typed
 `meta.type_expr`, the type-slot choice whose names are such a reference's and whose other variant is a type written in
 place, one more shape the walk has to know. A pinned sibling and a discriminator, which narrow that set, are worked out
 again by hand from `FieldRole.FIXED` pins and `chain().subtypes()`. Two yes-or-no questions are answered only by
@@ -325,11 +326,36 @@ and message from all three entry points and flips when the read reports or succe
 
 ---
 
+## 16. An importer's subtype is left out of an untagged refusal at an imported record's slot
+
+**Hit:** a service description declaring its own endpoint shape, `paged_get => service.operation & { status?: = 200
+}`, beside an endpoint written untagged, `GET => { response: order_page }`, at a `service.resource` endpoint slot in
+its own value entry (`proposal/operation-refinement.md`), with `paged_get` bound to the base's class. The refusal names
+the layer's subtypes alone: *"'endpoint' has no data of its own to bind -- provide an explicit type annotation
+(!typeName) naming one of its subtypes [operation, binding, document]"*. The same endpoint in a data document importing
+the description is refused naming `[operation, binding, document, paged_get]`. A tagged `!paged_get { … }` is admitted
+at that slot in both, and binds to the base's class once `paged_get` is bound to it: a value entry reads a value
+selecting a subtype beyond the slot's declaring schema through the resolving document's entries, and an untagged value
+selects nothing, so it is read, and refused, through the declaring schema's compile.
+
+**The change:** name the subtypes of the schema being resolved in that refusal, as [TSON-SCHEMA] §3.3.4 computes
+`subtypes` over its namespace, so the hint a value entry gives matches a data document's.
+
+**Workaround in place:** none needed; the refusal is right and only its hint is short. Pinned by
+`OperationRefinementProbeTest.theDescriptionsSubtypeIsAdmittedAtTheLayersSlot`, whose last assertion states the
+message whole and flips when it names `paged_get`; the same test and
+`OperationRefinementProbeTest.theRealLayerAdmitsADescriptionsOwnOperation` pin the admission and the bound read.
+
+**Priority:** low.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. That register renumbers each time a
 revision closes, so a finding here names spec sections, never a register number. A new finding goes here in the same
 shape: a `### To file:` heading, the spec sections, the gap, what this project does meanwhile, and a priority.
+A finding is deleted once filed upstream; what its ruling leaves for the library lives in the item it concerns.
 
 ### To file: a format this project needs and the vocabulary cannot state — `json_pointer`
 
@@ -415,56 +441,6 @@ reserves no root name.
   `problem.details`'s `status` stays `int32`.
 
 **Priority:** medium-high, since the library emits values its own schemas cannot describe.
-
-### To file: whether a `ref<T>` inside an annotation's value is resolved
-
-**Sections:** [TSON-SCHEMA] §5.12 (a name at a `ref<T>` slot resolved in the schema's namespace), §6 (annotations).
-
-**Kind:** ambiguity. §6 says an annotation in a schema document is resolved and validated against its declared type,
-and also that annotation values are data values. If the first governs, a `ref<T>` in the annotation's type reaches
-§5.12 and a name nothing declares is a schema error; if the second, the name is an inert token, as a type name in any
-data value is. The spec does not say which, and the answer decides whether a vocabulary can state a relation in an
-annotation and have it checked. tson-java takes the second reading (item 4, "A reference inside an annotation's value
-is not judged").
-
-**What this project does meanwhile:** states no relation in an annotation's value. An http projection's claims are fields
-of `service.http`, judged and delivered, so `service.tn` does not depend on the answer.
-
-**Priority:** medium: it decides where a vocabulary's relation checks live.
-
-### To file: a dependent field lets the sender choose the type a value is read against
-
-**Sections:** [TSON-SCHEMA] §5.2 (dependent fields), §5.12 (a reference's members); [TSON-JSON] §6.1.6.
-
-**Kind:** gap. A dependent field (`payload: kind!`) is read against the type its free sibling names, and the sibling
-is typed by a reference whose members are the closure's types, or by `meta.type_expr`, which admits a type written in
-place beside them, so the sender of a document chooses which type the receiver reads a value against. §5.2 says
-nothing about that choice: not that a receiver may hold a sender to fewer types than the reference admits, nor what a
-processor that binds types to classes does when the chosen type is one it does not bind. `meta.type_ref` admits the
-kernel's records, so `kind: meta.record` makes a binding receiver build a schema-model value inside an application's
-request. tson-java answers an unbound choice with `MissingBindingException`, a receiver's misconfiguration, where the
-sender made the choice.
-
-**What upstream will do, and what this waits on.** Upstream ruled against the suggestion made here: the set is the
-sibling's type, so it is the schema's to narrow (a pinned sibling, a discriminator over a family, or `meta.ref<C>`), and
-whether a host has a class for a type is invisible to the spec, so it cannot be a validity rule. Two pieces stay open.
-(a) Spec, [TSON-SCHEMA] §11 Security Considerations: a paragraph that a free sibling typed `meta.type_ref` or
-`meta.type_expr` hands the choice of type to the document's author, the kernel's vocabulary included and, for
-`meta.type_expr`, a type written in place, so a schema for untrusted input pins the sibling, makes it a discriminator,
-or narrows the reference. (b) Library: a schema obtained to bind is refused at load when a free sibling admits a type
-with no bound class, beside the rule that every value entry of a bound schema has a class, so no request can reach the
-fault. The consequences: a free `meta.type_expr` sibling never loads in bind mode; a free `meta.type_ref` sibling loads
-only when every type in the closure is bound, the kernel's records included since the library binds them, so refusing
-the kernel's vocabulary stays a receiver's own policy or is expressed as a family in the schema; a reference narrows
-by constructor, never to the subtypes of one record, which a family with a discriminator covers.
-
-**What this project does meanwhile:** `TsonApiDescription` refuses at startup a bound request record whose dependent
-field lets a sender name a type no class binds, or one of the kernel's vocabulary (`ChosenTypes`). A free
-`meta.type_ref` sibling therefore never loads in bind mode; a pinned sibling, or a discriminator over bound subtypes,
-does. Pinned by `UpstreamGapsTest.aDependentFieldsSiblingNamingATypeNothingBindsIsAMissingBinding`; the pin flips to
-a load-time refusal when (b) lands, and `BACKLOG.md` holds the follow-up.
-
-**Priority:** medium-high until (b) lands: in a binding receiver it is a server-fault status any client can produce.
 
 ### To file: a free sibling's member order against an unordered JSON object
 

@@ -161,10 +161,10 @@ The four entries are in build order.
   whose type refines `service.operation` and what `TsonApiSchema.bindings()` binds it to. Constraint: an edit in place
   until `service.tn` is published, a new identity after; and `service.resource` keeps its one bare required field.
 - [ ] **A bound request record's dependent field is a pinned sibling or a discriminator over a family** — Once tson-java
-  refuses at load a bound schema whose free sibling admits an unbound type (`UPSTREAM.md`, the dependent-field entry),
-  make that the rule here and delete `ChosenTypes` with its closure walk and the remainder-body rule, rather than keep a
-  narrower copy refusing the kernel's and the layer's own records. A family declares the admitted set in the published
-  description, where a client can read it.
+  refuses at load a bound schema whose free sibling admits an unbound type (work upstream's `BACKLOG.md` holds; the spec
+  gains a [TSON-SCHEMA] §11 paragraph and §5.2 is unchanged), make that the rule here and delete `ChosenTypes` with its
+  closure walk and the remainder-body rule, rather than keep a narrower copy refusing the kernel's and the layer's own
+  records. A family declares the admitted set in the published description, where a client can read it.
 
 ## Documentation
 

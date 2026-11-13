@@ -10,7 +10,7 @@ import io.ltr8.tson.schema.meta.FieldRole;
 import io.ltr8.tson.schema.meta.MapBody;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.RecordField;
-import io.ltr8.tson.schema.meta.ReferenceBody;
+import io.ltr8.tson.schema.meta.RefBody;
 import io.ltr8.tson.schema.meta.Top;
 import io.ltr8.tson.schema.meta.TupleBody;
 import io.ltr8.tson.schema.meta.TupleElement;
@@ -41,7 +41,7 @@ import java.util.function.Function;
  *   <li>a sibling pinned on the request record ({@code kind?: meta.type_ref = point}) offers its pin alone;</li>
  *   <li>a discriminator offers the pin of each subtype of the request record;</li>
  *   <li>any other sibling offers every member its reference admits in the closure, as the reference's linked index
- *       ({@link ReferenceBody#memberNames()}) holds them.</li>
+ *       ({@link RefBody#memberNames()}) holds them.</li>
  * </ul>
  *
  * <p>A chosen type needs a class where reading it builds one: a record or a tuple, an abstract record's subtypes, and
@@ -136,7 +136,7 @@ final class ChosenTypes {
         while (type instanceof Alias(TypeRef target)) {
             type = entries.apply(target.name());
         }
-        return type instanceof ReferenceBody reference ? reference.memberNames() : List.of();
+        return type instanceof RefBody reference ? reference.memberNames() : List.of();
     }
 
     /** Every type reading a value of {@code name} builds a class for. */
