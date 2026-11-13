@@ -27,7 +27,7 @@ import java.util.Map;
  * <ul>
  * <li>{@code orders-types-1.tn} (shared) -- the request and response records: one request record per exchange, a
  * one-field record for a parameter-only endpoint.</li>
- * <li>{@code orders-errors-1.tn} (shared) -- business errors composing {@code problem} and pinning {@code status},
+ * <li>{@code orders-errors-1.tn} (shared) -- business errors composing {@code problem.details} and pinning {@code status},
  * which is how an endpoint's {@code errors} get one.</li>
  * <li>{@code orders-1.tn} (protocol only) -- {@code orders} as a map of exchanges with a {@code @doc} per exchange,
  * and {@code orders_v2} beside it declaring only {@code refund}.</li>

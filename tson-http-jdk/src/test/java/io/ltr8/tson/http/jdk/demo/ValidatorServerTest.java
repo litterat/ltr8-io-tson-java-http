@@ -73,7 +73,7 @@ class ValidatorServerTest {
         tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(schemas::get))
                 .withDataBindContext(TsonBindings.of(Map.of("validation_result", ValidationResult.class,
-                        "diagnostic", TsonProblemDiagnostic.class))));
+                        "problem.diagnostic", TsonProblemDiagnostic.class))));
         tson.resolve(ValidatorServer.VALIDATE);
     }
 
@@ -379,6 +379,7 @@ class ValidatorServerTest {
         assertTrue(response.body().contains("max_depth"), response.body());
         // Self-describing, and the schema it names is published, so a client can check what it got.
         assertTrue(response.body().contains(TsonDeployment.ID), response.body());
+        assertTrue(response.body().contains("!deployment.acceptance_profile"), response.body());
         assertFalse(response.body().contains("schema_hosts"), response.body());
         assertFalse(response.body().contains("listener"), response.body());
     }

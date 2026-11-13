@@ -111,7 +111,7 @@ class TsonMediaSupportTest {
     private TsonProblem problemFrom(HttpResponse<String> response) {
         TsonHttpCodec problems = new TsonHttpCodec(TsonProblemSchema.tson());
         return problems.readObjectAs(new ByteArrayInputStream(response.body().getBytes(StandardCharsets.UTF_8)),
-                "application/tson", TsonProblemSchema.ID, "problem", TsonProblem.class);
+                "application/tson", TsonProblemSchema.ID, "problem.details", TsonProblem.class);
     }
 
     /** No TSON-specific code in the handler at all -- content().as() and send() do both halves. */

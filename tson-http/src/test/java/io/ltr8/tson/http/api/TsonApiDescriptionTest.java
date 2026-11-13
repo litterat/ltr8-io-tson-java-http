@@ -46,14 +46,14 @@ class TsonApiDescriptionTest {
 
     static final String ERR_ID = "https://schemas.example.com/2026/40/app/orders-errors-1.tn";
 
-    /** Business errors, each fixing the status it inherits from {@code problem}. */
+    /** Business errors, each fixing the status it inherits from {@code problem.details}. */
     static final String ERRORS = """
             !!id:"%s"
             !!import:"https://tson.io/2026/40/m/core.tn"
             !!import:"%s"
             !schema {
-              sku_not_found   => problem & { status: = 404  sku: text }
-              order_not_found => problem & { status: = 404 }
+              sku_not_found   => problem.details & { status: = 404  sku: text }
+              order_not_found => problem.details & { status: = 404 }
             }""".formatted(ERR_ID, TsonProblemSchema.ID);
 
     static final String PROTOCOL_ID = "https://schemas.example.com/2026/40/app/orders-1.tn";

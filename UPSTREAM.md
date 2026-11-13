@@ -324,7 +324,7 @@ value, or one that drops parts. And a bundled library's root entry reserves its 
 constructor under the library's map reserves nothing, so placement is decided per type.
 
 **1. `json_pointer` (RFC 6901) — a root entry of a bundled library.** `Diagnostic`'s own contract makes `path` and
-`schemaPointer` RFC 6901 JSON Pointers (`/orders/3/total`). `problem.tn`'s `diagnostic` can type them only as `text`,
+`schemaPointer` RFC 6901 JSON Pointers (`/orders/3/total`). `problem.tn`'s `problem.diagnostic` can type them only as `text`,
 and so can tson-cli's `diagnostics.tn`. A pattern states the grammar (`""` or `/`-prefixed segments, `~` only as
 `~0`/`~1`), but an atom gives a host value of decoded segments, which is what a consumer walking a pointer wants.
 Equality is `text`'s, since the escape is a bijection. `net.tn`, beside `uri`, is the nearest home; the root name it
@@ -382,11 +382,11 @@ reserves no root name.
 - `problem.tn` types RFC 9457's `type` and `instance` as `uri_reference`, since both are URI references by that
   RFC (§3.1.1, §3.1.5) and `TsonProblem.at` is typically handed a request path. Pinned by
   `TsonProblemSchemaTest.aRelativeTypeAndInstanceAreValid`.
-- `diagnostic.path` and `schema_pointer` stay `text` until 1 exists.
+- `problem.diagnostic`'s `path` and `schema_pointer` stay `text` until 1 exists.
 - The HTTP vocabulary lives in `service.tn`, which uses it — `service.http_verb`, `service.status_code`,
   `service.header_name` and `service.path_template` (RFC 6570 levels 1–2, so `{+var}` is expressible) — and `media_type` is
   `net.tn`'s. `TsonApiDescription` places each endpoint's request record over its path, which no pattern can.
-  `problem.status` stays `int32`.
+  `problem.details`'s `status` stays `int32`.
 
 **Priority:** medium-high, since the library emits values its own schemas cannot describe.
 

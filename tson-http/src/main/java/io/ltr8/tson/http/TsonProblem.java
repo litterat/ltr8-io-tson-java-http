@@ -7,7 +7,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * The body of an error response, written as {@code application/tson} against {@code problem.tn}.
+ * The body of an error response, written as {@code application/tson} against {@code problem.tn}'s
+ * {@code problem.details}.
  *
  * <p><b>RFC 9457 (Problem Details for HTTP APIs), plus {@code errors}.</b> Following the standard means
  * ordinary HTTP tooling recognises the body, and {@code errors} is not an invention either -- §3.1 of that RFC
@@ -24,7 +25,7 @@ import java.util.Optional;
  * <p>{@code status} is restated in the body so a problem that is stored, logged or forwarded is still
  * self-describing once separated from its response.
  */
-@Typename(name = "problem")
+@Typename(name = "problem.details")
 public record TsonProblem(Optional<String> type, String title, int status, Optional<String> detail,
                           Optional<String> instance, List<TsonProblemDiagnostic> errors) {
 

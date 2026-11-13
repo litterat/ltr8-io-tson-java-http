@@ -28,7 +28,9 @@ import java.util.Optional;
  * endpoint offers). {@code deployment.tn} carries the argument for why the [TSON-DATA] §8.2 policies can
  * live in neither of the other two, and the bundled {@code policy.tn} is the policy's vocabulary. A descriptor
  * states a {@code policy.processor}, complete, and {@link #profile} publishes the policy in force in the same
- * shape.
+ * shape. Every type {@code deployment.tn} declares is a member of its one root map, {@code deployment}: a
+ * descriptor's root is {@code !deployment.descriptor { … }} and the profile is a {@code
+ * deployment.acceptance_profile}.
  *
  * <p><b>Two rules this class exists to enforce by shape rather than by documentation.</b>
  *
@@ -48,7 +50,7 @@ import java.util.Optional;
  * exists to prevent. A descriptor stating no policy leaves the library's defaults alone — Highly Restrictive
  * over declared names, unrestricted over values — rather than overwriting them with a guess.
  */
-@Typename(name = "deployment")
+@Typename(name = "deployment.descriptor")
 public record TsonDeployment(String name, Optional<Listener> listener, Optional<Policy> policy,
                              @Field("schema_hosts") List<String> schemaHosts) {
 
@@ -58,9 +60,9 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
     private static final String SOURCE = readResource("/deployment.tn");
 
     private static final Map<String, Class<?>> BINDINGS = Map.of(
-            "deployment", TsonDeployment.class,
-            "acceptance_profile", AcceptanceProfile.class,
-            "listener", Listener.class,
+            "deployment.descriptor", TsonDeployment.class,
+            "deployment.acceptance_profile", AcceptanceProfile.class,
+            "deployment.listener", Listener.class,
             "policy.restriction_level", RestrictionLevel.class,
             "policy.processor", Policy.class,
             "policy.identifier_policy", Policy.Identifiers.class,
@@ -84,7 +86,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
     }
 
     /** Where this instance listens. Absent members leave the caller's own defaults alone. */
-    @Typename(name = "listener")
+    @Typename(name = "deployment.listener")
     public record Listener(Optional<String> host, Optional<Integer> port) {
     }
 
@@ -278,7 +280,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
      * <p><b>A hint, not the authority.</b> It can be cached and a policy can change under it; only the
      * refusal a request actually receives says what applied to that request, which is where §8.2 puts it.
      */
-    @Typename(name = "acceptance_profile")
+    @Typename(name = "deployment.acceptance_profile")
     public record AcceptanceProfile(String name, Policy policy) {
     }
 

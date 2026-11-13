@@ -45,7 +45,7 @@ public final class OrderServer {
     /**
      * The schema this server governs orders by, and the business errors it answers with.
      *
-     * <p>{@code sku_not_found} composes {@code problem} (§5.8), so it carries RFC 9457's members and adds its
+     * <p>{@code sku_not_found} composes {@code problem.details} (§5.8), so it carries RFC 9457's members and adds its
      * own. A record is closed under its type (§7.2), so the extension is <em>declared</em> rather than assumed
      * — which is what RFC 9457 does with an open JSON object, made explicit.
      *
@@ -72,7 +72,7 @@ public final class OrderServer {
     public static final String UNSTOCKED_SKU = "GONE-1";
 
     /**
-     * A bound {@code sku_not_found}: every member of {@code problem}, plus this error's own {@code sku}.
+     * A bound {@code sku_not_found}: every member of {@code problem.details}, plus this error's own {@code sku}.
      * Verbose on purpose -- a record is closed under its type, so composing one in the schema means spelling
      * the composed shape here too.
      */
@@ -181,8 +181,8 @@ public final class OrderServer {
                     routing.post(create.path(), (request, response) -> {
                         Order order = request.content().as(Order.class);
                         if (UNSTOCKED_SKU.equals(order.sku())) {
-                            // Written, not thrown: a business error composes problem and carries fields no
-                            // problem has, so the error boundary could not produce it.
+                            // Written, not thrown: a business error composes problem.details and carries
+                            // fields no problem body has, so the error boundary could not produce it.
                             response.status(404)
                                     .header(TsonSchemaHeader.NAME, TsonSchemaHeader.format(SCHEMA_ID))
                                     .send(SkuNotFound.of(order.sku()));

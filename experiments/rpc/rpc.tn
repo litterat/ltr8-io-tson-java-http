@@ -55,20 +55,20 @@
     a `fault`. `Resp` is the response type; `Err` is the declared error type, or a choice of them, declared
     as an entry of its own, when the exchange declares several -- a choice of records, so the value carries
     the error's tag, which is the discriminator a caller wants. An error is a typed value composing
-    `problem`, its status pinned on the type, and the resolver enforces the pin. A `fault` is the
-    transport's or the processor's own failure, a `problem` whose `type` comes from the same small closed
+    `problem.details`, its status pinned on the type, and the resolver enforces the pin. A `fault` is the
+    transport's or the processor's own failure, a `problem.details` whose `type` comes from the same small closed
     set the HTTP problem types use, so an http gateway maps by table rather than by translation. The group
     is what keeps business errors and faults apart, which is the distinction gRPC's single status channel
     blurs and the one a caller deciding whether to retry needs.
     """
   return => <Resp, Err> {
     id?: text
-    ( response: Resp | error: Err | fault: problem )
+    ( response: Resp | error: Err | fault: problem.details )
   }
 
   @doc:"The return of an exchange that declares no errors: a response, or a fault."
   return_plain => <Resp> {
     id?: text
-    ( response: Resp | fault: problem )
+    ( response: Resp | fault: problem.details )
   }
 }

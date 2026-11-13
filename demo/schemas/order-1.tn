@@ -5,5 +5,5 @@
     order => { sku: text  quantity: int32 }
 
     @doc:"A business error: the request was schema-valid, and the domain still said no."
-    sku_not_found => problem & { status: = 404  sku: text }
+    sku_not_found => problem.details & { status: = 404  sku: text }
 }

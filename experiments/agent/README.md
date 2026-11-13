@@ -58,9 +58,9 @@ the admission verifier's.
    across protocols. The layer has no inheritance between protocols, so a gateway fronting several either declares
    one protocol of its own holding their exchanges, which a plan names, or a plan names several and this is decided.
 2. **Business errors.** A failed call without `or` aborts with `agent_error`, whose `detail` is text. The protocol
-   declared that call's errors as typed values composing `problem`; the abort should carry the one that occurred, and
-   `agent_error` should compose `problem` like every other error here, so the http gateway and the agent processor
-   answer failures in one shape.
+   declared that call's errors as typed values composing `problem.details`; the abort should carry the one that
+   occurred, and `agent_error` should compose `problem.details` like every other error here, so the http gateway
+   and the agent processor answer failures in one shape.
 3. **`version: uint8 = 2`** on the agent duplicates what the identity `agent-vm.tn` already says ([TSON-JSON] §3.5);
    keep it only if the binary form wants a magic byte, and say so.
 4. **The surface grammar reads schemaless**, method names as preserved unknown type refs and `@or`/`@interface` as

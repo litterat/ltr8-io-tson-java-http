@@ -75,7 +75,7 @@ the client's highest quality wins; **a tie goes to TSON**, the encoding a respon
   document is TSON text in every encoding.
 - **A problem names `problem.tn` in the `TSON-Schema` header**, in both encodings — the only place a JSON
   one can, and true of a TSON one too. `respondProblem` sets it on all three adapters.
-- **A problem written as JSON is `application/problem+json`.** `problem.tn`'s `problem` is RFC 9457's five
+- **A problem written as JSON is `application/problem+json`.** `problem.tn`'s `problem.details` is RFC 9457's five
   members plus `errors`, an extension member, and the JSON writer omits an absent member rather than writing
   `null` — so its JSON encoding *is* an RFC 9457 body. It is labelled `application/problem+json` where the
   client's `Accept` admits that type, and with the negotiated JSON type where it does not, so a client that

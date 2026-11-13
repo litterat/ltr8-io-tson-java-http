@@ -21,7 +21,7 @@ class TsonDeploymentTest {
 
     private static final String FULL = """
             !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
-            !deployment {
+            !deployment.descriptor {
               name:     "production"
               listener: { host: "127.0.0.1"  port: 8080 }
               policy: {
@@ -37,7 +37,7 @@ class TsonDeploymentTest {
     private static String withPolicy(String policy) {
         return """
                 !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
-                !deployment { name: "n"  policy: %s }""".formatted(policy);
+                !deployment.descriptor { name: "n"  policy: %s }""".formatted(policy);
     }
 
     private static final String DEFAULT_IDENTIFIERS =
@@ -140,7 +140,7 @@ class TsonDeploymentTest {
     private static String withHosts(String hosts, String listenerHost) {
         return """
                 !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
-                !deployment { name: "n"  %s schema_hosts: [%s] }""".formatted(
+                !deployment.descriptor { name: "n"  %s schema_hosts: [%s] }""".formatted(
                 listenerHost == null ? "" : "listener: { host: " + listenerHost + " }", hosts);
     }
 
@@ -214,7 +214,7 @@ class TsonDeploymentTest {
     void anAbsentPolicyIsNotAPermissiveOne() {
         TsonDeployment deployment = TsonDeployment.read("""
                 !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
-                !deployment { name: "minimal" }""");
+                !deployment.descriptor { name: "minimal" }""");
 
         assertTrue(deployment.processorPolicy().isEmpty());
         assertEquals(List.of(), deployment.schemaHosts(), "an omitted list is empty, not null");
@@ -289,7 +289,7 @@ class TsonDeploymentTest {
 
         // Nothing about what this deployment trusts, and nothing about where it listens.
         String written = TsonDeployment.tson().objectWriter()
-                .describing(TsonDeployment.ID, "acceptance_profile").toTson(profile);
+                .describing(TsonDeployment.ID, "deployment.acceptance_profile").toTson(profile);
         assertFalse(written.contains("schemas.example.com"), written);
         assertFalse(written.contains("127.0.0.1"), written);
         assertFalse(written.contains("8080"), written);
@@ -309,7 +309,7 @@ class TsonDeploymentTest {
     void aDescriptorWithNoPolicyPublishesTheDefaults() {
         TsonDeployment.Policy policy = profileOf(TsonDeployment.read("""
                 !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
-                !deployment { name: "minimal" }""")).policy();
+                !deployment.descriptor { name: "minimal" }""")).policy();
 
         assertEquals(TsonDeployment.Policy.of(ProcessorPolicy.defaults()), policy);
         assertEquals(RestrictionLevel.HIGHLY_RESTRICTIVE, policy.identifierPolicy().level());
@@ -325,9 +325,10 @@ class TsonDeploymentTest {
     @Test
     void theProfileIsWrittenInPolicyTnsShape() {
         String written = TsonDeployment.tson().objectWriter()
-                .describing(TsonDeployment.ID, "acceptance_profile").toTson(profileOf(TsonDeployment.read(FULL)));
+                .describing(TsonDeployment.ID, "deployment.acceptance_profile").toTson(profileOf(TsonDeployment.read(FULL)));
 
         assertEquals(List.of(), TsonDeployment.tson().validate(written), written);
+        assertTrue(written.contains("!deployment.acceptance_profile"), written);
         assertTrue(written.contains("identifier_policy") && written.contains("token_policy"), written);
     }
 

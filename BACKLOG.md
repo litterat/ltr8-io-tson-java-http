@@ -146,15 +146,6 @@ The four entries are in build order.
   by operation. Measure what the resolver does with such an entry, then decide whether the reader accepts an endpoint
   whose type refines `service.operation` and what `TsonApiSchema.bindings()` binds it to. Same constraints as the security
   scheme.
-- [ ] **`problem.tn` and `deployment.tn` reserve one root name each** — Both declare their vocabularies at the root
-  (`problem`, `diagnostic`, `diagnostic_code`; `deployment`, `listener`, `acceptance_profile`), and every root name of a
-  closure is reserved in each importer, so a domain declaring one of them collides with the vocabulary, unfixable by the
-  importer ([TSON-SCHEMA] §2.2.3). Move each document's entries, annotations included, under one schema map named for
-  the vocabulary, as `service.tn` nests `service` (`design/schema-authoring.md`), so each costs an importer one root
-  name. Each bound class's `@Typename` (`TsonProblem`, `TsonProblemDiagnostic`, `TsonDeployment` and its records), every
-  schema composing `problem` (the demos' error schemas, the orders fixtures, the test schemas), the deployment
-  descriptors and `TsonProblemSchemaTest` follow. Do it before anything is published, since it changes every document
-  written against either. The two map names are a decision for the user.
 - [ ] **A bound request record's dependent field is a pinned sibling or a discriminator over a family** — Once tson-java
   refuses at load a bound schema whose free sibling admits an unbound type (`UPSTREAM.md`, the dependent-field entry),
   make that the rule here and delete `ChosenTypes` with its closure walk and the remainder-body rule, rather than keep a

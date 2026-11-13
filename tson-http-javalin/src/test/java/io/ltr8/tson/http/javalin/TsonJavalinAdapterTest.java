@@ -114,7 +114,7 @@ class TsonJavalinAdapterTest {
     private TsonProblem problemFrom(HttpResponse<String> response) {
         TsonHttpCodec problems = new TsonHttpCodec(TsonProblemSchema.tson());
         return problems.readObjectAs(new ByteArrayInputStream(response.body().getBytes(StandardCharsets.UTF_8)),
-                "application/tson", TsonProblemSchema.ID, "problem", TsonProblem.class);
+                "application/tson", TsonProblemSchema.ID, "problem.details", TsonProblem.class);
     }
 
     @Test
@@ -414,7 +414,7 @@ class TsonJavalinAdapterTest {
     }
 
     /**
-     * <b>A JSON client's problem is RFC 9457's own format</b>: {@code problem.tn}'s {@code problem} written as
+     * <b>A JSON client's problem is RFC 9457's own format</b>: {@code problem.tn}'s {@code problem.details} written as
      * JSON is an {@code application/problem+json} body, labelled so where the client accepts that type and with
      * the JSON type it asked for where it does not.
      */

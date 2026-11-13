@@ -127,7 +127,7 @@ class TsonApiConformanceTest {
 
     /**
      * Each kind of answer, exercised: the declared success status with the response type, a declared business error
-     * at the status its type fixes, and a transport refusal answered as a {@code problem}.
+     * at the status its type fixes, and a transport refusal answered as a {@code problem.details}.
      */
     @Test
     void everyResponseMatchesWhatTheDescriptionDeclares() throws Exception {
@@ -211,7 +211,7 @@ class TsonApiConformanceTest {
     /**
      * The type the description gives a reply at {@code status}: the response type at the endpoint's success status,
      * a business error at the status its type fixes, and otherwise -- a transport refusal, which no endpoint lists
-     * because every endpoint has them -- the error boundary's {@code problem}. Any other success status is one the
+     * because every endpoint has them -- the error boundary's {@code problem.details}. Any other success status is one the
      * description does not declare, a contract violation however good the body.
      */
     private static String declaredType(Route route, int status) {
@@ -226,7 +226,7 @@ class TsonApiConformanceTest {
         if (status < 400) {
             throw new AssertionError(route.key() + " answered " + status + ", which its description does not declare");
         }
-        return "problem";
+        return "problem.details";
     }
 
     /**

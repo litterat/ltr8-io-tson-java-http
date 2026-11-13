@@ -22,7 +22,9 @@ Rules that bite here:
 - Problem `type` URIs live under `https://ltr8.io/2026/40/http/problems/`; `ltr8.io` is the implementation, `tson.io`
   the specification. `ReadmeTest` holds the README's problem-type table to the types minted in `src/main`.
 - `problem.tn` is this project's own schema and diverges from tson-cli's `diagnostics.tn` on purpose. Its
-  `diagnostic_code` is a hand copy of `Diagnostic.Code`; `TsonProblemSchemaTest` keeps it current.
+  `problem.diagnostic_code` is a hand copy of `Diagnostic.Code`; `TsonProblemSchemaTest` keeps it current. Every type
+  it declares sits under its one root map, `problem` (a body is `problem.details`), as `deployment.tn`'s sit under
+  `deployment` (a descriptor is `deployment.descriptor`); a bound class's `@Typename` is the qualified name.
 - `HttpSchemaSource` is upstream's. What stays here is the mapping of its failures to statuses and
   `TsonHttpSchemaSourceIntegrationTest`; do not retest upstream's policy.
 - A class in `io.ltr8.tson.http.api` binds to a `service.tn` record only by being named in

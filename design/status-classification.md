@@ -116,8 +116,8 @@ and 502 collected. The agreement tests stay
 (`TsonHttpCodecTest.aFetchDiagnosticIsAnsweredByItsCode`,
 `TsonHttpSchemaSourceIntegrationTest.bothChannelsAnswerAnUnfetchableSchemaAlike`).
 
-**The reason is the code, and must not also be a field.** `Diagnostic.fetchReason` is gone upstream and
-`problem.tn` no longer declares a `fetch_reason` enum or field. A second carrier for one fact is free to
+**The reason is the code, and must not also be a field.** `Diagnostic` carries no fetch reason, and
+`problem.tn` declares no `fetch_reason` enum or field. A second carrier for one fact is free to
 disagree with the first — on the wire that means a body stating a code and a reason that contradict each
 other, which the schema would still call valid. Pinned by
 `TsonProblemSchemaTest.theSchemaCarriesNoSecondCarrierForAFetchFailure`.
@@ -135,8 +135,8 @@ halves apart: a token the atom's grammar rejects is `ATOM_FORM_INVALID` (a resol
 violating the atom's range is `ATOM_CONSTRAINT_VIOLATION` (a validation one). Both are verdicts and both are
 400; they are two codes because the fixes differ — rewrite the token, or change the value it denotes. `"not-a-
 uuid"` at a `uuid` field is the first, an `age` of 300 against a `max` the second, and
-`ValidatorServerTest.aFaultingDocumentIsAnAnswerRatherThanAFailure` shows both in one document. Adding it to
-`problem.tn`'s `diagnostic_code` is exactly the drift `TsonProblemSchemaTest` exists to catch, and it did.
+`ValidatorServerTest.aFaultingDocumentIsAnAnswerRatherThanAFailure` shows both in one document. A code upstream
+adds and `problem.tn`'s `problem.diagnostic_code` lacks is the drift `TsonProblemSchemaTest` exists to catch.
 
 **`SchemaFetchException` lives in `io.ltr8.tson.base`**, beside the `SchemaSource` interface whose
 contract it is — `fetch` names it as the one way a source says "cannot supply this", which is what lets the

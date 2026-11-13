@@ -52,7 +52,28 @@ class TsonProblemSchemaTest {
         assertTrue(new String(written, StandardCharsets.UTF_8).contains("SCHEMA_ERROR"));
 
         TsonProblem readBack = codec.readObjectAs(new ByteArrayInputStream(written), "application/tson",
-                TsonProblemSchema.ID, "problem", TsonProblem.class);
+                TsonProblemSchema.ID, "problem.details", TsonProblem.class);
+        assertEquals(problem, readBack);
+    }
+
+    /**
+     * The JSON encoding of an error body is the same type. A JSON body names no root of its own, so the reader is
+     * told {@code problem.details}; what {@code writeProblem} labels {@code application/problem+json} reads back
+     * through {@code problem.tn} at that type, unchanged.
+     */
+    @Test
+    void whatWriteProblemEmitsAsJsonValidatesAgainstProblemDetailsAndRoundTrips() {
+        TsonHttpCodec codec = new TsonHttpCodec(TsonProblemSchema.tson()).acceptingJson();
+        TsonProblem problem = TsonProblem.of(TsonHttpException.TYPES + "invalid-document", 400,
+                "Invalid TSON document", "the request body has 1 problem",
+                List.of(TsonDiagnostics.ofSchemaError("https://example.com/2026/40/app/order-1.tn", "order",
+                        "missing required field 'sku'", Optional.empty())));
+        TsonHttpCodec.Representation json = codec.negotiate("application/json, application/problem+json");
+        assertEquals(TsonMediaType.APPLICATION_PROBLEM_JSON, json.problemMediaType());
+
+        byte[] written = codec.writeProblem(problem, json);
+        TsonProblem readBack = codec.readObjectAs(new ByteArrayInputStream(written), "application/problem+json",
+                TsonProblemSchema.ID, "problem.details", TsonProblem.class);
         assertEquals(problem, readBack);
     }
 
@@ -70,7 +91,8 @@ class TsonProblemSchemaTest {
 
         String written = new String(codec.writeProblem(problem), StandardCharsets.UTF_8);
         assertTrue(written.startsWith("!!import:\"" + TsonProblemSchema.ID + "\""), written);
-        assertTrue(written.contains("!problem"), "and a root type-ref, or a reader cannot select a type: " + written);
+        assertTrue(written.contains("!problem.details"),
+                "and a root type-ref, or a reader cannot select a type: " + written);
 
         // read, not readObjectAs: no schema URI, no type name, no prior knowledge of either.
         TsonProblem readBack = codec.readObject(
@@ -88,7 +110,7 @@ class TsonProblemSchemaTest {
         assertEquals(List.of(), problem.errors());
 
         TsonProblem readBack = codec.readObjectAs(new ByteArrayInputStream(codec.writeProblem(problem)),
-                "application/tson", TsonProblemSchema.ID, "problem", TsonProblem.class);
+                "application/tson", TsonProblemSchema.ID, "problem.details", TsonProblem.class);
         assertEquals(problem, readBack);
         assertEquals(415, readBack.status());
     }
@@ -101,7 +123,7 @@ class TsonProblemSchemaTest {
         assertEquals(Optional.empty(), problem.detail());
 
         TsonProblem readBack = codec.readObjectAs(new ByteArrayInputStream(codec.writeProblem(problem)),
-                "application/tson", TsonProblemSchema.ID, "problem", TsonProblem.class);
+                "application/tson", TsonProblemSchema.ID, "problem.details", TsonProblem.class);
         assertEquals(Optional.empty(), readBack.detail());
     }
 
@@ -118,7 +140,7 @@ class TsonProblemSchemaTest {
                 .at("/orders/123");
 
         TsonProblem readBack = codec.readObjectAs(new ByteArrayInputStream(codec.writeProblem(problem)),
-                "application/tson", TsonProblemSchema.ID, "problem", TsonProblem.class);
+                "application/tson", TsonProblemSchema.ID, "problem.details", TsonProblem.class);
         assertEquals(problem, readBack);
     }
 
@@ -129,7 +151,7 @@ class TsonProblemSchemaTest {
      * actually enforce, which is the property that matters.
      */
     private static List<String> declaredCodes() {
-        return membersOf("diagnostic_code");
+        return membersOf("problem.diagnostic_code");
     }
 
     private static List<String> membersOf(String entryName) {
@@ -138,7 +160,7 @@ class TsonProblemSchemaTest {
     }
 
     /**
-     * {@code problem.tn}'s {@code diagnostic_code} is a hand-written copy of {@link Diagnostic.Code}, and
+     * {@code problem.tn}'s {@code problem.diagnostic_code} is a hand-written copy of {@link Diagnostic.Code}, and
      * nothing else checks that the copy is current. Add a member upstream and forget this schema, and an error
      * body emits a code its own schema rejects -- which no other test here would catch, because no fixture has
      * ever produced a code that is new.
@@ -152,7 +174,7 @@ class TsonProblemSchemaTest {
         List<String> declared = declaredCodes();
         for (Diagnostic.Code code : Diagnostic.Code.values()) {
             assertTrue(declared.contains(code.name()),
-                    () -> "Diagnostic.Code." + code + " is missing from problem.tn's diagnostic_code: "
+                    () -> "Diagnostic.Code." + code + " is missing from problem.tn's problem.diagnostic_code: "
                             + declared + " -- add it there, in place while the schema is unpublished");
         }
     }
@@ -161,20 +183,20 @@ class TsonProblemSchemaTest {
      * <b>The schema declares no reason enum beside the codes, and must not grow one.</b> Why a schema could
      * not be obtained is carried by the code, one per reason, so a body cannot state a code and a reason that
      * contradict each other -- a shape a second enum would make representable and this schema would call
-     * valid. The five {@code SCHEMA_*} members of {@code diagnostic_code} are what
+     * valid. The five {@code SCHEMA_*} members of {@code problem.diagnostic_code} are what
      * {@link #everyDiagnosticCodeIsDeclaredInTheSchema} already holds to the Java enum.
      */
     @Test
     void theSchemaCarriesNoSecondCarrierForAFetchFailure() {
-        assertNull(TsonProblemSchema.compiled().schema().entries().get("fetch_reason"),
-                "problem.tn declares a fetch_reason enum: the reason is the code, and two carriers for one "
+        assertNull(TsonProblemSchema.compiled().schema().entries().get("problem.fetch_reason"),
+                "problem.tn declares a problem.fetch_reason enum: the reason is the code, and two carriers for one "
                         + "fact are free to disagree");
 
-        Top diagnostic = TsonProblemSchema.compiled().schema().entries().get("diagnostic");
-        List<String> fields = List.copyOf(assertInstanceOf(RecordBody.class, diagnostic, "diagnostic is a record")
+        Top diagnostic = TsonProblemSchema.compiled().schema().entries().get("problem.diagnostic");
+        List<String> fields = List.copyOf(assertInstanceOf(RecordBody.class, diagnostic, "problem.diagnostic is a record")
                 .fields().keySet());
         assertFalse(fields.contains("fetch_reason"),
-                () -> "diagnostic carries a fetch_reason field: every member is a location or the problem "
+                () -> "problem.diagnostic carries a fetch_reason field: every member is a location or the problem "
                         + "itself, and this one would be a payload for five codes out of " + fields);
     }
 

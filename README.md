@@ -41,7 +41,7 @@ $ curl -s localhost:8080/orders -H 'Content-Type: application/tson' --data-binar
   !!import:"https://schemas.example.com/2026/40/app/order-1.tn"
   !order { }'
 !!import:"https://tson.io/2026/40/io/ltr8/http/problem.tn"
-!problem { status: 400 title: "Invalid TSON document" detail: "the request body has 2 problems" errors: [
+!problem.details { status: 400 title: "Invalid TSON document" detail: "the request body has 2 problems" errors: [
   { path: "/sku" schema_pointer: "/order/sku" code: "FIELD_REQUIRED"
     message: "missing required field \'sku\' for \'order\'" data_position: "3:8:70" ... }
   { path: "/quantity" schema_pointer: "/order/quantity" code: "FIELD_REQUIRED" ... } ] }
@@ -163,7 +163,7 @@ sets a token policy, which you can see refuse a document the default would accep
 ```
 $ curl -s localhost:8080/.well-known/tson-deployment
 !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
-!acceptance_profile { name: "validator-demo" policy: {
+!deployment.acceptance_profile { name: "validator-demo" policy: {
   identifier_policy: { level: "HIGHLY_RESTRICTIVE" per_segment: false skeleton_distinctness: true permitting: [] }
   token_policy: { level: "SINGLE_SCRIPT" permitting: [] }
   unicode_data_version: "16.0" limits: { max_depth: 64 max_token_length: 1048576 max_text_length: 1048576

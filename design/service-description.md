@@ -30,7 +30,7 @@ there too.
   and §8.2 judges a path key.
 - `service.resource` alone has the positional form, one bare required field; adding a second withdraws it and breaks
   every document written in it.
-- A business error composes `problem` and is written by the handler, not thrown.
+- A business error composes `problem.details` and is written by the handler, not thrown.
 
 ## A schema exports a namespace; data refers into one
 
@@ -168,8 +168,8 @@ model**, a startup failure rather than a published contract no client can act on
   or a discriminator over bound subtypes does;
 - the verb agrees with what the exchange says about itself, `@service.safe` and `@service.idempotent` on its key: GET
   safe, PUT and DELETE idempotent; and a response-less endpoint answers a status that carries no body;
-- each business error fixes its status (`sku_not_found => problem & { status: = 404 … }`), which is how a client tells
-  an error from the response by status alone; two errors of one endpoint pinning one status is refused;
+- each business error fixes its status (`sku_not_found => problem.details & { status: = 404 … }`), which is how a
+  client tells an error from the response by status alone; two errors of one endpoint pinning one status is refused;
 - a `!service.document` lists a media type, and every other endpoint lists only types a codec here speaks (below);
 - no two endpoints share a verb and a path, across every projection a description holds.
 
@@ -258,7 +258,7 @@ value of the namespace type `service.http`, never by its name.
 
 **Deliberately absent**, each a decision: security schemes, response headers, links, callbacks, examples, tags,
 servers, more than one success response, custom and WebDAV verbs (`service.http_verb` is a closed enum), and a declaration of
-the transport's own refusals, which every endpoint has and the error boundary answers with a `problem`. `security` is
+the transport's own refusals, which every endpoint has and the error boundary answers with a `problem.details`. `security` is
 the one that would disqualify this for a real service. Adding any is an edit in place until this is published, and a
 new identity after.
 
@@ -266,18 +266,19 @@ new identity after.
 fetching from the running server, proving that every referenced schema is published and every payload type exists,
 then holds the server to what no compiler can know: a reply at the success status carries the response type (a
 document, a media type it lists), one at a business error's fixed status that error, and any other is a 4xx or 5xx
-`problem`.
+`problem.details`.
 
 **What builds on the protocol, and is not built.** `experiments/rpc/` is its wire form, `call` and `return` as
 templates applied per exchange, next in the order of work and outside `tson-http` once it lands. `experiments/agent/`, a
 plan of calls, is **future work** kept so a consumer that is not HTTP shapes the layer: do not build toward it, and do
 not let a decision that is the agent's alone move the layer.
 
-## Business errors compose `problem`
+## Business errors compose `problem.details`
 
 A business error (the request was schema-valid and the domain still said no) is **written by the handler, not
-thrown**. It composes `problem` (§5.8) so it carries RFC 9457's members and adds its own, which means the error
-boundary cannot produce it: the boundary only renders a `problem`, and a `sku_not_found` has a field `problem` does not.
+thrown**. It composes `problem.details` (§5.8) so it carries RFC 9457's members and adds its own, which means the
+error boundary cannot produce it: the boundary only renders a `problem.details`, and a `sku_not_found` has a field
+`problem.details` does not.
 
 These types belong in the **application's** schema, importing `problem.tn`: `tson-http` owns the transport envelope,
 the service owns "SKU not found".

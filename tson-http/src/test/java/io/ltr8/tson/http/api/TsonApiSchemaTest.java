@@ -41,7 +41,7 @@ class TsonApiSchemaTest {
             !schema {
               non_empty_text => !text ^ { min_length: 1 }
               order          => { sku: non_empty_text  quantity: int32 }
-              sku_not_found  => problem & { status: = 404  sku: text }
+              sku_not_found  => problem.details & { status: = 404  sku: text }
             }""";
 
     /** A protocol, an http projection binding it, and the schema route as a document. */
@@ -279,8 +279,8 @@ class TsonApiSchemaTest {
      */
     @Test
     void anErrorFixesAStatusOfItsOwn() {
-        String unfixed = ORDER.replace("sku_not_found  => problem & { status: = 404  sku: text }",
-                "sku_not_found  => problem & { sku: text }");
+        String unfixed = ORDER.replace("sku_not_found  => problem.details & { status: = 404  sku: text }",
+                "sku_not_found  => problem.details & { sku: text }");
         Tson tson = tson(API);
         tson.resolve(unfixed);
         tson.resolve(API);
@@ -291,7 +291,7 @@ class TsonApiSchemaTest {
         String twice = assertThrows(IllegalArgumentException.class, () -> described(API.replace(
                 "errors: [sku_not_found]", "errors: [sku_not_found problem_404]").replace(
                 "schema_ref => { schemaPath: text }",
-                "schema_ref => { schemaPath: text }\n  problem_404 => problem & { status: = 404 }"))).getMessage();
+                "schema_ref => { schemaPath: text }\n  problem_404 => problem.details & { status: = 404 }"))).getMessage();
         assertTrue(twice.contains("both fix status 404"), twice);
     }
 

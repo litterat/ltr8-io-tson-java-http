@@ -317,9 +317,9 @@ public final class TsonApiDescription {
     }
 
     /**
-     * Each business error by the status its type fixes ({@code sku_not_found => problem & { status: = 404 }}), which
-     * is what tells an error from the response by status alone. An error fixing none, or two errors fixing one, would
-     * leave a client unable to say which type a failure is.
+     * Each business error by the status its type fixes ({@code sku_not_found => problem.details & { status: = 404
+     * }}), which is what tells an error from the response by status alone. An error fixing none, or two errors
+     * fixing one, would leave a client unable to say which type a failure is.
      */
     private static Map<Integer, TypeRef> errorStatuses(String label, List<TypeRef> errors,
                                                        Function<String, Top> entries) {
@@ -391,7 +391,7 @@ public final class TsonApiDescription {
      * endpoints declare them.
      *
      * <p>Not every one is a type the application binds: a parameter record bound only to be placed, or the
-     * {@code problem} this library writes itself, may be named here and mapped by nobody. {@link #boundClasses} is
+     * {@code problem.details} this library writes itself, may be named here and mapped by nobody. {@link #boundClasses} is
      * the filtered form, which is what a warm-up wants.
      */
     public Set<String> payloadTypes() {

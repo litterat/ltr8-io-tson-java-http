@@ -21,7 +21,7 @@
   is a parse error, and it is the natural thing to reach for after writing a few schemas, where the entry
   position takes one.
   """
-!deployment {
+!deployment.descriptor {
   name: "validator-demo"
 
   listener: { port: 8080 }

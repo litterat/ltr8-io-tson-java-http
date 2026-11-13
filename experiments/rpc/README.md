@@ -21,9 +21,9 @@ per service?
 
 [`rpc.tn`](rpc.tn) declares two templates: `call => <Req> { … }` -- address `(interface !!id, method key)`, the
 protocol schema and the exchange's key, correlation `id`, `deadline`, opaque `meta`, the exchange's `request` -- and
-`return => <Resp, Err> { … }`, exactly one of `response`, a declared `error` (a typed value composing `problem`, its
-status pinned on the type) or a `fault` (the transport's or processor's own `problem`, its `type` from the same closed
-set the HTTP problem types use).
+`return => <Resp, Err> { … }`, exactly one of `response`, a declared `error` (a typed value composing
+`problem.details`, its status pinned on the type) or a `fault` (the transport's or processor's own `problem.details`,
+its `type` from the same closed set the HTTP problem types use).
 
 **Both are closed once per exchange by a wire schema derived from the protocol** -- `place_order_call =>
 call<new_order>`, `place_order_return => return<order, sku_not_found>`, a choice of errors where an exchange declares
@@ -99,7 +99,7 @@ and this is what it dispatches on.
 count unknown, each complete as it arrives -- a property of the call, not of the type, and so not `[order]`. Nothing
 here uses one, and the format has no framing for a sequence of documents (a document is one value; readers reject
 trailing content). When a use arrives, the framing question comes with it: `application/tson-seq` on RFC 7464's
-model (an error mid-stream is a `problem` document in the sequence, so `errors` apply per element) over SSE,
+model (an error mid-stream is a `problem.details` document in the sequence, so `errors` apply per element) over SSE,
 multipart, or a lazily-read array; and a `shape: UNARY | SERVER_STREAM | CLIENT_STREAM | BIDI` beats two booleans
 that admit the bidirectional shape by accident of encoding.
 

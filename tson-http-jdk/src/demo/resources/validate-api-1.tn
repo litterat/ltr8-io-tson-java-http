@@ -45,7 +45,7 @@
         topology. And it is a hint -- it can be cached, and only the refusal a request actually receives says
         what applied to that request.
         """
-      GET => !service.operation { response: acceptance_profile }
+      GET => !service.operation { response: deployment.acceptance_profile }
     }
 
     "/{+schemaPath}" => {

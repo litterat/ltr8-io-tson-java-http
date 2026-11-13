@@ -163,7 +163,8 @@ One line each; the note carries the why. Read the note before touching the code 
   I-Regexp, whole-token, and `^`/`$` are literals. (`schema-authoring.md`)
 - A schema importing core reserves every root name of the kernel, numeric, temporal, net and core, so an application
   type is never named `int64`, `schema`, `host`, `date`, `uri`, `media_type` or `title`. (`schema-authoring.md`)
-- `problem.tn`'s `diagnostic_code` is a hand-written copy of `Diagnostic.Code`; `TsonProblemSchemaTest` is the only check.
+- `problem.tn`'s `problem.diagnostic_code` is a hand-written copy of `Diagnostic.Code`; `TsonProblemSchemaTest` is the
+  only check.
   (`schema-authoring.md`)
 - Every name `service.tn` declares sits in its one root map and is written by its path, `!service.binding`,
   `@service.safe`, `meta.ref<service.exchange>`, inside the layer too: a bare name there is unresolved, and the reader

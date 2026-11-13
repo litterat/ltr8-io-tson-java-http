@@ -13,15 +13,15 @@ touches, and the schema-language rules that read like bugs when they bite. Curre
 - `.tn`, never `.tn1`. A revision bump is one substitution across every identity; the check is that no `2026/<previous>`
   string survives and the build is green.
 - Nothing here is published yet, so a schema is edited in place. Once published, a shape change is a new identity.
-- `problem.tn`'s `diagnostic_code` is a hand-written copy of `Diagnostic.Code`; `TsonProblemSchemaTest` is the only
-  thing that catches it going stale. Keep it.
+- `problem.tn`'s `problem.diagnostic_code` is a hand-written copy of `Diagnostic.Code`; `TsonProblemSchemaTest` is the
+  only thing that catches it going stale. Keep it.
 - A schema importing core reserves every root name of the bundled documents, so an application type is never named
   `int64`, `schema`, `host`, `date`, `uri`, `media_type`, `title` or the like.
 - A vocabulary this project publishes declares its entries under one map named for itself, so it reserves one root name
   in every importer: every root name of a closure is reserved and a clash is unfixable by the importer
-  ([TSON-SCHEMA] §2.2.3). `service.tn` declares everything, annotations included, under `service`, and names its own
-  entries by the same path from inside the map; `problem.tn` and `deployment.tn` still declare at the root
-  (`BACKLOG.md`).
+  ([TSON-SCHEMA] §2.2.3). `service.tn` declares everything, annotations included, under `service`, `problem.tn` under
+  `problem` and `deployment.tn` under `deployment`, and each names its own entries by the same path from inside the
+  map. A bound class's `@Typename` is the qualified name (`problem.details`, `deployment.descriptor`).
 - An optional field is `name?: T`; `name: T?` is a required field admitting `_`. A `text` field accepts any token.
   A `pattern` is I-Regexp and `^`/`$` are literal characters.
 
@@ -34,12 +34,14 @@ of `!!import`s, and a document is a schema exactly when its root is tagged `!sch
 !!id:"https://tson.io/2026/40/io/ltr8/http/problem.tn"
 !!import:"https://tson.io/2026/40/m/core.tn"
 !schema {
-  problem => { … }
+  problem => !schema {
+    details => { … }
+  }
 }
 ```
 
 A data document imports the schemas it is read under — several are one namespace over their closures, a name two of
-them declare differently being a collision — and its root names its type (`!problem { … }`). `!!meta` and `!!schema`
+them declare differently being a collision — and its root names its type (`!problem.details { … }`). `!!meta` and `!!schema`
 are parse errors naming their replacement, and a directive anywhere past the header is a parse error too.
 
 **A schema's namespace is its own entries and its import closure's, and nothing else.** There is no ladder and no
@@ -100,7 +102,7 @@ by hand. Two traps worth knowing:
   their `!!import` from `TsonProblemSchema.ID`, so the next identity change is one constant rather than a file
   per demo.
 
-**`TsonProblemSchemaTest` is what catches a stale `diagnostic_code`**, and it is the only thing that does: an
+**`TsonProblemSchemaTest` is what catches a stale `problem.diagnostic_code`**, and it is the only thing that does: an
 upstream revision adding a code is otherwise invisible here until an error body emits one its own schema
 rejects. It has caught every addition so far. Keep it.
 
@@ -125,7 +127,7 @@ the build is the check.
 
 ## Traps
 
-- **`problem.tn`'s `diagnostic_code` is a hand-written copy of `Diagnostic.Code`.** Nothing but
+- **`problem.tn`'s `problem.diagnostic_code` is a hand-written copy of `Diagnostic.Code`.** Nothing but
   `TsonProblemSchemaTest` checks it is current, and an error body emitting a code its own schema rejects would
   not otherwise be caught, since no fixture produces a code that is new. The Java enum is the source of truth —
   never check this schema against tson-cli's, which would only prove they drifted together.
@@ -166,8 +168,9 @@ the build is the check.
   it costs an importer one root name. `service.tn` nests every entry and annotation under `service => !schema { … }`,
   and an entry inside the map names another by its path, `exchange => service.signature & {}`, since a name resolves
   in the schema's one namespace: a bare `signature` there is an unresolved reference. A description then writes
-  `!service.protocol` and `@service.binds`, and a bound class's `@Typename` is the qualified name. `problem.tn` and
-  `deployment.tn` still declare at the root (`BACKLOG.md`).
+  `!service.protocol` and `@service.binds`, and a bound class's `@Typename` is the qualified name. `problem.tn` nests
+  under `problem` and `deployment.tn` under `deployment` the same way, so an error body is `!problem.details { … }`, a
+  business error composes `problem.details`, and a descriptor is `!deployment.descriptor { … }`.
 
 - **A `pattern` is I-Regexp, and `^`/`$` are not anchors.** The kernel pins `regex` to RFC 9485
   ([TSON-SCHEMA] §4.2, "pinned to I-Regexp"), whose match is against the **whole** token — so a pattern needs

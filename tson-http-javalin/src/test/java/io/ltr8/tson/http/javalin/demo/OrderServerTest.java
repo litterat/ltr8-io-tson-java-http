@@ -80,7 +80,7 @@ class OrderServerTest {
         TsonHttpCodec problems = new TsonHttpCodec(TsonProblemSchema.tson());
         TsonProblem problem = problems.readObjectAs(
                 new ByteArrayInputStream(response.body().getBytes(StandardCharsets.UTF_8)),
-                "application/tson", TsonProblemSchema.ID, "problem", TsonProblem.class);
+                "application/tson", TsonProblemSchema.ID, "problem.details", TsonProblem.class);
         assertEquals(2, problem.errors().size());
         assertTrue(problem.errors().stream().allMatch(e -> e.code() == Diagnostic.Code.FIELD_REQUIRED));
     }

@@ -14,7 +14,7 @@
   service's whole job is to say whether they are well-formed, so a schema that rejected a malformed
   one at the envelope would answer the question by refusing to be asked it.
 
-  It imports problem.tn for `diagnostic` rather than declaring its own. A diagnostic is a
+  It imports problem.tn for `problem.diagnostic` rather than declaring its own. A diagnostic is a
   diagnostic whether it rides in an error body or in a result, and two shapes for one thing is how
   a client ends up with two renderers.
   """
@@ -62,6 +62,6 @@
     outcome:     outcome
     phase:       validation_phase
     elapsed_ms:  float64
-    diagnostics: [diagnostic]
+    diagnostics: [problem.diagnostic]
   }
 }

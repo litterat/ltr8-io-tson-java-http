@@ -13,6 +13,8 @@ publishes at `/.well-known/tson-deployment`. Current form only.
   `policy.limits`; a descriptor writes the ones it means and `policy.tn`'s defaults fill the rest.
 - The profile is the policy in force (`profile(inForce)`), not what the descriptor says, and it is a hint.
 - Hosts are `net.tn`'s `host`; `schema_hosts` is a `set<host>` compared by the type's equality.
+- `deployment.tn` declares one root, the schema map `deployment`: a descriptor is a `deployment.descriptor`, the
+  profile a `deployment.acceptance_profile`, and each bound record's `@Typename` is that qualified name.
 
 ## Deployment descriptors (`deployment.tn`, `TsonDeployment`)
 
@@ -24,8 +26,8 @@ imports `meta.tn` alone) as the policy's vocabulary. Its entries are members of 
 `policy.identifier_policy`, `policy.limit`, `policy.limits`, and `policy.processor`, the shape a deployment writes its
 policy in and a processor reports it in. `deployment.tn` imports `core.tn`, which brings `host`, and `policy.tn`, and
 both ends are a `policy.processor`: the descriptor states one and the profile publishes one. A descriptor is a data
-document that imports `deployment.tn` and whose root is `!deployment { … }`. The argument is in `deployment.tn`'s own
-`@doc`; the short form:
+document that imports `deployment.tn` and whose root is `!deployment.descriptor { … }`. The argument is in
+`deployment.tn`'s own `@doc`; the short form:
 
 - **Not a schema.** An artifact declaring its own strictness chooses its own check, and §3.5's immutability
   means raising a level mints a new identity, so every document pinning the old one keeps the old policy.
@@ -56,8 +58,8 @@ limit, each at `policy.tn`'s value — and the profile it publishes writes every
 `unicode_data_version` is left out of a descriptor: the tables are the processor's, so a descriptor naming one
 this processor does not carry stops the read.
 
-**Hosts are `net.tn`'s `host`**: a host name in either label form or an IPv4 or IPv6
-address, one string-class atom, so `listener.host` takes `localhost`, `"127.0.0.1"` and `"[::1]"` untagged — where
+**Hosts are `net.tn`'s `host`**: a host name in either label form or an IPv4 or IPv6 address, one string-class
+atom, so `deployment.listener`'s `host` takes `localhost`, `"127.0.0.1"` and `"[::1]"` untagged — where
 `( hostname | ipv4 | ipv6 )` is not disjoint under §5.4 and would need a tag on every value. `schema_hosts` is a
 `set<host>`, compared by the type's equality: `bücher.example` is `xn--bcher-kva.example`, `Example.COM` is
 `example.com`, `[::1]` is `0:0:0:0:0:0:0:1`, so one host twice is refused whatever the spellings, and a port, a URL,

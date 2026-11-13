@@ -75,7 +75,7 @@ other identity, because a reference in an untrusted document is an untrusted URL
 one would be a request forger for anyone who could reach it.
 
 **It runs under a deployment descriptor, and the policy applies to the probe and not to the envelope.**
-`validator-deployment.tn` is a data document: it imports `deployment.tn` and its root is `!deployment { … }`. It
+`validator-deployment.tn` is a data document: it imports `deployment.tn` and its root is `!deployment.descriptor { … }`. It
 states its policy whole, every `limits` member written out at `policy.tn`'s default so that no limit rests on a
 default the file does not show, and the profile it publishes at `/.well-known/tson-deployment` writes every limit,
 from the policy in force (`design/deployment-descriptor.md`). That

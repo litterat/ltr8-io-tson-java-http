@@ -52,7 +52,7 @@ falling back to position.
 and the declared throwables are the language's spelling of that union. A thrown type binds to an error record through a
 bridge, since an exception cannot be a record but can carry one. Whether a projection throws or writes an error is the
 projection's choice, and the protocol layer makes none. That is how the HTTP boundary's invariant, that a business
-error is written and not thrown (`design/service-description.md`, "Business errors compose `problem`"), holds at the
+error is written and not thrown (`design/service-description.md`, "Business errors compose `problem.details`"), holds at the
 boundary and nowhere else.
 
 **Absence.** A method with no parameters is a request absent; `void` is a response absent. Both are the data model's

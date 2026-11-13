@@ -89,7 +89,7 @@ public final class TsonHttpCodec {
         // Built once: an error body always names problem.tn and its root type, so there is nothing per-call
         // to decide. Both arguments are required -- a bound record writes no type-ref of its own, so a
         // !!import without one produces a document a reader cannot select a type from.
-        this.problemWriter = objectWriter.describing(TsonProblemSchema.ID, "problem");
+        this.problemWriter = objectWriter.describing(TsonProblemSchema.ID, "problem.details");
         // Warm-up, not a correctness measure. writeProblem runs when something has already gone wrong, often
         // for many requests at once, and resolving a descriptor for the first time on that path adds latency
         // exactly where it is least wanted.
@@ -421,8 +421,8 @@ public final class TsonHttpCodec {
      * out-of-band carrier on a response as on a request. And a tree is the TSON encoding's own model, so a
      * {@code TsonValue} is written as TSON or not at all -- {@link #requireTson} is that rule.
      *
-     * <p><b>A problem written as JSON is RFC 9457's own format.</b> {@code problem.tn}'s {@code problem} is
-     * RFC 9457's five members plus {@code errors}, an extension member, so its JSON encoding <em>is</em> an
+     * <p><b>A problem written as JSON is RFC 9457's own format.</b> {@code problem.tn}'s {@code problem.details}
+     * is RFC 9457's five members plus {@code errors}, an extension member, so its JSON encoding <em>is</em> an
      * {@code application/problem+json} body, and is labelled so wherever the client accepts that type; where it
      * accepts only the negotiated JSON type, it is labelled with that.
      *

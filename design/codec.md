@@ -69,9 +69,9 @@ field on a response through `TsonSchemaHeader.format`, a List of one.
 - `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem.tn` — the error body, its schema,
   and the reader that proves the two agree. **This project's own schema, maintained here** — it began as a copy
   of `tson-cli`'s `diagnostics.tn` and has diverged on purpose: a CLI reports on files and a server reports on
-  requests, and lifting the two into a shared module was asked for upstream and rightly rejected. `problem`
-  follows **RFC 9457**; `diagnostic` stays close to what a TSON read produces, because that is what it
-  reports.
+  requests, and lifting the two into a shared module was asked for upstream and rightly rejected. Its one root
+  is the schema map `problem`: `problem.details` follows **RFC 9457**; `problem.diagnostic` stays close to what a
+  TSON read produces, because that is what it reports.
 - `io.ltr8.tson.base.source.HttpSchemaSource` / `SchemaFetchException` — **upstream's, not this module's** (see
   above). What stays here is the half upstream cannot know: `TsonHttpException.from` maps a fetch `Reason`
   through `Diagnostic.Code.of` into the one fetch status table, and `TsonHttpSchemaSourceIntegrationTest` pins
