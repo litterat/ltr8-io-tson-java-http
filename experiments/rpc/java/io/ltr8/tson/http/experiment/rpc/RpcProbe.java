@@ -104,10 +104,10 @@ class RpcProbe {
         assertEquals(List.of(), tson.validate(packet("""
             !place_order_return { id: c1
               error: { type: "https://ltr8.io/2026/40/http/problems/sku-not-found"  title: "No such SKU"
-                       status: 404  sku: A-100  errors: [] } }""")));
+                       status: 404  sku: A-100 } }""")));
 
         List<Diagnostic> wrongStatus = tson.validate(packet(
-                "!place_order_return { id: c1  error: { title: \"x\"  status: 400  sku: A-100  errors: [] } }"));
+                "!place_order_return { id: c1  error: { title: \"x\"  status: 400  sku: A-100 } }"));
         assertEquals(1, wrongStatus.size(), () -> "" + wrongStatus);
         assertEquals(Diagnostic.Code.FIELD_FIXED, wrongStatus.getFirst().code());
         assertEquals("/error/status", wrongStatus.getFirst().path().orElseThrow());

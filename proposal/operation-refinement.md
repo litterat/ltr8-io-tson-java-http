@@ -85,22 +85,25 @@ admitted in the description's value entry, according to what is bound:
 
 - nothing bound: a tree, the endpoint tagged `paged_get`, its fields `response`, then `status` 200 and `request`
   `order_query` filled from the pins;
-- the layer bound and `paged_get` bound to nothing (`SCHEMA_ERROR`): *'orders_http': the body is no value of the type
-  'http' -- at /resources/~1orders/endpoints/GET: 'paged_get' is not a member of the union 'endpoint' binds against
-  [Operation, Binding, Document]*, as the object reader refuses it in a data document;
+- the layer bound and `paged_get` bound to nothing: the description loads and the entry's value is a tree, the
+  layer's `endpoint` being `abstract` as `service.endpoint` is (an open base refuses the same value as no member of the
+  union its sealed interface closes; `UPSTREAM.md`, "A subtype nothing binds, at an abstract base's slot in a value
+  entry, leaves the value a tree");
 - `paged_get` bound to `Operation` too: an `Operation` with status 200, request `order_query` and response
   `order_page`.
 
 A subtype one level down (`endpoint & { request?: meta.type_ref }`) is admitted alike, and refused as `BIND_MISMATCH`
-under `Operation`, whose `response` and `errors` no field of it fills. An untagged endpoint is refused naming
-*[operation, binding, document]*, the layer's subtypes only, where a data document names `paged_get` beside them.
+under `Operation`, whose `response` and `errors` no field of it fills. An untagged endpoint is refused by the
+resolver, the base being abstract: *'endpoint' is abstract and has no direct instances, so a value here must name its
+type -- one of (operation | binding | document)*, the layer's subtypes only while `paged_get` is declared after the
+records it pins, and `paged_get` beside them when it is declared first, as a data document always names it.
 
 **In a data document importing the description** (`aDataDocumentAdmitsAndBindsTheSubtypeAtTheLayersSlot`). The same
 layer slot admits the subtype. The tree reader delivers the endpoint with `typeRef()` `paged_get` and the pinned
-`status` and `request`. The object reader refuses it (`TYPE_MISMATCH`, *'paged_get' is not a member of the union
-'endpoint' binds against [Operation, Binding, Document]*) while `paged_get` binds nothing, and delivers an `Operation`
-once it is bound to `Operation`. An untagged endpoint is refused naming *[operation, binding, document, paged_get]*:
-here the closure is the description's. `request: order` against the pin is `FIELD_FIXED` from both readers.
+`status` and `request`. The object reader refuses it as a missing binding (`MissingBindingException`, *no bound Java
+class for 'paged_get' …*) while `paged_get` binds nothing, and delivers an `Operation` once it is bound to
+`Operation`. An untagged endpoint is refused naming *(operation | binding | document | paged_get)*: here the closure is
+the description's. `request: order` against the pin is `FIELD_FIXED` from both readers.
 
 **Binding to the base's class** (`aSubtypeAddingAFieldDoesNotBindToTheBasesClass`). Only a subtype with the base's
 field set binds to its class. `operation & { page_size?: int32 }` is admitted by the tree reader and refused by the
@@ -112,10 +115,10 @@ next_page?: int32 }`, `order_list => page<order>` and a plain `!operation { requ
 
 **Through the real layer** (`theRealLayerAdmitsADescriptionsOwnOperation`). `orders-api-inline-1.tn` under a new
 identity, declaring `paged_get => service.operation & { status?: = 200 }` and writing `GET /orders/{id}/items` as
-`!paged_get`. Bound as a server binds by default (`TsonApiSchema.bindings()`) it is refused at *… at
-/resources/~1orders~1{id}~1items/endpoints/GET: 'paged_get' is not a member of the union 'service.endpoint' binds
-against [Operation, Binding, Document]*, and `describedBy` then throws *'…/orders-api-paged-1.tn' is not resolved --
-resolve the description before reading it*. Unbound it loads, the endpoint a tree tagged `paged_get` with status 200.
+`!paged_get`. Bound as a server binds by default (`TsonApiSchema.bindings()`) it loads with the projection held as a
+tree, and `describedBy` refuses it: *'orders_http' applies service.http, and its value did not bind to …Http but is
+held as TsonRecord -- a type written in it binds to no class; bind a description's own endpoint subtype through
+TsonApiSchema.bindingsWith*. Unbound it loads, the endpoint a tree tagged `paged_get` with status 200.
 With `bindingsWith(Map.of("paged_get", Operation.class))` it loads, the endpoint is an `api.Operation`, and
 `describedBy` reads the route with status 200, request `order_ref` and response `order_page`.
 

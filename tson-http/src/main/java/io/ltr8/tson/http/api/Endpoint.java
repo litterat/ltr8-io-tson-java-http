@@ -9,10 +9,10 @@ import java.util.Optional;
 
 /**
  * What sits under a verb in a {@link Resource}: an {@link Operation} carrying its signature inline, a {@link
- * Binding} borrowing an exchange's, or a {@link Document} answering bytes of a media type it lists. A sealed
- * interface, so the binder has a target for a {@code service.endpoint}-typed slot and a bare {@code
- * !service.endpoint} has nothing to construct -- the schema alone would admit one, and this binding is what makes the
- * base abstract.
+ * Binding} borrowing an exchange's, or a {@link Document} answering bytes of a media type it lists. The schema
+ * declares {@code service.endpoint} {@code abstract}, so the resolver refuses an untagged endpoint, or a bare {@code
+ * !service.endpoint}, naming the subtypes; this sealed interface is the Java side of the same fact, the binder's
+ * target for an {@code endpoint}-typed slot with no record of its own to construct.
  */
 @Typename(name = "service.endpoint")
 public sealed interface Endpoint permits Operation, Binding, Document {

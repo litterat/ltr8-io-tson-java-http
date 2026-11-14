@@ -93,7 +93,7 @@ vocabulary from the protocol's own registries and nothing else: RFC 9110's verbs
 held folded as HTTP/2 and HTTP/3 put it on the wire, a media type per RFC 9110 §8.3.1, a path as an RFC 6570 template,
 a status code. It describes an HTTP exchange in HTTP's terms, never in a framework's or a language's.
 
-The bridge to the language is `placement` (`design/service-description.md`), which maps the exchange's path, query,
+The bridge to the language is `placement` (`design/http-projection.md`), which maps the exchange's path, query,
 headers and body onto the request record; from there the join reaches the language. So the language is reached by two
 bridges from the data side, and never by a framework's annotations. That is why an adapter is a translation layer with
 no TSON knowledge of its own (`design/adapters.md`), and why three frameworks share one description.

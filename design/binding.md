@@ -16,7 +16,7 @@ are the server's own. Current form only.
   is a 500 (`BIND_MISMATCH`), not a 400: a constraint a client is held to goes in the schema.
 - A dependent field (`payload: kind!`) binds to an `Object` component, which `TsonBindings` registers as an atom; a
   context without it prepares clean and fails every read. Which types a sender may name in the sibling is held at
-  startup (`ChosenTypes`, `design/service-description.md`), so a sender's choice never reaches the 500 above.
+  startup (`ChosenTypes`, `design/http-projection.md`), so a sender's choice never reaches the 500 above.
 - A bound class guards its own optional lists in its compact constructor and never guards a required one.
 - A URI atom reads to `io.ltr8.net.Iri`, not `java.net.URI`.
 - A value's name (a `meta.ref<T>` slot, `T` no constructor) binds to `ValueRef<T>` or `String`; a `TypeRef` there is a

@@ -55,8 +55,9 @@ effect shifts under an upgrade with no diff to the descriptor is the silent rela
 So the validator's descriptor writes out the parts it leaves at the default — the identifier policy and every
 limit, each at `policy.tn`'s value — and the profile it publishes writes every limit in force. Pinned by
 `TsonDeploymentTest.aPolicyStatesEveryPart` and `aStatedPolicyIsAppliedExactlyAsWritten`.
-`unicode_data_version` is left out of a descriptor: the tables are the processor's, so a descriptor naming one
-this processor does not carry stops the read.
+`unicode_data_version` is the one optional member of `policy.processor`, and a descriptor leaves it out or writes
+the processor's own: the tables are the processor's, so `TsonDeployment` refuses a descriptor naming a version this
+processor does not carry, and the read stops.
 
 **Hosts are `net.tn`'s `host`**: a host name in either label form or an IPv4 or IPv6 address, one string-class
 atom, so `deployment.listener`'s `host` takes `localhost`, `"127.0.0.1"` and `"[::1]"` untagged — where

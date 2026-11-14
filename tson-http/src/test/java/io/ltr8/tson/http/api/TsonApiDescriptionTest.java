@@ -327,17 +327,17 @@ class TsonApiDescriptionTest {
 
     /**
      * An endpoint is a {@code !service.operation}, a {@code !service.binding} or a {@code !service.document}, and the
-     * tag says which: the base has no data of its own, so an untagged value is refused by the resolver naming the
-     * subtypes, and an exchange on a {@code !service.operation} is a field it does not have. The one-or-the-other rule
-     * needs no reader.
+     * tag says which: the base is {@code abstract}, so an untagged value, and one tagged with the base, is refused by
+     * the resolver naming the subtypes, and an exchange on a {@code !service.operation} is a field it does not have.
+     * The one-or-the-other rule needs no reader.
      */
     @Test
     void anEndpointIsTaggedOperationOrBinding() {
         String untagged = only(api("""
               a => !service.http { resources: { "/orders" => { POST => { exchange: place_order } } } }
             """));
-        assertTrue(untagged.contains("'service.endpoint' has no data of its own to bind")
-                && untagged.contains("[service.document, service.operation, service.binding]"), untagged);
+        assertTrue(untagged.contains("'service.endpoint' is abstract and has no direct instances, so a value here "
+                + "must name its type -- one of (service.document | service.operation | service.binding)"), untagged);
 
         String exchangeOnAnOperation = only(api("""
               a => !service.http {
@@ -349,7 +349,8 @@ class TsonApiDescriptionTest {
         String bareBase = only(api("""
               a => !service.http { resources: { "/orders" => { POST => !service.endpoint { status: 201 } } } }
             """));
-        assertTrue(bareBase.contains("has no data of its own to bind"), bareBase);
+        assertTrue(bareBase.contains("a tag naming 'service.endpoint' selects nothing -- it is abstract and has no "
+                + "direct instances"), bareBase);
     }
 
     /**
@@ -734,6 +735,38 @@ class TsonApiDescriptionTest {
         assertTrue(notAnExchangeName.contains("'service.exchange_name': 'place order'"), notAnExchangeName);
     }
 
+    /**
+     * A header name and an authentication scheme are folded under {@code ASCII_CASEFOLD}, which maps {@code A} to
+     * {@code Z} and nothing else, and the {@code pattern} judges the folded value ([TSON-SCHEMA] §5.5): {@code
+     * Content-Type} reads as {@code content-type}, while a name spelt with a fullwidth letter or a long s stays outside
+     * the token grammar and is refused, in a response header and in a request field's header alike, where a
+     * compatibility fold would have brought either into ASCII and admitted it.
+     */
+    @Test
+    void aHeaderNameIsFoldedInAsciiAndOneACompatibilityFoldWouldAdmitIsRefused() {
+        Route create = routes(api("""
+              a => !service.http { resources: { "/orders" => {
+                POST => !service.operation { request: order  response: order  status: 201
+                        response_headers: { Content-Type => "application/tson" } } } } }
+            """)).route(HttpVerb.POST, "/orders").orElseThrow();
+        assertEquals(Map.of("content-type", "application/tson"), create.responseHeaders());
+
+        for (String name : List.of("\uFF23ontent-Type", "Acce\u017Fs-Key")) {
+            String asResponseHeader = only(api("a => !service.http { resources: { \"/orders\" => {\n"
+                    + "  POST => !service.operation { request: order  response: order  status: 201\n"
+                    + "          response_headers: { \"" + name + "\" => \"x\" } } } } }"));
+            assertTrue(asResponseHeader.contains("'service.header_name'"), asResponseHeader);
+
+            String asRequestHeader = only(api("a => !service.http { resources: { \"/orders\" => {\n"
+                    + "  POST => !service.operation { request: new_order  headers: { idempotency_key => \"" + name
+                    + "\" } } } } }"));
+            assertTrue(asRequestHeader.contains("'service.header_name'"), asRequestHeader);
+        }
+
+        String scheme = only(api("bearer => !service.http_auth { scheme: \"\uFF22earer\" }"));
+        assertTrue(scheme.contains("'service.auth_scheme'"), scheme);
+    }
+
     // ── security schemes and response headers ──
 
     /** Two schemes, declared as value entries at the root, each tagged with the kind of scheme it is. */
@@ -790,7 +823,8 @@ class TsonApiDescriptionTest {
 
     /**
      * A name in {@code security} is a reference the resolver judges at load: a type and a protocol are each refused
-     * there, naming the slot, on a projection and on an endpoint alike; an untagged scheme has no data of its own.
+     * there, naming the slot, on a projection and on an endpoint alike; a scheme tagged with the abstract base is
+     * refused naming the subtypes.
      */
     @Test
     void aSecurityNamingNoSchemeIsRefusedAtLoad() {
@@ -805,9 +839,36 @@ class TsonApiDescriptionTest {
                 + " } }"));
         assertTrue(onAnEndpoint.contains("/security/0 wants a 'service.security_scheme', and 'order'"), onAnEndpoint);
 
-        String untagged = only(api("raw => { scheme: Bearer }\nk => !service.security_scheme { }"));
-        assertTrue(untagged.contains("'service.security_scheme' has no data of its own to bind")
-                && untagged.contains("[service.http_auth, service.api_key]"), untagged);
+        assertEquals("'k': the body is no value of the type 'service.security_scheme' -- a tag naming "
+                + "'service.security_scheme' selects nothing -- it is abstract and has no direct instances. Name the "
+                + "member this value is, one of (service.http_auth | service.api_key), or omit the tag",
+                only(api("raw => { scheme: Bearer }\nk => !service.security_scheme { }")));
+    }
+
+    /**
+     * An api key's {@code name} is {@code text}, a query parameter's name being no header name, and one carried in a
+     * header is held as a header name: folded under ASCII case folding, and refused at startup unless it is an RFC
+     * 9110 token. A query parameter's name is kept as written.
+     */
+    @Test
+    void aHeaderBorneApiKeyIsHeldAsAHeaderName() {
+        TsonApiDescription routes = routes(api("""
+              header_key => !service.api_key { in: header  name: X-Api-Key }
+              query_key  => !service.api_key { in: query  name: Api_Key }
+            """ + "a => !service.http {\n  security: [header_key]\n  resources: { " + safeGet("/a", "") + "\n  "
+                + safeGet("/b", "security: [query_key]") + " }\n}"));
+        assertEquals(List.of(new ApiKey(ApiKeyIn.header, "x-api-key")),
+                routes.route(HttpVerb.GET, "/a").orElseThrow().security());
+        assertEquals("x-api-key", ((ApiKey) routes.route(HttpVerb.GET, "/a").orElseThrow().security().getFirst()).name());
+        assertEquals("Api_Key", ((ApiKey) routes.route(HttpVerb.GET, "/b").orElseThrow().security().getFirst()).name(),
+                "a query parameter's name is kept as written");
+
+        String refused = assertThrows(IllegalArgumentException.class, () -> routes(api(
+                "bad => !service.api_key { in: header  name: \"X Api Key\" }\n"
+                        + "a => !service.http {\n  security: [bad]\n  resources: { " + safeGet("/a", "") + " }\n}")))
+                .getMessage();
+        assertEquals("'a GET /a' accepts an api key in the header 'x api key', which is no RFC 9110 token, so no header "
+                + "carries it -- a header name is ASCII letters, digits and !#$%&'*+.^_`|~-", refused);
     }
 
     /**

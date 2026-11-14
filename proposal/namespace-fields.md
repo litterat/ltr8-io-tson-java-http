@@ -1,8 +1,8 @@
 # A protocol and an http projection as records with a namespace field
 
 **Status:** adopted. `service.tn` declares `service.protocol` and `service.http` as records with a namespace field, read
-by `TsonApiDescription` through `Protocol` and `Http` (`design/service-description.md`), without `version` and `base`
-and with every document in the full form. Measured by
+by `TsonApiDescription` through `Protocol` and `Http` (`design/service-description.md`, `design/http-projection.md`),
+without `version` and `base` and with every document in the full form. Measured by
 `tson-http/src/test/java/io/ltr8/tson/http/probe/NamespaceFieldProbeTest.java`; what follows is the record of the
 measurement. It concerns this project's own vocabulary, `service.tn`, and asks nothing of tson-java or the spec.
 

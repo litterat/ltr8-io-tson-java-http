@@ -23,11 +23,11 @@
   in a contract -- raising a token policy would mean publishing a new description, which is the friction that
   gets a control switched off.
 
-  THIS DOCUMENT IS DATA, NOT A SCHEMA, and the line is worth stating. A document that exports a namespace is
-  a schema, and any document may refer to a type or a value in the namespace it imports. An API description
-  is a schema because others refer into it. A descriptor configures one instance, may move without minting
-  an identity, and exports nothing, since nothing may name it (rule 2 below), so nothing here needs to be a
-  schema.
+  A DESCRIPTOR IS DATA, NOT A SCHEMA -- this document, the vocabulary a descriptor is written in, is the
+  schema -- and the line is worth stating. A document that exports a namespace is a schema, and any document
+  may refer to a type or a value in the namespace it imports. An API description is a schema because others
+  refer into it. A descriptor configures one instance, may move without minting an identity, and exports
+  nothing, since nothing may name it (rule 2 below), so it need not be a schema.
 
   Two rules hold, or self-certification returns by the back door:
 
@@ -44,7 +44,8 @@
   in the file is what runs. There are no partial overrides falling back to the library's defaults, because a
   default is the library's to move, and a security setting whose effect can shift under a library upgrade
   with no diff to the descriptor is the silent relaxation §8.2 exists to prevent. A descriptor that states
-  no policy leaves the library's defaults alone; one that states a policy states all of it.
+  no policy leaves the library's defaults alone; one that states a policy states every required member of
+  `policy.processor`, and the one optional member, `unicode_data_version`, is the processor's (below).
 
   ONE ROOT NAME. Every entry is a member of the schema map `deployment` nested in the root, and is named by
   its path from the root, from inside the map as from outside it: `deployment.descriptor`,
@@ -68,12 +69,14 @@
     @doc:"""
       One deployment: the descriptor a processor is handed.
 
-      `policy` is the processor policy this deployment runs under: policy.tn's identifier and token policies
-      and limits, every part stated. Absent leaves the library's defaults, which point opposite ways round for
-      reasons §8.2 gives -- a name is an interface and a homograph in one is an attack, while data may
-      legitimately be a Cyrillic display name -- so a descriptor stating none is asking for exactly that, not
-      for nothing. `unicode_data_version` is left out: the tables are the processor's, not the deployment's,
-      and a descriptor naming one this processor does not carry is refused when it is read.
+      `policy` is the processor policy this deployment runs under, a `policy.processor` carried whole: its
+      identifier and token policies and its `limits`, every one stated, and its `unicode_data_version`, each a
+      member of that record rather than a field of this one. Absent leaves the library's defaults, which point
+      opposite ways round for reasons §8.2 gives -- a name is an interface and a homograph in one is an attack,
+      while data may legitimately be a Cyrillic display name -- so a descriptor stating none is asking for
+      exactly that, not for nothing. `unicode_data_version` is the one optional member of `policy.processor`,
+      and a descriptor leaves it out or writes the processor's own: the tables are the processor's, not the
+      deployment's, and `TsonDeployment` refuses a descriptor naming a version this processor does not carry.
 
       Scripts are named by their [UAX #24] Script property alias, long (`Latin`, `Canadian_Aboriginal`) or ISO
       15924 (`Latn`, `Cans`), case-insensitively; a name that is not a script stops the read, so a typo in a
@@ -110,12 +113,12 @@
       A PROFILE IS A HINT AND THE VERDICT IS THE AUTHORITY. This can be cached, and a policy can change under
       it; only the 4xx a request actually receives says what applied to that request. The refusal itself
       carries only its code: §8.2 has the policy and the data version stated once per processor rather than on
-      every refusal, and this profile is that statement for a counterparty. `unicode_data_version` is stated,
-      as a report states it: §8.3 marks all three rules unstable across Unicode releases, so a refusal is only
-      interpretable against the data that produced it.
-
-      `limits` is here for the same reason the policies are: a 413 says a document went past a bound, and a
-      sender that read the bound first never writes past it.
+      every refusal, and this profile is that statement for a counterparty. `unicode_data_version` and `limits`
+      are members of `policy.processor`, which the profile carries whole. The version is always written here,
+      as a report writes it: §8.3 marks all three rules unstable across Unicode releases, so a refusal is only
+      interpretable against the data that produced it. The limits are here for the same reason the policies
+      are: a 413 says a document went past a bound, and a sender that read the bound first never writes past
+      it.
       """
     acceptance_profile => {
       name:   text

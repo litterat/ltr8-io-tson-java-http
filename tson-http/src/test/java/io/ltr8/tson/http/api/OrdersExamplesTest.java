@@ -137,6 +137,7 @@ class OrdersExamplesTest {
         TsonApiDescription routes = routesOf(tson(), "orders-api-secured-1.tn", "orders_http");
         HttpAuth bearer = new HttpAuth("bearer");
         ApiKey partner = new ApiKey(ApiKeyIn.header, "X-Api-Key");
+        assertEquals("x-api-key", partner.name(), "a header-borne key's name is held folded");
 
         assertEquals(List.of(bearer), routes.route(HttpVerb.POST, "/orders").orElseThrow().security(), "inherited");
         assertEquals(List.of(partner), routes.route(HttpVerb.GET, "/orders").orElseThrow().security(), "replaced");

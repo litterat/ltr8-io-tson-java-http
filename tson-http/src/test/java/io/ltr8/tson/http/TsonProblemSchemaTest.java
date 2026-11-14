@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TsonProblemSchemaTest {
@@ -101,7 +102,10 @@ class TsonProblemSchemaTest {
         assertEquals(problem, readBack);
     }
 
-    /** errors is a list because a 415 or a 406 produces no diagnostic at all, and must still be a valid body. */
+    /**
+     * A 415 or a 406 produces no diagnostic at all, and the boundary still writes {@code errors}, an empty list,
+     * which is a valid body and reads back as one.
+     */
     @Test
     void aProblemWithNoDiagnosticsIsStillValid() {
         TsonHttpCodec codec = new TsonHttpCodec(TsonProblemSchema.tson());
@@ -113,6 +117,37 @@ class TsonProblemSchemaTest {
                 "application/tson", TsonProblemSchema.ID, "problem.details", TsonProblem.class);
         assertEquals(problem, readBack);
         assertEquals(415, readBack.status());
+    }
+
+    /**
+     * {@code errors} is optional, and a business error omits it: a body without it, in either encoding, reads as an
+     * empty list, since the binder hands {@link TsonProblem}'s constructor nothing for an omitted list.
+     */
+    @Test
+    void aBodyOmittingErrorsReadsAsAnEmptyList() {
+        TsonHttpCodec codec = new TsonHttpCodec(TsonProblemSchema.tson()).acceptingJson();
+        String tson = "!!import:\"" + TsonProblemSchema.ID + "\"\n!problem.details { title: \"No such SKU\"  status: 404 }";
+        TsonProblem read = codec.readObject(new ByteArrayInputStream(tson.getBytes(StandardCharsets.UTF_8)),
+                "application/tson", TsonProblem.class);
+        assertEquals(new TsonProblem(Optional.empty(), "No such SKU", 404, Optional.empty(), Optional.empty(),
+                List.of()), read);
+
+        String json = "{\"title\": \"No such SKU\", \"status\": 404}";
+        assertEquals(read, codec.readObjectAs(new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)),
+                "application/problem+json", TsonProblemSchema.ID, "problem.details", TsonProblem.class));
+    }
+
+    /** {@code status} is a {@code problem.status}, an HTTP status code, so 42 is refused where an int32 took it. */
+    @Test
+    void aStatusOutsideHttpsRangeIsRefused() {
+        TsonHttpCodec codec = new TsonHttpCodec(TsonProblemSchema.tson());
+        String body = "!!import:\"" + TsonProblemSchema.ID + "\"\n!problem.details { title: x  status: 42 }";
+        TsonHttpException refused = assertThrows(TsonHttpException.class, () -> codec.readObject(
+                new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)), "application/tson", TsonProblem.class));
+        assertEquals(400, refused.status());
+        assertEquals(List.of(Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION),
+                refused.problem().errors().stream().map(TsonProblemDiagnostic::code).toList());
+        assertEquals("/status", refused.problem().errors().getFirst().path().orElseThrow());
     }
 
     /** An absent detail must survive as an absence, not become an empty string. */

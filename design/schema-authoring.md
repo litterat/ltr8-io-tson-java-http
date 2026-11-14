@@ -24,6 +24,11 @@ touches, and the schema-language rules that read like bugs when they bite. Curre
   map. A bound class's `@Typename` is the qualified name (`problem.details`, `deployment.descriptor`).
 - An optional field is `name?: T`; `name: T?` is a required field admitting `_`. A `text` field accepts any token.
   A `pattern` is I-Regexp and `^`/`$` are literal characters.
+- A `pattern` judges the value after the type's `normalization` has folded it. An ASCII protocol's name (an HTTP
+  header field name, an authentication scheme) folds with `ASCII_CASEFOLD`, never `NFKC_CASEFOLD`, which folds
+  compatibility characters into ASCII and widens what an ASCII pattern admits.
+- A base record that has no values of its own is declared `abstract` (`service.endpoint`, `service.security_scheme`):
+  the resolver then refuses an untagged value, and one tagged with the base, naming the subtypes, in every mode.
 
 ## The header, and the bundled documents
 
@@ -179,4 +184,20 @@ the build is the check.
   `^[A-Za-z][A-Za-z_]*$`"* — a message that reads like the value is wrong when the pattern is. Reflex from
   JSON Schema, which is unanchored and needs them. `service.tn`'s `service.header_name` and `service.path_template`
   carry patterns here.
+- **A `pattern` judges the folded value, so the fold decides what an ASCII pattern admits.** [TSON-SCHEMA] §5.5 puts a
+  text value into its type's `normalization` form first, and every facet, `pattern` included, judges the result.
+  `NFKC_CASEFOLD` folds compatibility characters *into* ASCII, so under it a header name spelt with a fullwidth `C`
+  (U+FF23) or a long s (U+017F) folds to a plain token and the RFC 9110 token pattern admits it: two names a reader
+  takes for one header that no server does. `ASCII_CASEFOLD` maps `A` to `Z` and nothing else, the comparison HTTP field
+  names, URI schemes and DNS names state for themselves, so the same spelling stays outside the pattern and is refused.
+  `service.header_name` and `service.auth_scheme` use it
+  (`TsonApiDescriptionTest.aHeaderNameIsFoldedInAsciiAndOneACompatibilityFoldWouldAdmitIsRefused`).
+- **`abstract` is grammar, and it is what makes a base have no values of its own.** `endpoint => abstract
+  service.placement & { … }` ([TSON-SCHEMA] §5.2, §12.1's `definition-mark`, as the kernel writes `type => abstract
+  meta.top & { … }`) makes the resolver refuse an untagged value at an `endpoint`-typed slot, and a value tagged
+  `!service.endpoint`, naming the subtypes — in every mode, bound or not. Binding the base to a sealed interface says the
+  same fact on the Java side and no longer carries it alone. The mark is not inherited, so `operation`, `binding` and
+  `document` stay open. A subtype nothing binds, at an abstract base's slot in a value entry, leaves the whole value a
+  tree rather than being refused (`UPSTREAM.md`, "A subtype nothing binds, at an abstract base's slot in a value entry,
+  leaves the value a tree"), which is why `TsonApiDescription` refuses a `service.http` entry that did not bind.
 

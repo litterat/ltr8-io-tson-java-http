@@ -206,7 +206,10 @@ and RFC 9457's own pointer from a problem to deployment-scoped documentation is 
 and that documentation is where a client is sent to `/.well-known/tson-deployment`. Embedding the profile in
 every refusal would be the constant-restated-N-times mistake upstream just removed from the diagnostic, one
 level up. Not adding a `policy` member was therefore a layering decision, not an RFC 9457 constraint — extension
-members are the standard's own growth mechanism and `errors` already is one. If a client ever needs to know
+members are the standard's own growth mechanism and `errors` already is one. `problem.tn` declares it optional: the
+boundary writes it on every problem it renders, empty where a failure produced no diagnostic, and a business error
+omits it. `status` is a `problem.status`, an integer from 100 to 599, so the body cannot state a number that is no
+HTTP status. If a client ever needs to know
 *which version* of the profile judged it, the answer is a `Link` header plus the profile's `name`, added then.
 
 **Both channels type a refusal by its rule.** A refusal at schema load arrives collected, as one of the three codes,

@@ -74,15 +74,16 @@ public final class OrderServer {
     /**
      * A bound {@code sku_not_found}: every member of {@code problem.details}, plus this error's own {@code sku}.
      * Verbose on purpose -- a record is closed under its type, so composing one in the schema means spelling
-     * the composed shape here too.
+     * the composed shape here too. {@code errors} is a component because a class bound for reading has one for
+     * every field, and it is empty here: a business error carries no diagnostic, so its body omits the member.
      */
     @Typename(name = "sku_not_found")
     public record SkuNotFound(Optional<String> type, String title, int status, Optional<String> detail,
-                              Optional<String> instance, List<TsonProblemDiagnostic> errors, String sku) {
+                              Optional<String> instance, Optional<List<TsonProblemDiagnostic>> errors, String sku) {
 
         static SkuNotFound of(String sku) {
             return new SkuNotFound(Optional.of(TsonHttpException.TYPES + "sku-not-found"), "No such SKU", 404,
-                    Optional.of("'" + sku + "' is not stocked"), Optional.empty(), List.of(), sku);
+                    Optional.of("'" + sku + "' is not stocked"), Optional.empty(), Optional.empty(), sku);
         }
     }
 

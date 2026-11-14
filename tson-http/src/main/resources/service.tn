@@ -21,14 +21,14 @@
   (`design/invoke.md`), and no parameter list, return type or exception is ever written here.
 
   One vocabulary, and two entries a description writes for what it serves. `service.protocol` and
-  `service.http` are RECORDS, each holding one field typed by a namespace (§4.1): a protocol's `exchanges`, a
-  `service.exchanges` mapping exchange names to exchanges, and a projection's `resources`, a
+  `service.http` are RECORDS, each holding one field typed by a namespace ([TSON-SCHEMA] §4.1): a protocol's
+  `exchanges`, a `service.exchanges` mapping exchange names to exchanges, and a projection's `resources`, a
   `service.resources` mapping path templates to resources. An entry applying either is a value, never a
   type. Everything inside them -- `service.exchange`, `service.resource`, `service.endpoint`,
   `service.operation`, `service.binding`, `service.document`, `service.exemption` -- is an ordinary record
   too. A record composes (`service.operation => service.endpoint & service.signature`) and is admitted as a
-  subtype where its base is expected (§7.2). Beside them a description may declare the security schemes its
-  projections and endpoints name, each a value entry tagged with a subtype of `service.security_scheme`:
+  subtype where its base is expected ([TSON-SCHEMA] §7.2). Beside them a description may declare the security
+  schemes its projections and endpoints name, each a value entry tagged with a subtype of `service.security_scheme`:
   `bearer => !service.http_auth { scheme: Bearer }`.
 
     orders => !service.protocol {
@@ -65,11 +65,11 @@
   `!service.document`, listing its media types where the others state a response type.
 
   THE POSITIONAL FORM, AND WHAT IT COSTS. `service.resource`, `service.protocol` and `service.http` each
-  have exactly one bare REQUIRED field, so §5.6 lets the map stand in for it: `"/orders" => { GET => ... }`
-  is `"/orders" => { endpoints: { GET => ... } }`, and the tag is optional under the path key. The examples
-  use it for a resource, and write a protocol and a projection in full, since a reference into a protocol
-  spells `exchanges` whether the document wrote it or not, and a projection writing `binds` cannot use the
-  form at all. The cost is a versioning one and it is the reason this is written down: adding a SECOND
+  have exactly one bare REQUIRED field, so [TSON-SCHEMA] §5.6 lets the map stand in for it:
+  `"/orders" => { GET => ... }` is `"/orders" => { endpoints: { GET => ... } }`, and the tag is optional under
+  the path key. The examples use it for a resource, and write a protocol and a projection in full, since a
+  reference into a protocol spells `exchanges` whether the document wrote it or not, and a projection writing
+  `binds` cannot use the form at all. The cost is a versioning one and it is the reason this is written down: adding a SECOND
   required field to any of the three withdraws the positional form from it, and every document written in
   it stops parsing. So a new field there is optional or it is a new type.
 
@@ -92,8 +92,10 @@
       The transport-neutral contract of one request-and-reply. A plain record on purpose: it is what
       `exchange` and an inline `operation` share.
 
-      `request` absent means the exchange takes nothing; `response` absent means it returns nothing (an HTTP
-      204). `errors` lists BUSINESS errors -- the request was schema-valid and the domain said no -- each
+      `request` absent means the exchange takes nothing; `response` absent means it returns nothing. An http
+      endpoint over a signature with no response writes `status: 204`, `205` or `304`, a status that carries no
+      body, and `TsonApiDescription` refuses one that does not: `service.endpoint`'s default 200 is for an endpoint
+      with a response. `errors` lists BUSINESS errors -- the request was schema-valid and the domain said no -- each
       a type composing `problem.details`. A transport's own refusals (a body failing its schema, an Accept it
       cannot satisfy) are not listed: every exchange has them and the error boundary answers them.
       """
@@ -156,8 +158,9 @@
       `{+schemaPath}`, reserved expansion, leaves its `/` unencoded, which is what an identity path with
       slashes in it needs. The fragment operator is not admitted, since a server never receives a fragment,
       and nor are levels 3 and 4 -- several variables to an expression, query forms, prefixes and explode --
-      which describe expansion rather than a route a server can match. A variable name is ASCII letters,
-      digits and `_`.
+      which describe expansion rather than a route a server can match. A variable name is RFC 6570's varname,
+      ASCII letters, digits and `_`, so a request field it binds is spelt that way: a field named `order-id`
+      cannot be bound from the path, and travels in the query, a header or the body.
 
       An identifier family, because it keys a namespace: it starts with `/`, and continues with identifier
       characters and RFC 3986's other path characters -- unreserved, sub-delimiters but `'`, `:`, `@`, a
@@ -173,11 +176,15 @@
     }
 
     @doc:"""
-      A header field name: an RFC 9110 token, compared without case as RFC 9110 §5.1 has it -- held folded, so
-      `Idempotency-Key` is `idempotency-key`, the form HTTP/2 and HTTP/3 put on the wire. It keys a map field
-      rather than a namespace, so it is a text family with a `pattern`.
+      A header field name: an RFC 9110 token, compared without case as RFC 9110 §5.1 has it -- held folded under
+      `ASCII_CASEFOLD`, so `Idempotency-Key` is `idempotency-key`, the form HTTP/2 and HTTP/3 put on the wire.
+      [TSON-SCHEMA] §5.5 judges the `pattern` against the value put into the type's form, and `ASCII_CASEFOLD`, the
+      comparison HTTP field names state for themselves, maps `A` to `Z` and nothing else, so a name spelt with a
+      fullwidth letter (U+FF23 for `C`) or a long s (U+017F) stays outside the token grammar and is refused, where
+      `NFKC_CASEFOLD` would fold either into ASCII and admit it. It keys a map field rather than a namespace, so
+      it is a text family with a `pattern`.
       """
-    header_name => !unicode.text_type { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+"  normalization: NFKC_CASEFOLD }
+    header_name => !unicode.text_type { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+"  normalization: ASCII_CASEFOLD }
 
     @doc:"""
       Where a request record's fields go: the bridge from HTTP's constructs to the exchange's request record,
@@ -211,13 +218,17 @@
     @doc:"""
       What sits under a verb, under a path, in an http projection: the base record of `operation`, `binding`
       and `document`, carrying what each has -- the placement of a request record, the status of the response,
-      and the media types the endpoint speaks. A value at an `endpoint`-typed slot is tagged with the subtype it
-      is and admitted as that subtype (§7.2); a reader binds the base to a type with no bare form, so an
-      untagged value is refused naming the subtypes. The tag is the whole difference between the
-      one-declaration form and the two-declaration form, and it is read before anything else.
+      and the media types the endpoint speaks. It is `abstract` ([TSON-SCHEMA] §5.2): it has no values of its
+      own, so a value at an `endpoint`-typed slot is tagged with the subtype it is and admitted as that subtype
+      (§7.2), and an untagged value, or one tagged `!service.endpoint`, is refused by the resolver naming the
+      subtypes, in every mode. The sealed interface `Endpoint` the reader binds it to is the Java side of the same
+      fact. The tag is the whole difference between the one-declaration form and the two-declaration form, and it
+      is read before anything else.
 
       `status` is the status of the success response; there is no list of responses, because an exchange has
-      one response type. An error's status is the `status` member its own type pins --
+      one response type. The default 200 is for an endpoint with a response: one whose signature has no response
+      type writes `status: 204` (or 205 or 304, a status that carries no body), and `TsonApiDescription` refuses
+      an operation or a binding that does not. An error's status is the `status` member its own type pins --
       `sku_not_found => problem.details & { status: = 404  sku: text }` -- so an error type an endpoint names MUST fix
       it, and `TsonApiDescription` refuses one that does not. A transport's own refusals -- a body failing its
       schema, an Accept nothing satisfies -- are not listed: every endpoint has them, and the error boundary
@@ -252,10 +263,10 @@
       endpoint with no response type, admits a literal only. The header names are `header_name`s, held folded.
 
       Deliberately absent, each a decision: links, callbacks, examples, tags, servers, and more than one success
-      response. Adding one is a later version under §3.5 once this is published, never an edit -- and a new kind
-      of endpoint is a new record composing this one, admitted wherever an `endpoint` is.
+      response. Adding one is a later version under [TSON-SCHEMA] §3.5 once this is published, never an edit --
+      and a new kind of endpoint is a new record composing this one, admitted wherever an `endpoint` is.
       """
-    endpoint => service.placement & {
+    endpoint => abstract service.placement & {
       status?:            service.status_code ~ 200
       media_types?:       [media_type]
       security?:          [meta.ref<service.security_scheme>]
@@ -268,7 +279,8 @@
       schema document was published as -- and `TsonApiDescription` refuses a document listing none.
       `application/tson` is not implied for a document as it is for the other endpoint kinds. Its success body
       is not judged as a value, only labelled. It may still take a request record to place and name business
-      errors.
+      errors, and it restates `request?` and `errors?` rather than composing `service.signature` because the
+      signature carries `response?` too, and a document has no response type to judge.
       """
     document => service.endpoint & {
       request?:   meta.type_ref
@@ -285,13 +297,14 @@
     summary => @meta.annotation text
 
     @doc:"""
-      Three facts about an exchange that a caller composing calls needs -- an agent planning a batch, deciding what may
-      be retried, reordered or must be confirmed first -- and has no HTTP verb to read them from. Bare markers before
-      the exchange's key: `@service.safe get_order => { ... }`, `@service.idempotent cancel_order => { ... }`.
-      `@service.safe` implies `@service.idempotent`. Annotations rather than fields because they describe the exchange,
-      not its request or response; the http projection CHECKS its verb against them (GET must be safe; PUT and DELETE
-      idempotent) and never derives one from the other. `safe` and `idempotent` are RFC 9110's words for the same
-      facts.
+      The exchange has no effect a caller can observe: calling it is a read. `safe` is the first of three facts
+      about an exchange that a caller composing calls needs -- an agent planning a batch, deciding what may be
+      retried, reordered or must be confirmed first -- and has no HTTP verb to read them from; `idempotent` and
+      `destructive`, declared after it, are the other two. Bare markers before the exchange's key:
+      `@service.safe get_order => { ... }`, `@service.idempotent cancel_order => { ... }`. `@service.safe` implies
+      `@service.idempotent`. Annotations rather than fields because they describe the exchange, not its request or
+      response; the http projection CHECKS its verb against them (GET must be safe; PUT and DELETE idempotent) and
+      never derives one from the other. `safe` and `idempotent` are RFC 9110's words for the same facts.
 
       `@service.destructive` is the third: the exchange has an effect a caller cannot undo, and a caller should
       confirm before invoking it -- `@service.idempotent @service.destructive cancel_order => { ... }`. It is the one
@@ -302,7 +315,11 @@
       at GET or HEAD, as it refuses an unsafe one there.
       """
     safe        => @meta.annotation void
+
+    @doc:"The exchange may be repeated with the effect of one call, so a caller may retry it; `@service.safe` implies it."
     idempotent  => @meta.annotation void
+
+    @doc:"The exchange has an effect a caller cannot undo, so a caller confirms it first; it excludes `@service.safe`."
     destructive => @meta.annotation void
 
     @doc:"An endpoint with its signature INLINE -- the one-declaration form, for a projection with no protocol behind it."
@@ -381,11 +398,12 @@
       How a client proves who it is to an endpoint: the base record of `http_auth` and `api_key`. A description
       declares a scheme as a VALUE ENTRY at its root, tagged with the subtype it is --
       `bearer => !service.http_auth { scheme: Bearer }` -- and an http projection or an endpoint names it in
-      `security`, one segment, a reference the resolver judges. A reader binds the base to a type with no bare
-      form, so an untagged scheme is refused naming the subtypes, as an untagged `endpoint` is. It declares no
-      field: what a scheme says is its subtype's.
+      `security`, one segment, a reference the resolver judges. It is `abstract` ([TSON-SCHEMA] §5.2), so an
+      untagged scheme, or one tagged `!service.security_scheme`, is refused by the resolver naming the subtypes, in
+      every mode, as an untagged `endpoint` is; the sealed interface `SecurityScheme` it binds to is the Java side
+      of the same fact. It declares no field: what a scheme says is its subtype's.
       """
-    security_scheme => { }
+    security_scheme => abstract { }
 
     @doc:"""
       An HTTP authentication scheme (RFC 9110 §11): the client sends `Authorization: <scheme> <credentials>`.
@@ -395,15 +413,18 @@
 
     @doc:"""
       A key the client carries in a header or a query parameter: `in` says which, and `name` is the header's or
-      the parameter's name.
+      the parameter's name. `name` is `text` rather than a `header_name` because a query parameter's name is no
+      header name; when `in` is `header` the reader holds it as one, folded under `ASCII_CASEFOLD` and refused
+      unless it is an RFC 9110 token, so `X-Api-Key` is `x-api-key`.
       """
     api_key => service.security_scheme & { in: service.api_key_in  name: text }
 
     @doc:"""
-      An authentication scheme's name: an RFC 9110 token (§11.1), compared without case as RFC 9110 §11.1 has it
-      -- held folded, so `Bearer` is `bearer`. A text family with a `pattern`, as `header_name` is.
+      An authentication scheme's name: an RFC 9110 token, compared without case as RFC 9110 §11.1 has it -- held
+      folded under `ASCII_CASEFOLD`, so `Bearer` is `bearer`, and a name a compatibility fold would bring into
+      ASCII is refused, as a `header_name`'s is. A text family with a `pattern`, as `header_name` is.
       """
-    auth_scheme => !unicode.text_type { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+"  normalization: NFKC_CASEFOLD }
+    auth_scheme => !unicode.text_type { pattern: "[!#$%&'*+.^_`|~0-9A-Za-z-]+"  normalization: ASCII_CASEFOLD }
 
     @doc:"Where an `api_key` travels: a request header or a query parameter."
     api_key_in => !enum [header query]

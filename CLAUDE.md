@@ -26,7 +26,8 @@ Each under ~20 KB and opening with its invariants. Pick by what you are about to
 | `acceptingJson`, `application/json` bodies, `respondDescribed`, `application/problem+json` | `json-encoding.md` |
 | `TsonSchemaVersions`, `TSON-Accept-Schema`, `@Profile`, two versions of one schema | `schema-versions.md` |
 | `allowHost`/`mapHost`, `SchemaSource.ofMap`, an `!!import` URL in a request body | `schema-sources.md` |
-| `service.tn`, `io.ltr8.tson.http.api`, `TsonApiDescription`, `TsonApiCoverage`, business errors | `service-description.md` |
+| `service.tn`'s protocol side (exchanges, their facts, the root map), `io.ltr8.tson.http.api`, `TsonApiDescription`, `TsonApiCoverage`, business errors | `service-description.md` |
+| `service.http`, endpoints, placement, statuses, media types, security schemes, response headers, the verb checks, `Route` | `http-projection.md` |
 | The protocol layer, `tson-invoke`, the join (backlog) | `invoke.md` |
 | A `.tn` file this project owns, a `!!id`, `problem.tn`, a revision bump, a field spelling | `schema-authoring.md` |
 | `deployment.tn`, `TsonDeployment`, `/.well-known/tson-deployment`, `policy.tn` | `deployment-descriptor.md` |
@@ -174,10 +175,11 @@ One line each; the note carries the why. Read the note before touching the code 
 - Every name `service.tn` declares sits in its one root map and is written by its path, `!service.binding`,
   `@service.safe`, `meta.ref<service.exchange>`, inside the layer too: a bare name there is unresolved, and the reader
   asks `Annotations` for `service.safe`. (`service-description.md`)
+- An entry has two annotation positions that land in different places; reading only one looks like a library bug. (same)
 - A protocol and an http projection are records whose one required field is a namespace (`exchanges`, `resources`), so
   an exchange is `orders.exchanges.place_order`, and like `service.resource` each has the positional form: a second
-  required field breaks every document written in it. A projection's claims, `binds` and `not_bound`, are fields. (same)
-- An entry has two annotation positions that land in different places; reading only one looks like a library bug. (same)
+  required field breaks every document written in it. A projection's claims, `binds` and `not_bound`, are fields.
+  (`http-projection.md`)
 - An endpoint's `security: []` is open and an absent one inherits the projection's; never fold absent into empty. (same)
 - `TsonHandler.install` is not optional with Helidon's `TsonMediaSupport`. (`tson-http-helidon/CLAUDE.md`)
 - A descriptor states its policy whole; an absent policy is not a permissive one. (`deployment-descriptor.md`)

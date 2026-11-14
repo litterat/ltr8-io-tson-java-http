@@ -3,8 +3,9 @@ package io.ltr8.tson.http.probe.operationrefinement;
 import java.util.List;
 
 /**
- * The endpoint base, bound to a type with no bare form, so an untagged endpoint is refused naming the subtypes. A
- * description's own subtype of {@code operation} has no class here: the question is which class it reaches.
+ * The endpoint base, abstract in the probe's layer as {@code service.endpoint} is, so an untagged endpoint is refused
+ * naming the subtypes. A description's own subtype of {@code operation} has no class here: the question is which class
+ * it reaches.
  */
 public sealed interface Endpoint permits Operation, Binding, Document {
 

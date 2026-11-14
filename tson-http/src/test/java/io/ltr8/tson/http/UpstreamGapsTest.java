@@ -1687,4 +1687,94 @@ class UpstreamGapsTest {
         assertFalse(message.contains("names a value") || message.contains("not a type"),
                 "the message names the fault now -- update UPSTREAM.md's entry and flip this");
     }
+
+    // ── constraint: an omitted optional list reaches a bound constructor as null ───────────────────────────────
+
+    /**
+     * <b>An optional list a document omits reaches a bound record's {@code List} component as {@code null}</b>: the
+     * binder does not normalise it, and the convention upstream follows is that the record does, in its compact
+     * constructor. {@code TsonProblem} relies on it for {@code problem.details}'s optional {@code errors}, which a
+     * business error omits, as {@code TsonDeployment} and the {@code api} records do for theirs. Fails the day the
+     * binder delivers an empty list, or refuses a {@code List} component for an optional field.
+     */
+    @Test
+    void anOmittedOptionalListReachesTheConstructorAsNull() {
+        String id = "https://s.example.com/2026/40/optional-list-1.tn";
+        String schema = """
+                !!id:"https://s.example.com/2026/40/optional-list-1.tn"
+                !!import:"https://tson.io/2026/40/m/core.tn"
+                !schema {
+                    tagged => { name: text  tags?: [text] }
+                }""";
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(Map.of(id, schema))))
+                .withDataBindContext(TsonBindings.of(Map.of("tagged", Tagged.class))));
+        tson.resolve(schema);
+        assertEquals(new Tagged("a", null), tson.objectReader().withSchema(id).readAs("{ name: a }", "tagged",
+                Tagged.class), "an omitted list arrives as something other than null now -- update the records' guards");
+        assertEquals(new Tagged("a", List.of()), tson.objectReader().withSchema(id).readAs("{ name: a  tags: [] }",
+                "tagged", Tagged.class));
+    }
+
+    /** Bound by {@link #anOmittedOptionalListReachesTheConstructorAsNull}, its list left unguarded. */
+    public record Tagged(String name, List<String> tags) {
+    }
+
+    // ── open: a subtype nothing binds, at an abstract base's slot in a value entry, leaves the value a tree ──────
+
+    /**
+     * <b>A subtype nothing binds is refused at load wherever its value is read</b> -- the contract wanted, and what
+     * an OPEN base does: a value entry holding {@code !two {}} at a {@code base}-typed slot, {@code base} bound to a
+     * sealed interface and {@code two} bound to nothing, is refused as no member of the union the interface closes.
+     * Mark the base {@code abstract} and the same schema loads clean, the entry's value held as a tree rather than
+     * the bound {@code Holder}, so a reader looking for the bound class finds nothing to read. {@code
+     * TsonApiDescription} refuses a {@code service.http} entry whose value did not bind for that reason. Fails the
+     * day the abstract case is refused as the open one is. {@code UPSTREAM.md}'s entry "A subtype nothing binds, at
+     * an abstract base's slot in a value entry, leaves the value a tree" stages it.
+     */
+    @Test
+    void aSubtypeNothingBindsAtAnAbstractBasesSlotLeavesAValueEntryATree() {
+        String id = "https://s.example.com/2026/40/abstract-slot-1.tn";
+        Map<String, Class<?>> bound = Map.of("base", SlotBase.class, "one", SlotOne.class, "holder", SlotHolder.class);
+        java.util.function.Function<String, String> schema = mark -> """
+                !!id:"https://s.example.com/2026/40/abstract-slot-1.tn"
+                !!import:"https://tson.io/2026/40/m/core.tn"
+                !schema {
+                    base   => %s{ a?: int32 }
+                    one    => base & {}
+                    two    => base & {}
+                    holder => { b: base }
+                    h      => !holder { b: !two {} }
+                }""".formatted(mark);
+
+        String open = schema.apply("");
+        List<Diagnostic> refused = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(Map.of(id, open))))
+                .withDataBindContext(TsonBindings.of(bound))).validateSchema(open);
+        assertEquals(1, refused.size(), () -> "" + refused);
+        assertEquals("'h': the body is no value of the type 'holder' -- at /b: 'two' is not a member of the union "
+                + "'base' binds against [SlotOne]", refused.getFirst().message());
+
+        String marked = schema.apply("abstract ");
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(Map.of(id, marked))))
+                .withDataBindContext(TsonBindings.of(bound)));
+        assertEquals(List.of(), tson.validateSchema(marked),
+                "the abstract base refuses the unbound subtype now -- delete UPSTREAM.md's entry and flip this");
+        Object value = assertInstanceOf(ValueEntry.class,
+                tson.schemaRegistry().get(id).orElseThrow().schema().entries().get("h")).value();
+        assertInstanceOf(io.ltr8.tson.tree.TsonValue.class, value, "held as a tree, not a SlotHolder");
+    }
+
+    /** The base {@link #aSubtypeNothingBindsAtAnAbstractBasesSlotLeavesAValueEntryATree} binds. */
+    public sealed interface SlotBase permits SlotOne {
+    }
+
+    /** The one subtype bound. */
+    public record SlotOne(Optional<Integer> a) implements SlotBase {
+    }
+
+    /** The record holding a base-typed field. */
+    public record SlotHolder(SlotBase b) {
+    }
 }

@@ -24,13 +24,18 @@ import java.util.Optional;
  *
  * <p>{@code status} is restated in the body so a problem that is stored, logged or forwarded is still
  * self-describing once separated from its response.
+ *
+ * <p><b>{@code errors} is optional in the schema and never absent here.</b> This class writes the list on every
+ * problem, empty where a failure produced no diagnostic, and a body that omits it, as a business error does, reads
+ * as an empty list: the binder hands an omitted optional list to the constructor as {@code null}, and the
+ * constructor normalises it.
  */
 @Typename(name = "problem.details")
 public record TsonProblem(Optional<String> type, String title, int status, Optional<String> detail,
                           Optional<String> instance, List<TsonProblemDiagnostic> errors) {
 
     public TsonProblem {
-        errors = List.copyOf(errors);
+        errors = errors == null ? List.of() : List.copyOf(errors);
     }
 
     /** A problem carrying diagnostics -- the ordinary 4xx shape. */

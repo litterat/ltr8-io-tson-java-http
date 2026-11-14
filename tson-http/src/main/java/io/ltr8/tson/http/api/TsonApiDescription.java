@@ -23,6 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 
 /**
  * The service a schema describes, read back from its resolved entries: every endpoint of every entry applying {@code
@@ -53,7 +54,8 @@ import java.util.function.Function;
  *   <li>an exchange is never marked both {@code @service.safe} and {@code @service.destructive}, which exclude each
  *       other;</li>
  *   <li>the verb agrees with what the exchange says about itself (GET safe, PUT and DELETE idempotent, and nothing
- *       destructive at GET or HEAD), and a response-less endpoint answers a status that carries no body;</li>
+ *       destructive at GET or HEAD), and an operation or a binding with no response type writes a status that
+ *       carries no body, 204, 205 or 304, since the default 200 is for an endpoint with a response;</li>
  *   <li>each business error fixes its status, which is how a response is told from an error by status alone;</li>
  *   <li>a {@code document} lists at least one media type, since none is implied for it, and its body is bytes, so
  *       any type labels it; every other endpoint writes a TSON value, so it lists only media types a codec this
@@ -69,7 +71,8 @@ import java.util.function.Function;
  *
  * <p>The security schemes in force for an endpoint are resolved here too, {@link Route#security()}: the endpoint's
  * own {@code security} when it writes one, an empty one meaning open, else its projection's. The resolver judged
- * every name a scheme; nothing here or anywhere in this library enforces one.
+ * every name a scheme, and an api key carried in a header is held to RFC 9110's token grammar here, since its
+ * {@code name} is {@code text}; nothing here or anywhere in this library enforces a scheme.
  *
  * @see TsonApiCoverage for holding a server to the routes
  */
@@ -82,6 +85,9 @@ public final class TsonApiDescription {
     private static final String BUNDLED = "https://tson.io/2026/40/m/";
 
     private static final Set<Integer> EMPTY_STATUSES = Set.of(204, 205, 304);
+
+    /** RFC 9110's {@code token}, the grammar of a header field name, as {@code service.header_name} states it. */
+    private static final Pattern TOKEN = Pattern.compile("[!#$%&'*+.^_`|~0-9A-Za-z-]+");
 
     private static final String TSON = TsonMediaType.APPLICATION_TSON.toString();
 
@@ -124,13 +130,20 @@ public final class TsonApiDescription {
 
     /**
      * Every value entry applying {@code service.http}, by its name, in the order written. Such an entry is a value,
-     * not a type: its {@link ValueEntry} holds the bound {@link Http}.
+     * not a type: its {@link ValueEntry} holds the bound {@link Http}. One whose value is held as a tree instead is
+     * refused: the resolver loads a projection holding an endpoint subtype nothing binds and keeps the whole value
+     * as a tree, and skipping it would serve a description with that projection's routes missing.
      */
     private static Map<String, Http> projections(Namespace<Top> entries) {
         Map<String, Http> found = new LinkedHashMap<>();
         entries.forEach((entry, value) -> {
             if (value instanceof ValueEntry(_, Http http)) {
                 found.put(entry, http);
+            } else if (value instanceof ValueEntry(String type, Object unbound) && type.equals("service.http")) {
+                throw new IllegalArgumentException("'" + entry + "' applies service.http, and its value did not "
+                        + "bind to " + Http.class.getName() + " but is held as " + unbound.getClass().getSimpleName()
+                        + " -- a type written in it binds to no class; bind a description's own endpoint subtype "
+                        + "through TsonApiSchema.bindingsWith");
             }
         });
         return found;
@@ -195,6 +208,7 @@ public final class TsonApiDescription {
                 // An endpoint's own list replaces the projection's, an empty one included: `security: []` is open.
                 List<SecurityScheme> security = endpoint.security().orElse(http.security()).stream()
                         .map(ValueRef::get).toList();
+                security.forEach(scheme -> requireHeaderToken(label, scheme));
                 Annotations fallback = docs;
                 routes.add(new Route(verb, path, exchange, request, response, errorStatuses(label, errors, entries),
                         endpoint.status(), safe, idempotent, destructive, document, mediaTypes, placement,
@@ -357,6 +371,19 @@ public final class TsonApiDescription {
         if (!holds) {
             throw new IllegalArgumentException("'" + label + "': " + verb + " is " + what + ", but the exchange is "
                     + "not marked @service." + what + " -- mark it, or bind it to a verb that claims less");
+        }
+    }
+
+    /**
+     * An api key carried in a header is named by a header field name, which {@code service.api_key}'s {@code text}
+     * cannot require, a query parameter's name being no header name; {@link ApiKey} holds it folded.
+     */
+    private static void requireHeaderToken(String label, SecurityScheme scheme) {
+        if (scheme instanceof ApiKey(ApiKeyIn in, String name) && in == ApiKeyIn.header
+                && !TOKEN.matcher(name).matches()) {
+            throw new IllegalArgumentException("'" + label + "' accepts an api key in the header '" + name + "', "
+                    + "which is no RFC 9110 token, so no header carries it -- a header name is ASCII letters, "
+                    + "digits and !#$%&'*+.^_`|~-");
         }
     }
 

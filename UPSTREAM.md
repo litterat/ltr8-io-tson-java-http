@@ -330,23 +330,47 @@ and message from all three entry points and flips when the read reports or succe
 
 **Hit:** a service description declaring its own endpoint shape, `paged_get => service.operation & { status?: = 200
 }`, beside an endpoint written untagged, `GET => { response: order_page }`, at a `service.resource` endpoint slot in
-its own value entry (`proposal/operation-refinement.md`), with `paged_get` bound to the base's class. The refusal names
-the layer's subtypes alone: *"'endpoint' has no data of its own to bind -- provide an explicit type annotation
-(!typeName) naming one of its subtypes [operation, binding, document]"*. The same endpoint in a data document importing
-the description is refused naming `[operation, binding, document, paged_get]`. A tagged `!paged_get { … }` is admitted
-at that slot in both, and binds to the base's class once `paged_get` is bound to it: a value entry reads a value
-selecting a subtype beyond the slot's declaring schema through the resolving document's entries, and an untagged value
-selects nothing, so it is read, and refused, through the declaring schema's compile.
+its own value entry (`proposal/operation-refinement.md`). `service.endpoint` is `abstract`, so the resolver refuses
+the untagged value naming the subtypes it has indexed when it reads it, and in a value entry that depends on where
+the description declares `paged_get`. Declared after the records its pins name, as the probe's description does, the
+refusal names the layer's subtypes alone: *"'endpoint' is abstract and has no direct instances, so a value here must
+name its type -- one of (operation | binding | document)"*. Declared first, as the real-layer probe's is, it names
+`paged_get` beside them, and a data document importing the description always does: *"… one of (operation | binding |
+document | paged_get)"*. A tagged `!paged_get { … }` is admitted at that slot in every case.
 
-**The change:** name the subtypes of the schema being resolved in that refusal, as [TSON-SCHEMA] §3.3.4 computes
-`subtypes` over its namespace, so the hint a value entry gives matches a data document's.
+**The change:** name the subtypes of the schema being resolved in that refusal whatever the declaration order, as
+[TSON-SCHEMA] §3.3.4 computes `subtypes` over its namespace, so the hint a value entry gives matches a data
+document's.
 
 **Workaround in place:** none needed; the refusal is right and only its hint is short. Pinned by
-`OperationRefinementProbeTest.theDescriptionsSubtypeIsAdmittedAtTheLayersSlot`, whose last assertion states the
-message whole and flips when it names `paged_get`; the same test and
-`OperationRefinementProbeTest.theRealLayerAdmitsADescriptionsOwnOperation` pin the admission and the bound read.
+`OperationRefinementProbeTest.theDescriptionsSubtypeIsAdmittedAtTheLayersSlot`, whose last assertions state the
+message in both orders and flip when the first names `paged_get`; `theRealLayerAdmitsADescriptionsOwnOperation` pins
+the declared-first message through `service.tn`.
 
 **Priority:** low.
+
+---
+
+## 17. A subtype nothing binds, at an abstract base's slot in a value entry, leaves the value a tree
+
+**Hit:** `service.endpoint` declared `abstract`, and a description writing an endpoint as its own subtype,
+`!paged_get { … }`, with `paged_get` bound to no class (`TsonApiSchema.bindings()` as a server passes it). While the
+base was open, the description was refused at load: *"'paged_get' is not a member of the union 'service.endpoint'
+binds against [Operation, Binding, Document]"*. Marked `abstract`, it loads clean, and the entry's whole value is held
+as a tree rather than the bound `Http`, so a reader looking for the bound class finds no projection at all. In a data
+document the object reader throws `MissingBindingException` for the same value, where the open base gave a
+`TYPE_MISMATCH`.
+
+**The change:** refuse a subtype nothing binds at an abstract base's slot as the open base's is, so whether a value
+entry binds does not turn on a definition mark; or report it, rather than holding a value a bind context was given
+for as a tree.
+
+**Workaround in place:** `TsonApiDescription` refuses a value entry applying `service.http` whose value did not bind,
+naming `TsonApiSchema.bindingsWith` as the remedy, so the description is a startup failure rather than one served with
+its routes missing. Pinned by `UpstreamGapsTest.aSubtypeNothingBindsAtAnAbstractBasesSlotLeavesAValueEntryATree`,
+which flips when the abstract case is refused, and by `OperationRefinementProbeTest`.
+
+**Priority:** medium.
 
 ---
 

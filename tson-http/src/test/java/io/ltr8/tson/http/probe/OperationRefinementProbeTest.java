@@ -4,6 +4,7 @@ import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.DiagnosticsReceiver;
+import io.ltr8.tson.base.MissingBindingException;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.ReadException;
 import io.ltr8.tson.base.bind.AtomContext;
@@ -53,8 +54,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * binds to the base's class once it is bound to it, wherever the slot is: at a record the description declares, at
  * the layer's record in the description's own value entry, and at the layer's record in a data document importing
  * the description. The real layer admits it the same way through {@code TsonApiSchema}, and {@code describedBy}
- * reads the endpoint. A subtype bound to nothing is no member of the union the base's sealed interface closes. What
- * paged lists share is a response shape, and a template over the response record says it too.
+ * reads the endpoint. The base is {@code abstract}, as {@code service.endpoint} is, so a subtype bound to nothing
+ * leaves a value entry holding it a tree, which {@code describedBy} refuses, and is a missing binding to the object
+ * reader in a data document. What paged lists share is a response shape, and a template over the response record
+ * says it too.
  */
 class OperationRefinementProbeTest {
 
@@ -65,8 +68,8 @@ class OperationRefinementProbeTest {
     static final String ID = "https://schemas.example.com/2026/40/refinement/s-1.tn";
 
     /**
-     * The layer: {@code service.tn}'s endpoint pattern at the root. A base, {@code endpoint}, bound to a sealed
-     * interface so it has no bare form; {@code operation}, {@code binding} and {@code document} composing it; a
+     * The layer: {@code service.tn}'s endpoint pattern at the root. A base, {@code endpoint}, {@code abstract} and
+     * bound to a sealed interface; {@code operation}, {@code binding} and {@code document} composing it; a
      * resource holding {@code {http_verb => endpoint}}; and a projection whose resources are a namespace.
      */
     static final String LAYER = "!!id:\"" + LAYER_ID + "\"\n!!import:\"" + META + "\"\n!!import:\"" + NET + "\"\n"
@@ -81,7 +84,7 @@ class OperationRefinementProbeTest {
                 start: NONE  start_add: "/"  continue_add: "/{}+%-._~!$&()*,;=:@"
                 pattern: "/([^%{}]|%[0-9A-Fa-f]{2}|\\\\{[+]?[A-Za-z0-9_]+\\\\})*" }
               http_verb     => !enum [GET POST]
-              endpoint      => { status?: integer ~ 200  media_types?: [media_type] }
+              endpoint      => abstract { status?: integer ~ 200  media_types?: [media_type] }
               operation     => endpoint & signature
               binding       => endpoint & { exchange: meta.ref<exchange> }
               document      => endpoint & { request?: meta.type_ref }
@@ -263,13 +266,17 @@ class OperationRefinementProbeTest {
      * subtype is admitted</b>, as [TSON-SCHEMA] §3.3.4 computes {@code subtypes} over the namespace of the schema
      * being resolved and §7.2 admits by the tag's chain, and as a data document importing the description admits it.
      * Unbound, the endpoint is a tree tagged {@code paged_get}, its {@code status} and {@code request} filled from the
-     * pins. The layer bound and {@code paged_get} bound to nothing: no member of the union the sealed interface
-     * closes, as the object reader refuses it in a data document. {@code paged_get} bound to {@code Operation} too: an
-     * {@code Operation} with the pinned status and request. A subtype one level down ({@code endpoint & { … }}) is
-     * admitted alike, and refused as a {@code BIND_MISMATCH} under {@code Operation}, whose {@code response} and
-     * {@code errors} no field of it fills. An untagged endpoint is refused naming the layer's subtypes only, where the
-     * same refusal in a data document names the description's beside them. {@code UPSTREAM.md}'s entry "An importer's
-     * subtype is left out of an untagged refusal at an imported record's slot" stages that difference.
+     * pins. The layer bound and {@code paged_get} bound to nothing: the schema loads and the entry's value is held
+     * as a tree, the abstract base keeping it from the union refusal an open base gives ({@code UPSTREAM.md}'s entry
+     * "A subtype nothing binds, at an abstract base's slot in a value entry, leaves the value a tree"). {@code
+     * paged_get} bound to {@code Operation} too: an {@code Operation} with the pinned status and request. A subtype
+     * one level down ({@code endpoint & { … }}) is admitted alike, and refused as a {@code BIND_MISMATCH} under
+     * {@code Operation}, whose {@code response} and {@code errors} no field of it fills. An untagged endpoint is
+     * refused by the resolver, the base being abstract, naming the subtypes it has indexed when it reads the value:
+     * the layer's alone in this description, where {@code paged_get} is declared after the records it pins, and
+     * {@code paged_get} beside them when it is declared first, as a data document always names it. {@code
+     * UPSTREAM.md}'s entry "An importer's subtype is left out of an untagged refusal at an imported record's slot"
+     * stages that difference.
      */
     @Test
     void theDescriptionsSubtypeIsAdmittedAtTheLayersSlot() {
@@ -283,8 +290,10 @@ class OperationRefinementProbeTest {
         assertEquals(List.of("response", "status", "request"), List.copyOf(tree.fields().keySet()));
 
         String prefix = "'orders_http': the body is no value of the type 'http' -- at /resources/~1orders/endpoints/GET: ";
-        assertEquals(prefix + "'paged_get' is not a member of the union 'endpoint' binds against [Operation, Binding, "
-                + "Document]", refusal(schema, LAYER_BOUND, Diagnostic.Code.SCHEMA_ERROR));
+        Tson layerBound = tson(schema, LAYER_BOUND);
+        assertEquals(List.of(), layerBound.validateSchema(schema),
+                "an unbound subtype at the abstract base is refused now -- update UPSTREAM.md's entry");
+        assertInstanceOf(TsonValue.class, entry(layerBound, "orders_http"));
 
         Tson bound = tson(schema, PAGED_BOUND);
         assertEquals(List.of(), bound.validateSchema(schema));
@@ -305,18 +314,23 @@ class OperationRefinementProbeTest {
         assertTrue(mismatch.message().startsWith("'orders_http': 'paged_get' and " + Operation.class.getName()
                 + " do not agree: component 'response' is filled by no field"), mismatch::message);
 
-        assertEquals(prefix + "'endpoint' has no data of its own to bind -- provide an explicit type annotation "
-                        + "(!typeName) naming one of its subtypes [operation, binding, document]",
-                refusal(schema(PAGED, http("{ response: order_page }")), PAGED_BOUND, Diagnostic.Code.SCHEMA_ERROR));
+        String untagged = prefix + "'endpoint' is abstract and has no direct instances, so a value here must name its "
+                + "type -- one of (operation | binding | document";
+        assertEquals(untagged + ")",
+                refusal(schema(PAGED, http("{ response: order_page }")), PAGED_BOUND, Diagnostic.Code.SCHEMA_ERROR),
+                "the description's subtype is named now -- update UPSTREAM.md's entry and flip this");
+        String declaredFirst = schema(PAGED, http("{ response: order_page }"))
+                .replace(PAGED + "\n", "").replace("!schema {\n", "!schema {\n" + PAGED + "\n");
+        assertEquals(untagged + " | paged_get)", refusal(declaredFirst, PAGED_BOUND, Diagnostic.Code.SCHEMA_ERROR));
     }
 
     /**
      * <b>A data document importing the description admits the subtype at the layer's slot, and binds it to the base's
      * class.</b> The tree reader delivers the endpoint tagged {@code paged_get}, its {@code status} and {@code
-     * request} filled from the pins. The object reader refuses it as no member of the union while {@code paged_get}
-     * binds nothing, and delivers an {@code Operation} once it is bound to {@code Operation}. An untagged endpoint is
-     * refused naming the description's subtype beside the layer's, and a value contradicting a pin is refused as
-     * {@code FIELD_FIXED} by both readers.
+     * request} filled from the pins. The object reader refuses it as a missing binding while {@code paged_get} binds
+     * nothing, and delivers an {@code Operation} once it is bound to {@code Operation}. An untagged endpoint is
+     * refused as an abstract base's value naming the description's subtype beside the layer's, and a value
+     * contradicting a pin is refused as {@code FIELD_FIXED} by both readers.
      */
     @Test
     void aDataDocumentAdmitsAndBindsTheSubtypeAtTheLayersSlot() {
@@ -332,10 +346,10 @@ class OperationRefinementProbeTest {
         assertEquals(200, endpoint.get("status").asInt().orElseThrow());
         assertEquals(List.of("response", "status", "request"), List.copyOf(endpoint.fields().keySet()));
 
-        ReadException notMember = assertThrows(ReadException.class, () -> unbound.objectReader().read(paged, Http.class));
-        assertEquals(Diagnostic.Code.TYPE_MISMATCH, notMember.diagnostic().code());
-        assertEquals("'paged_get' is not a member of the union 'endpoint' binds against [Operation, Binding, Document]",
-                notMember.diagnostic().message());
+        MissingBindingException notBound = assertThrows(MissingBindingException.class,
+                () -> unbound.objectReader().read(paged, Http.class));
+        assertTrue(notBound.getMessage().startsWith("no bound Java class for 'paged_get': nothing in this bind context "
+                + "resolves that schema type name."), notBound::getMessage);
 
         Tson bound = tson(schema, PAGED_BOUND);
         assertEquals(List.of(), bound.validateSchema(schema));
@@ -346,8 +360,9 @@ class OperationRefinementProbeTest {
 
         ReadException untagged = assertThrows(ReadException.class,
                 () -> bound.objectReader().read(data("{ response: order_page }"), Http.class));
-        assertEquals("'endpoint' has no data of its own to bind -- provide an explicit type annotation (!typeName) "
-                + "naming one of its subtypes [operation, binding, document, paged_get]", untagged.diagnostic().message());
+        assertEquals(Diagnostic.Code.TYPE_MISMATCH, untagged.diagnostic().code());
+        assertEquals("'endpoint' is abstract and has no direct instances, so a value here must name its type -- one "
+                + "of (operation | binding | document | paged_get)", untagged.diagnostic().message());
 
         String fixed = "'request' is fixed on 'paged_get' and cannot be given another value -- the schema declares it "
                 + "with '=' (fixed); for a default the data may override, use '~'";
@@ -431,12 +446,14 @@ class OperationRefinementProbeTest {
     }
 
     /**
-     * <b>Through {@code service.tn} and {@code TsonApiSchema} as they stand, a description's own operation loads once
-     * it is bound.</b> Bound as a server binds by default, {@link TsonApiSchema#bindings()}: no member of the union
-     * {@code service.endpoint} binds against, so the description never resolves and {@code describedBy} has nothing
-     * to read. Unbound: admitted, a tree tagged {@code paged_get} with the pinned status. With {@code paged_get}
-     * bound to {@code api.Operation} through {@link TsonApiSchema#bindingsWith}: the endpoint is an {@code
-     * api.Operation}, and {@code describedBy} reads its route with status 200 and the request and response it names.
+     * <b>Through {@code service.tn} and {@code TsonApiSchema} as they stand, a description's own operation loads once it is
+     * bound.</b> Bound as a server binds by default, {@link TsonApiSchema#bindings()}: the description loads, its projection
+     * held as a tree since {@code paged_get} binds to nothing, and {@code describedBy} refuses the projection rather than
+     * reading a description with its routes missing. Unbound: admitted, a tree tagged {@code paged_get} with the pinned
+     * status. With {@code paged_get} bound to {@code api.Operation} through {@link TsonApiSchema#bindingsWith}: the endpoint
+     * is an {@code api.Operation}, and {@code describedBy} reads its route with status 200 and the request and response it
+     * names. Written untagged, the endpoint is refused naming {@code paged_get} beside the layer's subtypes, the description
+     * declaring it first.
      */
     @Test
     void theRealLayerAdmitsADescriptionsOwnOperation() {
@@ -446,11 +463,12 @@ class OperationRefinementProbeTest {
                 + "/resources/~1orders~1{id}~1items/endpoints/GET: ";
 
         Tson layerOnly = real(paged, TsonApiSchema.bindings());
-        Diagnostic union = only(layerOnly.validateSchema(paged));
-        assertEquals(Diagnostic.Code.SCHEMA_ERROR, union.code());
-        assertEquals(at + "'paged_get' is not a member of the union 'service.endpoint' binds against [Operation, "
-                + "Binding, Document]", union.message());
-        assertEquals("'" + PAGED_ID + "' is not resolved -- resolve the description before reading it",
+        assertEquals(List.of(), layerOnly.validateSchema(paged));
+        assertInstanceOf(TsonValue.class, assertInstanceOf(ValueEntry.class, layerOnly.schemaRegistry().get(PAGED_ID)
+                .orElseThrow().schema().entries().get("orders_http")).value());
+        assertEquals("'orders_http' applies service.http, and its value did not bind to "
+                + io.ltr8.tson.http.api.Http.class.getName() + " but is held as TsonRecord -- a type written in it "
+                + "binds to no class; bind a description's own endpoint subtype through TsonApiSchema.bindingsWith",
                 assertThrows(IllegalArgumentException.class, () -> TsonApiSchema.describedBy(layerOnly, PAGED_ID))
                         .getMessage());
 
@@ -475,5 +493,11 @@ class OperationRefinementProbeTest {
         assertEquals(200, route.status());
         assertEquals("order_ref", route.request().orElseThrow().name());
         assertEquals("order_page", route.response().orElseThrow().name());
+
+        String untagged = paged.replace("GET => !paged_get {", "GET => {");
+        assertEquals(at + "'service.endpoint' is abstract and has no direct instances, so a value here must name its "
+                + "type -- one of (service.document | service.operation | service.binding | paged_get)",
+                only(real(untagged, TsonApiSchema.bindingsWith(Map.of("paged_get",
+                        io.ltr8.tson.http.api.Operation.class))).validateSchema(untagged)).message());
     }
 }

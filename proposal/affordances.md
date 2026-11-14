@@ -231,7 +231,7 @@ Javalin's and Helidon's SSE support).
 2. The bound records, `TsonApiSchema.bindings()`, `ExchangeName` over the field.
 3. `TsonApiDescription`'s stream rules and `binds` over events, with `TsonApiDescriptionTest`.
 4. A stream in the JDK demo, read by `TsonApiConformanceTest`; then Javalin and Helidon.
-5. `design/service-description.md`; `AffordanceProbeTest` stays as the record of why.
+5. `design/service-description.md` and `design/http-projection.md`; `AffordanceProbeTest` stays as the record of why.
 
 ## Open questions
 

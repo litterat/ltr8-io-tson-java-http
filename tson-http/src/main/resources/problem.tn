@@ -23,7 +23,7 @@
   RFC 9457's per-error shape -- that RFC suggests detail and pointer, which would throw away the
   code vocabulary, the two-ended location model and the source positions §8.1 requires.
 
-  Versioning, per §3.5: a shape change to a PUBLISHED schema is a new identity, never an edit, because
+  Versioning, per [TSON-SCHEMA] §3.5: a shape change to a PUBLISHED schema is a new identity, never an edit, because
   a document that named the old one must go on resolving. Nothing here is published yet, so this file
   is edited in place under the one identity it has. Once a release fixes it, adding so much as an enum
   member below is a new identity, and this document keeps being served alongside it.
@@ -38,12 +38,13 @@
       NOT_IMPLEMENTED: this library could not check a construct the body uses -- the same split the CLI rides
       its exit codes on (70, not 1) -- a 501. BIND_MISMATCH: a schema and the Java class bound to it disagree,
       or the class refused a value the schema admits, which is this server's own wiring; its message names a
-      server class, so it is a 500 and the boundary drops it from the body entirely. The five SCHEMA_* codes:
-      no schema was obtained, one code per reason. The remaining four, with SCHEMA_NOT_PERMITTED and
-      SCHEMA_TOO_LARGE, are refusals: this processor declined under its own policy and limits, and the next one
-      along may accept the same body in full.
+      server class, so it is a 500 and the boundary drops it from the body entirely. The five schema-fetch codes,
+      SCHEMA_NOT_PERMITTED, SCHEMA_NOT_FOUND, SCHEMA_UNREACHABLE, SCHEMA_TIMEOUT and SCHEMA_TOO_LARGE: no schema was
+      obtained, one code per reason; SCHEMA_ERROR, a schema that was obtained and is wrong, is a verdict and not one
+      of them. The remaining four, with SCHEMA_NOT_PERMITTED and SCHEMA_TOO_LARGE, are refusals: this processor
+      declined under its own policy and limits, and the next one along may accept the same body in full.
 
-      Not being a verdict does not settle the status, and the SCHEMA_* five are where that shows.
+      Not being a verdict does not settle the status, and the five fetch codes are where that shows.
       SCHEMA_UNREACHABLE is a 502 and SCHEMA_TIMEOUT a 504 -- the reference was fine and the world was
       not. SCHEMA_NOT_PERMITTED (a reference this deployment will not fetch), SCHEMA_NOT_FOUND (one
       nothing serves) and SCHEMA_TOO_LARGE (one whose document exceeds the bytes a schema may be) are the
@@ -83,6 +84,9 @@
       BIND_MISMATCH
       LIMIT_EXCEEDED SCHEMA_NOT_PERMITTED SCHEMA_NOT_FOUND SCHEMA_UNREACHABLE SCHEMA_TIMEOUT SCHEMA_TOO_LARGE
     ]
+
+    @doc:"An HTTP status code, refined so 42 is not a status; a business error's `status: = 404` pins it."
+    status => !integer ^ { min: 100  max: 599 }
 
     @doc:"""
       One problem, located at up to two ends: the value in the data (path, data_position) and the rule
@@ -131,18 +135,21 @@
       that RFC (§3.1.1, §3.1.5) -- which is why they are uri_reference and not uri, which requires a scheme.
 
       status is restated here so a problem that is stored, logged or forwarded stays self-describing
-      once separated from its response.
+      once separated from its response. It is a problem.status, so it is an HTTP status and nothing wider.
 
-      errors is empty for a failure that produced no diagnostic at all -- an unsupported media type, an
-      unacceptable Accept -- which is why it is a list rather than a required single value.
+      errors is optional. The error boundary writes it on every problem it renders: the diagnostics the read
+      produced, and an empty list for a failure that produced none -- an unsupported media type, an
+      unacceptable Accept. A business error omits it, the request having been schema-valid, so there is no
+      diagnostic to carry. A bound list component receives an omitted list as nothing, and TsonProblem reads
+      it as an empty list.
       """
     details => {
       type?: uri_reference
       title: text
-      status: int32
+      status: problem.status
       detail?: text
       instance?: uri_reference
-      errors: [problem.diagnostic]
+      errors?: [problem.diagnostic]
     }
   }
 }
