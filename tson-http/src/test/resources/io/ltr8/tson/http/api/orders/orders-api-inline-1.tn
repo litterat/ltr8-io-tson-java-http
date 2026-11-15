@@ -5,7 +5,7 @@
 @doc:"""
   Web service only: an http projection on its own terms, with no protocol behind it and no `binds`, so every
   endpoint is a `!service.operation` carrying its signature inline. The verb and the path are the keys an endpoint
-  sits under; a path key is a name in the URL's own grammar, so `/orders/{id}` needs no identifier minted
+  sits under; a path key is the URL's own grammar and no name, so `/orders/{id}` needs no identifier minted
   from it. A parameter-only endpoint is a one-field request record placed from the path.
 
   An exchange's facts ride on its own key, so on an inline operation they sit before the verb: a GET must be
@@ -33,8 +33,8 @@
         @service.safe
         @doc:"""
           The lines of one order: a second parameter-only endpoint, and a nested path written as a template of
-          its own -- the URL namespace is hierarchical and a resource key is flat over it, which is the
-          qualified-name question wearing a slash.
+          its own -- a URL's path is hierarchical and a resource key is flat over it, and no qualified name
+          walks a path key, since nothing references a resource.
           """
         GET => !service.operation { request: order_ref  response: order_page }
       }

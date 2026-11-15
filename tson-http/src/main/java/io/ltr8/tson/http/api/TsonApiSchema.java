@@ -105,10 +105,11 @@ public final class TsonApiSchema {
      * This vocabulary's records by their qualified names, mapped to the classes in this package: {@code
      * service.protocol} and {@code service.http}, the two a description's entries apply, and what they hold; and the
      * security schemes, {@code service.http_auth} and {@code service.api_key} under the base {@code
-     * service.security_scheme}, whose value entries a projection and an endpoint name. The namespace types {@code
-     * service.exchanges} and {@code service.resources} need no class: a field they type binds to a {@code Namespace}
-     * of the value type's class. The map is explicit, so a class in this package binds only by being named here, and
-     * a record no class binds -- {@code service.placement}, folded into each endpoint -- is not listed.
+     * service.security_scheme}, whose value entries a projection and an endpoint name. The namespace type {@code
+     * service.exchanges} and the map type {@code service.resources} need no class: a field they type binds to a {@code
+     * Namespace} or an {@code AnnotatedMap} of the value type's class. The map is explicit, so a class in this package
+     * binds only by being named here, and a record no class binds -- {@code service.placement}, folded into each
+     * endpoint -- is not listed.
      *
      * <p>A description will not read without them: an entry no class binds is held as a tree, and {@link
      * #describedBy} reads bound records.

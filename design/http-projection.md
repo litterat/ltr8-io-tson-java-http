@@ -7,7 +7,7 @@ are `design/service-description.md`; its example shows a protocol and a projecti
 
 **Invariants**
 
-- `service.http` is a record whose one required field is the namespace `resources`; its claims, `binds` and
+- `service.http` is a record whose one required field is the plain map `resources`; its claims, `binds` and
   `not_bound`, are fields beside it, references the resolver judges at load and delivers their referents.
   `TsonApiDescription` finds every projection by what the entry is, a value of `service.http` bound to `Http`, never by
   its name.
@@ -17,8 +17,9 @@ are `design/service-description.md`; its example shows a protocol and a projecti
 - `service.endpoint` and `service.security_scheme` are `abstract`: an untagged endpoint, and a value tagged with either
   base, is refused by the resolver naming the subtypes. The tag selects `operation`, `binding` or `document`. A
   projection whose value did not bind is a startup failure (`design/service-description.md`, "Wiring").
-- A path key is a `service.path_template`, an RFC 6570 template at levels 1 and 2 and an `identifier_type`, so §8.2
-  judges it as a name. No qualified name walks a path key, and nothing references an endpoint.
+- A path key is a `service.path_template`, an RFC 6570 template at levels 1 and 2 and a text family whose `pattern`
+  is ASCII-exact; it is no name, so no name hygiene reaches it and a key is held as written. No qualified name walks
+  a path key, and nothing references a resource or an endpoint.
 - Each request record's fields are placed exactly once over the path, the query, the headers and the body; a field in
   the path, the query or a header is a scalar.
 - The verb agrees with the exchange's facts: GET safe, PUT and DELETE idempotent, nothing `@service.destructive` at GET
@@ -38,23 +39,31 @@ are `design/service-description.md`; its example shows a protocol and a projecti
 
 ## A projection, its resources and its endpoints
 
-`service.http` is `{ binds?, not_bound?, security?, resources }`. A namespace type declares its facets and nothing else,
-so a fact about the projection as a whole is a field beside its namespace, as a protocol's is
-(`design/service-description.md`). `binds?: [meta.ref<service.protocol>]` names the protocols it binds, and is a claim
-the reader holds it to; `not_bound?: [service.exemption]` gives each exchange it does not bind with a required
-`reason`, written `not_bound: [{ exchange: orders_v2.exchanges.refund  reason: "…" }]`. An exemption is a list of
-records rather than a map keyed by exchange, since a map key is a name in the map's own key family, never a reference.
-How the claim is checked is `design/service-description.md`, "What the reader checks". A projection with no `binds` is
-a web service on its own terms, its endpoints `!service.operation`s. `binds` takes the word `!service.binding` and
-`not_bound` use. `http` is named for the transport, as a gRPC projection of the same protocol would be.
+`service.http` is `{ binds?, not_bound?, security?, resources }`, a record, so a fact about the projection as a whole is
+a field beside its map, as a protocol's is beside its namespace (`design/service-description.md`).
+`binds?: [meta.ref<service.protocol>]` names the protocols it binds, and is a claim the reader holds it to;
+`not_bound?: [service.exemption]` gives each exchange it does not bind with a required `reason`, written
+`not_bound: [{ exchange: orders_v2.exchanges.refund  reason: "…" }]`. An exemption is a list of records rather than a
+map keyed by exchange, since a map key is a value of the map's own key family, never a reference. How the claim is
+checked is `design/service-description.md`, "What the reader checks". A projection with no `binds` is a web service on
+its own terms, its endpoints `!service.operation`s. `binds` takes the word `!service.binding` and `not_bound` use.
+`http` is named for the transport, as a gRPC projection of the same protocol would be.
 
-`resources` is a `service.resources`, a namespace keyed by `service.path_template` whose values are `service.resource`,
-`{ endpoints: {service.http_verb => service.endpoint} }`. `http_verb` is RFC 9110's request methods as a closed enum,
-called verbs so that `method` names nothing in the layer. A path key is a name: an `identifier_type` with `start: NONE`,
-`start_add: "/"` and RFC 3986's path characters plus a template's braces and `+` in `continue_add`, and a `pattern`
-holding the structure the character set cannot (braces paired around one variable, `%` and two hex digits). A
-qualified-name segment is an identifier and a path key starts with `/`, so no qualified name walks a path key; an
-endpoint is reached by location.
+`resources` is a `service.resources`, `{service.path_template => service.resource}`, a plain map whose values are
+`service.resource`, `{ endpoints: {service.http_verb => service.endpoint} }`; `Http` binds it to an `AnnotatedMap`,
+which keeps the written order routes are read in. `http_verb` is RFC 9110's request methods as a closed enum, called
+verbs so that `method` names nothing in the layer.
+
+**A path is not a name.** It is where the schema stops and HTTP begins: a server matches it against a request's
+target, and nothing in a description references it, so `resources` is a plain map rather than a namespace and its key
+a text family with a `pattern`, as `service.header_name` is. The `pattern` is ASCII-exact, read in four classes and
+two forms: `/`, then any run of RFC 3986's unreserved characters `[A-Za-z0-9._~-]`, its sub-delimiters
+`[!$&'()*+,;=]`, `[:@/]`, a percent-encoded octet `%[0-9A-Fa-f]{2}` and an expression `\{[+]?[A-Za-z0-9_]+\}`.
+Anything else, a bare `%`, `{` or `}` and every non-ASCII character included, is refused at the key, so
+percent-encoding is the one way a path carries another character. No normalization is stated, so a key is held as
+written, and no name hygiene applies (`UpstreamGapsTest.anHttpPathKeyIsJudgedByItsPatternAlone`). A qualified name
+walks a namespace's keys only, so none walks a path key; an endpoint is reached by location.
+`TsonApiSchemaTest.aPathIsAUriTemplateCheckedAtSchemaLoad` lists what the pattern admits and refuses.
 
 **An endpoint is one of three kinds, and its tag says which.** `service.endpoint` is the `abstract` base, placement
 plus `status`, `media_types`, `security` and `response_headers`, bound to the sealed interface `Endpoint`. A value at an
@@ -75,7 +84,8 @@ operation refining it, but a schema fact stated as a field is per-instance: `ver
 **A path is a URI template**: RFC 6570 levels 1 and 2, absolute, checked at schema load. The demos declare
 `{+schemaPath}`, the reserved expansion an identity path with slashes needs, where `{schemaPath}` would percent-encode
 them. The fragment operator and levels 3 and 4 describe expansion rather than a route a server can match, and are not
-admitted. A variable is RFC 6570's varname, so a field named `order-id` cannot be bound from the path.
+admitted. A variable is RFC 6570's varname, ASCII letters, digits and `_`, so a field named `order-id` cannot be bound
+from the path.
 
 ## Placement
 
@@ -186,16 +196,16 @@ no identifier, so nothing declares a `Location`.
 `idempotency-key`, the form HTTP/2 and HTTP/3 put on the wire. [TSON-SCHEMA] §5.5 judges the `pattern` against the
 folded value, so a fold reaching beyond ASCII would widen it: `NFKC_CASEFOLD` would bring a fullwidth letter or a long
 s into the token grammar, and `ASCII_CASEFOLD` leaves it outside, refused (`design/schema-authoring.md`). A header name
-keys a map field rather than a namespace, so it is a text family, not an identifier family.
+keys a map field rather than a namespace, so it is a text family, not an identifier family, as a path is.
 
 ## The positional form, and what it costs
 
-`service.resource`, `service.protocol` and `service.http` each have exactly one bare required field, so §5.6 lets the
-map stand in for it: `"/orders" => { POST => … }` for `{ endpoints: { POST => … } }`. The documents use it for a
-resource and write a protocol and a projection in full: a reference into a protocol spells `exchanges` whether the
-document wrote it or not, and a projection writing `binds` cannot use the form, a brace holding fields or keys and never
-both. A second required field on any of the three withdraws the positional form, and every document written in it stops
-parsing, so a new field there is optional or a new type.
+`service.resource`, `service.protocol` and `service.http` each have exactly one bare required field, a map or a
+namespace, so §5.6 lets the map stand in for it: `"/orders" => { POST => … }` for `{ endpoints: { POST => … } }`. The
+documents use it for a resource and write a protocol and a projection in full: a reference into a protocol spells
+`exchanges` whether the document wrote it or not, and a projection writing `binds` cannot use the form, a brace holding
+fields or keys and never both. A second required field on any of the three withdraws the positional form, and every
+document written in it stops parsing, so a new field there is optional or a new type.
 
 **A projection is a value of its own, never a template's application.** An endpoint is no entry, so the one thing a
 template could hold is a whole `!service.http` value, and a template's body is a record body ([TSON-SCHEMA] §5.10):

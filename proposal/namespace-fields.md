@@ -6,6 +6,10 @@ without `version` and `base` and with every document in the full form. Measured 
 `tson-http/src/test/java/io/ltr8/tson/http/probe/NamespaceFieldProbeTest.java`; what follows is the record of the
 measurement. It concerns this project's own vocabulary, `service.tn`, and asks nothing of tson-java or the spec.
 
+**Since adopted:** `service.resources` is a plain map keyed by a text family, `{service.path_template =>
+service.resource}`, rather than a namespace, since nothing references a path (`design/http-projection.md`);
+`service.exchanges` stays a namespace. Below, `resources` as a namespace is the shape measured.
+
 ## Summary
 
 `service.protocol` and `service.http` stop being namespace types and become ordinary records: declared fields, plus one

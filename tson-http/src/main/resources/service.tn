@@ -20,16 +20,16 @@
   exchange's request record by placement. A language is reached from that side, through the join
   (`design/invoke.md`), and no parameter list, return type or exception is ever written here.
 
-  One vocabulary, and two entries a description writes for what it serves. `service.protocol` and
-  `service.http` are RECORDS, each holding one field typed by a namespace ([TSON-SCHEMA] §4.1): a protocol's
-  `exchanges`, a `service.exchanges` mapping exchange names to exchanges, and a projection's `resources`, a
-  `service.resources` mapping path templates to resources. An entry applying either is a value, never a
-  type. Everything inside them -- `service.exchange`, `service.resource`, `service.endpoint`,
-  `service.operation`, `service.binding`, `service.document`, `service.exemption` -- is an ordinary record
-  too. A record composes (`service.operation => service.endpoint & service.signature`) and is admitted as a
-  subtype where its base is expected ([TSON-SCHEMA] §7.2). Beside them a description may declare the security
-  schemes its projections and endpoints name, each a value entry tagged with a subtype of `service.security_scheme`:
-  `bearer => !service.http_auth { scheme: Bearer }`.
+  One vocabulary, and two entries a description writes for what it serves. `service.protocol` and `service.http` are
+  RECORDS, each holding one keyed field. A protocol's `exchanges` is a namespace ([TSON-SCHEMA] §4.1), a
+  `service.exchanges` mapping exchange names to exchanges, since a binding's reference walks into it. A projection's
+  `resources` is a plain map, a `service.resources` mapping path templates to resources, since nothing references an
+  endpoint. An entry applying either is a value, never a type. Everything inside them -- `service.exchange`,
+  `service.resource`, `service.endpoint`, `service.operation`, `service.binding`, `service.document`,
+  `service.exemption` -- is an ordinary record too. A record composes (`service.operation => service.endpoint &
+  service.signature`) and is admitted as a subtype where its base is expected ([TSON-SCHEMA] §7.2). Beside them a
+  description may declare the security schemes its projections and endpoints name, each a value entry tagged with a
+  subtype of `service.security_scheme`: `bearer => !service.http_auth { scheme: Bearer }`.
 
     orders => !service.protocol {
       exchanges: {
@@ -145,8 +145,9 @@
       order': U+0020 cannot appear in an identifier"), where `type_name` would misname the namespace doing the
       refusing. A namespace type's key is a name, so its role is an identifier family: where the authority's
       grammar is wider than TSON's identifier, the role is a `unicode.identifier_type` widened with `start_add`
-      and `continue_add`, as `path_template` is. A map field's key may still be a text family carrying a
-      `pattern`, as `header_name` is; a `pattern` is I-Regexp, matched against the whole token, so no anchors.
+      and `continue_add`. A plain map's key is no name, and its role may be a text family carrying a `pattern`,
+      as `header_name` and `path_template` are; a `pattern` is I-Regexp, matched against the whole token, so no
+      anchors.
 
       An exchange's name: an identifier in its protocol's namespace, not a type name.
       """
@@ -162,17 +163,16 @@
       ASCII letters, digits and `_`, so a request field it binds is spelt that way: a field named `order-id`
       cannot be bound from the path, and travels in the query, a header or the body.
 
-      An identifier family, because it keys a namespace: it starts with `/`, and continues with identifier
-      characters and RFC 3986's other path characters -- unreserved, sub-delimiters but `'`, `:`, `@`, a
-      percent-encoded octet -- plus a template's braces and `+`. The `pattern` holds the structure the
-      character set cannot: braces paired around one variable, and `%` followed by two hex digits. Being a
-      name, a path key meets [TSON-DATA] §8.2's name hygiene too, so a mixed-script path is refused.
+      A text family with a `pattern`, as `header_name` is, and no name. A path is where the schema stops and HTTP
+      begins: a server matches it against a request's target, and nothing in a description references it, so it
+      takes none of a name's grammar or hygiene. The `pattern` is ASCII-exact: a `/`, then any run of RFC 3986's
+      path characters -- unreserved, sub-delimiters, `:`, `@` and `/` -- percent-encoded octets `%XX`, and
+      expressions `{var}` or `{+var}`. Nothing else is admitted, a bare `%`, `{` or `}` included, so percent-encoding
+      is the one way a path carries any other character. A key is held as written, `unicode.text_type`'s
+      normalization being `NONE` unless stated.
       """
-    path_template => !unicode.identifier_type {
-      start:        NONE
-      start_add:    "/"
-      continue_add: "/{}+%-._~!$&()*,;=:@"
-      pattern:      "/([^%{}]|%[0-9A-Fa-f]{2}|\\{[+]?[A-Za-z0-9_]+\\})*"
+    path_template => !unicode.text_type {
+      pattern: "/([A-Za-z0-9._~-]|[!$&'()*+,;=]|[:@/]|%[0-9A-Fa-f]{2}|\\{[+]?[A-Za-z0-9_]+\\})*"
     }
 
     @doc:"""
@@ -351,7 +351,7 @@
       covers, as a binding's does -- `orders_v2.exchanges.refund` -- so it can never quietly cover a second
       protocol's exchange of the same name. The resolver judges the reference; that it names an exchange of a
       protocol the projection binds is the reader's check. A list of records rather than a map keyed by
-      exchange: a map key is a name in the map's own key family, never a reference.
+      exchange: a map key is a value of the map's own key family, never a reference.
       """
     exemption => {
       exchange: meta.ref<service.exchange>
@@ -360,12 +360,12 @@
 
     @doc:"""
       An http projection's resources keyed by path template, each holding endpoints keyed by verb -- the shape
-      OpenAPI's `paths` has, arrived at from the key types rather than copied. A path key is the URL
-      namespace's own grammar -- a `path_template` -- which is why an endpoint needs no invented name and why
-      `/orders/{id}` needs no identifier minted from it. A qualified-name segment is an identifier and a path
-      key starts with `/`, so no qualified name walks a path key; nothing references an endpoint.
+      OpenAPI's `paths` has, arrived at from the key types rather than copied. A plain map, not a namespace: a
+      path key is the URL's own grammar -- a `path_template` -- which is why an endpoint needs no invented name and
+      why `/orders/{id}` needs no identifier minted from it. A qualified name walks a namespace's keys and no
+      other, so none walks a path key, and nothing references a resource or an endpoint.
       """
-    resources => !meta.namespace { key_type: service.path_template  value_type: service.resource }
+    resources => {service.path_template => service.resource}
 
     @doc:"""
       An http projection: its resources, and what it claims about the protocols behind it. Named for the
@@ -384,8 +384,8 @@
       unless the endpoint writes its own `security`, which replaces it. Each name is a reference to a value entry
       tagged with a subtype of `service.security_scheme`, judged at load.
 
-      Its one required field, `resources`, is bare, so a projection writing nothing else may write the map
-      alone; one writing `binds` writes `resources:` too, since a brace holds fields or keys, never both.
+      Its one required field, `resources`, is a map and bare, so a projection writing nothing else may write the
+      map alone; one writing `binds` writes `resources:` too, since a brace holds fields or keys, never both.
       """
     http => {
       binds?:     [meta.ref<service.protocol>]

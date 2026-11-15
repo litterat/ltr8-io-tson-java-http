@@ -122,7 +122,10 @@ values are a tagged family of object kinds.
 
 - **The key** is a concrete path, not a `service.path_template`, and a namespace key must be an identifier family.
   `path_template`'s character set without the braces does it, and admits `/`, `/orders/42` and an identity path; a
-  template variable, a relative path and a query are refused, and §8.2 judges the key as it judges a path template.
+  template variable, a relative path and a query are refused, and §8.2 judges the key as it judges a name.
+  `service.path_template` has since become a text family keying a plain map, a path being no name, and the probe's
+  layer keeps the shape measured; nothing references a concrete path either, so whether the instance needs a
+  namespace at all, or a plain map keyed by an ASCII-exact text family, is part of the open question.
 - **The back-reference** names what the model declares by its qualified name: an exchange, an event, a protocol. It
   cannot name a resource or an endpoint, since no qualified name walks a path key (`NamespaceFieldProbeTest
   .aPathKeyIsNoQualifiedNameSegment`); the exchange is the better referent anyway, being what a client acts on.

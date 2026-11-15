@@ -210,24 +210,47 @@ class TsonApiSchemaTest {
         return API.replace("\"/{+schemaPath}\" =>", "\"" + path + "\" =>");
     }
 
+    /** {@link #API} with the schema route's path replaced, and the order route moved out of the way of {@code path}. */
+    private static String withPathKey(String path) {
+        return API.replace("\"/orders\" =>", "\"/placed\" =>").replace("\"/{+schemaPath}\" =>", "\"" + path + "\" =>");
+    }
+
     /**
-     * <b>A path is a URI template, checked by its shape at schema load</b>: levels 1 and 2, absolute. {@code
-     * {+schemaPath}} -- reserved expansion, what a path with slashes in it needs -- is admitted, as are a dot, a
-     * percent-encoded octet and RFC 3986's other path characters; the fragment operator, a level-3 form, an
-     * unclosed or stray brace, a broken percent-encoding, a space and a path not starting with {@code /} are not.
-     * The character set is the identifier family's and the structure its {@code pattern}'s, and either refusal
-     * names the role.
+     * <b>A path is a URI template, checked by its shape at schema load</b>: levels 1 and 2, absolute, ASCII-exact. A
+     * {@code /}, then RFC 3986's path characters, percent-encoded octets and {@code {var}} or {@code {+var}}
+     * expressions -- {@code {+schemaPath}}, reserved expansion, being what a path with slashes in it needs. A
+     * character outside ASCII, a broken percent-encoding, a stray or unclosed brace, a variable outside RFC 6570's
+     * varname, the fragment and query operators, a space and a path not starting with {@code /} are each refused at
+     * the key, by the {@code pattern} of {@code service.path_template}, a text family: a path is no name.
      */
     @Test
     void aPathIsAUriTemplateCheckedAtSchemaLoad() {
-        for (String admitted : List.of("/{schemaPath}", "/{+schemaPath}", "/schemas/{+schemaPath}",
-                "/v1.2/{+schemaPath}", "/a%2Fb/{schemaPath}", "/x:y@z/{schemaPath}")) {
+        for (String admitted : List.of("/", "/orders", "/orders/{id}", "/schemas/{+path}", "/a%2Fb",
+                "/a.b-c_d~e!$&'()*+,;=:@", "/{schemaPath}", "/v1.2/{+schemaPath}")) {
+            String api = withPathKey(admitted);
+            assertEquals(List.of(), tson(api).validateSchema(api), admitted);
+        }
+        for (String admitted : List.of("/{+schemaPath}", "/schemas/{+schemaPath}", "/a%2Fb/{schemaPath}")) {
             assertTrue(described(withSchemaPath(admitted)).route(HttpVerb.GET, admitted).isPresent(), admitted);
         }
-        for (String refused : List.of("/{#schemaPath}", "/{?schemaPath}", "/{schemaPath", "/a}/{schemaPath}",
-                "/a%zz/{schemaPath}", "/a b/{schemaPath}", "{+schemaPath}")) {
-            String message = only(withSchemaPath(refused));
-            assertTrue(message.contains("path_template"), refused + ": " + message);
+        for (String refused : List.of("/订单", "/a%2", "/a{", "/{a-b}", "orders", "/{{id}}", "/{#schemaPath}",
+                "/{?schemaPath}", "/a}/{schemaPath}", "/a b/{schemaPath}")) {
+            String at = "/resources/" + refused.replace("~", "~0").replace("/", "~1");
+            String why = "'service.path_template': '" + refused + "' does not match the required pattern ";
+
+            String api = withPathKey(refused);
+            List<Diagnostic> inSchema = tson(api).validateSchema(api);
+            assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), inSchema.stream().map(Diagnostic::code).toList(),
+                    () -> refused + ": " + inSchema);
+            assertTrue(inSchema.getFirst().message().contains("at " + at + ": " + why), inSchema.getFirst().message());
+
+            String data = "!!import:\"" + TsonApiSchema.ID + "\"\n"
+                    + "!service.http { resources: { \"" + refused + "\" => { endpoints: {} } } }";
+            List<Diagnostic> inData = tson(API).validate(data);
+            assertEquals(List.of(Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION),
+                    inData.stream().map(Diagnostic::code).toList(), () -> refused + ": " + inData);
+            assertEquals(Optional.of(at), inData.getFirst().path(), refused);
+            assertTrue(inData.getFirst().message().startsWith(why), inData.getFirst().message());
         }
     }
 

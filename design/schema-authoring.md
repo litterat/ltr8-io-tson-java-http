@@ -191,7 +191,9 @@ the build is the check.
   schema compiles, and every value is refused with *"'Latn' does not match the required pattern
   `^[A-Za-z][A-Za-z_]*$`"* — a message that reads like the value is wrong when the pattern is. Reflex from
   JSON Schema, which is unanchored and needs them. `service.tn`'s `service.header_name` and `service.path_template`
-  carry patterns here.
+  carry patterns here. RFC 9485's classes are stricter than a host engine's: inside `[...]` a `-` is literal only
+  first or last and `[`, `]` and `\` are escaped, while `{` and `}` are literal there and are escaped outside one,
+  written `\\{` in a TSON string. A class of ASCII ranges is how a pattern says ASCII-exact, as `path_template`'s is.
 - **A `pattern` judges the folded value, so the fold decides what an ASCII pattern admits.** [TSON-SCHEMA] §5.5 puts a
   text value into its type's `normalization` form first, and every facet, `pattern` included, judges the result.
   `NFKC_CASEFOLD` folds compatibility characters *into* ASCII, so under it a header name spelt with a fullwidth `C`

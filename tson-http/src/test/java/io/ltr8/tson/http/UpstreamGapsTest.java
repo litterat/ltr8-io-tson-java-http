@@ -311,27 +311,37 @@ class UpstreamGapsTest {
     }
 
     /**
-     * <b>An http path key is judged as the name written.</b> A path key is a name in the URL namespace's grammar
-     * ({@code path_template}, an identifier family), so [TSON-DATA] §8.2's hygiene judges the key the author wrote:
-     * the root path, a single segment, a literal segment and a single-script path in Cyrillic each describe to a
-     * route, and a mixed-script path is refused, naming the key as written.
+     * <b>An http path key is text, judged by its pattern alone and held as written.</b> {@code service.resources} is
+     * a plain map keyed by {@code path_template}, a text family with an ASCII-exact {@code pattern}, so a path key is
+     * no name and [TSON-DATA] §8.2's name hygiene never reaches it: the root path, a single segment and a literal
+     * segment each describe to a route, and so do {@code /l} and {@code /I} side by side, two keys a look-alike scope
+     * of names would refuse together. A path in Cyrillic and a mixed-script one are refused by the pattern, the
+     * refusal naming the key as written, and neither by a script rule.
      */
     @Test
-    void anHttpPathKeyIsJudgedAsTheNameWritten() {
+    void anHttpPathKeyIsJudgedByItsPatternAlone() {
         String body = """
                   order  => { sku: text }
                   orders => !service.http {
                     resources: { "%s" => { @service.safe GET => !service.operation { response: order } } }
                   }""";
 
-        for (String path : List.of("/", "/x", "/orders/42", "/путь")) {
+        for (String path : List.of("/", "/x", "/orders/42")) {
             var described = assertDoesNotThrow(() -> TsonApiSchema.describedBy(
                     resolveAgainstServiceMeta(body.formatted(path)), API_ID), path);
             assertTrue(described.route(io.ltr8.tson.http.api.HttpVerb.GET, path).isPresent(), path);
         }
-        String mixed = assertThrows(RuntimeException.class,
-                () -> resolveAgainstServiceMeta(body.formatted("/pаth"))).getMessage();
-        assertTrue(mixed.contains("'/pаth' mixes the scripts"), mixed);
+        String alike = body.formatted("/l").replace("} } }", "} }\n      \"/I\" => { @service.safe GET => "
+                + "!service.operation { response: order } } }");
+        var both = assertDoesNotThrow(() -> TsonApiSchema.describedBy(resolveAgainstServiceMeta(alike), API_ID));
+        assertEquals(List.of("GET /I", "GET /l"),
+                both.routes().stream().map(io.ltr8.tson.http.api.Route::key).sorted().toList());
+        for (String path : List.of("/путь", "/pаth")) {
+            String refused = assertThrows(RuntimeException.class,
+                    () -> resolveAgainstServiceMeta(body.formatted(path))).getMessage();
+            assertTrue(refused.contains("'service.path_template': '" + path + "' does not match the required "
+                    + "pattern") && !refused.contains("script"), refused);
+        }
     }
 
     /**
@@ -514,9 +524,9 @@ class UpstreamGapsTest {
      * no default one. An {@code identifier_type} widened with {@code start_add} and {@code continue_add} is
      * admitted, and still carries a {@code pattern} that is enforced at the key.
      *
-     * <p>{@code service.tn}'s {@code service.resources} is keyed this way: {@code service.path_template} is an {@code
-     * identifier_type} starting with {@code /}, its {@code pattern} holding a URI template's structure, and §8.2's name
-     * hygiene reaches a path key as it reaches any name.
+     * <p>{@code service.tn}'s {@code service.exchanges} is keyed this way, by {@code service.exchange_name}. Its
+     * {@code service.resources} is no namespace but a plain map, so its key, {@code service.path_template}, is a
+     * text family with a {@code pattern}: nothing references a path, so a path need not be a name.
      */
     @Test
     void aNamespaceKeyTypeMustBeAnIdentifierFamily() {

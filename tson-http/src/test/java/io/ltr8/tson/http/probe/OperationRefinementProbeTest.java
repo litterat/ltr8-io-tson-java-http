@@ -71,7 +71,7 @@ class OperationRefinementProbeTest {
     /**
      * The layer: {@code service.tn}'s endpoint pattern at the root. A base, {@code endpoint}, {@code abstract} and
      * bound to a sealed interface; {@code operation}, {@code binding} and {@code document} composing it; a
-     * resource holding {@code {http_verb => endpoint}}; and a projection whose resources are a namespace.
+     * resource holding {@code {http_verb => endpoint}}; and a projection whose resources are a map keyed by path.
      */
     static final String LAYER = "!!id:\"" + LAYER_ID + "\"\n!!import:\"" + META + "\"\n!!import:\"" + NET + "\"\n"
             + """
@@ -81,16 +81,15 @@ class OperationRefinementProbeTest {
               exchange_name => meta.identifier
               exchanges     => !meta.namespace { key_type: exchange_name  value_type: exchange }
               protocol      => { exchanges: exchanges }
-              path_template => !unicode.identifier_type {
-                start: NONE  start_add: "/"  continue_add: "/{}+%-._~!$&()*,;=:@"
-                pattern: "/([^%{}]|%[0-9A-Fa-f]{2}|\\\\{[+]?[A-Za-z0-9_]+\\\\})*" }
+              path_template => !unicode.text_type {
+                pattern: "/([A-Za-z0-9._~-]|[!$&'()*+,;=]|[:@/]|%[0-9A-Fa-f]{2}|\\\\{[+]?[A-Za-z0-9_]+\\\\})*" }
               http_verb     => !enum [GET POST]
               endpoint      => abstract { status?: integer ~ 200  media_types?: [media_type] }
               operation     => endpoint & signature
               binding       => endpoint & { exchange: meta.ref<exchange> }
               document      => endpoint & { request?: meta.type_ref }
               resource      => { endpoints: {http_verb => endpoint} }
-              resources     => !meta.namespace { key_type: path_template  value_type: resource }
+              resources     => {path_template => resource}
               http          => { resources: resources }
             }""";
 
@@ -519,7 +518,7 @@ class OperationRefinementProbeTest {
                 assertInstanceOf(ValueEntry.class, withPaged.schemaRegistry().get(PAGED_ID).orElseThrow().schema()
                         .entries().get("orders_http")).value());
         io.ltr8.tson.http.api.Operation op = assertInstanceOf(io.ltr8.tson.http.api.Operation.class,
-                http.resources().entries().get(path).endpoints().get("GET"));
+                http.resources().get(path).endpoints().get("GET"));
         assertEquals(200, op.status());
         Route route = TsonApiSchema.describedBy(withPaged, PAGED_ID).route(HttpVerb.GET, path).orElseThrow();
         assertEquals(200, route.status());

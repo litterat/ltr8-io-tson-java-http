@@ -112,12 +112,16 @@ only, every endpoint inline.
 **The maps borrow namespaces TSON does not own**: exchange names, URL path templates, RFC 9110's verbs, header names.
 A key type is how a document borrows one, with **one naming role per borrowed namespace**, as the kernel has
 `type_name` and `field_name` over one grammar. A namespace's key is a name, so its role is an identifier family
-(`UpstreamGapsTest.aNamespaceKeyTypeMustBeAnIdentifierFamily`): `exchange_name => meta.identifier`, or an
-`identifier_type` widened with `start_add` and `continue_add`, as `service.path_template` is; a map field's key may be
-a text family with a `pattern`, as `service.header_name` is. A role names the namespace in its refusal
-(`NameRoleTest`), and §8.2's hygiene refuses a mixed-script or confusable key. So an exchange's identity is
-`(schema identity, qualified name)`, `…/orders-1.tn` and `orders.exchanges.place_order`, held as `ExchangeName`. The
-HTTP roles and their `ASCII_CASEFOLD` are `design/http-projection.md`.
+(`UpstreamGapsTest.aNamespaceKeyTypeMustBeAnIdentifierFamily`), `exchange_name => meta.identifier` or an
+`identifier_type` widened with `start_add` and `continue_add`. A plain map's key is no name, and its role may be a
+text family with a `pattern`, as `service.path_template` and `service.header_name` are. Which a key is follows from
+whether anything references it: a binding's reference walks into a protocol's exchanges, so they are a namespace and
+an exchange name is a name; nothing references a path or a header, so a projection's resources and an endpoint's
+response headers are plain maps, and a path is where the schema stops and HTTP begins. A role names itself in its refusal
+(`NameRoleTest`), and §8.2's hygiene refuses a mixed-script or confusable name, a namespace key's and never a text
+key's. So an exchange's identity is `(schema identity, qualified name)`, `…/orders-1.tn` and
+`orders.exchanges.place_order`, held as `ExchangeName`. The HTTP roles and their `ASCII_CASEFOLD` are
+`design/http-projection.md`.
 
 **A namespace is a map composed to name keys**: `meta.map & { key_type: meta.identifier_ref  voidable?: = false }`, a
 composition restating `key_type` under a narrower type and pinning `voidable`, so its `key_type` is required and an
@@ -130,11 +134,11 @@ fields are no namespace, and no qualified name reaches a field declaration.
 **A protocol is a record holding a namespace.** A namespace type declares its facets and nothing else
 (`UpstreamGapsTest.aNamespaceTypeDeclaresOnlyItsFacets`), so a value of one is the map alone, with nowhere to write a
 fact about the whole. So `service.protocol` is a record whose one field, `exchanges`, is a `service.exchanges`, and a
-fact about the protocol as a whole is a field beside it; `service.http` is built the same way
-(`design/http-projection.md`). An entry applying either record is a value, never a type. `service.exchange` is an
-ordinary record and heads no entry. `service.protocol` has the positional form, one bare required field; what that costs
-is `design/http-projection.md`, "The positional form". `proposal/namespace-fields.md` holds the measurement
-(`NamespaceFieldProbeTest`).
+fact about the protocol as a whole is a field beside it. `service.http` is a record too, its one required field the
+plain map `resources`, since nothing references an endpoint (`design/http-projection.md`). An entry applying either
+record is a value, never a type. `service.exchange` is an ordinary record and heads no entry. `service.protocol` has the
+positional form, one bare required field; what that costs is `design/http-projection.md`, "The positional form".
+`proposal/namespace-fields.md` holds the measurement (`NamespaceFieldProbeTest`).
 
 **An import crosses no level**, so the layer takes `media_type` from `net.tn` and its kernel names from `meta.tn`, and
 an importer uses every name the layer declares (`UpstreamGapsTest.anImportCrossesNoLevel`,

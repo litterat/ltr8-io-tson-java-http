@@ -715,9 +715,9 @@ class TsonApiDescriptionTest {
         assertEquals(Map.of("idempotency_key", "idempotency-key"), orders.endpoints().get("POST").headers());
     }
 
-    /** The borrowed namespaces keep their grammars at the key: a path, a header name, an exchange name. */
+    /** Each borrowed grammar holds at its key, naming its role: a path, a header name, an exchange name. */
     @Test
-    void theBorrowedNamespacesKeepTheirGrammarsAtTheKey() {
+    void theBorrowedGrammarsHoldAtTheKey() {
         String notAPath = only(api("""
               a => !service.http { resources: { "orders" => { GET => !service.operation { request: order_ref } } } }
             """));

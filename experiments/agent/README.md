@@ -81,9 +81,9 @@ where a slot is typed `meta.ref<service.exchange>`, never as a tag. A reference 
 is a name judged against the closure the document imports ([TSON-SCHEMA] §3.3.4), and an argument list there is a parse
 error ([TSON-DATA] §7.2.5): at `m: meta.ref<service.exchange>`, `orders.exchanges.place_order` reads and
 `orders.exchanges.no_such` is refused ("'orders.exchanges' has no key 'no_such'"), and at `m: meta.ref<order>` a value entry
-`o1` reads while `order`, a type, is refused (`UpstreamGapsTest.aValueReferenceInADataDocumentIsJudged`). The URL namespace
-being hierarchical (`/orders/{id}/items` under `/orders/{id}`) while a resource key in `service.tn` is a flat template is
-the same question, and one answer should serve both.
+`o1` reads while `order`, a type, is refused (`UpstreamGapsTest.aValueReferenceInADataDocumentIsJudged`). A URL path does
+not raise it: a resource key in `service.tn` is a flat template in a plain map, no name, and nothing references a
+resource, so `/orders/{id}/items` sitting under `/orders/{id}` is the server's matching and never a question of scope.
 
 **The pool's `type` and `method` entries are typed `name`** in `agent-vm.tn`, and want to be `meta.type_ref` and
 `meta.ref<service.exchange>`, judged on read as any reference in data is. The names they hold are the interface's, while a
