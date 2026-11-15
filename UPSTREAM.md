@@ -502,3 +502,56 @@ facet picking among a closed vocabulary (§5.5, §5.7), would then want a word o
 **What this project does meanwhile:** writes "sibling" for the typing field only.
 
 **Priority:** low.
+
+### To file: a proposal's return condition for `extern` is met by a service description serving two versions of one schema
+
+**Sections:** [TSON-SCHEMA] §3.5 (a published schema is immutable), §2.2.3 (every root name of an import closure is
+reserved in each importer), §9 (one map per vocabulary), §7.1 and §7.8 (where Revision 38's external forms were
+removed); tson-java's `proposal/extern.md`, deferred, whose "What it would take to return" asks for names that cannot be
+reconciled by a sub-namespace.
+
+**Kind:** design comment on a deferred proposal, from a consumer that has the case.
+
+**The case.** §3.5 makes a published schema immutable, so a shape change is a new identity, and a server serves
+`order-1.tn` and `order-2.tn` side by side (`design/schema-versions.md`, `TsonSchemaVersions`). Both declare `order`. A
+service description that says an endpoint serves both must name both types, and cannot: importing both collides on
+`order`, and the collision cannot be reconciled by nesting the older schema under a map, because v1 is published and
+may not be edited. So the version story and the service description never meet: a description names one version, and
+the others are carried by hand outside it. This is the proposal's own return condition, and it arises from §3.5 rather
+than from a vocabulary that chose its names badly.
+
+**On the prefix form.** With §9's one map per vocabulary, every name of a vocabulary is already written by its path,
+`service.binding`, `problem.details`, with no bare spelling, so the proposal's "one value has two spellings" objection
+does not arise for a schema that follows the SHOULD. Suggested: an extern's local name defaults to, or must equal, the
+schema's root map name when it has exactly one root. Import and extern then spell every name identically, and the one
+difference is that the externed closure keeps its own pins. The importer chooses a prefix only for a schema with
+several roots, which is the legacy case the version story needs: `v1 => !meta.extern { schema: "…/order-1.tn" }` and
+`response: v1.order`.
+
+**On "foreign readers compile per embedding".** Bind mode pays that cost today by hand: a `DataNameBinder` is handed a
+type name and nothing else, both versions say `order`, so a receiver holds a bind context per version. A fixed prefix
+turns the per-embedding context into a name, `v1.order` beside `v2.order` in one binder. A receiver that compiles every
+schema at startup, as this one must, pays the compile where it wants to.
+
+**On tags resolving by position.** In this consumer the one place two closures meet is a schema document, the service
+description, which names foreign types at `meta.type_ref` and `meta.ref` slots and never reads a value under them. A
+request or response body is one record under the route's root type with no foreign value nested in it, so the
+governing closure of a data document stays one, selected by the route. A narrower extern, admitted in a schema document
+at type and reference slots and not as a tag resolving by position in a data document, serves this case without putting
+two namespaces in one data document, and is a smaller thing than Revision 38's forms.
+
+**Three requirements from the codec side, whichever form returns.** An extern is a schema reference and takes the same
+`SchemaSource` policy as an import, a deployment's fetch allow-list included ([TSON-DATA] §8.2 posture: policy on every
+reference). The linked schema lists externs beside imports, since what a server publishes and warms is collected by
+walking a description's dependencies. And the deployment descriptor's rule that no document may name one still holds,
+a descriptor having no identity; worth a sentence where extern is specified, it being a second way to name a document.
+
+**Not argued for.** Pins that disagree across revisions: an extern would let a Revision 40 description name a Revision
+39 type across two kernels. The series makes no compatibility promise between revisions, so this consumer does not ask
+for it.
+
+**What this project does meanwhile:** a description names one version of each schema it describes; a server serving
+several versions carries the others in `TsonSchemaVersions`, outside the description, and the description does not
+state that the endpoint serves them.
+
+**Priority:** medium: it decides whether a service description can state what a versioned server serves.
