@@ -24,6 +24,8 @@ touches, and the schema-language rules that read like bugs when they bite. Curre
   map. A bound class's `@Typename` is the qualified name (`problem.details`, `deployment.descriptor`).
 - An optional field is `name?: T`; `name: T?` is a required field admitting `_`. A `text` field accepts any token.
   A `pattern` is I-Regexp and `^`/`$` are literal characters.
+- `^` follows `!name` and takes values; a record derives by `&` alone, which admits a new field, so a misspelt
+  restatement is a new field and its spelling is the author's to check.
 - A `pattern` judges the value after the type's `normalization` has folded it. An ASCII protocol's name (an HTTP
   header field name, an authentication scheme) folds with `ASCII_CASEFOLD`, never `NFKC_CASEFOLD`, which folds
   compatibility characters into ASCII and widens what an ASCII pattern admits.
@@ -143,13 +145,19 @@ the build is the check.
   `FIELD_REQUIRED`. Every schema here spells optional as `name?: T`, following upstream's kernel. Two more that
   bite: a default needs the name marked (`page?: int32 ~ 1`; `page: int32 ~ 1` is refused), and a pin on an
   unmarked name (`status: int32 = 404`) is a **marker** the document must write and is never injected — only
-  `status?: int32 = 404` injects. A refinement cannot move a field from required to omissible, so a base whose
-  subtypes should inject a pin has to declare the name marked; and a restated field's type is the inherited one or a
-  type IS-A it ([TSON-SCHEMA] §5.7, judged at link), so `int32` does not restate a choice holding it. A type written
+  `status?: int32 = 404` injects. A restated field cannot move from required to optional (`x?: int32` over `x:
+  int32` is refused), but it may take a default or a pin with its name marked (`x?: = 5` over `x: int32` loads and
+  injects); and a restated field's type is the inherited one or a type IS-A it ([TSON-SCHEMA] §5.7, judged at link),
+  so `int32` does not restate a choice holding it. A type written
   in place is IS-A nothing but itself and narrows only to an equal one, so `[int8]` does not restate `[int32]`; and a
   name never restates as its construction or the reverse: over `text_list => [text]`, a field `tags: text_list` is not
   restated `tags: [text]`. Bound values cannot tell the three optional-ish spellings apart; only a tree keeps whether `_` was
   written.
+- **`^` follows `!name` and refines a built type by values; a record derives by `&` alone.** `status =>
+  !integer ^ { min: 100  max: 599 }` narrows a type a constructor built, and `name ^ { … }` after a bare name is a parse
+  error naming `name & { … }` ([TSON-SCHEMA] §5.5, §5.8). A composition body is field definitions, and it admits a new
+  field where nothing refuses a misspelt restatement, so `operation & { statsu?: = 200 }` adds a field and the author
+  checks a restated field's spelling.
 - **A `text` field accepts any token, including `42`, `true` and `2026-01-01`.** It rejects only what is
   not a token at all — an array, a record. Correct per spec, and it reliably reads as a bug: [TSON-DATA]
   §4 says base type resolution does not apply at a schema-typed position, and §7.1's "form is not meaning"

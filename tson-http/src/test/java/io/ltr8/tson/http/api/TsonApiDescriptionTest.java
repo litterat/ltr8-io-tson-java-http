@@ -973,8 +973,8 @@ class TsonApiDescriptionTest {
      * plan step is a value of the exchange type. The cost shows in every value -- schema facts declared as fields
      * are per-instance. {@code verb: = POST} pins a field whose name is unmarked, which [TSON-SCHEMA] §5.2 makes
      * a <em>marker</em>: never injected, so each step must write its own verb and URL, and omitting one is the
-     * missing-field error. Pinning with the name marked instead would inject, but a refinement may not relax a
-     * required field to an omissible one, so the base would have to declare {@code verb?:} to begin with.
+     * missing-field error. Restating the field with its name marked, {@code verb?: = POST}, would inject the pin: a
+     * composition may move a required field to fixed, though not to optional.
      */
     @Test
     void anExchangeAsATypeCanBeComposedIntoAnOperation() {

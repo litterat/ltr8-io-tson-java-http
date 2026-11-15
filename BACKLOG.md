@@ -158,7 +158,7 @@ The four entries are in build order.
   admit an endpoint shape declared in the description itself (`paged_get => service.operation & { … }`, fixing what every
   paged list shares, its endpoints then written `!paged_get { … }`). Without it a CRUD family is written out operation
   by operation. Measure what the resolver does with such an entry, then decide whether the reader accepts an endpoint
-  whose type refines `service.operation` and what `TsonApiSchema.bindings()` binds it to. Constraint: an edit in place
+  whose type composes `service.operation` and what `TsonApiSchema.bindings()` binds it to. Constraint: an edit in place
   until `service.tn` is published, a new identity after; and `service.resource` keeps its one bare required field.
 - [ ] **A bound request record's dependent field is a pinned sibling or a discriminator over a family** — Once tson-java
   refuses at load a bound schema whose free sibling admits an unbound type (work upstream's `BACKLOG.md` holds; the spec

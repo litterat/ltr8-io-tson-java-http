@@ -27,7 +27,7 @@ written, and each item asks a model to **classify** a construct, **predict** whe
 | Entry arrow and declaration | `name => ...` | Classify the entry: a type, a constructor, a value, an annotation. |
 | Constructor application | `!C { ... }`, `!enum [A B]` | Classify what `!C` produces; write one. |
 | Atom refinement | `!integer ^ { min: 0 }` | Predict which tokens it admits; write a bounded atom. |
-| Record refinement | `T ^ { x: ~"hello" }` | Predict what the refinement admits that its source refused, and the reverse. |
+| Restated field | `T & { x?: ~"hello" }` | Predict what the composition admits that its source refused, and the reverse; whether a name restates a field or adds one. |
 | Composition | `A & B & { ... }` | Predict the merged fields; classify admissible operands. |
 | Subtraction | `head - { fields }` | Predict the fields left, and whether the result IS-A `head`. |
 | Bare record | `{ sku: text }` | Write one from a prose shape. |
@@ -60,8 +60,8 @@ Phase 3 tool and is not built until a hypothesis calls for it.
 
 - **The compiler is the judge wherever a judge is needed.** tson-java's resolver (its `tson` CLI and Java API) grades
   every generated schema and every predicted admission. Its diagnostics already name error classes a feature can be
-  charged with: a type applied where a constructor was needed, refinement of a finished entry, a facet body in field
-  grammar, an unresolved constructor. An LLM judge is used only for prose, with a rubric drawn from the
+  charged with: a type applied where a constructor was needed, `^` over a record whose fields `&` restates, a facet body in
+  field grammar, an unresolved constructor. An LLM judge is used only for prose, with a rubric drawn from the
   stripped documentation, and never to grade syntax.
 - **The stripped documentation is the answer key.** Stripping `@doc` and `@service.summary` from a layer produces the
   stimulus; what was stripped is the rubric for comprehension items and the target for the unknowns experiment.
@@ -262,27 +262,30 @@ entry's value is a type, otherwise it is data, and `!T body` is the same instant
 The `_type` suffix (`integer_type`, `text_type`, `media_type_type`) carries most of that; `record`, `enum`, `choice` and
 `namespace` carry none of it. Across a layer the size of `meta.tn`, that would be a lookup per line.
 
-Refinement, `^`, is different in kind: it refines any value under the rules its type states, field by field, a
-facet's (bounds inward, member sets shrinking), a field's modifier (`=` fixed, `~` replaceable) or a reference's `of`
-(narrowed to a subtype), so `int8 => !integer ^ { min: 0  max: 255 }`, `defaultbase => base ^ { x: ~"hello" }` and
-`identifier_ref => !meta.type_ref ^ { of: unicode.identifier_type }` are one rule, record refinement being the case
-whose type is `record`. **The parser note:** the `!` prefix on atom refinement (`!integer ^ { ... }`) tells the
-parser the body is facet data, not field declarations, before anything resolves; without it something else must, or
-one grammar covers both bodies and defers the choice to resolution.
+Refinement, `^`, is different in kind: it follows `!name` and refines a type a constructor built by values, under
+the rules that type states, facet by facet (bounds inward, member sets shrinking) or a reference's `of` (narrowed to a
+subtype), so `int8 => !integer ^ { min: 0  max: 255 }` and `identifier_ref => !meta.type_ref ^ { of:
+unicode.identifier_type }` are one rule. A record is never refined: it derives by composition, `&`, whose body is field
+definitions, and a field restated there narrows by the same rules, its modifier (`=` fixed, `~` replaceable) or its
+type (one IS-A the inherited), so `defaultbase => base & { x?: ~"hello" }` restates `x` where a name `base` lacks adds
+a field. **The parser note:** the operator tells the parser the body's grammar before anything resolves, values after
+`^` and field definitions after `&`, so a bare `T ^ { ... }` is a parse error naming `T & { ... }` ([TSON-SCHEMA]
+§12.1) and `!R ^ { ... }` over a record is a resolver error naming the same (§4.3).
 
 **Syntax variants**, named neutrally in any prompt:
 
-- **V0** -- Revision 39: `!` marks an instance, so `!C { ... }` is a value of `C` (a type when `C` IS-A `meta.type`)
-  whether `C` is a constructor or an ordinary type; `!I ^ { ... }` and `T ^ { ... }` refine a value under its type's
-  rules; `A & B` composes. This is the baseline itself.
+- **V0** -- Revision 40: `!` marks an instance, so `!C { ... }` is a value of `C` (a type when `C` IS-A `meta.type`)
+  whether `C` is a constructor or an ordinary type; `!I ^ { ... }` refines a type a constructor built by values; `A & B
+  & { ... }` composes, the one way to derive a record. This is the baseline itself.
 - **V1** -- `!` removed from every type-producing form (`integer => integer_type { min: 0 }`,
-  `age => integer ^ { min: 0 }`), and kept only where a value follows.
+  `age => integer ^ { min: 0 }`, which V0 refuses as a parse error), and kept only where a value follows; the operator
+  still decides the body.
 - **V2** -- an infix construction operator, `integer => integer_type <- { min: 0 }`, beside `^` and `&`; `!` only on
   values. tson-java proposed it as spec feedback and withdrew it: under one level the head's chain says whether an
   entry is a type, so there is no head-position ambiguity for it to remove. It stays a variant because the question
   here is load on a reader, which that argument does not settle.
-- **V3** -- V2 with atom refinement also spelled `<-` (`small_int => integer <- { max: 10 }`), so `^` has only the
-  field-declaration body grammar and `<-` only the facet-data one.
+- **V3** -- V2 with atom refinement also spelled `<-` (`small_int => integer <- { max: 10 }`), so one operator takes
+  a body of values, whether it constructs or refines, `^` goes, and `&` alone takes field definitions.
 
 **Naming:** N0, the `_type` suffix as it stands; N1, neutral names with the suffix removed; N2, names replaced by
 meaningless but pronounceable tokens, measuring how much the names carry. **Ordering:** O0, declare-before-use, as the

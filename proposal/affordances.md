@@ -217,7 +217,7 @@ Javalin's and Helidon's SSE support).
   service publishes its own description, and `binds` holds a projection to every exchange.
 - **`sdfThing` composition** (§2.2.6): a projection binding several protocols already composes them.
 - **`sdfRef`'s copy and merge patch** (§4.4): overrides are "a convention as it cannot be checked" (§6.2.1); the layer
-  has no inheritance between protocols, and the kernel's refinement keeps IS-A.
+  has no inheritance between protocols, and a field restated in the kernel's composition keeps IS-A.
 - **A lexicographic `version`** (§3.1): a schema is immutable at its identity (§3.5); a change is a new identity.
 - **Extension by registry string** (§2.3.3): an annotation is declared in a schema and typed, so a misspelt one is
   refused (measured above), where an unregistered prefix is merely unknown.

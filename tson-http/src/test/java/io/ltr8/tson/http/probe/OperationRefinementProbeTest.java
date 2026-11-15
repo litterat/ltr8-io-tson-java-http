@@ -46,18 +46,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * itself; {@code proposal/operation-refinement.md} is the proposal it measures. Every test pins Revision 40's outcome,
  * and one failing after a library change means the answer has moved.
  *
- * <p>The answers measured: an empty composition, a composition or a refinement pinning {@code status} or {@code
- * request} all load; {@code status: = 200} unmarked is refused as moving a default to required, a list cannot be
- * pinned at all ([TSON-SCHEMA] §5.2), and a refinement adding a field is refused. A template cannot fix an operation's
- * response: a parameter is a type, so {@code response: T} restates the field's type and is refused where it is
- * applied, and {@code response?: = T} is refused at the declaration. The description's own subtype is admitted, and
- * binds to the base's class once it is bound to it, wherever the slot is: at a record the description declares, at
- * the layer's record in the description's own value entry, and at the layer's record in a data document importing
- * the description. The real layer admits it the same way through {@code TsonApiSchema}, and {@code describedBy}
- * reads the endpoint. The base is {@code abstract}, as {@code service.endpoint} is, so a subtype bound to nothing
- * leaves a value entry holding it a tree, which {@code describedBy} refuses, and is a missing binding to the object
- * reader in a data document. What paged lists share is a response shape, and a template over the response record
- * says it too.
+ * <p>The answers measured: one spelling derives an endpoint shape, the composition. An empty composition and one pinning
+ * {@code status} or {@code request} load; {@code status: = 200} unmarked is refused as moving a default to required, and a
+ * list cannot be pinned at all ([TSON-SCHEMA] §5.2). {@code ^} follows {@code !name} and takes values, so {@code operation ^
+ * { … }} is a parse error and {@code !operation ^ { … }} a resolver error, each naming {@code operation & { … }}. A
+ * composition adding a field loads, and a subtype adding one does not bind to the base's class. A template cannot fix an
+ * operation's response: a parameter is a type, so {@code response: T} restates the field's type and is refused where it is
+ * applied, and {@code response?: = T} is refused at the declaration. The description's own subtype is admitted, and binds to
+ * the base's class once it is bound to it, wherever the slot is: at a record the description declares, at the layer's record
+ * in the description's own value entry, and at the layer's record in a data document importing the description. The real
+ * layer admits it the same way through {@code TsonApiSchema}, and {@code describedBy} reads the endpoint. The base is {@code
+ * abstract}, as {@code service.endpoint} is, so a subtype bound to nothing leaves a value entry holding it a tree, which
+ * {@code describedBy} refuses, and is a missing binding to the object reader in a data document. What paged lists share is a
+ * response shape, and a template over the response record says it too.
  */
 class OperationRefinementProbeTest {
 
@@ -170,17 +171,21 @@ class OperationRefinementProbeTest {
     // ── 1: which forms load ─────────────────────────────────────────────────────────────────────────────────────
 
     /**
-     * <b>A composition and a refinement of the layer's {@code operation} load in an importing description</b>, empty
-     * or pinning {@code status} and {@code request}: a pin moves {@code status?: integer ~ 200} from DEFAULT to FIXED,
-     * and {@code request} is a {@code meta.type_ref}, a reference atom, so it takes a value. Three spellings are
-     * refused: {@code status: = 200} unmarked, which moves an injected field back to required (§5.7); a pin on
-     * {@code media_types}, a list, which the grammar refuses at the {@code [} since a value modifier is a scalar token
-     * (§5.2); and a refinement adding a field, which only {@code &} may do.
+     * <b>A composition of the layer's {@code operation} loads in an importing description, and a refinement of it is
+     * refused</b>: a record derives by {@code &} alone. Empty, or pinning {@code status} and {@code request}, it loads:
+     * a pin moves {@code status?: integer ~ 200} from DEFAULT to FIXED, and {@code request} is a {@code
+     * meta.type_ref}, a reference atom, so it takes a value. Two spellings of a restated field are refused: {@code
+     * status: = 200} unmarked, which moves an injected field back to required (§5.7), and a pin on {@code
+     * media_types}, a list, which the grammar refuses at the {@code [} since a value modifier is a scalar token
+     * (§5.2). {@code ^} follows {@code !name} and its body is values, so {@code operation ^ { … }} is a parse error
+     * whatever its body, and {@code !operation ^ { … }} a resolver error, a record stating no rule for a body of values
+     * (§4.3); each names {@code operation & { … }}. A composition adding a field, {@code page_size?: int32}, loads:
+     * nothing refuses a field naming no inherited one, so a misspelt restatement adds a field as well.
      */
     @Test
-    void aCompositionOrARefinementOfOperationLoads() {
+    void aCompositionOfOperationLoadsAndARefinementOfItIsRefused() {
         for (String form : List.of("  paged_get => operation & {}", PAGED,
-                "  paged_get => operation ^ { status?: = 200  request?: = order_query }")) {
+                "  paged_get => operation & { page_size?: int32 }")) {
             String schema = schema(form);
             assertEquals(List.of(), tson(schema, LAYER_BOUND).validateSchema(schema), form);
         }
@@ -191,10 +196,16 @@ class OperationRefinementProbeTest {
         assertEquals("expected a scalar token, the void sentinel '_', or '?' after '=', found '['",
                 refusal(schema("  paged_get => operation & { media_types?: = [\"application/tson\"] }"), LAYER_BOUND,
                         Diagnostic.Code.VALIDATION_ERROR));
-        assertEquals("'paged_get': refinement body field 'page_size' names no inherited field -- a refinement copies "
-                        + "its source's whole field set and admits no new fields; composition (`&`) is what adds one "
-                        + "(§5.7)",
-                refusal(schema("  paged_get => operation ^ { page_size?: int32 }"), LAYER_BOUND,
+        String caret = "'^' follows '!name' and takes values (§5.5, §5.7), and 'operation' has no '!': a record's "
+                + "fields are restated in a composition, 'operation & { ... }' (§5.8)";
+        for (String form : List.of("  paged_get => operation ^ { status?: = 200  request?: = order_query }",
+                "  paged_get => operation ^ { page_size?: int32 }")) {
+            assertEquals(caret, refusal(schema(form), LAYER_BOUND, Diagnostic.Code.VALIDATION_ERROR), form);
+        }
+        assertEquals("'paged_get': '!operation ^ { ... }' needs an atom instance, an array or a map type to narrow, or "
+                        + "a constructor of types to build from (§5.5), and 'operation' is a record, which takes no "
+                        + "'^' -- its fields are restated in a composition, 'operation & { ... }' (§5.8)",
+                refusal(schema("  paged_get => !operation ^ { status: 200 }"), LAYER_BOUND,
                         Diagnostic.Code.SCHEMA_ERROR));
     }
 
@@ -210,8 +221,8 @@ class OperationRefinementProbeTest {
     void aTemplateCannotFixAnOperationsResponse() {
         String open = "  paged => <T> operation & { response: T }";
         assertEquals(List.of(), tson(schema(open), LAYER_BOUND).validateSchema(schema(open)));
-        assertEquals("'paged_orders': not a valid refinement of 'operation' (§5.7): field 'response' is typed 'order', "
-                        + "which is not 'meta.type_ref' or IS-A it",
+        assertEquals("'paged_orders': not a valid restatement of 'operation''s fields (§5.7): field 'response' is typed "
+                        + "'order', which is not 'meta.type_ref' or IS-A it",
                 refusal(schema(open, "  paged_orders => paged<order>"), Map.of(), Diagnostic.Code.SCHEMA_ERROR));
         assertEquals("parameter 'T' stands at the value of field 'response' (meta.record_field.value) -- a parameter is "
                         + "a type, and stands only at a field's type or as an argument of an application there or in "
@@ -378,13 +389,35 @@ class OperationRefinementProbeTest {
 
     /**
      * <b>Only a subtype with the base's field set binds to the base's class.</b> A composition adding a field, {@code
-     * operation & { page_size?: int32 }}, is admitted by the tree reader and refused by the object reader under
-     * {@code Operation}, which has no component for it: binding a description's subtype to the layer's class works
-     * for a refinement or a field-free composition only.
+     * operation & { page_size?: int32 }}, is admitted at the layer's slot whether or not a value writes the field. In
+     * the description's own value entry it is a tree tagged {@code paged_get} unbound and with the layer bound, and a
+     * {@code BIND_MISMATCH} naming {@code page_size} once {@code paged_get} is bound to {@code Operation}, which has no
+     * component for it: the mismatch is the type's, so a value leaving the field out is refused alike. In a data
+     * document the tree reader admits it and the object reader refuses it the same way. Binding a description's subtype
+     * to the layer's class works for a composition that restates or pins inherited fields only.
      */
     @Test
     void aSubtypeAddingAFieldDoesNotBindToTheBasesClass() {
-        String schema = schema("  paged_get => operation & { page_size?: int32 }");
+        String adding = "  paged_get => operation & { page_size?: int32 }";
+        String mismatchPrefix = "'paged_get' and " + Operation.class.getName()
+                + " do not agree: no component for field 'page_size'";
+        for (String endpoint : List.of("!paged_get { response: order_page }",
+                "!paged_get { response: order_page  page_size: 50 }")) {
+            String described = schema(adding, http(endpoint));
+            for (Map<String, Class<?>> bound : List.of(Map.<String, Class<?>>of(), LAYER_BOUND)) {
+                Tson tson = tson(described, bound);
+                assertEquals(List.of(), tson.validateSchema(described), endpoint);
+                TsonValue tree = assertInstanceOf(TsonValue.class, entry(tson, "orders_http"))
+                        .at("/resources/~1orders/endpoints/GET");
+                assertEquals(Optional.of("paged_get"), tree.typeRef());
+                assertEquals(endpoint.contains("page_size"), tree.fields().containsKey("page_size"), endpoint);
+            }
+            Diagnostic mismatch = only(tson(described, PAGED_BOUND).validateSchema(described));
+            assertEquals(Diagnostic.Code.BIND_MISMATCH, mismatch.code(), mismatch::message);
+            assertTrue(mismatch.message().startsWith("'orders_http': " + mismatchPrefix), mismatch::message);
+        }
+
+        String schema = schema(adding);
         Tson tson = tson(schema, PAGED_BOUND);
         assertEquals(List.of(), tson.validateSchema(schema));
         String doc = data("!paged_get { response: order_page  page_size: 50 }");
@@ -394,8 +427,7 @@ class OperationRefinementProbeTest {
         assertEquals(List.of(), problems.diagnostics());
         ReadException mismatch = assertThrows(ReadException.class, () -> tson.objectReader().read(doc, Http.class));
         assertEquals(Diagnostic.Code.BIND_MISMATCH, mismatch.diagnostic().code());
-        assertTrue(mismatch.diagnostic().message().startsWith("'paged_get' and " + Operation.class.getName()
-                + " do not agree: no component for field 'page_size'"), mismatch.diagnostic()::message);
+        assertTrue(mismatch.diagnostic().message().startsWith(mismatchPrefix), mismatch.diagnostic()::message);
     }
 
     // ── what paged lists share ──────────────────────────────────────────────────────────────────────────────────

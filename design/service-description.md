@@ -119,8 +119,9 @@ a text family with a `pattern`, as `service.header_name` is. A role names the na
 `(schema identity, qualified name)`, `…/orders-1.tn` and `orders.exchanges.place_order`, held as `ExchangeName`. The
 HTTP roles and their `ASCII_CASEFOLD` are `design/http-projection.md`.
 
-**A namespace is a map refined to name keys**: `meta.map ^ { key_type: meta.identifier_ref  voidable?: = false }`, so
-its `key_type` is required and an identifier family and no value is `_`. A qualified name walks its keys, and a record
+**A namespace is a map composed to name keys**: `meta.map & { key_type: meta.identifier_ref  voidable?: = false }`, a
+composition restating `key_type` under a narrower type and pinning `voidable`, so its `key_type` is required and an
+identifier family and no value is `_`. A qualified name walks its keys, and a record
 value's field to reach one: `orders.exchanges.place_order` is the protocol's entry, its `exchanges` field and a key
 (`UpstreamGapsTest.aReferenceThroughARecordValuesFieldIsJudged`), so `orders.place_order` is refused at load naming the
 fields a protocol declares (`TsonApiDescriptionTest.aTwoSegmentExchangeNameIsRefusedNamingTheField`). A record's

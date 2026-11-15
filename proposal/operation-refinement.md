@@ -8,8 +8,9 @@ surfaces, an untagged refusal naming the layer's subtypes only, is staged in `UP
 
 ## Summary
 
-The forms load: `paged_get => service.operation & { status?: = 200  request?: = order_query }`, the same as a
-refinement `^`, and the empty composition. The question's premise, that a description could then write its endpoints
+One spelling derives the shape, the composition: `paged_get => service.operation & { status?: = 200  request?: =
+order_query }` loads, and the empty composition. `^` follows `!name` and takes values, so `service.operation ^ { … }`
+is a parse error naming the composition. The question's premise, that a description could then write its endpoints
 `!paged_get { … }`, holds. At the one place a description writes an endpoint, a slot of the layer's own
 `service.resource` read in the description's value entry, tson-java admits the description's subtype ([TSON-SCHEMA]
 §3.3.4 computes `subtypes` over the schema being resolved; §7.2 admits by the tag's chain), as it does at a record the
@@ -18,7 +19,7 @@ class: bound as `TsonApiSchema.bindings()` binds, naming the layer's records alo
 `service.endpoint` binds against, so a description declaring `paged_get` resolves through `TsonApiSchema` only with
 `bindingsWith` naming it, a name the server must know before the description resolves.
 
-The refinement buys little. A list cannot be pinned (§5.2), so `media_types` stays per
+The derived shape buys little. A list cannot be pinned (§5.2), so `media_types` stays per
 endpoint; `status` already defaults to 200; a template cannot fix `response`, since a parameter is a type and
 `response` holds a type reference as its value; and `@service.safe` sits on the verb key, which a type does not carry.
 What paged lists share is a payload shape, and `page => <T> { items: [T]  next_page?: int32 }` with `order_list =>
@@ -44,24 +45,30 @@ bare form, with `operation => endpoint & signature`, `binding` and `document` co
 layer would write `service.operation`. A description imports that layer and core and declares `order`, `order_query`
 and `order_page`.
 
-**Which forms load** (`aCompositionOrARefinementOfOperationLoads`). `paged_get => operation & {}`, `operation & {
-status?: = 200  request?: = order_query }` and `operation ^ { status?: = 200  request?: = order_query }` load clean. A
+**Which forms load** (`aCompositionOfOperationLoadsAndARefinementOfItIsRefused`). A record derives by `&` alone.
+`paged_get => operation & {}` and `operation & { status?: = 200  request?: = order_query }` load clean. A
 `meta.type_ref` is a reference atom, so `request` takes a pin. Each of these is refused with one diagnostic:
 
 - `status: = 200`, unmarked (`SCHEMA_ERROR`): *'paged_get': tightening 'status' from defaulted to required is not a
   permitted state transition -- a refinement can only restrict, never expand (§5.7)*. The spelling is `status?: = 200`.
 - `media_types?: = ["application/tson"]` (`VALIDATION_ERROR`): *expected a scalar token, the void sentinel '_', or '?'
   after '=', found '['*. A value modifier is a scalar token (§5.2), so no list field is ever pinned.
-- `operation ^ { page_size?: int32 }` (`SCHEMA_ERROR`): *refinement body field 'page_size' names no inherited field
-  -- a refinement copies its source's whole field set and admits no new fields; composition (`&`) is what adds one
-  (§5.7)*.
+- `operation ^ { status?: = 200  request?: = order_query }`, or any body (`VALIDATION_ERROR`, a parse error): *'^'
+  follows '!name' and takes values (§5.5, §5.7), and 'operation' has no '!': a record's fields are restated in a
+  composition, 'operation & { ... }' (§5.8)*. So the question's second form is no form.
+- `!operation ^ { status: 200 }` (`SCHEMA_ERROR`, from the resolver): *'paged_get': '!operation ^ { ... }' needs an
+  atom instance, an array or a map type to narrow, or a constructor of types to build from (§5.5), and 'operation' is
+  a record, which takes no '^' -- its fields are restated in a composition, 'operation & { ... }' (§5.8)*.
+
+A composition adding a field, `operation & { page_size?: int32 }`, loads. Nothing refuses a field naming no inherited
+one, so a misspelt restatement (`statsu?: = 200`) adds a field too; its spelling is the author's to check.
 
 **A template cannot fix the response** (`aTemplateCannotFixAnOperationsResponse`). `paged => <T> operation & {
 response: T }` loads, since nothing is judged until it is applied. Applied:
 
-- `paged_orders => paged<order>`: *'paged_orders': not a valid refinement of 'operation' (§5.7): field 'response' is
-  typed 'order', which is not 'meta.type_ref' or IS-A it*. `response: T` restates the field's type, where the shape
-  wants its value fixed.
+- `paged_orders => paged<order>`: *'paged_orders': not a valid restatement of 'operation''s fields (§5.7): field
+  'response' is typed 'order', which is not 'meta.type_ref' or IS-A it*. `response: T` restates the field's type,
+  where the shape wants its value fixed.
 - `paged => <T> operation & { response?: = T }`: *parameter 'T' stands at the value of field 'response'
   (meta.record_field.value) -- a parameter is a type, … (§5.10)*.
 - `GET => !paged<order> { … }` (`VALIDATION_ERROR`): *'!paged<...>' applies type arguments, which are schema syntax
@@ -106,8 +113,11 @@ class for 'paged_get' …*) while `paged_get` binds nothing, and delivers an `Op
 the description's. `request: order` against the pin is `FIELD_FIXED` from both readers.
 
 **Binding to the base's class** (`aSubtypeAddingAFieldDoesNotBindToTheBasesClass`). Only a subtype with the base's
-field set binds to its class. `operation & { page_size?: int32 }` is admitted by the tree reader and refused by the
-object reader: `BIND_MISMATCH`, *'paged_get' and …Operation do not agree: no component for field 'page_size' …*.
+field set binds to its class. `operation & { page_size?: int32 }` is admitted at the layer's slot in the description's
+value entry, written with `page_size` or without it: a tree tagged `paged_get` with nothing bound and with the layer
+bound, and with `paged_get` bound to `Operation` the one diagnostic `BIND_MISMATCH`, *'orders_http': 'paged_get' and
+…Operation do not agree: no component for field 'page_size' …*. The mismatch is the type's, so leaving the field out
+of a value does not help. In a data document the tree reader admits it and the object reader refuses it the same way.
 
 **What the sharing is** (`aTemplateOverTheResponseRecordSaysWhatPagedListsShare`). `page => <T> { items: [T]
 next_page?: int32 }`, `order_list => page<order>` and a plain `!operation { request: order_query  response: order_list
@@ -194,7 +204,7 @@ that loads composes `service.operation` as it stands.
    to `api.Operation`, but only through `bindingsWith` naming `paged_get`, a name the server learns from the
    description it has not yet resolved. Under `bindings()` it is no member of the union, so supporting it in general
    means two resolutions, or a nearest-supertype binder the library does not have.
-2. **Even working, it fixes little.** Of what a paged list shares, the refinement can fix `status` (already 200) and,
+2. **Even working, it fixes little.** Of what a paged list shares, the composition can fix `status` (already 200) and,
    only where it is shared, `request`. It cannot fix `media_types` (no list pins), `response` (no value
    parameters), or `@service.safe` (a key annotation).
 3. **What a paged list does share is its payload**, and a response template (`page<T>`) with a shared query record

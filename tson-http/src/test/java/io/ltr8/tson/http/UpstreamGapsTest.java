@@ -425,7 +425,7 @@ class UpstreamGapsTest {
 
     /**
      * A namespace type declares its facets and nothing else: a value of it is the map alone, so a field beyond the
-     * facets {@code meta.namespace} has as a refinement of {@code meta.map} -- {@code key_type} and {@code value_type},
+     * facets {@code meta.namespace} has as a composition of {@code meta.map} -- {@code key_type} and {@code value_type},
      * {@code ordered}, {@code min_items} and {@code max_items} among them -- has nowhere to be written, and {@code
      * meta.namespace}'s own record reader refuses it as an unknown field, listing the facets. That is why {@code
      * service.tn}'s {@code service.protocol} and {@code service.http} are records holding one namespace-typed field,

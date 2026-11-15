@@ -70,7 +70,7 @@ request?: method! }`, would type the request by the exchange the packet addresse
 by a reference over a constructor (`meta.type_ref`, a `meta.ref<C>`) or by `meta.type_expr`, and `meta.ref<service.exchange>`
 names values ([TSON-SCHEMA] §5.2). What the
 form does reach is `{ request_type: meta.type_ref  request?: request_type! }`, a request typed by a type name the
-packet carries, which ties it to no exchange the address names; pinning `request_type` per exchange in a refinement is
+packet carries, which ties it to no exchange the address names; pinning `request_type` per exchange in a composition is
 the template application spelled longer. `DependentEnvelopeProbe` measures both forms: the exchange-keyed envelope
 is a `SCHEMA_ERROR` at load, and the type-keyed one reads each body against the type it names, pointing a violation
 into the body and refusing an exchange's qualified name at the sibling. Typing a payload by a value's own member (an

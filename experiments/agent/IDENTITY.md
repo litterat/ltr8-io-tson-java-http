@@ -96,24 +96,32 @@ canonical form for a **value**, independent of formatting. Because TSON and its 
 encodings of one model, a canonical form defined over the model would let a value be signed once and verified in either
 encoding. JCS can't offer that, since it is JSON-only.
 
-### 2. Authorization as schema refinement
+### 2. Authorization as a narrowed type
 
-The most distinctive idea here. A delegation that narrows what an agent may send can be written as a **refinement of
-the request type**:
+The most distinctive idea here. A delegation that narrows what an agent may send can be written as a **composition of
+the request type that restates its fields under narrower types**:
 
 ```
-place_order_request      => { order: order }
-delegated_place_order    => place_order_request ^ { order: order ^ { quantity: int32 ^ { max: 5 } } }
+small_quantity           => !int32 ^ { max: 5 }
+delegated_order          => order & { quantity: small_quantity }
+delegated_place_order    => place_order_request & { order: delegated_order }
 ```
 
-- The agent's request must validate against the refined type. That's a check the validator already makes.
-- Refinement only narrows: [TSON-SCHEMA] §5.7, "refinement can only restrict", checked facet by facet (a lower bound
-  may rise, an upper bound may fall, a step may only tighten to a multiple). So **attenuation holds by construction**,
-  the property capability tokens work hard for. A further delegation refines the refinement, and can only narrow again.
-- Macaroon and Biscuit caveats are predicates outside any type system. Refinements are typed, compose by the existing
-  rules, and are checked by the same code that checks every document.
+Each level is a named entry: a composition is declared, never written in place (§5.2), and an atom refinement such as
+`!int32 ^ { max: 5 }` is no type at a field's position (§5.3), so it is declared and named too.
 
-What a refinement can't express (one field compared with another, a total across a list) is where `COMPUTATION.md`'s
+- The agent's request must validate against the delegated type. That's a check the validator already makes.
+- A restated field only narrows: [TSON-SCHEMA] §5.7 checks its type is the inherited one or IS-A it, and an atom
+  refinement narrows facet by facet (a lower bound may rise, an upper bound may fall, a step may only tighten to a
+  multiple). So **attenuation holds for every field the delegation restates**, the property capability tokens work hard
+  for, and a further delegation composing this one can only narrow those fields again.
+- A composition also admits a **new** field, and nothing refuses one: `delegated_order => order & { quantitty: … }`
+  adds a field rather than narrowing `quantity`. Attenuation by construction would need admission to refuse a
+  delegated type whose field set is larger than its base's, a check the resolver does not make.
+- Macaroon and Biscuit caveats are predicates outside any type system. A delegated type is typed, composes by the
+  existing rules, and is checked by the same code that checks every document.
+
+What a narrowed type can't express (one field compared with another, a total across a list) is where `COMPUTATION.md`'s
 total-expression layer would come in.
 
 ### 3. Approving an exact plan
@@ -124,7 +132,7 @@ the human-in-the-loop step most agent systems lack: approve this specific sequen
 
 Admission can then check a plan against a delegation as well as against the interface:
 - every call's method is within the grant;
-- every request validates against the delegated refinement;
+- every request validates against the delegated type, and that type adds no field to its base;
 - the budget is within the delegated budget;
 - data-flow rules hold, such as "the output of `read_email` may not reach `send_email.to`" (`COMPUTATION.md`).
 
@@ -144,7 +152,7 @@ delegation => {
 }
 grant => {
   method:   meta.ref<method>      -- a method of the interface
-  request?: meta.ref<meta.record> -- the refinement its requests must validate against
+  request?: meta.ref<meta.record> -- the narrowed type its requests must validate against
 }
 ```
 
@@ -181,7 +189,8 @@ TSON's JSON reader (Part 3) could read an existing JSON credential against one.
   does not track provenance, and that should hold: who asserted a value belongs in a signed **envelope** around it (in
   the style of COSE_Sign1 or JWS), never in the data model.
 - **Authority comes from the deployment or the caller,** never from the document (§8.2, object capability).
-- **Delegation only narrows,** which refinement already guarantees.
+- **Delegation only narrows,** which a composition guarantees for the fields it restates, and admission checks
+  for the fields it might add.
 - **Everything is addressed by content:** interfaces, plans, delegations and schemas, pinned by hash, so an approval or
   a grant names exactly one thing.
 - **Keep the rows of the table apart.** A design that answers personhood doesn't answer delegation, and the other way
@@ -190,8 +199,8 @@ TSON's JSON reader (Part 3) could read an existing JSON credential against one.
 ## Cheap first experiments
 
 Each could be tried with what exists, without committing to anything:
-1. **Authorization as refinement:** write a delegated refinement of a demo request type and show the codec refusing a
-   request outside it. The resolver and validator already do all of it.
+1. **Authorization as a narrowed type:** write a delegated composition of a demo request type and show the codec
+   refusing a request outside it. The resolver and validator already do all of it except refuse a field it adds.
 2. **A canonical value form:** define one for TSON's model and sign a value in a COSE or JWS envelope, verifying it in
    both encodings.
 3. **Plan approval by hash:** sign an `agent.tn` plan's digest and have admission refuse any other plan.
