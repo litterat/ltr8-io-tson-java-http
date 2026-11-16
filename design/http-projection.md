@@ -21,7 +21,8 @@ are `design/service-description.md`; its example shows a protocol and a projecti
   is ASCII-exact; it is no name, so no name hygiene reaches it and a key is held as written. No qualified name walks
   a path key, and nothing references a resource or an endpoint.
 - Each request record's fields are placed exactly once over the path, the query, the headers and the body; a field in
-  the path, the query or a header is a scalar.
+  the path, the query or a header is a scalar. A request or response named through an extern is the foreign record it
+  lands on, its fields' types judged in the foreign schema.
 - The verb agrees with the exchange's facts: GET safe, PUT and DELETE idempotent, nothing `@service.destructive` at GET
   or HEAD. A verb never sets a fact.
 - An operation or binding with no response type writes `status: 204`, `205` or `304`; the default 200 is for an
@@ -103,6 +104,11 @@ protocol and the projection over it may look different. The reader checks it (`R
   (`ChosenTypes`): a free `meta.type_ref` sibling admits the kernel's records and never does, while a pinned sibling or
   a discriminator over bound subtypes does.
 
+**A request named through an extern is placed as the foreign record it lands on**: its fields are that record's, and
+each field's type is looked up where its declaration wrote it, so `id: span` in `keys-1.tn` is a record in the path
+though the description declares no `span`, and a field typed by an extern is judged as its landing
+(`TsonApiDescriptionExternTest.anExternTypedRequestRefusesAForeignRecordInThePath`).
+
 **There is no parameter list.** A parameter-only endpoint declares a one-field record (`schema_ref => { schemaPath:
 text }`) placed from the path. An endpoint with no request admits no placement, so a `{segment}` on it is refused.
 
@@ -179,7 +185,10 @@ exchange's.
 
 **The template is checked at startup**, as a request's placement is: each variable names a field of the response type
 that is one scalar, the rule for a path segment; a form beyond level 1 is refused; and an endpoint with no response type,
-a document or one answering no body, declares literals only. `Route.responseHeaders()` holds the templates, and
+a document or one answering no body, declares literals only. A response named through an extern is judged as the
+foreign record it lands on, its fields' types in the foreign schema
+(`TsonApiDescriptionExternTest.aResponseHeaderExpandsOverTheForeignRecordsScalarField`). `Route.responseHeaders()`
+holds the templates, and
 `expandResponseHeaders(fields)` expands them through `HeaderTemplate` from a function of field name to text that the
 server writes from its own reply, since reading a field of an arbitrary bound record would need reflection or the tree
 reader.

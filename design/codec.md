@@ -37,8 +37,10 @@ schemaless body stays valid TSON, with "must name a schema" living in endpoint p
 
 **The agreement rule as implemented.** `TsonSchemaHeader.resolve(peek, fieldValue)` reads the header against
 `peek.header().imports()`, the `TsonDocumentHeader(id, imports)` the peek carries. Both sides are sets of canonical
-identities: scheme, pin, order and repetition carry nothing. `Governing.schemas()` is the governing set, one
-reference per identity:
+identities: scheme, pin, order and repetition carry nothing. A schema an extern names ([TSON-SCHEMA] §5.13) is a
+member of neither: it loads on an import's terms, the same source, policy and digest, but none of its names enters the
+body's namespace, so a body holding a foreign value imports the declaring schema alone and agrees with a header naming
+that alone (`ExternProbeTest`). `Governing.schemas()` is the governing set, one reference per identity:
 
 | Header | Body imports | Governs |
 |---|---|---|

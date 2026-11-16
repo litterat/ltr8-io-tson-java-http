@@ -406,7 +406,10 @@ class TsonSchemaVersionsTest {
                 () -> codec.readTree(body(order(V2_ID, "{ sku: \"B\" quantity: 2 }")), "application/tson"));
     }
 
-    /** The failure a single shared binder gives, so the reason for a context per version stays visible. */
+    /**
+     * The failure a binder answering by name alone gives, one class for {@code order} in both versions; a binder
+     * keyed by schema ({@code TsonBindings.bySchema}) binds the two apart.
+     */
     @Test
     void oneBinderCannotServeTwoVersionsOfOneTypeName() {
         DataNameBinder binder = name -> "order".equals(name) ? OrderV1.class

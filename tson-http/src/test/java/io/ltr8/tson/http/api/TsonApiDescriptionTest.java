@@ -57,6 +57,16 @@ class TsonApiDescriptionTest {
               order_not_found => problem.details & { status: = 404 }
             }""".formatted(ERR_ID, TsonProblemSchema.ID);
 
+    static final String RECEIPT_ID = "https://schemas.example.com/2026/40/app/receipt-1.tn";
+
+    /** A schema nothing imports, reached only by an extern a test writes. */
+    static final String RECEIPT = """
+            !!id:"%s"
+            !!import:"https://tson.io/2026/40/m/core.tn"
+            !schema {
+              receipt => { order_id: text  total: int32 }
+            }""".formatted(RECEIPT_ID);
+
     static final String PROTOCOL_ID = "https://schemas.example.com/2026/40/app/orders-1.tn";
     static final String API_ID = "https://schemas.example.com/2026/40/app/orders-api-1.tn";
 
@@ -191,6 +201,7 @@ class TsonApiDescriptionTest {
         lib.putAll(TsonApiSchema.publishedById());
         lib.put(TsonProblemSchema.ID, TsonProblemSchema.source());
         lib.put(ERR_ID, ERRORS);
+        lib.put(RECEIPT_ID, RECEIPT);
         lib.put(PROTOCOL_ID, PROTOCOL);
         lib.put(API_ID, api);
         return Tson.of(ProcessorConfig.defaults()
@@ -765,6 +776,31 @@ class TsonApiDescriptionTest {
 
         String scheme = only(api("bearer => !service.http_auth { scheme: \"\uFF22earer\" }"));
         assertTrue(scheme.contains("'service.auth_scheme'"), scheme);
+    }
+
+    /**
+     * <b>A schema an extern names is published with the imports.</b> It loads with them though none of its names
+     * enters the description's namespace ([TSON-SCHEMA] §5.13), so a client resolving the description fetches it,
+     * and {@code referencedSchemas()} walks each schema's dependencies, imports then externs' schemas, rather than its
+     * imports alone. Here the receipt schema is reached by the extern and nothing else.
+     */
+    @Test
+    void aSchemaAnExternNamesIsReferenced() {
+        TsonApiDescription described = routes(api("""
+                  receipt_v1 => !meta.extern { schema: "%s"  type: receipt }
+                  receipts => !service.protocol {
+                    exchanges: { @service.safe get_receipt => { request: order_ref  response: receipt_v1 } }
+                  }
+                  receipts_http => !service.http {
+                    binds: [receipts]
+                    resources: {
+                      "/receipts/{id}" => { GET => !service.binding { exchange: receipts.exchanges.get_receipt } }
+                    }
+                  }
+                """.formatted(RECEIPT_ID)));
+
+        assertEquals(List.of(API_ID, TsonApiSchema.ID, PROTOCOL_ID, ERR_ID, TsonProblemSchema.ID, RECEIPT_ID),
+                List.copyOf(described.referencedSchemas()));
     }
 
     // ── security schemes and response headers ──

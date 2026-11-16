@@ -165,6 +165,16 @@ The four entries are in build order.
   gains a [TSON-SCHEMA] §11 paragraph and §5.2 is unchanged), make that the rule here and delete `ChosenTypes` with its
   closure walk and the remainder-body rule, rather than keep a narrower copy refusing the kernel's and the layer's own
   records. A family declares the admitted set in the published description, where a client can read it.
+- [ ] **Resolve a type expression where the entry holding it is declared** — `Landed.entries()` answers a name with
+  the definition it lands on and drops the schema it landed in, so a name that definition writes is looked up in the
+  namespace the lookup started from. `RequestPlacement` and `notOneScalar` take it: a field typed by an extern of an
+  array or a map declared in a third schema has its element, key or value type resolved in the record's schema, found
+  as nothing (read as a built-in scalar) or as another entry. `ChosenTypes` carries each `Landed` and is not affected,
+  except that a record's subtypes are resolved in the landing's namespace, so a subtype only an importer of the foreign
+  schema declares is not seen. Fix: carry the landing with each definition and resolve each type expression in the
+  schema that declares the entry holding it, found by `TsonLinkedSchema.declaringIdentity(name)` and the registry's
+  linked schema for that identity; test with a request field typed by an extern of an array of records declared in a
+  third schema, placed in the query.
 
 ## Documentation
 

@@ -1,5 +1,6 @@
 package io.ltr8.tson.http.api;
 
+import io.ltr8.tson.schema.TsonLinkedSchema;
 import io.ltr8.tson.schema.meta.ArrayBody;
 import io.ltr8.tson.schema.meta.MapBody;
 import io.ltr8.tson.schema.meta.RecordBody;
@@ -43,6 +44,11 @@ import java.util.regex.Pattern;
  * <p>A request that is not a record is refused where it is read rather than left to fail as an empty field set:
  * the whole mapping is a distribution of one record's fields, so {@code request: text} places nothing, and
  * silently placing nothing reads as a working endpoint that carries no data.
+ *
+ * <p>A request named through an extern ([TSON-SCHEMA] §5.13) is placed as the foreign record the extern lands on:
+ * its fields are that record's, and each field's type is looked up in the foreign schema's namespace, where its
+ * declaration wrote it, so a field typed by a record that schema declares is no scalar in the path. A field typed by
+ * an extern is judged as what the extern lands on, in a request of either kind.
  */
 public record RequestPlacement(Map<String, Location> fields) {
 
@@ -52,19 +58,27 @@ public record RequestPlacement(Map<String, Location> fields) {
     /** A template variable, the operator stripped: {@code {+schemaPath}} places {@code schemaPath} as one field. */
     private static final Pattern SEGMENT = Pattern.compile("\\{[+]?([^}]+)}");
 
+    /**
+     * The placement of {@code request}'s fields at the endpoint {@code name}. A request reached through an extern is
+     * the foreign record it lands on, and its fields' types are judged in the foreign schema ({@link Landed}).
+     *
+     * @param scope the description, in whose namespace {@code request} is written
+     */
     static RequestPlacement of(String name, HttpVerb verb, String path, List<String> query, Map<String, String> headers,
-                        Optional<String> body, Optional<TypeRef> request,
-                        Function<String, Top> entries) {
+                               Optional<String> body, Optional<TypeRef> request, TsonLinkedSchema scope) {
         Map<String, RecordField> declared = new LinkedHashMap<>();
-        request.ifPresent(ref -> {
-            Top type = entries.apply(ref.name());
-            if (type == null || !(type instanceof RecordBody record)) {
+        Landed landed = new Landed(scope, "");                  // no request: no field is declared to judge
+        if (request.isPresent()) {
+            TypeRef ref = request.get();
+            landed = Landed.of(scope, ref.name());
+            if (!(landed.definition() instanceof RecordBody record)) {
                 throw new IllegalArgumentException("'" + name + "' takes '" + ref.text() + "', which is not a record"
                         + " -- a request is the record whose fields an endpoint distributes over the HTTP request,"
                         + " so an exchange taking one value declares a one-field record for it");
             }
             declared.putAll(record.fields());
-        });
+        }
+        Function<String, Top> entries = landed.entries();
         Map<String, Location> placed = new LinkedHashMap<>();
         Matcher segments = SEGMENT.matcher(path);
         while (segments.find()) {
@@ -165,6 +179,8 @@ public record RequestPlacement(Map<String, Location> fields) {
     /**
      * Why {@code field} is not one scalar, if it is not: what a URL segment carries, and what a response header's
      * template expands a variable from. A dependent field, an array, a record, a map and a tuple are not.
+     *
+     * @param entries the definitions of the names the declaring record writes, each past its externs
      */
     static Optional<String> notOneScalar(RecordField field, Function<String, Top> entries) {
         if (field.sibling().isPresent()) {

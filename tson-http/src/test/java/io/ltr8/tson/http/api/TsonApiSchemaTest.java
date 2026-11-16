@@ -444,13 +444,15 @@ class TsonApiSchemaTest {
     /**
      * <b>And which classes to warm.</b> Hand-listing them is how a response type added to a description never
      * gets warmed — nothing connects the two lists, and the omission costs only latency, so nothing reports
-     * it. A payload type nobody binds is skipped rather than refused.
+     * it. Each payload type is named as the binder is asked it, by the schema declaring it and its name there, and
+     * one nobody binds is skipped rather than refused.
      */
     @Test
     void aDescriptionKnowsWhichClassesToWarm() {
         TsonApiDescription api = described(API);
 
-        assertEquals(Set.of("order", "sku_not_found", "schema_ref"), api.payloadTypes());
+        assertEquals(Set.of(new PayloadType(ORDER_ID, "order"), new PayloadType(ORDER_ID, "sku_not_found"),
+                new PayloadType(API_ID, "schema_ref")), api.payloadTypes());
         assertEquals(List.of(String.class), api.boundClasses(Map.of("order", String.class)),
                 "only what the bindings map names");
     }

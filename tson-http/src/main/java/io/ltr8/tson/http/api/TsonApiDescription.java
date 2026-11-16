@@ -1,8 +1,14 @@
 package io.ltr8.tson.http.api;
 
 import io.ltr8.annotation.Annotations;
+import io.ltr8.bind.DataBindContext;
+import io.ltr8.bind.DataBindException;
+import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.http.TsonMediaType;
+import io.ltr8.tson.schema.ExternTarget;
+import io.ltr8.tson.schema.TsonLinkedSchema;
+import io.ltr8.tson.schema.meta.Extern;
 import io.ltr8.tson.schema.meta.FieldRole;
 import io.ltr8.tson.schema.meta.Namespace;
 import io.ltr8.tson.schema.meta.RecordBody;
@@ -13,6 +19,8 @@ import io.ltr8.tson.schema.meta.ValueEntry;
 import io.ltr8.tson.schema.meta.ValueRef;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -22,7 +30,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.function.Function;
 import java.util.regex.Pattern;
 
 /**
@@ -66,8 +73,18 @@ import java.util.regex.Pattern;
  *       ({@link ChosenTypes});</li>
  *   <li>each response header's template expands from the response value: every variable names a scalar field of
  *       the endpoint's response type, and an endpoint with no response type, a document among them, declares
- *       literals only.</li>
+ *       literals only;</li>
+ *   <li>no class is bound by the local name of an extern the description declares and a route names, where it
+ *       differs from the entry the extern lands on and no schema of the closure declares that name as its own: a
+ *       reader asks for the entry, so such a binding serves no read.</li>
  * </ul>
+ *
+ * <p><b>A payload type named through an extern</b> ([TSON-SCHEMA] §5.13) is judged as the foreign entry it lands on:
+ * an error's status pin, a response header's field, a request's placement and its chosen types read the foreign
+ * record, and the names its declaration writes are looked up in the foreign schema's namespace, never the
+ * description's ({@link Landed}). A route names the type as the description wrote it; {@link #payloadTypes()} names
+ * it where it is declared, the declaring schema and the entry's own name, which is what the binder is asked ({@link
+ * PayloadType}).
  *
  * <p>The security schemes in force for an endpoint are resolved here too, {@link Route#security()}: the endpoint's
  * own {@code security} when it writes one, an empty one meaning open, else its projection's. The resolver judged
@@ -79,10 +96,11 @@ import java.util.regex.Pattern;
 public final class TsonApiDescription {
 
     /**
-     * The spec's own bundled meta directory. Every implementation has these; a service does not publish them,
-     * and a client resolving this description already has them.
+     * The spec's own bundled meta directory, as a canonical identity's prefix ([TSON-DATA] §2.2.1). Every
+     * implementation has these; a service does not publish them, and a client resolving this description already
+     * has them.
      */
-    private static final String BUNDLED = "https://tson.io/2026/40/m/";
+    private static final String BUNDLED = "tson.io/2026/40/m/";
 
     private static final Set<Integer> EMPTY_STATUSES = Set.of(204, 205, 304);
 
@@ -97,22 +115,31 @@ public final class TsonApiDescription {
 
     private final Tson tson;
     private final String schemaId;
+    private final TsonLinkedSchema linked;
     private final List<Route> routes;
+    private final Set<PayloadType> payloadTypes;
 
-    private TsonApiDescription(Tson tson, String schemaId, List<Route> routes) {
+    private TsonApiDescription(Tson tson, String schemaId, TsonLinkedSchema linked, List<Route> routes) {
         this.tson = tson;
         this.schemaId = schemaId;
+        this.linked = linked;
         this.routes = List.copyOf(routes);
+        Set<PayloadType> types = new LinkedHashSet<>();
+        this.routes.forEach(route -> route.payloadTypes().forEach(reference -> types.add(payloadType(reference))));
+        this.payloadTypes = Collections.unmodifiableSet(types);
     }
 
     static TsonApiDescription of(Tson tson, String schemaId) {
-        var compiled = tson.schemaRegistry().get(schemaId).orElseThrow(() -> new IllegalArgumentException(
-                "'" + schemaId + "' is not resolved -- resolve the description before reading it"));
-        Namespace<Top> entries = compiled.schema().entries();
+        if (tson.schemaRegistry().get(schemaId).isEmpty()) {
+            throw new IllegalArgumentException("'" + schemaId + "' is not resolved -- resolve the description before "
+                    + "reading it");
+        }
+        TsonLinkedSchema linked = tson.loader().resolveLinked(schemaId);
+        DataBindContext context = tson.dataBindContext();
         List<Route> routes = new ArrayList<>();
         Map<String, Route> byKey = new LinkedHashMap<>();
-        projections(entries).forEach((name, http) -> {
-            for (Route route : read(name, http, entries::get)) {
+        projections(linked.schema().entries()).forEach((name, http) -> {
+            for (Route route : read(name, http, linked)) {
                 Route earlier = byKey.putIfAbsent(route.key(), route);
                 if (earlier != null) {
                     throw new IllegalArgumentException("'" + route.key() + "' is declared twice, and a server serves "
@@ -122,10 +149,57 @@ public final class TsonApiDescription {
             }
         });
         for (Route route : routes) {
-            route.request().ifPresent(request ->
-                    ChosenTypes.requireBound(route.key(), request, entries::get, tson.dataBindContext()));
+            route.request().ifPresent(request -> ChosenTypes.requireBound(route.key(), request, linked, context));
         }
-        return new TsonApiDescription(tson, schemaId, routes);
+        requireNoBindingByExternName(schemaId, linked, closure(tson, linked).values(), routes, context);
+        return new TsonApiDescription(tson, schemaId, linked, routes);
+    }
+
+    /**
+     * A reader asks the bind context for the class of the entry an extern lands on, by the schema declaring it and
+     * its name there, never for the extern's local name ([TSON-SCHEMA] §5.13). So a context binding an extern's local
+     * name, where it differs from the entry's, binds nothing a read of that payload type will ask for: the schema
+     * prepares clean and every read of it is a 500 naming the entry's own name. Refused for an extern this description
+     * declares itself and a route names as its request, response or error, unless a schema of the closure declares an
+     * entry of that name as its own, which such a binding may be for.
+     */
+    private static void requireNoBindingByExternName(String schemaId, TsonLinkedSchema linked,
+                                                     Collection<TsonLinkedSchema> closure, List<Route> routes,
+                                                     DataBindContext context) {
+        Map<String, Route> namedAt = new LinkedHashMap<>();
+        routes.forEach(route -> route.payloadTypes().forEach(type -> namedAt.putIfAbsent(type.name(), route)));
+        namedAt.forEach((name, route) -> {
+            if (!(linked.schema().entries().get(name) instanceof Extern)
+                    || !linked.declaringIdentity(name).equals(linked.identity())) {
+                return;
+            }
+            Optional<ExternTarget.Landing> landing = linked.landing(name);
+            if (landing.isEmpty() || landing.get().name().equals(name) || declaresItsOwn(closure, name)) {
+                return;                                 // a read asks the binder this very name
+            }
+            Class<?> bound;
+            try {
+                bound = context.nameBinder().resolve(linked.declaringIdentity(name), name);
+            } catch (DataBindException unbound) {
+                return;
+            }
+            String target = landing.get().name();
+            String declaring = landing.get().in().schema().id();
+            throw new IllegalArgumentException("'" + route.key() + "' names '" + name + "', which '" + schemaId
+                    + "' declares as an extern of '" + target + "' in '" + declaring + "', and the bind context binds '"
+                    + name + "' to " + bound.getName() + ", which no read asks for: no schema of the closure declares "
+                    + "a '" + name + "' of its own -- a reader asks the binder for the entry an extern lands on, by the "
+                    + "schema declaring it and its name there; bind '" + target + "' instead, through "
+                    + "TsonBindings.bySchema keyed by '" + declaring + "' where two schemas each declare '" + target
+                    + "'");
+        });
+    }
+
+    /** Whether a schema of {@code closure} declares an entry {@code name} of its own, other than an extern. */
+    private static boolean declaresItsOwn(Collection<TsonLinkedSchema> closure, String name) {
+        return closure.stream().anyMatch(schema -> schema.schema().entries().get(name) != null
+                && !(schema.schema().entries().get(name) instanceof Extern)
+                && schema.declaringIdentity(name).equals(schema.identity()));
     }
 
     /**
@@ -149,7 +223,7 @@ public final class TsonApiDescription {
         return found;
     }
 
-    private static List<Route> read(String httpName, Http http, Function<String, Top> entries) {
+    private static List<Route> read(String httpName, Http http, TsonLinkedSchema scope) {
         Map<String, Protocol> protocols = bound(http);
         // Every exchange the projection claims, bound or exempted, states facts that must agree with each other.
         protocols.forEach((name, protocol) -> protocol.exchanges().keySet().forEach(key -> requireFactsExclusive(
@@ -191,7 +265,7 @@ public final class TsonApiDescription {
                     }
                 }
                 RequestPlacement placement = RequestPlacement.of(label, verb, path, endpoint.query(),
-                        endpoint.headers(), endpoint.body(), request, entries);
+                        endpoint.headers(), endpoint.body(), request, scope);
                 if (exchange.isEmpty()) {
                     requireFactsExclusive(label, facts);
                 }
@@ -204,13 +278,13 @@ public final class TsonApiDescription {
                     requireStatusAgrees(label, endpoint.status(), response);
                 }
                 Set<String> mediaTypes = mediaTypes(label, endpoint);
-                requireTemplatesExpand(label, endpoint.responseHeaders(), response, entries);
+                requireTemplatesExpand(label, endpoint.responseHeaders(), response, scope);
                 // An endpoint's own list replaces the projection's, an empty one included: `security: []` is open.
                 List<SecurityScheme> security = endpoint.security().orElse(http.security()).stream()
                         .map(ValueRef::get).toList();
                 security.forEach(scheme -> requireHeaderToken(label, scheme));
                 Annotations fallback = docs;
-                routes.add(new Route(verb, path, exchange, request, response, errorStatuses(label, errors, entries),
+                routes.add(new Route(verb, path, exchange, request, response, errorStatuses(label, errors, scope),
                         endpoint.status(), safe, idempotent, destructive, document, mediaTypes, placement,
                         text(onVerb, "service.summary").or(() -> text(fallback, "service.summary")),
                         text(onVerb, "doc").or(() -> text(fallback, "doc")), security, endpoint.responseHeaders()));
@@ -251,10 +325,11 @@ public final class TsonApiDescription {
     /**
      * Each response header's template expands from the response value: every variable names a field of the response
      * type, and that field is one scalar, as a path segment's is. An endpoint with no response type -- a document, or
-     * one answering no body -- has nothing to expand a variable from, so its headers are literals.
+     * one answering no body -- has nothing to expand a variable from, so its headers are literals. A response type
+     * named through an extern is the foreign record it lands on, its fields' types judged in the foreign schema.
      */
     private static void requireTemplatesExpand(String label, Map<String, String> headers, Optional<TypeRef> response,
-                                               Function<String, Top> entries) {
+                                               TsonLinkedSchema scope) {
         headers.forEach((header, template) -> {
             for (String variable : HeaderTemplate.variables(label, header, template)) {
                 String declared = "'" + label + "' declares the response header '" + header + ": " + template + "'";
@@ -263,7 +338,8 @@ public final class TsonApiDescription {
                             + variable + "' from -- a document's header, or one answering no body, is a literal");
                 }
                 String type = response.get().name();
-                if (!(entries.apply(type) instanceof RecordBody record)) {
+                Landed landed = Landed.of(scope, type);
+                if (!(landed.definition() instanceof RecordBody record)) {
                     throw new IllegalArgumentException(declared + ", but the response type '" + type + "' is not a "
                             + "record, so it has no field '" + variable + "'");
                 }
@@ -272,7 +348,7 @@ public final class TsonApiDescription {
                     throw new IllegalArgumentException(declared + ", but the response type '" + type + "' declares no "
                             + "field '" + variable + "' -- it declares " + record.fields().keySet());
                 }
-                RequestPlacement.notOneScalar(field, entries).ifPresent(because -> {
+                RequestPlacement.notOneScalar(field, landed.entries()).ifPresent(because -> {
                     throw new IllegalArgumentException(declared + ", but '" + variable + "' of '" + type + "' is "
                             + because + ", and a header's variable expands from one scalar");
                 });
@@ -398,15 +474,16 @@ public final class TsonApiDescription {
     /**
      * Each business error by the status its type fixes ({@code sku_not_found => problem.details & { status: = 404
      * }}), which is what tells an error from the response by status alone. An error fixing none, or two errors
-     * fixing one, would leave a client unable to say which type a failure is.
+     * fixing one, would leave a client unable to say which type a failure is. An error named through an extern fixes
+     * the status the foreign record it lands on fixes.
      */
-    private static Map<Integer, TypeRef> errorStatuses(String label, List<TypeRef> errors,
-                                                       Function<String, Top> entries) {
+    private static Map<Integer, TypeRef> errorStatuses(String label, List<TypeRef> errors, TsonLinkedSchema scope) {
         Map<Integer, TypeRef> byStatus = new LinkedHashMap<>();
         for (TypeRef error : errors) {
-            int status = fixedStatus(entries.apply(error.name())).orElseThrow(() -> new IllegalArgumentException(
-                    "'" + label + "' names the error '" + error.name() + "', which fixes no status -- write "
-                            + "`status: = <code>` on it, so a client can tell it from the response by status"));
+            int status = fixedStatus(Landed.of(scope, error.name()).definition()).orElseThrow(() ->
+                    new IllegalArgumentException("'" + label + "' names the error '" + error.name() + "', which "
+                            + "fixes no status -- write `status: = <code>` on it, so a client can tell it from the "
+                            + "response by status"));
             TypeRef earlier = byStatus.putIfAbsent(status, error);
             if (earlier != null) {
                 throw new IllegalArgumentException("'" + label + "' names '" + earlier.name() + "' and '"
@@ -443,51 +520,109 @@ public final class TsonApiDescription {
     }
 
     /**
-     * Every schema identity a client needs in order to resolve this description — itself and its imports
-     * transitively, {@code service.tn} among them, minus the bundled standard library.
+     * Every schema identity a client needs in order to resolve this description — itself and its dependencies
+     * transitively, {@code service.tn} among them, minus the bundled standard library. A dependency is an import
+     * or the schema an extern names ([TSON-SCHEMA] §5.13, {@code TsonLinkedSchema.dependencies()}): an extern's
+     * schema loads with the imports though none of its names enters the namespace, so a client resolving the
+     * description fetches it too.
      *
      * <p><b>This is the set a server must publish</b>, and deriving it is the point: a description that
      * references a schema its own server does not serve is a contract nobody can act on, and hand-listing
      * what to publish is how that happens.
      *
-     * <p>Ordered with this description first, then in resolution order.
+     * <p>Each schema is named by its own {@code !!id}, the identity a catalog serves it at. Ordered with this
+     * description first, then depth first, each schema's imports before the schemas its externs name.
      */
     public Set<String> referencedSchemas() {
-        Set<String> found = new LinkedHashSet<>();
-        collect(schemaId, found);
+        return new LinkedHashSet<>(closure(tson, linked).keySet());
+    }
+
+    /**
+     * {@code linked} and what it depends on transitively, minus the bundled standard library, by each schema's
+     * {@code !!id}: this schema first, then depth first, each schema's imports before the schemas its externs name.
+     * Every dependency resolved when the description did, so each is in the registry by its canonical identity,
+     * which is what {@code dependencies()} lists.
+     */
+    private static Map<String, TsonLinkedSchema> closure(Tson tson, TsonLinkedSchema linked) {
+        Map<String, TsonLinkedSchema> found = new LinkedHashMap<>();
+        collect(tson, linked, found);
         return found;
     }
 
-    private void collect(String id, Set<String> found) {
-        if (id == null || id.startsWith(BUNDLED) || !found.add(id)) {
+    private static void collect(Tson tson, TsonLinkedSchema linked, Map<String, TsonLinkedSchema> found) {
+        if (found.putIfAbsent(linked.schema().id(), linked) != null) {
             return;
         }
-        tson.loader().resolveLinked(id).schema().imports().forEach(imported -> collect(imported, found));
+        for (String dependency : linked.dependencies()) {
+            if (!dependency.startsWith(BUNDLED)) {
+                collect(tson, tson.schemaRegistry().getByCanonicalIdentity(dependency).orElseThrow(() ->
+                        new IllegalStateException("'" + dependency + "' is a dependency of '" + linked.schema().id()
+                                + "' and is not resolved")), found);
+            }
+        }
     }
 
     /**
-     * Every payload type this description's endpoints name — requests, responses and errors, in the order the
-     * endpoints declare them.
+     * Every payload type this description's endpoints name -- requests, responses and errors, in the order the
+     * endpoints declare them -- each where it is declared, the schema declaring it and its name there, which is what a
+     * reader asks the bind context for its class ({@link PayloadType}). A type named through an extern is the foreign
+     * entry it lands on, so {@code order_v1} and {@code order_v2}, externs of two schemas' {@code order}, are two
+     * payload types named {@code order}, and a route still names each by its local name ({@link Route#response()},
+     * {@link #payloadType}).
      *
-     * <p>Not every one is a type the application binds: a parameter record bound only to be placed, or the
-     * {@code problem.details} this library writes itself, may be named here and mapped by nobody. {@link #boundClasses} is
-     * the filtered form, which is what a warm-up wants.
+     * <p>Not every one is a type the application binds: a parameter record bound only to be placed, or the {@code
+     * problem.details} this library writes itself, may be named here and mapped by nobody. {@link #boundClasses} is the
+     * filtered form, which is what a warm-up wants.
      */
-    public Set<String> payloadTypes() {
-        Set<String> types = new LinkedHashSet<>();
-        routes.forEach(route -> route.payloadTypes().forEach(reference -> types.add(reference.name())));
-        return types;
+    public Set<PayloadType> payloadTypes() {
+        return payloadTypes;
     }
 
     /**
-     * The Java classes {@code bindings} maps this description's payload types to — what to warm at startup,
-     * derived rather than listed.
+     * {@code type}, a name a route of this description writes, where it is declared: past its extern to the foreign
+     * entry it lands on, where it names one. Its {@link PayloadType#schemaId()} is the schema a body of the type is
+     * read under by its own name, in either encoding.
+     */
+    public PayloadType payloadType(TypeRef type) {
+        Landed landed = Landed.of(linked, type.name());
+        String identity = landed.identity();
+        String declaring = landed.in().identity().equals(identity) ? landed.in().schema().id()
+                : tson.schemaRegistry().getByCanonicalIdentity(identity).map(found -> found.schema().id())
+                        .orElseThrow(() -> new IllegalStateException("'" + identity + "' declares '" + landed.name()
+                                + "', a payload type of '" + schemaId + "', and is not resolved"));
+        return new PayloadType(declaring, landed.name());
+    }
+
+    /**
+     * The Java classes {@code bindings} maps this description's payload types to -- what to warm at startup,
+     * derived rather than listed. {@code bindings} is a name-only map, as {@code TsonBindings.of} takes, so each
+     * payload type is looked up by {@link PayloadType#name()}, the name a reader asks, never an extern's local name.
      *
      * <p>Hand-listing them is how a response type added to a description never gets warmed: nothing connects
      * the two lists, and the omission costs only latency, so nothing reports it. A type {@code bindings} does
      * not map is skipped rather than refused.
      */
     public List<Class<?>> boundClasses(Map<String, Class<?>> bindings) {
-        return payloadTypes().stream().map(bindings::get).filter(Objects::nonNull).distinct().toList();
+        return payloadTypes.stream().<Class<?>>map(type -> bindings.get(type.name())).filter(Objects::nonNull)
+                .distinct().toList();
+    }
+
+    /**
+     * The Java classes the description's own {@code Tson} binds its payload types to, each asked as a reader asks it,
+     * by the schema declaring it and its name there: what to warm where the context tells schemas apart ({@code
+     * TsonBindings.bySchema}), so two versions' {@code order} warm two classes. A type nothing binds is skipped
+     * rather than refused.
+     */
+    public List<Class<?>> boundClasses() {
+        DataNameBinder binder = tson.dataBindContext().nameBinder();
+        List<Class<?>> bound = new ArrayList<>();
+        for (PayloadType type : payloadTypes) {
+            try {
+                bound.add(binder.resolve(type.identity(), type.name()));
+            } catch (DataBindException unbound) {
+                // a payload type nobody binds: placed, read as a tree, or written by this library
+            }
+        }
+        return bound.stream().distinct().toList();
     }
 }

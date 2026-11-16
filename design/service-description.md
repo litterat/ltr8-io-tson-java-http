@@ -35,10 +35,12 @@ the protocol belongs to the projection.
 - A class in `io.ltr8.tson.http.api` binds only by being named in `TsonApiSchema.bindings()`; a `service.http` entry
   whose value did not bind is a startup failure, since the resolver holds one with an unbound subtype in it as a tree.
 - The description is the source of truth for what a server publishes (`referencedSchemas()`), warms
-  (`boundClasses(bindings)`) and speaks (`Route.mediaTypes()`). `TsonApiCoverage.requireComplete()` holds the server
-  to it, and `notServedHere` with a reason is the only way out.
+  (`boundClasses(bindings)`, `boundClasses()`) and speaks (`Route.mediaTypes()`). `TsonApiCoverage.requireComplete()`
+  holds the server to it, and `notServedHere` with a reason is the only way out.
 - A claim names the declared verb and path template, never the path the framework registers.
 - A business error composes `problem.details`, fixes its status, and is written by the handler, not thrown.
+- A payload type named through an extern is judged as the entry it lands on, in the foreign schema; `payloadTypes()`
+  names it by that schema and the entry's own name, what the binder is asked. A binding by the local name is refused.
 - A schema entry has two annotation positions and they land in different places.
 
 ## A schema exports a namespace; data refers into one
@@ -172,9 +174,20 @@ rather than a published contract no client can act on:
   held per `ExchangeName`, never per name, since two protocols may both declare `get_order`;
 - no exchange is marked both `@service.safe` and `@service.destructive`;
 - each business error fixes its status, and two errors of one endpoint pinning one status is refused (below);
+- no class is bound by the local name of an extern a route names, where no schema of the closure owns the name
+  (below);
 - what is HTTP's, each request field placed exactly once, a bound dependent field's chosen types, the verb against the
   exchange's facts, a responseless endpoint's status, the media types, no two endpoints sharing a verb and a path, and
   each response header's template, is `design/http-projection.md`.
+
+**The reader follows an extern** ([TSON-SCHEMA] §5.13), the way one description names two versions of one schema
+(`order_v1`, `order_v2`), which an import of both cannot. An extern entry's body is an `Extern`, so every check that
+looks inside a payload type reads its landing (`Landed`): the error's pin, a response header's field, a request's
+placement and chosen types are the foreign record's, the names its declaration writes looked up in the foreign schema
+(`TsonApiDescriptionExternTest`). A route keeps the name written; `payloadTypes()` and `payloadType(ref)` give the
+`PayloadType`, the declaring schema's `!!id` and the entry's own name, which is what the binder is asked (by
+`identity()`) and what the codec reads the type under in either encoding. So a context binding `order_v1` binds
+nothing a read asks for, and is refused at startup (`design/binding.md`).
 
 ## Wiring, and what a server derives
 
@@ -191,10 +204,15 @@ subtype binds; skipping it would serve the description with that projection's ro
 
 **What a server publishes and warms comes from the description**, not a document beside it:
 
-- `referencedSchemas()`: itself, the layer, and its imports transitively, minus the bundled standard library. That is
-  the catalog, so a referenced-but-unpublished schema is impossible, not merely tested for.
-- `boundClasses(bindings)`: what to `prepareToWrite`, from every request, response and error the endpoints name.
-  Hand-listing lets a new response type go unwarmed, which costs only latency, so nothing reports it.
+- `referencedSchemas()`: itself, the layer, and its dependencies transitively, minus the bundled standard library. A
+  dependency is an import or the schema an extern names (`TsonLinkedSchema.dependencies()`), which loads with the
+  imports though none of its names enters the namespace. That is the catalog, so a referenced-but-unpublished schema is
+  impossible, not merely tested for.
+- `boundClasses(bindings)`: what to `prepareToWrite`, from every request, response and error the endpoints name, each
+  looked up in a name-only map by its `PayloadType.name()`, the name a read asks. `boundClasses()` asks the
+  description's own `Tson` context instead, by the declaring schema and the name, so a context keyed by schema
+  (`TsonBindings.bySchema`) warms two versions' `order` as two classes. Hand-listing lets a new response type go
+  unwarmed, which costs only latency, so nothing reports it.
 
 **`TsonApiCoverage` holds a server to that contract at startup.** `serving(verb, path)` claims a declared endpoint and
 hands back its `Route`, so the path and media types come from the description wherever the framework can take them; an

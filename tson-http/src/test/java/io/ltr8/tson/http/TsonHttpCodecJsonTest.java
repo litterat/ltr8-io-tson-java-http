@@ -1,8 +1,13 @@
 package io.ltr8.tson.http;
 
+import io.ltr8.bind.DataBindContext;
+import io.ltr8.bind.DataBindException;
+import io.ltr8.bind.DataNameBinder;
 import io.ltr8.tson.Tson;
+import io.ltr8.tson.base.CanonicalIdentity;
 import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.policy.LimitsPolicy;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.json.Json;
@@ -176,6 +181,32 @@ class TsonHttpCodecJsonTest {
     @Test
     void aTsonBodyIsStillReadByTheTsonReader() {
         assertEquals(new Note("t", null, null, 2), codec.readObjectAs(json("{ title: t  count: 2 }"),
+                "application/tson", SCHEMA_ID, "note", Note.class));
+    }
+
+    /**
+     * <b>A JSON body binds under a binder that routes by schema</b>, as a TSON body does. The reader asks a name
+     * within the canonical identity of the schema declaring it, and the JSON reader's bind context, which leaves the
+     * kernel's vocabulary unbound, passes that question on whole: answering it by the name alone sent a {@code
+     * byNamespace} binder to its fallback, a 500 on a body with nothing wrong with it.
+     */
+    @Test
+    void aJsonBodyBindsUnderABinderRoutingBySchema() {
+        DataNameBinder refuseAll = name -> {
+            throw new DataBindException("'" + name + "' is asked without its schema");
+        };
+        DataBindContext bySchema = DataBindContext.builder()
+                .nameBinder(DataNameBinder.byNamespace(Map.of(CanonicalIdentity.canonicalize(SCHEMA_ID),
+                        DataNameBinder.ofMap(Map.of("note", Note.class))), refuseAll))
+                .registerAtoms(AtomContext.hostTypes()).build();
+        Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(uri -> SCHEMA))
+                .withDataBindContext(bySchema));
+        tson.resolve(SCHEMA);
+        TsonHttpCodec routed = new TsonHttpCodec(tson).acceptingJson();
+
+        assertEquals(new Note("t", null, null, 2), routed.readObjectAs(json("{\"title\": \"t\", \"count\": 2}"),
+                "application/json", SCHEMA_ID, "note", Note.class));
+        assertEquals(new Note("t", null, null, 2), routed.readObjectAs(json("{ title: t  count: 2 }"),
                 "application/tson", SCHEMA_ID, "note", Note.class));
     }
 

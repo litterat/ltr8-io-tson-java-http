@@ -48,7 +48,9 @@ entries (`TsonLinkedSchema.isConstructor`, `originOf`).
 
 A schema reference in a request body is an untrusted URL, and the body's header is the one place it can stand: a
 data document's `!!import`s bind it, several read under one namespace ([TSON-SCHEMA] §7.1). Each is resolved through
-the configured `SchemaSource`, so the allow-list sees every one.
+the configured `SchemaSource`, so the allow-list sees every one. An extern's `schema` in a schema the body reaches
+([TSON-SCHEMA] §5.13) is a reference on an import's terms, the same source, policy and per-identity digest, so a
+refused host is the same `SCHEMA_NOT_PERMITTED` and the same 400 (`ExternProbeTest.anExternsSchemaIsRefusedAsAnImportIs`).
 
 **A directive inside a value is a parse error**, outside [TSON-DATA]'s placement for directives. A body writing
 `{ attachment: !!import:"…" !order {…} }` is a 400 `VALIDATION_ERROR`, *"directive '!!import' is not permitted

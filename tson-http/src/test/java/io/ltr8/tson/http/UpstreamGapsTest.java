@@ -1195,6 +1195,46 @@ class UpstreamGapsTest {
         }
     }
 
+    // ── open: the JSON bind registry refuses a namespace-typed component in the closure ───────────────
+
+    /**
+     * <b>A closure holding a record whose field is a namespace binds in TSON and is refused in JSON.</b> A schema
+     * importing {@code service.tn}, read in bind mode with the layer's records bound, compiles {@code service.protocol}
+     * against {@link io.ltr8.tson.http.api.Protocol}, whose {@code exchanges} component is a {@code Namespace}: the
+     * TSON registry binds it and the JSON registry refuses it as a map, so a JSON body read under a service
+     * description, here its own {@code note}, is a {@code BIND_MISMATCH} the same TSON body is not. {@code UPSTREAM.md},
+     * "The JSON bind registry refuses a namespace-typed component". Fails the day the JSON read binds.
+     */
+    @Test
+    void jsonBindingRefusesANamespaceComponentInTheClosure() {
+        String id = "https://s.example.com/2026/40/described-1.tn";
+        String schema = """
+                !!id:"https://s.example.com/2026/40/described-1.tn"
+                !!import:"https://tson.io/2026/40/io/ltr8/http/service.tn"
+                !!import:"https://tson.io/2026/40/m/core.tn"
+                !schema {
+                    note => { title: text }
+                }""";
+        Map<String, String> library = new LinkedHashMap<>(TsonApiSchema.publishedById());
+        library.put(id, schema);
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(library)))
+                .withDataBindContext(TsonBindings.of(TsonApiSchema.bindingsWith(Map.of("note", Note.class)))));
+        tson.resolve(schema);
+        TsonHttpCodec codec = new TsonHttpCodec(tson).acceptingJson();
+
+        assertEquals(new Note("t"), codec.readObjectAs(new ByteArrayInputStream("{ title: t }"
+                .getBytes(StandardCharsets.UTF_8)), "application/tson", id, "note", Note.class));
+        TsonHttpException refused = assertThrows(TsonHttpException.class, () -> codec.readObjectAs(
+                new ByteArrayInputStream("{\"title\": \"t\"}".getBytes(StandardCharsets.UTF_8)), "application/json",
+                id, "note", Note.class));
+        assertEquals(List.of(Diagnostic.Code.BIND_MISMATCH), refused.diagnostics().stream().map(Diagnostic::code)
+                .toList(), () -> "" + refused.diagnostics());
+        assertTrue(refused.diagnostics().getFirst().message().contains("'service.protocol' and "
+                + io.ltr8.tson.http.api.Protocol.class.getName() + " do not agree: field 'exchanges' is a map, and "
+                + "component 'exchanges' binds " + Namespace.class.getName()), refused::getMessage);
+    }
+
     // ── open: an unresolved name a bundled library declares does not name the library ────────────
 
     /**

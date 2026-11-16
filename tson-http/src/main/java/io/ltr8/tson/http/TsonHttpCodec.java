@@ -618,16 +618,33 @@ public final class TsonHttpCodec {
      * a context, checks those records against their classes when it compiles a closure and refuses each one --
      * every closure holds the kernel, so no JSON body would bind at all. {@code UpstreamGapsTest} pins that gap.
      * The JSON reader needs the application's names only, which are the ones the vocabulary does not answer.
+     *
+     * <p>Both forms of the binder's question pass through: the reader asks a name within the canonical identity of
+     * the schema declaring it, so a binder routing by schema ({@code DataNameBinder.byNamespace}, two versions that
+     * both declare {@code order}) is asked as it would be by the TSON reader.
      */
     private static DataBindContext withoutKernelVocabulary(DataBindContext composed) {
         DataNameBinder names = composed.nameBinder();
-        return composed.toBuilder().nameBinder(name -> {
-            if (isKernelVocabulary(name)) {
-                throw new DataBindException("'" + name + "' is the kernel's own vocabulary, which a JSON body "
-                        + "does not bind");
+        return composed.toBuilder().nameBinder(new DataNameBinder() {
+            @Override
+            public Class<?> resolve(String name) throws DataBindException {
+                requireNotKernel(name);
+                return names.resolve(name);
             }
-            return names.resolve(name);
+
+            @Override
+            public Class<?> resolve(String namespace, String name) throws DataBindException {
+                requireNotKernel(name);
+                return names.resolve(namespace, name);
+            }
         }).build();
+    }
+
+    private static void requireNotKernel(String name) throws DataBindException {
+        if (isKernelVocabulary(name)) {
+            throw new DataBindException("'" + name + "' is the kernel's own vocabulary, which a JSON body does not "
+                    + "bind");
+        }
     }
 
     private static boolean isKernelVocabulary(String name) {
