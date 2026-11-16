@@ -35,8 +35,8 @@ are the server's own. Current form only.
   `Binding` and `Document` guard theirs for that reason. A **required** list is deliberately not guarded: it never reaches a
   constructor, because the reader reports `FIELD_REQUIRED` and abandons the construction first, so a guard
   there would mask a real violation. A `references()` that returns such a `null` is refused by name — a
-  `BindMismatchException` naming the class — rather than being an NPE out of `Tson.resolve`; the guard is
-  still the class's job, the failure just no longer reads as a library fault.
+  `BindMismatchException` naming the class — rather than being an NPE out of `Tson.resolve`, so the failure reads
+  as the class's and not the library's; the guard is still the class's job.
 - **A bound class must be public.** tson-java declares no `opens` and binding only ever touches public
   constructors and methods, so a package-private record fails analysis with a bare `DataBindException:
   Failed to resolve` that names nothing useful.

@@ -87,11 +87,10 @@ come from `net.tn` through core, which is where `service.tn` and `problem.tn` ta
 annotations and its root's tag, never the root's value — so a handler can classify from the opening of a document
 without a full parse, past a schema's document-level `@doc` where it has one.
 
-**Use the `.tn` extension, not `.tn1`**, matching tson-java. §7.1 now says this outright rather than leaving it
-to be inferred: `.tn` is the extension of the 2026 revision series and makes no stability claim, while `.tn1` is
-a positive claim of TSON version 1 stability that **MUST NOT** be used before that freeze. The rule has a sting
-in its tail for this repo — renaming a document to `.tn1` at the freeze changes its identifying URI and so its
-canonical identity, and references pinned during the revision series do not carry over. So the eventual freeze
+**Use the `.tn` extension, not `.tn1`**, matching tson-java. By §7.1, `.tn` is the extension of the 2026 revision series and
+makes no stability claim, while `.tn1` is a positive claim of TSON version 1 stability that **MUST NOT** be used before that
+freeze. The rule has a sting in its tail for this repo — renaming a document to `.tn1` at the freeze changes its identifying
+URI and so its canonical identity, and references pinned during the revision series do not carry over. So the eventual freeze
 is a re-pinning exercise across every `!!id`, `!!import` and constant here, not a rename.
 
 **Immutability binds a *published* schema, and nothing here is published yet.** §3.5 makes a schema immutable
@@ -99,10 +98,9 @@ once it is available for someone else to pin — that is what the rule protects:
 on resolving. Until this project is released, **edit the file in place**: a project-owned name carries no
 version (below), so there is nothing to bump. A release fixes each document under its identity.
 
-**Once this *is* published**, the rule is the real one and the machinery is already here: a shape change is a new
-identity beside the old, `TsonProblemSchema.publishedSources()` returns the whole history (one entry today) and
-the demos publish all of it; `publishedById()` is the same keyed by identity, for a caller wiring a schema source
-by hand. Two traps worth knowing:
+**Once this *is* published**, the rule is the real one and the machinery is already here: a shape change is a new identity
+beside the old, `TsonProblemSchema.publishedSources()` returns the whole history and the demos publish all of it;
+`publishedById()` is the same keyed by identity, for a caller wiring a schema source by hand. Two traps worth knowing:
 
 - **A hand-wired source serving the current text at a superseded URI fails as an "identity mismatch"** from
   the loader — a long way from the map that was actually wrong. Use `publishedById()` even at one version.
@@ -112,7 +110,7 @@ by hand. Two traps worth knowing:
 
 **`TsonProblemSchemaTest` is what catches a stale `problem.diagnostic_code`**, and it is the only thing that does: an
 upstream revision adding a code is otherwise invisible here until an error body emits one its own schema
-rejects. It has caught every addition so far. Keep it.
+rejects. Keep it.
 
 **Project-owned schema `!!id`** follows tson-java's convention with this repo's own group:
 `https://tson.io/2026/40/io/ltr8/http/<name>.tn` — `/2026/40` the spec revision, `io/ltr8` the publisher, `http`
@@ -139,21 +137,19 @@ the build is the check.
   `TsonProblemSchemaTest` checks it is current, and an error body emitting a code its own schema rejects would
   not otherwise be caught, since no fixture produces a code that is new. The Java enum is the source of truth —
   never check this schema against tson-cli's, which would only prove they drifted together.
-- **An optional field is `name?: T`, and `name: T?` is not one.** [TSON-SCHEMA] §5.2 gives a field three
-  slots: `?` on the *name* says the key may be omitted, `?` on the *type* says a written `_` is admitted, and
-  `~`/`=` say what a value may be. So `detail: text?` is a field the document **must write** (as `_` if it has
-  nothing), and reads exactly like the optional field it used to be — until a response omitting it comes back
-  `FIELD_REQUIRED`. Every schema here spells optional as `name?: T`, following upstream's kernel. Two more that
-  bite: a default needs the name marked (`page?: int32 ~ 1`; `page: int32 ~ 1` is refused), and a pin on an
-  unmarked name (`status: int32 = 404`) is a **marker** the document must write and is never injected — only
-  `status?: int32 = 404` injects. A restated field cannot move from required to optional (`x?: int32` over `x:
-  int32` is refused), but it may take a default or a pin with its name marked (`x?: = 5` over `x: int32` loads and
-  injects); and a restated field's type is the inherited one or a type IS-A it ([TSON-SCHEMA] §5.7, judged at link),
-  so `int32` does not restate a choice holding it. A type written
-  in place is IS-A nothing but itself and narrows only to an equal one, so `[int8]` does not restate `[int32]`; and a
-  name never restates as its construction or the reverse: over `text_list => [text]`, a field `tags: text_list` is not
-  restated `tags: [text]`. Bound values cannot tell the three optional-ish spellings apart; only a tree keeps whether `_` was
-  written.
+- **An optional field is `name?: T`, and `name: T?` is not one.** [TSON-SCHEMA] §5.2 gives a field three slots: `?` on the
+  *name* says the key may be omitted, `?` on the *type* says a written `_` is admitted, and `~`/`=` say what a value may be.
+  So `detail: text?` is a field the document **must write** (as `_` if it has nothing). It reads like an optional field, and
+  a response omitting it comes back `FIELD_REQUIRED`. Every schema here spells optional as `name?: T`, following upstream's
+  kernel. Two more that bite: a default needs the name marked (`page?: int32 ~ 1`; `page: int32 ~ 1` is refused), and a pin
+  on an unmarked name (`status: int32 = 404`) is a **marker** the document must write and is never injected — only `status?:
+  int32 = 404` injects. A restated field cannot move from required to optional (`x?: int32` over `x: int32` is refused), but
+  it may take a default or a pin with its name marked (`x?: = 5` over `x: int32` loads and injects); and a restated field's
+  type is the inherited one or a type IS-A it ([TSON-SCHEMA] §5.7, judged at link), so `int32` does not restate a choice
+  holding it. A type written in place is IS-A nothing but itself and narrows only to an equal one, so `[int8]` does not
+  restate `[int32]`; and a name never restates as its construction or the reverse: over `text_list => [text]`, a field `tags:
+  text_list` is not restated `tags: [text]`. Bound values cannot tell the three optional-ish spellings apart; only a tree
+  keeps whether `_` was written.
 - **`^` follows `!name` and refines a built type by values; a record derives by `&` alone.** `status =>
   !integer ^ { min: 100  max: 599 }` narrows a type a constructor built, and `name ^ { … }` after a bare name is a parse
   error naming `name & { … }` ([TSON-SCHEMA] §5.5, §5.8). A composition body is field definitions, and it admits a new
@@ -165,26 +161,21 @@ the build is the check.
   makes a type contract operate on the token's *text*, not on how it was written. A handler that needs
   string-ness says so with a `pattern`, not by assuming `text` means it. Pinned by
   `TsonHttpCodecTest.aTextFieldAcceptsAnyTokenButNotAContainer`.
-- **A schema importing core reserves every root name of the bundled documents.** A name two documents of one closure
-  declare is a collision wherever it is declared, whether or not anything names it, and core's closure holds the
-  roots of `meta.tn`, `numeric.tn`, `temporal.tn` and `net.tn` and core's own annotations — `text`, `int64`, `schema`,
+- **A schema importing core reserves every root name of the bundled documents.** Every root name of a closure is
+  reserved: a name two documents of one closure declare is a collision wherever it is declared, whether or not
+  anything names it, and the importer cannot fix it ([TSON-SCHEMA] §2.2.3). Core's closure holds the roots of
+  `meta.tn`, `numeric.tn`, `temporal.tn` and `net.tn` and core's own annotations — `text`, `int64`, `schema`,
   `date`, `time`, `period`, `uuid`, `email`, `host`, `hostname`, `uri`, `uri_reference`, `media_type`, `title`,
   `comment` among them — and the map names `meta`, `atom`, `numeric`, `unicode`, `net`, `binary`, `temporal`. A schema
   importing `policy.tn`, as `deployment.tn` does, reserves the map name `policy` too. So an application type is
-  never named after one, and a vocabulary this project publishes declares none: `service.tn` takes `media_type`
-  from `net.tn` rather than declaring its own, since a description imports both it and core. The bundled roots are
-  kept to what an author writes, so `record`, `identifier`, `field_name` and `kind` stay free. Core declares no sign
-  bounds, no `non_empty_text` and no bare `identifier`, so a schema wanting one declares it — `non_empty_text =>
-  !text ^ { min_length: 1 }`, `identifier => !unicode.identifier_type { continue_add: "-" }` — or writes
-  `meta.identifier`. A schema naming one it never declared fails as *"field 'sku' has an unresolved reference
-  'non_empty_text'"*, which reads like a typo in the schema and is a library upgrade. A vocabulary
-  this project publishes therefore declares its entries under one map named for itself, as `policy.tn` does, so that
-  it costs an importer one root name. `service.tn` nests every entry and annotation under `service => !schema { … }`,
-  and an entry inside the map names another by its path, `exchange => service.signature & {}`, since a name resolves
-  in the schema's one namespace: a bare `signature` there is an unresolved reference. A description then writes
-  `!service.protocol` and `@service.safe`, and a bound class's `@Typename` is the qualified name. `problem.tn` nests
-  under `problem` and `deployment.tn` under `deployment` the same way, so an error body is `!problem.details { … }`, a
-  business error composes `problem.details`, and a descriptor is `!deployment.descriptor { … }`.
+  never named after one. The bundled roots are kept to what an author writes, so `record`, `identifier`, `field_name`
+  and `kind` stay free. Core declares no sign bounds, no `non_empty_text` and no bare `identifier`, so a schema wanting
+  one declares it — `non_empty_text => !text ^ { min_length: 1 }`, `identifier => !unicode.identifier_type {
+  continue_add: "-" }` — or writes `meta.identifier`. A schema naming one it never declared fails as *"field 'sku' has
+  an unresolved reference 'non_empty_text'"*, which reads like a typo in the schema and is a library upgrade. A
+  vocabulary this project publishes nests its entries under one map named for itself (`service`, `problem`,
+  `deployment`), so it costs an importer one root name (`design/service-description.md`, "The layer: a protocol, and
+  projections of it").
 
 - **A `pattern` is I-Regexp, and `^`/`$` are not anchors.** The kernel pins `regex` to RFC 9485
   ([TSON-SCHEMA] §4.2, "pinned to I-Regexp"), whose match is against the **whole** token — so a pattern needs
@@ -203,12 +194,12 @@ the build is the check.
   names, URI schemes and DNS names state for themselves, so the same spelling stays outside the pattern and is refused.
   `service.header_name` and `service.auth_scheme` use it
   (`TsonApiDescriptionTest.aHeaderNameIsFoldedInAsciiAndOneACompatibilityFoldWouldAdmitIsRefused`).
-- **`abstract` is grammar, and it is what makes a base have no values of its own.** `endpoint => abstract
-  service.placement & { … }` ([TSON-SCHEMA] §5.2, §12.1's `definition-mark`, as the kernel writes `type => abstract
-  meta.top & { … }`) makes the resolver refuse an untagged value at an `endpoint`-typed slot, and a value tagged
-  `!service.endpoint`, naming the subtypes — in every mode, bound or not. Binding the base to a sealed interface says the
-  same fact on the Java side and no longer carries it alone. The mark is not inherited, so `operation`, `binding` and
-  `document` stay open. A subtype nothing binds, at an abstract base's slot in a value entry, leaves the whole value a
-  tree rather than being refused (`UPSTREAM.md`, "A subtype nothing binds, at an abstract base's slot in a value entry,
-  leaves the value a tree"), which is why `TsonApiDescription` refuses a `service.http` entry that did not bind.
+- **`abstract` is grammar, and it is what makes a base have no values of its own.** `endpoint => abstract service.placement &
+  { … }` ([TSON-SCHEMA] §5.2, §12.1's `definition-mark`, as the kernel writes `type => abstract meta.top & { … }`) makes the
+  resolver refuse an untagged value at an `endpoint`-typed slot, and a value tagged `!service.endpoint`, naming the subtypes
+  — in every mode, bound or not. Binding the base to a sealed interface says the same fact on the Java side, beside the mark
+  rather than in place of it. The mark is not inherited, so `operation`, `binding` and `document` stay open. A subtype
+  nothing binds, at an abstract base's slot in a value entry, leaves the whole value a tree rather than being refused
+  (`UPSTREAM.md`, "A subtype nothing binds, at an abstract base's slot in a value entry, leaves the value a tree"), which is
+  why `TsonApiDescription` refuses a `service.http` entry that did not bind.
 

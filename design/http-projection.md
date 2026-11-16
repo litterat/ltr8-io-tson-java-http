@@ -2,8 +2,9 @@
 
 How a protocol is projected onto HTTP: the projection and its claims, endpoints and their kinds, placement, statuses,
 the verb checks, media types, security schemes, response headers, and the resolved `Route` a server is handed. The
-protocol layer, the one root map, the resolver-versus-reader split, the wiring, `TsonApiCoverage` and business errors
-are `design/service-description.md`; its example shows a protocol and a projection binding it.
+protocol layer and the one root map are `design/service-description.md`, whose example shows a protocol and a
+projection binding it; the resolver-versus-reader split, the wiring, `TsonApiCoverage` and business errors are
+`design/service-reader.md`.
 
 **Invariants**
 
@@ -16,7 +17,7 @@ are `design/service-description.md`; its example shows a protocol and a projecti
   in full.
 - `service.endpoint` and `service.security_scheme` are `abstract`: an untagged endpoint, and a value tagged with either
   base, is refused by the resolver naming the subtypes. The tag selects `operation`, `binding` or `document`. A
-  projection whose value did not bind is a startup failure (`design/service-description.md`, "Wiring").
+  projection whose value did not bind is a startup failure (`design/service-reader.md`, "Wiring").
 - A path key is a `service.path_template`, an RFC 6570 template at levels 1 and 2 and a text family whose `pattern`
   is ASCII-exact; it is no name, so no name hygiene reaches it and a key is held as written. No qualified name walks
   a path key, and nothing references a resource or an endpoint.
@@ -46,7 +47,7 @@ a field beside its map, as a protocol's is beside its namespace (`design/service
 `not_bound?: [service.exemption]` gives each exchange it does not bind with a required `reason`, written
 `not_bound: [{ exchange: orders_v2.exchanges.refund  reason: "…" }]`. An exemption is a list of records rather than a
 map keyed by exchange, since a map key is a value of the map's own key family, never a reference. How the claim is
-checked is `design/service-description.md`, "What the reader checks". A projection with no `binds` is a web service on
+checked is `design/service-reader.md`, "What the reader checks". A projection with no `binds` is a web service on
 its own terms, its endpoints `!service.operation`s. `binds` takes the word `!service.binding` and `not_bound` use.
 `http` is named for the transport, as a gRPC projection of the same protocol would be.
 
@@ -117,7 +118,7 @@ text }`) placed from the path. An endpoint with no request admits no placement, 
 `status` is the success response's status; there is no list of responses, since an exchange has one response type.
 The default 200 is for an endpoint with a response: an operation or binding with no response type writes a status that
 carries no body, 204, 205 or 304 (`TsonApiDescriptionTest.aResponselessEndpointCannotAnswer200`). Each business error
-fixes its own status (`design/service-description.md`, "Business errors").
+fixes its own status (`design/service-reader.md`, "Business errors").
 
 ## Verb checks
 
@@ -227,7 +228,7 @@ the diagnostic naming the remedy, one value per instantiation (`UpstreamGapsTest
 business errors by status (`errorFor(status)`), its success status, the three exchange facts, whether it is a
 document, its media types, its placement, its documentation (`summary()`, `doc()`, the verb key's, else the
 exchange's), its security in force and its response headers. `TsonApiCoverage.serving` hands it to the handler
-(`design/service-description.md`, "Wiring").
+(`design/service-reader.md`, "Wiring").
 
 `TsonApiConformanceTest` resolves the description through a schema source fetching from the running server, proving
 that every referenced schema is published and every payload type exists, then holds the server to what no compiler can

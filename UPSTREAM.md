@@ -10,9 +10,9 @@ there is in git history; leaving it inline turns a to-do list into an archive no
 
 Two consequences worth knowing before citing anything here:
 
-- **Numbers are not stable.** Deleting a closed item renumbers the rest, so an `UPSTREAM.md #N` reference from
-  Javadoc or prose is a reference to a *live* item and needs re-checking whenever this file is pruned. Keep
-  such references few and put them only where the open question is the point.
+- **Cite an entry by its title, never by its number.** Deleting a closed item renumbers the rest, so a reference is
+  written as `UPSTREAM.md`'s entry followed by the entry's heading in quotes; the Javadoc in `UpstreamGapsTest` and the
+  probes does this. Keep such references few and put them only where the open question is the point.
 - **Cite the behaviour, not the item.** Where a gap has closed, the rule it left behind is stated where it
   applies — in the Javadoc of the class that relies on it, or in `CLAUDE.md`'s "Traps" — with no number at
   all. That is what stops a fixed gap being reintroduced by someone who never reads this file.

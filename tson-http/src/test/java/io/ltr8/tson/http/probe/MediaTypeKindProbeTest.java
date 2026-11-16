@@ -210,7 +210,8 @@ class MediaTypeKindProbeTest {
      * {@code toString}.</b> {@code !meta.apply { head: order  arguments: [order] }} is no type's name, and the refusal
      * says so as {@code found TypeRef[name=meta.apply, position=Position[line=0, …]]}: the record rendering of {@code
      * io.ltr8.tson.compiler.stream.TypeRef}, the tag's event, with a zero position, as the quoted token's refusal in
-     * {@link #kindOfMediaTypeTypeHoldsATypeName} renders its {@code TokenEvent}. {@code UPSTREAM.md} #13; the fragment
+     * {@link #kindOfMediaTypeTypeHoldsATypeName} renders its {@code TokenEvent}. {@code UPSTREAM.md}'s entry "A quoted
+     * token or a tag at a kind slot in a value body is refused through an event's {@code toString}"; the fragment
      * asserted here flips when the tag is named as written.
      */
     @Test

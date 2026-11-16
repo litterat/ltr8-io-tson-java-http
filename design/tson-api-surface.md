@@ -57,8 +57,8 @@ carrying a `FetchPolicy` beside the source. `registeredOnly()` is the shape the 
 `policy.IdentifierPolicy`/`ScriptPolicy`/`LimitsPolicy`/`ProcessorPolicy`,
 `source.SchemaSource`/`HttpSchemaSource`/`FileSchemaSource`,
 `bind.AtomContext`, and the exceptions. It is one vocabulary across both encodings by specification, which is
-why it is not in `tson-compiler`. **The classifying factories stayed behind**: `TsonDiagnostics` in
-`tson-compiler` owns `ofBaseSyntaxError` and friends, because they switch on the TSON reader's own exception
+why it is not in `tson-compiler`. **The classifying factories are in `tson-compiler`**: `TsonDiagnostics` there
+owns `ofBaseSyntaxError` and friends, because they switch on the TSON reader's own exception
 types. The schema model's classes live in `io.ltr8.tson.schema.<namespace>` by the bundled map that declares them
 (`schema.meta.ValueEntry`, `schema.meta.Namespace`, `schema.net.IriType`).
 
@@ -92,7 +92,7 @@ shape is:
 > handler.
 
 A schema arriving at runtime (an unknown `!!import` URL) must go through a single guarded resolution
-path, not a concurrent one. The contract is now stated where a server reads it — `Tson`'s class Javadoc
+path, not a concurrent one. The contract is stated where a server reads it — `Tson`'s class Javadoc
 (concurrent reads through one instance are safe; on a race work may be duplicated but state never is;
 `resolve`/`validateSchema` and mutating a `DataBindContext` under live reads are outside the guarantee) and
 `ProcessorConfig.withDataBindContext` — and pinned upstream by `ReadPathConcurrencyTest` and

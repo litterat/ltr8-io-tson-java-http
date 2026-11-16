@@ -67,24 +67,23 @@ typed `meta.declared` names a type of the closure the header bound, and nothing 
   most time, because the failure surfaces from the resolver rather than from the fetch.
 
 - **Use `SchemaSource.ofMap`, never `map::get`.** `SchemaFetchException` is the whole contract for
-  "cannot supply this", and a source returning `null` is now refused by name rather than dereferenced — but
-  refused is still a failure, and `ofMap` is the form that does not fail: it throws `NOT_PERMITTED` for a miss —
-  the map is this deployment's whole configuration, so a schema outside it is one it will not supply — and
+  "cannot supply this". A source returning `null` is refused by name rather than dereferenced, but as an
+  `IllegalStateException`, a fault in this server, so `schemaSource(schemas::get)` is a 500 any client can produce
+  at will by naming a schema nobody publishes. `ofMap` is the form that does not fail: it throws `NOT_PERMITTED` for
+  a miss — the map is this deployment's whole configuration, so a schema outside it is one it will not supply — and
   compares by **canonical identity**, so a reference differing only in scheme or `?sha256=` pin still resolves
-  (§2.2.1). A hand-rolled map source gets the first half and misses the second. All three demos shipped
-  `schemaSource(schemas::get)`, which was an NPE — and so a 500 any client could produce at will, by naming a
-  schema nobody publishes. Pinned by `UpstreamGapsTest.ofMapRefusesAMissAndComparesByCanonicalIdentity` and,
-  in all three adapters, by `OrderServerTest.aDocumentNamingAnUnknownSchemaIsTheSendersMistake`.
+  (§2.2.1). A hand-rolled map source gets the first half and misses the second. Pinned by
+  `UpstreamGapsTest.ofMapRefusesAMissAndComparesByCanonicalIdentity` and, in all three adapters, by
+  `OrderServerTest.aDocumentNamingAnUnknownSchemaIsTheSendersMistake`.
 - **Never `computeIfAbsent` on a schema cache.** It holds a `ConcurrentHashMap` bin lock for the whole of a
   network fetch, blocking every other thread whose key lands in that bin — and stalling a resize — for as long
   as the timeout allows. `HttpSchemaSource` uses get-then-put; two threads racing one identity fetch it
   twice and store identical content, which costs a request and breaks nothing.
 
   *Not* because the loader is re-entrant: it isn't. It fetches a document, returns, and only then resolves and
-  fetches its imports, so `fetch` is never called from inside `fetch` (measured — max depth 1). Kept here
-  because the reasoning was worked out in this repo and reads as a bug to anyone who meets get-then-put cold;
-  the code and its concurrency test are upstream's now, so this is a rule to know rather than one to maintain.
-  An earlier version of this note claimed the loader was re-entrant.
+  fetches its imports, so `fetch` is never called from inside `fetch` (measured — max depth 1). Stated here
+  because get-then-put reads as a bug to anyone who meets it cold; the code and its concurrency test are
+  upstream's, so this is a rule to know rather than one to maintain.
 - **Policy is checked on every reference, cached or not.** A cache hit must skip the network, never the
   allow-list — otherwise a schema fetched for one request becomes fetchable for a request that would have been
   refused.

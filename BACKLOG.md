@@ -52,7 +52,7 @@ Prose inside a live entry follows the same rule: say what is left to do and what
   structural rather than claimed and `requireComplete()` has nothing left to catch. A handler attaches two ways: directly by
   verb and template for a `!service.operation`, and through the service's join ("The module split", below) for a
   `!service.binding`, so a server with no `!service.protocol` is a first-class case. Constraint: the per-framework path
-  translation that claim-by-template avoids (`design/service-description.md`, "An endpoint has no name") becomes the
+  translation that claim-by-template avoids (`design/service-reader.md`, "An endpoint has no name") becomes the
   adapter's job, once, where a wrong entry is a route that silently never matches; each adapter's suite must prove every
   declared template is reachable.
 
@@ -160,6 +160,8 @@ The four entries are in build order.
   by operation. Measure what the resolver does with such an entry, then decide whether the reader accepts an endpoint
   whose type composes `service.operation` and what `TsonApiSchema.bindings()` binds it to. Constraint: an edit in place
   until `service.tn` is published, a new identity after; and `service.resource` keeps its one bare required field.
+  The measurement is `proposal/operation-refinement.md` (measured, its verdict for review), and the alternative aimed
+  at Revision 41 is `proposal/value-references.md`.
 - [ ] **A bound request record's dependent field is a pinned sibling or a discriminator over a family** — Once tson-java
   refuses at load a bound schema whose free sibling admits an unbound type (work upstream's `BACKLOG.md` holds; the spec
   gains a [TSON-SCHEMA] §11 paragraph and §5.2 is unchanged), make that the rule here and delete `ChosenTypes` with its

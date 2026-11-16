@@ -1,8 +1,9 @@
 # Status classification: `Diagnostic.Code` to HTTP status
 
 How a read's outcome becomes a status and a problem `type`: the split upstream states, the codes that are not verdicts,
-the rank order, the two fetch channels, name hygiene and the policies behind it. Current form only. The policy is
-`TsonHttpException.from`; nothing else decides a status.
+the rank order, the two fetch channels, and how a refusal is typed. Current form only. The policy is
+`TsonHttpException.from`; nothing else decides a status. What name hygiene refuses, and the processor policies behind
+it, are `design/name-policy.md`.
 
 **Invariants**
 
@@ -16,10 +17,9 @@ the rank order, the two fetch channels, name hygiene and the policies behind it.
 - One fetch status table: a thrown `SchemaFetchException.Reason` maps through `Diagnostic.Code.of(reason)` into it.
   Never add a second switch over `Reason`.
 - Name hygiene (`CONFUSABLE_NAMES`, `RESTRICTED_CHARACTER`, `RESTRICTED_SCRIPT`) and `LIMIT_EXCEEDED` are refusals the
-  sender fixes: 400 and 413, not 5xx, and not verdicts. Ask `isNameRefusal()` and `verdict()` rather than listing codes.
+  sender fixes: 400 and 413, never 5xx, and not verdicts. Ask `isNameRefusal()` and `verdict()` rather than listing codes.
 - A refusal is typed by its code, one problem `type` per code, and the body carries no policy; the policy is published
   once at `/.well-known/tson-deployment`.
-- `tson-http` never builds the `Tson`, so raising the token policy is the application's call.
 
 **Error classification is already a policy upstream — mirror it, don't invent one.** tson-java splits:
 the author's document/schema is wrong per the spec; the library hasn't implemented that yet
@@ -28,15 +28,14 @@ internal invariant broke. The CLI rides its exit codes on that split (1 = your d
 in the library), and **the HTTP mapping is the same split wearing status codes**: validation → 4xx, gap or
 internal fault → 5xx. A gap must never be reported to a client as "your request was invalid".
 
-**Ask the `Diagnostic.Code`, not the exception type — the split is no longer one type per outcome.** A read
-gap is now *reported* like any other problem rather than thrown, so it reaches a collecting caller as a
-`NOT_IMPLEMENTED` diagnostic among the rest, and a fail-fast one as a `ReadException` carrying that same
-code — the very type a schema violation arrives as. Classifying by type therefore answers 400 for a gap,
-which is the one verdict this policy may never give. `TsonHttpException.invalidDocument` holds the rule and
-`from` routes every `ReadException` through it, so both channels answer alike. Upstream states the rule
+**Ask the `Diagnostic.Code`, not the exception type.** A read gap is *reported* like any other problem rather than
+thrown, so it reaches a collecting caller as a `NOT_IMPLEMENTED` diagnostic among the rest, and a fail-fast one as a
+`ReadException` carrying that same code — the very type a schema violation arrives as. Classifying by type therefore
+answers 400 for a gap, which is the one verdict this policy may never give. `TsonHttpException.invalidDocument` holds
+the rule and `from` routes every `ReadException` through it, so both channels answer alike. Upstream states the rule
 as *"asking by code rather than by exception type is the stated policy"*.
 
-**Eleven codes are not verdicts on the document, and they differ by who could not give one** — this library, the
+**Some codes are not verdicts on the document, and they differ by who could not give one** — this library, the
 reading application, this deployment's own policy and budget, whoever was to serve the schema. `Diagnostic.Code.`
 `verdict()` is that set, stated upstream so no consumer keeps a private copy; **use it rather than listing them**.
 
@@ -72,11 +71,10 @@ broke when their document really was wrong sends them round a loop that cannot t
 
 Ranking, most-inward actor first, and the `tson` CLI's exit order (`70 > 78 > 69 > 1 > 75`) wearing statuses:
 `BIND_MISMATCH` (an operator has to fix it, and until they do nothing else is evaluated) → `NOT_IMPLEMENTED` →
-the three 400 fetch codes → `LIMIT_EXCEEDED` → §8.2 refusals → ordinary violations → `SCHEMA_UNREACHABLE` →
+the 400 fetch codes → `LIMIT_EXCEEDED` → §8.2 refusals → ordinary violations → `SCHEMA_UNREACHABLE` →
 `SCHEMA_TIMEOUT`. `TsonHttpException.REFERENCE_CODES` and `ORIGIN_CODES` state the two fetch halves.
-**This is a scan in rank order, not a first-match on the diagnostic list** — the status used to come from
-whichever fetch reason was reported first, so document ordering decided whether the sender or the dependency
-was blamed.
+**This is a scan in rank order, not a first-match on the diagnostic list**, so document ordering never decides whether
+the sender or the dependency is blamed.
 
 **The origin's two rank last, and answer only when they are all that is wrong.** A retry is advice only when
 nothing else needs fixing: every other fix ends in a resend, which retries the origin for free, while a bare retry
@@ -91,7 +89,7 @@ exactly where the exit code does — a rejection beside a gap or a bind mismatch
 `aReferenceTheSenderMustChangeOutranksAnOriginsFailure`.
 
 **`LIMIT_EXCEEDED` is a 413, and it is the one status here about what reading would *cost* rather than about
-what the body says.** §9.1's resource limits are a policy the library now enforces — nesting depth, bounded at
+what the body says.** §9.1's resource limits are a policy the library enforces — nesting depth, bounded at
 §9.1's own default of 64 — and a body that goes past one is stopped where it stood. So it is not a verdict:
 everything past that point went unread, and the detail says so. It is still a 4xx, on `SCHEMA_TOO_LARGE`'s
 argument: the bound is this deployment's configuration, and the sender is nonetheless who can act. 413 rather
@@ -106,13 +104,12 @@ missing one, so a 502 there would advertise a retry that cannot help. It goes wi
 `SCHEMA_NOT_FOUND` under `unusable-schema-reference` — a size cap is exactly a reference this deployment will
 not fetch. The CLI reaches the same place from the other side, ranking it permanent.
 
-**Both channels must answer alike, and there is now one table rather than two held together.** One fetch
-failure reaches a consumer two ways: thrown as `SchemaFetchException` (essentially startup-only, since
-**every read through the codec collects**) and collected as a diagnostic, the common path. The two speak
-different enums — thrown carries a `Reason`, collected a `Code` — so `TsonHttpException.from` maps through
-`Diagnostic.Code.of(reason)` into `fetchFailure`, which is the only fetch status table. Do not add a second
-switch over `Reason`: that is what they were before, and they diverged, `NOT_PERMITTED` answering 400 thrown
-and 502 collected. The agreement tests stay
+**Both channels must answer alike, through one table.** One fetch failure reaches a consumer two ways: thrown as
+`SchemaFetchException` (essentially startup-only, since **every read through the codec collects**) and collected as a
+diagnostic, the common path. The two speak different enums — thrown carries a `Reason`, collected a `Code` — so
+`TsonHttpException.from` maps through `Diagnostic.Code.of(reason)` into `fetchFailure`, which is the only fetch status
+table. Do not add a second switch over `Reason`: two tables held together are free to diverge, and one failure would
+then answer one status thrown and another collected. The agreement tests stay
 (`TsonHttpCodecTest.aFetchDiagnosticIsAnsweredByItsCode`,
 `TsonHttpSchemaSourceIntegrationTest.bothChannelsAnswerAnUnfetchableSchemaAlike`).
 
@@ -142,96 +139,21 @@ adds and `problem.tn`'s `problem.diagnostic_code` lacks is the drift `TsonProble
 contract it is — `fetch` names it as the one way a source says "cannot supply this", which is what lets the
 classification route on it at all.
 
-**Name hygiene is policy, not validity, and it arrives as three more codes.** [TSON-DATA] §8.2 is a layer
-two conforming processors may legitimately disagree on, which is why its defaults are the library's choice
-rather than the format's. **One code per rule**: `CONFUSABLE_NAMES` (two names in one scope with equal
-UTS #39 skeletons), `RESTRICTED_CHARACTER` (a character outside the identifier profile) and
-`RESTRICTED_SCRIPT` (a script combination the level does not admit — wider than a mix, since `ASCII_ONLY`
-refuses a single-script name with nothing mixed).
+**Name hygiene and `LIMIT_EXCEEDED` are refusals the sender fixes.** They answer 400 and 413, never 5xx, and none is a
+verdict: ask `isNameRefusal()` and `verdict()` rather than listing codes, and see `design/name-policy.md` for the rules
+themselves and why a refusal under this server's own policy is still the client's to fix.
 
-**A field name is a name and meets all three rules**, which is a Revision 35 change and reads like a test being
-wrong when it bites. A Class 1 record's field names used to see only the look-alike rule; now the two per-name
-rules reach them as well. So a within-word homograph — Latin `admin` beside a Cyrillic-`а` one — draws
-`RESTRICTED_SCRIPT` *as well as* the `CONFUSABLE_NAMES` it always drew, and the script one is reported first,
-which decides the problem `type`: `policyRefusal` takes the first refusal in the list. A body whose only
-refusal is the set rule needs two names the identifier policy admits *individually* — the all-Cyrillic
-spelling of `pass` beside the Latin one, which is what
-`TsonHttpCodecTest.twoConfusableFieldNamesInASchemalessBodyAreABadRequest` now sends, and both halves are
-pinned by `UpstreamGapsTest.everyFieldNameOfASchemalessRecordMeetsAllThreeNameRules`.
+**A refusal is a 400 of its own problem `type`, one per code, and the body carries no policy.** RFC 9457's own pointer
+from a problem to deployment-scoped documentation is `type`. So `TsonHttpException.policyRefusal` types a refusal
+`…/problems/restricted-script` (the code's name, kebab-cased) and that documentation is where a client is sent to
+`/.well-known/tson-deployment`. Why the body carries no `policy` member is a layering decision:
+`design/name-policy.md`, "A refusal carries its code and nothing about the policy that judged it". `errors` is an
+RFC 9457 extension member, and `problem.tn` declares it optional: the boundary writes it on every problem it renders,
+empty where a failure produced no diagnostic, and a business error omits it. `status` is a `problem.status`, an integer
+from 100 to 599, so the body cannot state a number that is no HTTP status.
 
-**A field name is a value of its record's `name_type`** (Revision 38), an identifier family defaulting
-to the series' identifier, so nothing here changes unless a schema says so. What a server meets: a schemaless
-`{ "first name": 1 }` is `ATOM_FORM_INVALID`, a 400 like the parse error it was; a governed record's undeclared
-name, identifier or not, is `UNRECOGNIZED_FIELD` in both encodings; and a body naming a schema this deployment will
-not supply is skipped unjudged, so its problem carries the unusable reference alone rather than name refusals a
-schema admitting `"first name"` would never make (`UpstreamGapsTest.aFieldNameIsJudgedOnlyByTheSchemaTheDocumentNames`).
-A relaxed name type is a translation's tool — `@id`, `$ref`, or an HTTP-style name under `ASCII_CASEFOLD` — stated on
-a fieldless abstract base its records compose, and bound with `@Field("@id")`; the hygiene rules then run under that
-type's profile. `RecordBody.fields()` is an ordered text-keyed `AnnotatedMap`: a field name is in no namespace.
-
-**All three are 400 and none is a verdict**, both halves pinned rather than left implicit
-(`TsonHttpCodecTest.nameHygieneIsARefusalTheSenderFixes`): §8.1 makes a refusal its fifth outcome, so
-`verdict()` is false for them as for `LIMIT_EXCEEDED`. These are the first codes a server can meet because of its
-*own* configuration, and the temptation is to read "my policy refused it" as a 5xx. It is not — a body refused
-under a raised policy is refused as one over a depth limit is, and it is still the client's to fix. None of
-them says anything went unchecked *for want of this server*, which is what the 5xx codes have in common and
-these do not — and why a status keyed on `verdict()` would be wrong here too.
-
-**The rule rides the code, not a field beside it**, and that is worth knowing before designing anything
-similar: a consumer routes on the code, and a second enum would restate what the code already fixes while
-being free to disagree with it. The three want three different fixes — rename one of a colliding pair, change
-a character, or relax the level — so the code has to carry enough to say which.
-
-**A refusal carries its code and nothing about the policy that judged it.** The level, the unit and the
-Unicode data version are properties of the processor, constant for its life, and tson-java states them once —
-`Tson.processorPolicy()` returns a `ProcessorPolicy` (both §8.2 policies, the limits, and `dataVersion()`), and a
-derived reader answers for itself — rather than on each refusal; `Diagnostic` carries no per-refusal version.
-
-**The two policies are two types, because they govern different things.** `IdentifierPolicy` is a `ScriptPolicy`
-level plus what only a name has: a unit (`perSegment()`, dividing at the name's profile's own separators) and
-`withSkeletonDistinctness`, the look-alike rule's own switch, which no level reaches. The token policy is a bare
-`ScriptPolicy`, so a per-segment token policy is *unwritable* rather than refused. **A name is decided by type,
-not position**: an identifier-typed field value, an identifier-keyed map's keys and a unique array of identifiers
-are names and meet all three rules, the key and element sets being look-alike scopes — in a data document and in a
-schema's value entries alike, where a namespace value and an annotation value are read under the same
-policy. `NameRoleTest` pins both places.
-Over HTTP the once-statement is `deployment.tn`'s acceptance profile at `/.well-known/tson-deployment`. §8.3
-is why any of it matters: all three rules are unstable across Unicode releases, so two conforming processors
-may legitimately disagree about one name and the version is what explains it.
-
-**A refusal is a 400 of its own problem `type`, one per code, and the body carries no policy.** tson-cli's
-envelopes carry `policy` on every run because a report file has nothing to dereference; an HTTP response does,
-and RFC 9457's own pointer from a problem to deployment-scoped documentation is `type`. So
-`TsonHttpException.policyRefusal` types a refusal `…/problems/restricted-script` (the code's name, kebab-cased)
-and that documentation is where a client is sent to `/.well-known/tson-deployment`. Embedding the profile in
-every refusal would be the constant-restated-N-times mistake upstream just removed from the diagnostic, one
-level up. Not adding a `policy` member was therefore a layering decision, not an RFC 9457 constraint — extension
-members are the standard's own growth mechanism and `errors` already is one. `problem.tn` declares it optional: the
-boundary writes it on every problem it renders, empty where a failure produced no diagnostic, and a business error
-omits it. `status` is a `problem.status`, an integer from 100 to 599, so the body cannot state a number that is no
-HTTP status. If a client ever needs to know
-*which version* of the profile judged it, the answer is a `Link` header plus the profile's `name`, added then.
-
-**Both channels type a refusal by its rule.** A refusal at schema load arrives collected, as one of the three codes,
-or thrown on a fail-fast path as a `SchemaRefusalException` — the one subtype of a sealed `SchemaValidationException`.
+**Both channels type a refusal by its rule.** A refusal at schema load arrives collected, as one of the three name-hygiene
+codes, or thrown on a fail-fast path as a `SchemaRefusalException` — the one subtype of a sealed `SchemaValidationException`.
 `from` matches it *before* its supertype, which would answer `invalid-schema`, since §8.2 requires a refusal be told
 from a malformed schema. Ask `Diagnostic.Code.isNameRefusal()` for the three-code set rather than listing it, as with
 `verdict()`. Pinned by `TsonHttpCodecTest.aThrownSchemaRefusalIsAnsweredAsACollectedOneIs`.
-
-**The defaults are opposite on purpose**, and a server inherits both: `ProcessorConfig.withIdentifierPolicy` defaults
-to Highly Restrictive over *declared names*, so a schema a request body names is refused for a homograph;
-`ProcessorConfig.withTokenPolicy` defaults to unrestricted over *values*, because data may legitimately be a Cyrillic
-display name and no scan runs at all. Pinned by
-`UpstreamGapsTest.aDeclaredNameDefaultsToHighlyRestrictiveAndAValueToUnrestricted` — asserting one half would
-leave the other free to move.
-
-**Raising the token policy is the application's call, not this library's.** §8.2's "Values" paragraph names
-this project's exact situation — a service that renders or matches untrusted values faces on values the
-spoofing surface §9.4 raises for names — and says such a deployment applies the level *knowingly*.
-`tson-http` never builds the `Tson`, so it has no place to decide; a service that renders what it reads should
-pass `withTokenPolicy(...)` where it builds one. A trap if it does: a token policy stricter than the identifier
-policy **subsumes** it, since the check runs before anything knows which tokens are names. And there is no unit to
-reach for — `_` and `-` are word separators in a name and ordinary characters in a value, so segmenting one would
-admit UTS #39's own `Toys-Я-Us`, which is why `ScriptPolicy` has no per-segment form.
-
-

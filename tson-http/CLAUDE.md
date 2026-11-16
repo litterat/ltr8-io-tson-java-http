@@ -6,12 +6,12 @@ are touching:
 | Working in | Read (`design/…`) |
 |---|---|
 | `TsonHttpCodec`, `TsonMediaType`, `TsonAcceptHeader`, `TsonSchemaHeader`, `TsonAcceptSchemaHeader`, `TsonSchemaCatalog` | `codec.md`, then `json-encoding.md` for the `acceptingJson` side |
-| `TsonHttpException`, `TsonProblem*`, `problem.tn` | `status-classification.md`, `schema-authoring.md` |
+| `TsonHttpException`, `TsonProblem*`, `problem.tn` | `status-classification.md`, `name-policy.md`, `schema-authoring.md` |
 | `TsonSchemaVersions`, `TsonDocumentPeek` use | `schema-versions.md` |
-| `TsonBindings` | `binding.md` |
-| `api/` (`TsonApiSchema`, `TsonApiDescription`, `TsonApiCoverage`, the bound records), `service.tn`, the `OrdersExamples` fixtures | `service-description.md`, then `http-projection.md` for `service.http`, endpoints and `Route` |
+| `TsonBindings` (`of`, `bySchema`) | `binding.md` |
+| `api/` (`TsonApiSchema`, `TsonApiDescription`, `TsonApiCoverage`, `Landed`, `PayloadType`, the bound records), `service.tn`, the `OrdersExamples` and `ExternExamples` fixtures | `service-description.md` for the layer, `service-reader.md` for the reader and the wiring, `http-projection.md` for `service.http`, endpoints and `Route` |
 | `TsonDeployment`, `deployment.tn` | `deployment-descriptor.md` |
-| `probe/`, `UpstreamGapsTest` | `tson-api-surface.md`; `experiments/CLAUDE.md` for the probes that live there |
+| `probe/` (a proposal's probe, its bound records in a sub-package named for it), `UpstreamGapsTest` | `tson-api-surface.md` and the proposal under `proposal/`; `experiments/CLAUDE.md` for the probes that live there |
 
 Rules that bite here:
 
@@ -31,5 +31,8 @@ Rules that bite here:
   `TsonApiSchema.bindings()`, an explicit map keyed by qualified name (`service.binding`), as its `@Typename` is; a
   record added to the layer binds nothing until a line is added there, and an application binding one of those names
   is refused by `bindingsWith`.
+- A payload type a route names through an extern is read as the entry it lands on in the declaring schema
+  (`PayloadType`), so a binding keyed by the extern's local name serves nothing; `TsonApiDescription` refuses it at
+  startup, and two schemas declaring one name bind through `TsonBindings.bySchema`.
 - Experiments' probe tests join this module's test source set from `experiments/*/java`; a probe failing after a
   library change is information, not a regression.

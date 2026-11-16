@@ -56,7 +56,7 @@ governing set is a contract's version is not `resolve`'s question: `TsonSchemaVe
 (`design/schema-versions.md`). A JSON body is not peeked, so its set is the header's alone. The adapters write the
 field on a response through `TsonSchemaHeader.format`, a List of one.
 
-## What `tson-http` looks like today
+## What `tson-http` holds
 
 `TsonHttpCodec` is the type an adapter drives; everything else supports it.
 
@@ -69,11 +69,10 @@ field on a response through `TsonSchemaHeader.format`, a List of one.
   — `ltr8.io` is the implementation resource, kept apart from the specification's `tson.io`, where schema
   identities live. The revision rides in it too, so a spec bump moves it with everything else.
 - `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem.tn` — the error body, its schema,
-  and the reader that proves the two agree. **This project's own schema, maintained here** — it began as a copy
-  of `tson-cli`'s `diagnostics.tn` and has diverged on purpose: a CLI reports on files and a server reports on
-  requests, and lifting the two into a shared module was asked for upstream and rightly rejected. Its one root
-  is the schema map `problem`: `problem.details` follows **RFC 9457**; `problem.diagnostic` stays close to what a
-  TSON read produces, because that is what it reports.
+  and the reader that proves the two agree. **This project's own schema, maintained here**, kept apart from `tson-cli`'s
+  `diagnostics.tn` because a CLI reports on files and a server reports on requests, so the two are not shared. Its one root
+  is the schema map `problem`: `problem.details` follows **RFC 9457**; `problem.diagnostic` stays close to what a TSON read
+  produces, because that is what it reports.
 - `io.ltr8.tson.base.source.HttpSchemaSource` / `SchemaFetchException` — **upstream's, not this module's** (see
   above). What stays here is the half upstream cannot know: `TsonHttpException.from` maps a fetch `Reason`
   through `Diagnostic.Code.of` into the one fetch status table, and `TsonHttpSchemaSourceIntegrationTest` pins
@@ -102,8 +101,8 @@ field on a response through `TsonSchemaHeader.format`, a List of one.
   peeks as no imports, and the read that continues reports the real problem.
   **A `ByteArrayInputStream` will not catch a mistake here**: it supports `mark`/`reset`, so a peek that
   consumes the stream still looks intact. Test with a stream whose `markSupported()` is false and whose
-  `reset()` throws, as `TsonSchemaHeaderTest` does — this project shipped a peek that ate the whole body on a
-  real request and had a green test suite over the wrong fixture.
+  `reset()` throws, as `TsonSchemaHeaderTest` does, since a peek that eats the whole body passes every test over a
+  markable fixture and fails on the first real request.
 - **`describing()` needs a root type name as well as a schema URI, for an object.** A data document under imports
   names its root's type ([TSON-SCHEMA] §7.1), and a bound record writes no type-ref of its own, so `!!import` alone
   yields a document no reader can select a type in. The tree form takes one argument, because a tree node already
