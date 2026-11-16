@@ -326,7 +326,8 @@ public final class TsonApiDescription {
      * Each response header's template expands from the response value: every variable names a field of the response
      * type, and that field is one scalar, as a path segment's is. An endpoint with no response type -- a document, or
      * one answering no body -- has nothing to expand a variable from, so its headers are literals. A response type
-     * named through an extern is the foreign record it lands on, its fields' types judged in the foreign schema.
+     * named through an extern is the foreign record it lands on, and each field's type is judged as what it lands on
+     * from that record's landing, past any further extern ({@link Landed}).
      */
     private static void requireTemplatesExpand(String label, Map<String, String> headers, Optional<TypeRef> response,
                                                TsonLinkedSchema scope) {
@@ -348,7 +349,7 @@ public final class TsonApiDescription {
                     throw new IllegalArgumentException(declared + ", but the response type '" + type + "' declares no "
                             + "field '" + variable + "' -- it declares " + record.fields().keySet());
                 }
-                RequestPlacement.notOneScalar(field, landed.entries()).ifPresent(because -> {
+                RequestPlacement.notOneScalar(field, landed).ifPresent(because -> {
                     throw new IllegalArgumentException(declared + ", but '" + variable + "' of '" + type + "' is "
                             + because + ", and a header's variable expands from one scalar");
                 });

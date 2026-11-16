@@ -7,7 +7,8 @@ import java.util.Map;
 
 /**
  * A service description naming foreign types by extern ([TSON-SCHEMA] §5.13), and the schemas they land in: two
- * versions of {@code order}, a business error, and a request record. Shared by {@code TsonApiDescriptionExternTest},
+ * versions of {@code order}, a business error, request records, and the arrays a request record's field reaches in a
+ * third schema. Shared by {@code TsonApiDescriptionExternTest},
  * which holds the reader to it, and {@code ExternProbeTest}, which measures the library under it.
  *
  * <ul>
@@ -18,6 +19,8 @@ import java.util.Map;
  * {@code id} is the record {@code span}; and {@code pinned_key} and {@code free_key}, each holding a dependent field
  * {@code payload: kind!}, its sibling pinned to {@code span} in the first and a free {@code meta.type_ref} in the
  * second.</li>
+ * <li>{@code tags-1.tn} declares {@code labels}, an array of its record {@code label}, and {@code codes}, an array of
+ * its scalar {@code code}: the third schema a request record's field reaches by extern, {@link #TAGGED_KEYS}.</li>
  * <li>{@code api-1.tn} names each as an extern -- {@code order_v1}, {@code order_v2}, {@code not_found_v1}, {@code
  * order_key_v1} -- beside its own {@code order_ref}, with one exchange per version and a projection binding both.</li>
  * </ul>
@@ -46,6 +49,33 @@ public final class ExternExamples {
               pinned_key => { id: text  kind?: meta.type_ref = span  payload: kind! }
               free_key   => { id: text  kind: meta.type_ref  payload: kind! }
             }""";
+
+    public static final String TAGS = BASE + "tags-1.tn";
+
+    public static final String TAGS_SOURCE = "!!id:\"" + TAGS + "\"\n!!import:\"" + CORE + "\"\n" + """
+            !schema {
+              label  => { name: text  colour: text }
+              labels => [label]
+              code   => text
+              codes  => [code]
+            }""";
+
+    /**
+     * Entries {@link #keys} splices into {@code keys-1.tn}: externs of each {@code tags-1.tn} array and of its {@code
+     * label} and {@code code}, the request records {@code labelled} and {@code coded} holding an array by extern, and
+     * {@code badged} holding the element types by extern. Its own {@code code} is a record, so a name {@code
+     * tags-1.tn}'s {@code codes} writes, looked up here, is found as another entry.
+     */
+    public static final String TAGGED_KEYS = """
+              code       => { system: text  value: text }
+              label_list => !meta.extern { schema: "%1$s"  type: labels }
+              code_list  => !meta.extern { schema: "%1$s"  type: codes }
+              label_ref  => !meta.extern { schema: "%1$s"  type: label }
+              code_ref   => !meta.extern { schema: "%1$s"  type: code }
+              labelled   => { id: text  labels: label_list }
+              coded      => { id: text  codes: code_list }
+              badged     => { id: text  label: label_ref  code: code_ref }
+            """.formatted(TAGS);
 
     /** The description with nothing spliced in. */
     public static final String DESCRIPTION = description("", "");
@@ -88,6 +118,12 @@ public final class ExternExamples {
                 }""".formatted(ORDER_1, ORDER_2, ERRORS, KEYS, errors, headers);
     }
 
+    /** {@code keys-1.tn} with {@code extra} entries declared after its own. */
+    static String keys(String extra) {
+        int closing = KEYS_SOURCE.lastIndexOf('}');
+        return KEYS_SOURCE.substring(0, closing) + extra + KEYS_SOURCE.substring(closing);
+    }
+
     /** The orders examples beside every schema here, {@code description} as {@code api-1.tn}. Mutable. */
     public static Map<String, String> library(String description) {
         Map<String, String> library = OrdersExamples.library();
@@ -95,6 +131,7 @@ public final class ExternExamples {
         library.put(ORDER_2, ORDER_2_SOURCE);
         library.put(ERRORS, ERRORS_SOURCE);
         library.put(KEYS, KEYS_SOURCE);
+        library.put(TAGS, TAGS_SOURCE);
         library.put(API, description);
         return library;
     }

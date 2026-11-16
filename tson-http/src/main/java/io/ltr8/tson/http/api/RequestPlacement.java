@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -48,7 +47,10 @@ import java.util.regex.Pattern;
  * <p>A request named through an extern ([TSON-SCHEMA] §5.13) is placed as the foreign record the extern lands on:
  * its fields are that record's, and each field's type is looked up in the foreign schema's namespace, where its
  * declaration wrote it, so a field typed by a record that schema declares is no scalar in the path. A field typed by
- * an extern is judged as what the extern lands on, in a request of either kind.
+ * an extern is judged as what the extern lands on, in a request of either kind, and every type expression is resolved
+ * in the schema declaring the entry holding it ({@link Landed}): an array's element type where the array is declared,
+ * so a field typed by an extern of an array of records declared in a third schema is refused in the query, whatever
+ * the request record's own schema declares under the element's name.
  */
 public record RequestPlacement(Map<String, Location> fields) {
 
@@ -60,17 +62,18 @@ public record RequestPlacement(Map<String, Location> fields) {
 
     /**
      * The placement of {@code request}'s fields at the endpoint {@code name}. A request reached through an extern is
-     * the foreign record it lands on, and its fields' types are judged in the foreign schema ({@link Landed}).
+     * the foreign record it lands on; its fields' types are judged in the foreign schema, and each name such a type's
+     * definition writes in the schema declaring that definition ({@link Landed}).
      *
      * @param scope the description, in whose namespace {@code request} is written
      */
     static RequestPlacement of(String name, HttpVerb verb, String path, List<String> query, Map<String, String> headers,
                                Optional<String> body, Optional<TypeRef> request, TsonLinkedSchema scope) {
         Map<String, RecordField> declared = new LinkedHashMap<>();
-        Landed landed = new Landed(scope, "");                  // no request: no field is declared to judge
+        // No request: no field is declared to judge, so the landing is never asked a name.
+        Landed landed = request.map(ref -> Landed.of(scope, ref.name())).orElseGet(() -> new Landed(scope, ""));
         if (request.isPresent()) {
             TypeRef ref = request.get();
-            landed = Landed.of(scope, ref.name());
             if (!(landed.definition() instanceof RecordBody record)) {
                 throw new IllegalArgumentException("'" + name + "' takes '" + ref.text() + "', which is not a record"
                         + " -- a request is the record whose fields an endpoint distributes over the HTTP request,"
@@ -78,15 +81,14 @@ public record RequestPlacement(Map<String, Location> fields) {
             }
             declared.putAll(record.fields());
         }
-        Function<String, Top> entries = landed.entries();
         Map<String, Location> placed = new LinkedHashMap<>();
         Matcher segments = SEGMENT.matcher(path);
         while (segments.find()) {
-            place(name, placed, declared, segments.group(1), Location.PATH, entries);
+            place(name, placed, declared, segments.group(1), Location.PATH, landed);
         }
-        query.forEach(field -> place(name, placed, declared, field, Location.QUERY, entries));
-        headers.keySet().forEach(field -> place(name, placed, declared, field, Location.HEADER, entries));
-        body.ifPresent(field -> place(name, placed, declared, field, Location.BODY, entries));
+        query.forEach(field -> place(name, placed, declared, field, Location.QUERY, landed));
+        headers.keySet().forEach(field -> place(name, placed, declared, field, Location.HEADER, landed));
+        body.ifPresent(field -> place(name, placed, declared, field, Location.BODY, landed));
 
         boolean remainderIsQuery = verb == HttpVerb.GET || verb == HttpVerb.HEAD || body.isPresent();
         // Walked in the request record's order, so the result reads as the record does; Map.copyOf would
@@ -95,7 +97,7 @@ public record RequestPlacement(Map<String, Location> fields) {
         for (String field : declared.keySet()) {
             Location where = placed.getOrDefault(field, remainderIsQuery ? Location.QUERY : Location.BODY);
             if (where == Location.QUERY && !placed.containsKey(field)) {
-                requireScalar(name, field, declared.get(field), where, entries);
+                requireScalar(name, field, declared.get(field), where, landed);
             }
             inRecordOrder.put(field, where);
         }
@@ -111,7 +113,7 @@ public record RequestPlacement(Map<String, Location> fields) {
     }
 
     private static void place(String entry, Map<String, Location> placed, Map<String, RecordField> declared,
-                              String field, Location where, Function<String, Top> entries) {
+                              String field, Location where, Landed request) {
         if (!declared.containsKey(field)) {
             throw new IllegalArgumentException("'" + entry + "' places '" + field + "' in the " + where
                     + ", but the request declares no such field -- it declares " + declared.keySet());
@@ -122,7 +124,7 @@ public record RequestPlacement(Map<String, Location> fields) {
                     + " and in the " + where);
         }
         if (where != Location.BODY) {
-            requireScalar(entry, field, declared.get(field), where, entries);
+            requireScalar(entry, field, declared.get(field), where, request);
         }
     }
 
@@ -150,54 +152,67 @@ public record RequestPlacement(Map<String, Location> fields) {
      * A URL segment carries exactly one scalar; a query parameter and a header may repeat, so either admits an
      * array of scalars as well -- {@code ?tag=a&tag=b} is ordinary HTTP, and refusing it would push a
      * multi-valued parameter into the body where no GET can carry it. A record, a map, a tuple, or an array of
-     * any of those has no spelling in any of the three.
+     * any of those has no spelling in any of the three. An array's element type is judged where the array is declared.
+     *
+     * @param request the landing of the record declaring {@code field}
      */
-    private static void requireScalar(String entry, String name, RecordField field, Location where,
-                                      Function<String, Top> entries) {
+    private static void requireScalar(String entry, String name, RecordField field, Location where, Landed request) {
         if (field.sibling().isPresent()) {
             return;                                     // a dependent field: requireInRemainderBody refuses it
         }
-        Top type = body(field.type(), entries);
-        if (type == null) {
+        Body type = body(field.type(), request);
+        if (type.definition() == null) {
             return;                                     // a built-in: text, int32, a date -- scalar by construction
         }
-        if (type instanceof ArrayBody array) {
+        if (type.definition() instanceof ArrayBody array) {
             if (where == Location.PATH) {
                 refuse(entry, name, where, "an array, and a URL segment carries exactly one scalar");
             }
-            if (isContainer(body(array.elementType(), entries))) {
+            if (isContainer(body(array.elementType(), type.at()).definition())) {
                 refuse(entry, name, where, "an array of " + array.elementType().text()
                         + ", and a repeated " + where.name().toLowerCase(Locale.ROOT) + " value carries a scalar");
             }
             return;
         }
-        if (isContainer(type)) {
+        if (isContainer(type.definition())) {
             refuse(entry, name, where, "a " + field.type().text() + ", which is not a scalar");
         }
     }
 
     /**
      * Why {@code field} is not one scalar, if it is not: what a URL segment carries, and what a response header's
-     * template expands a variable from. A dependent field, an array, a record, a map and a tuple are not.
+     * template expands a variable from. A dependent field, an array, a record, a map and a tuple are not. The field's
+     * type is judged as what it lands on, past its externs; an array is refused whatever its element type, so no name
+     * the landed definition writes is read.
      *
-     * @param entries the definitions of the names the declaring record writes, each past its externs
+     * @param record the landing of the record declaring {@code field}
      */
-    static Optional<String> notOneScalar(RecordField field, Function<String, Top> entries) {
+    static Optional<String> notOneScalar(RecordField field, Landed record) {
         if (field.sibling().isPresent()) {
             return Optional.of("a dependent field, whose type its sibling names per instance");
         }
-        Top type = body(field.type(), entries);
+        Top type = body(field.type(), record).definition();
         if (type instanceof ArrayBody) {
             return Optional.of("an array");
         }
         return isContainer(type) ? Optional.of("a " + field.type().text() + ", which is not a scalar") : Optional.empty();
     }
 
-    /** The type {@code type} stands for: its entry when it is named, its body when it is written in place. */
-    private static Top body(TypeExpr type, Function<String, Top> entries) {
+    /**
+     * A type's definition with the landing whose namespace resolves the names that definition writes: a named type's
+     * entry where it lands, a type written in place with the landing it was written in.
+     */
+    private record Body(Top definition, Landed at) {
+    }
+
+    /** The type {@code type}, written in {@code at}'s declaration, stands for. */
+    private static Body body(TypeExpr type, Landed at) {
         return switch (type) {
-            case TypeRef reference -> entries.apply(reference.name());
-            case TypeInline inline -> inline.of();
+            case TypeRef reference -> {
+                Landed landed = at.resolve(reference.name());
+                yield new Body(landed.definition(), landed);
+            }
+            case TypeInline inline -> new Body(inline.of(), at);
         };
     }
 

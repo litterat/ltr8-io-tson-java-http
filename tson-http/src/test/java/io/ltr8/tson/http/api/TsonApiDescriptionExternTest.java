@@ -24,6 +24,7 @@ import static io.ltr8.tson.http.api.ExternExamples.API;
 import static io.ltr8.tson.http.api.ExternExamples.DESCRIPTION;
 import static io.ltr8.tson.http.api.ExternExamples.ORDER_1;
 import static io.ltr8.tson.http.api.ExternExamples.ORDER_2;
+import static io.ltr8.tson.http.api.ExternExamples.TAGGED_KEYS;
 import static io.ltr8.tson.http.api.ExternExamples.description;
 import static io.ltr8.tson.http.api.ExternExamples.described;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -108,6 +109,114 @@ class TsonApiDescriptionExternTest {
 
         assertEquals("'orders_http GET /v1/orders/{id}' places 'id' in the PATH, but it is a span, which is not a "
                 + "scalar", refused.getMessage());
+    }
+
+    /**
+     * <b>A type expression is resolved in the schema declaring the entry holding it.</b> {@code labelled}'s {@code
+     * labels} is {@code label_list}, an extern of {@code tags-1.tn}'s {@code labels}, an array of that schema's record
+     * {@code label}: an array of records has no query spelling, though {@code keys-1.tn} declares no {@code label}, and
+     * though it declares a scalar {@code label} of its own.
+     */
+    @Test
+    void aForeignArrayOfRecordsFromAThirdSchemaIsRefusedInTheQuery() {
+        String expected = "'orders_http GET /v1/orders/{id}' places 'labels' in the QUERY, but it is an array of label,"
+                + " and a repeated query value carries a scalar";
+        for (String own : List.of("", "  label      => text\n")) {
+            IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                    () -> keyed("labelled", TAGGED_KEYS + own, "  query: [labels]"), own);
+
+            assertEquals(expected, refused.getMessage(), own);
+        }
+    }
+
+    /**
+     * And an array of scalars from the third schema is admitted, though {@code keys-1.tn} declares a record of the
+     * element's name: {@code tags-1.tn}'s {@code codes} is {@code [code]}, its own {@code code} a {@code text}.
+     */
+    @Test
+    void aForeignArrayOfScalarsFromAThirdSchemaIsAdmittedInTheQuery() {
+        Route route = keyed("coded", TAGGED_KEYS, "  query: [codes]").routes().getFirst();
+
+        assertEquals(Map.of("id", Location.PATH, "codes", Location.QUERY), route.placement().fields());
+    }
+
+    /**
+     * An extern landing on an entry its schema holds by import lands in the importer: {@code shelf-1.tn} imports
+     * {@code tags-1.tn}, so the landing's namespace is {@code shelf-1.tn}'s and the entry's declaring schema {@code
+     * tags-1.tn}. An import merges the declarer's whole namespace and admits no redefinition, so the importer resolves
+     * every name the entry writes as the declarer does, and the array of records is refused as before.
+     */
+    @Test
+    void aForeignArrayAnImportHoldsIsJudgedAsItsDeclarerWroteIt() {
+        String shelf = ExternExamples.BASE + "shelf-1.tn";
+        String stocked = "  shelved    => !meta.extern { schema: \"" + shelf + "\"  type: labels }\n"
+                + "  stocked    => { id: text  labels: shelved }\n";
+        Map<String, String> library = ExternExamples.library(keyedDescription("stocked", "  query: [labels]"));
+        library.put(shelf, "!!id:\"" + shelf + "\"\n!!import:\"" + ExternExamples.CORE + "\"\n!!import:\""
+                + ExternExamples.TAGS + "\"\n!schema {\n  shelf => { name: text }\n}");
+        library.put(ExternExamples.KEYS, ExternExamples.keys(stocked + "  label      => text\n"));
+        Tson tson = OrdersExamples.tson(library);
+        tson.resolve(library.get(API));
+
+        Landed landed = Landed.of(tson.loader().resolveLinked(ExternExamples.KEYS), "shelved");
+        assertEquals(CanonicalIdentity.canonicalize(shelf), landed.in().identity());
+        assertEquals(CanonicalIdentity.canonicalize(ExternExamples.TAGS), landed.identity());
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> TsonApiSchema.describedBy(tson, API));
+        assertEquals("'orders_http GET /v1/orders/{id}' places 'labels' in the QUERY, but it is an array of label, and "
+                + "a repeated query value carries a scalar", refused.getMessage());
+    }
+
+    /**
+     * A response header's variable is judged through the landing of the field's type: {@code badged}'s {@code code}
+     * is {@code code_ref}, an extern of {@code tags-1.tn}'s {@code code}, a {@code text}, so it expands, though {@code
+     * keys-1.tn}'s own {@code code} is a record; its {@code label} lands on {@code tags-1.tn}'s record and is refused.
+     * Any array is refused there, its element type unread, so {@code coded}'s {@code codes} is refused as an array.
+     */
+    @Test
+    void aResponseHeaderJudgesAFieldTypedByAnExternWhereItLands() {
+        Route route = headed("badged", "{code}").routes().get(1);
+        assertEquals(Map.of("etag", "C-1"), route.expandResponseHeaders(field -> field.equals("code") ? "C-1" : null));
+
+        String declared = "'orders_http GET /v2/orders/{id}' declares the response header ";
+        assertEquals(declared + "'etag: {label}', but 'label' of 'order_key_v1' is a label_ref, which is not a scalar,"
+                + " and a header's variable expands from one scalar", assertThrows(IllegalArgumentException.class,
+                () -> headed("badged", "{label}")).getMessage());
+        assertEquals(declared + "'etag: {codes}', but 'codes' of 'order_key_v1' is an array, and a header's variable "
+                + "expands from one scalar", assertThrows(IllegalArgumentException.class,
+                () -> headed("coded", "{codes}")).getMessage());
+    }
+
+    /**
+     * {@link #KEYED} with {@code order_key_v1} an extern of {@code keys-1.tn}'s {@code request}, and {@code placement}
+     * spliced into the v1 endpoint.
+     */
+    static String keyedDescription(String request, String placement) {
+        return KEYED.replace("type: order_key }", "type: " + request + " }").replace(
+                "exchange: orders.exchanges.get_order_v1 }", "exchange: orders.exchanges.get_order_v1" + placement + " }");
+    }
+
+    /** {@link #keyedDescription}, read with {@code extra} declared in {@code keys-1.tn}. */
+    static TsonApiDescription keyed(String request, String extra, String placement) {
+        return readWithKeys(keyedDescription(request, placement), extra);
+    }
+
+    /**
+     * The description whose v2 endpoint answers {@code order_key_v1}, an extern of {@code keys-1.tn}'s {@code
+     * response}, with an {@code ETag} of {@code template}, read with {@link ExternExamples#TAGGED_KEYS} declared there.
+     */
+    static TsonApiDescription headed(String response, String template) {
+        return readWithKeys(description("", "  response_headers: { ETag => \"" + template + "\" }")
+                .replace("type: order_key }", "type: " + response + " }")
+                .replace("response: order_v2 }", "response: order_key_v1 }"), TAGGED_KEYS);
+    }
+
+    static TsonApiDescription readWithKeys(String description, String extra) {
+        Map<String, String> library = ExternExamples.library(description);
+        library.put(ExternExamples.KEYS, ExternExamples.keys(extra));
+        Tson tson = OrdersExamples.tson(library);
+        tson.resolve(description);
+        return TsonApiSchema.describedBy(tson, API);
     }
 
     // ── what the binder is asked ──

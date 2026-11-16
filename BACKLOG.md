@@ -167,16 +167,14 @@ The four entries are in build order.
   gains a [TSON-SCHEMA] §11 paragraph and §5.2 is unchanged), make that the rule here and delete `ChosenTypes` with its
   closure walk and the remainder-body rule, rather than keep a narrower copy refusing the kernel's and the layer's own
   records. A family declares the admitted set in the published description, where a client can read it.
-- [ ] **Resolve a type expression where the entry holding it is declared** — `Landed.entries()` answers a name with
-  the definition it lands on and drops the schema it landed in, so a name that definition writes is looked up in the
-  namespace the lookup started from. `RequestPlacement` and `notOneScalar` take it: a field typed by an extern of an
-  array or a map declared in a third schema has its element, key or value type resolved in the record's schema, found
-  as nothing (read as a built-in scalar) or as another entry. `ChosenTypes` carries each `Landed` and is not affected,
-  except that a record's subtypes are resolved in the landing's namespace, so a subtype only an importer of the foreign
-  schema declares is not seen. Fix: carry the landing with each definition and resolve each type expression in the
-  schema that declares the entry holding it, found by `TsonLinkedSchema.declaringIdentity(name)` and the registry's
-  linked schema for that identity; test with a request field typed by an extern of an array of records declared in a
-  third schema, placed in the query.
+- [ ] **A name that is a plain alias lands on its alias** — `Landed.of` follows alias hops only on the way to an extern:
+  `TsonLinkedSchema.landing` answers empty for a name that reaches no extern, and `Landed.of` then keeps the name as
+  written, so a name that is a plain alias within one schema lands on its `Alias` definition, which no check treats as a
+  record or a container. Measured: a request field typed by a local alias of a record (`span_alias => span` in
+  `keys-1.tn`) is admitted in the path. Not yet measured, from the same code: a request or response type that is a local
+  alias of a record is refused as "not a record", and `notOneScalar` admits a header variable over a field typed by such
+  an alias. To do: land a name past its alias hops where it reaches no extern, as it is past them where it does, with a
+  test per check.
 
 ## Documentation
 
