@@ -158,6 +158,8 @@ One line each; the note carries the why. Read the note before touching the code 
 - A URI atom reads to `io.ltr8.net.Iri`, not `java.net.URI`. (`binding.md`)
 - A JSON body is never peeked and never read into a `TsonValue`; its schema comes from `TSON-Schema` and its root type
   from the route. JSON `null` is `_` and is refused at `a?: T`. (`json-encoding.md`)
+- A schema document is TSON syntax only; JSON encodes data against the resolved form, so a schema-side form
+  (application, completion, `^`) never has a JSON spelling. (`json-encoding.md`)
 - The version is the one member of a message's binding this endpoint serves. `route` refuses a binding naming none of
   its versions, one naming two, and one naming no schema at all. No guessing fallback. Multiple constructors do not
   select a version. (`schema-versions.md`)

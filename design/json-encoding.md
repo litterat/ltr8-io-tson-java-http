@@ -5,6 +5,8 @@ JSON body cannot name, how a response is negotiated, and the shape of a problem 
 
 **Invariants**
 
+- A schema document is TSON syntax only; JSON encodes data against a schema's resolved form, never a schema or a
+  schema-side form (the rule below).
 - JSON is admitted only where the endpoint opted in, read by tson-java's `tson-json` built from the codec's own `Tson`,
   so one policy, one set of registered schemas and one application binding judge both encodings.
 - The JSON reader's bind context is the composed one with the kernel's vocabulary left unbound. Handed
@@ -18,8 +20,17 @@ JSON body cannot name, how a response is negotiated, and the shape of a problem 
   `application/problem+json` where the client admits that type.
 - JSON readers compile on the first read that names a schema, on a request thread; nothing is resolved there.
 
+**A schema document has one syntax, and JSON is not a second one.** A schema is written in TSON's schema grammar
+([TSON-SCHEMA] §12). JSON ([TSON-JSON] §3) is an encoding of *data* documents: a JSON document is a value read against
+the resolved form of a schema it names through `$import` or `TSON-Schema`, and it never encodes a schema document or a
+schema-side shorthand. A construction, an application such as `page<order>`, a composition, a refinement
+`!integer ^ { … }`, an incomplete entry and its completion exist only in schema syntax: a JSON body carries the value
+they resolve to, written flat, and nothing in Part 3 spells them. This project serves a schema document as the TSON
+bytes it was published as (`TsonSchemaCatalog`), never as JSON. A new schema-side form therefore needs no JSON spelling,
+and asking for one is a sign the form has been put at the wrong layer.
+
 **JSON is read by the JSON reader and written by the JSON writer, and only where the endpoint opted in.** TSON is
-JSON-*like* and **is not a JSON superset** ([TSON-DATA] §6); JSON is a second encoding of the same model, defined by
+JSON-*like* and **is not a JSON superset** ([TSON-DATA] §6); JSON is a second encoding of the same data model, defined by
 **[TSON-JSON]** (spec Part 3) with its own media type, `application/tson+json`. `acceptingJson()` admits that,
 `application/json` and any other `+json` type, and reads all of them with tson-java's **`tson-json`**. The
 `Json` it uses is built from the codec's own `Tson`: the same processor policy and registered schemas, and the

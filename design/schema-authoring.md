@@ -9,6 +9,7 @@ touches, and the schema-language rules that read like bugs when they bite. Curre
   application keeps numbered names on purpose.
 - A header is `!!id`, then `!!import`s; a schema's root is `!schema { … }`. A data document imports its schemas and its
   root names its type. `!!meta` and `!!schema` are parse errors.
+- A schema is TSON syntax only; JSON encodes data against its resolved form (`json-encoding.md`).
 - A schema sees its own entries and its import closure, nothing else: importing nothing, it does not see `text`.
 - `.tn`, never `.tn1`. A revision bump is one substitution across every identity; the check is that no `2026/<previous>`
   string survives and the build is green.
