@@ -24,7 +24,8 @@ endpoint; `status` already defaults to 200; a template cannot fix `response`, si
 `response` holds a type reference as its value; and `@service.safe` sits on the verb key, which a type does not carry.
 What paged lists share is a payload shape, and `page => <T> { items: [T]  next_page?: int32 }` with `order_list =>
 page<order>` says it today with no change to the layer. **Recommended verdict: not proposed.** Writing the operation
-out is cheaper than the machinery, and the backlog item can close.
+out is cheaper than the machinery, and the backlog item can close. `proposal/value-references.md` supersedes this
+answer, sharing the facts in the document as a base value an endpoint completes rather than through a type.
 
 ## The question
 
