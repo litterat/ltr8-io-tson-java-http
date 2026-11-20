@@ -167,14 +167,18 @@ The four entries are in build order.
   gains a [TSON-SCHEMA] §11 paragraph and §5.2 is unchanged), make that the rule here and delete `ChosenTypes` with its
   closure walk and the remainder-body rule, rather than keep a narrower copy refusing the kernel's and the layer's own
   records. A family declares the admitted set in the published description, where a client can read it.
-- [ ] **A name that is a plain alias lands on its alias** — `Landed.of` follows alias hops only on the way to an extern:
-  `TsonLinkedSchema.landing` answers empty for a name that reaches no extern, and `Landed.of` then keeps the name as
-  written, so a name that is a plain alias within one schema lands on its `Alias` definition, which no check treats as a
-  record or a container. Measured: a request field typed by a local alias of a record (`span_alias => span` in
-  `keys-1.tn`) is admitted in the path. Not yet measured, from the same code: a request or response type that is a local
-  alias of a record is refused as "not a record", and `notOneScalar` admits a header variable over a field typed by such
-  an alias. To do: land a name past its alias hops where it reaches no extern, as it is past them where it does, with a
-  test per check.
+- [ ] **A plain-alias payload type is named as what a read asks** — `PayloadType`, `payloadTypes()` and both
+  `boundClasses` forms, and `ChosenTypes`, name a plain alias as written. A TSON read of a root type that is a plain
+  alias, or an alias of an alias, asks the bind context for the entry the alias reaches. Measured: with the target bound
+  the read succeeds, and with only the alias name bound it is a 500 (`MissingBindingException: no bound Java class for
+  'receipt'`). So for such a type `boundClasses` warms nothing when the target is bound and a class no read uses when
+  the alias is, and `ChosenTypes` skips a bound request that is a plain alias of a record holding a dependent field:
+  `request: typed_note` is refused and `note_alias => typed_note` loads. Not measured, from reading the code:
+  `requireNoBindingByExternName` skips an alias of an extern a route names, since the entry is not an `Extern`. To do:
+  `payloadType`, `payloadTypes()`, `boundClasses` and `ChosenTypes` land past plain alias hops, naming the entry the
+  alias reaches in the schema declaring it, as an extern's landing already is; a class bound by the alias's own name
+  serves no TSON read and is refused at startup as a binding by an extern's local name is; measure the alias-of-an-extern
+  case in `requireNoBindingByExternName`; flip `TsonApiDescriptionTest.aPayloadTypeThatIsAPlainAliasIsNamedAsWritten`.
 
 ## Documentation
 

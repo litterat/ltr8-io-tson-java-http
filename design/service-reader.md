@@ -17,9 +17,11 @@ level, is `design/service-description.md`; everything HTTP, the projection, its 
   holds the server to it, and `notServedHere` with a reason is the only way out.
 - A claim names the declared verb and path template, never the path the framework registers.
 - A business error composes `problem.details`, fixes its status, and is written by the handler, not thrown.
-- A payload type named through an extern is judged as the entry it lands on, and each type expression in it in the
-  namespace of the landing that holds the entry writing it; `payloadTypes()` names it by that schema and the entry's
-  own name, what the binder is asked. A binding by the local name is refused.
+- A payload type named through an extern, or by a plain alias, is judged as the entry it lands on or reaches, and each
+  type expression in it in the namespace of the landing that holds the entry writing it; a refusal names the type as
+  written. `payloadTypes()` names an extern by its landing's schema and the entry's own name, what the binder is asked;
+  a plain alias is named as written, while a TSON read asks for the entry it reaches. A binding by an extern's local
+  name is refused.
 
 ## What the reader checks
 
@@ -50,10 +52,14 @@ placement and chosen types are the foreign record's. Each type expression is res
 writes it, hop by hop, so an array of a third schema has its element type looked up where the array is declared. The
 landing's namespace is enough even where its schema holds the entry by import: an import merges the declarer's whole
 namespace transitively and refuses a redefinition ([TSON-SCHEMA] §2.2.3), so no lookup of the declaring schema is made
-(`TsonApiDescriptionExternTest`). A route keeps the name written; `payloadTypes()` and `payloadType(ref)` give the
-`PayloadType`, the declaring schema's `!!id` and the entry's own name, which is what the binder is asked (by
-`identity()`) and what the codec reads the type under in either encoding. So a context binding `order_v1` binds
-nothing a read asks for, and is refused at startup (`design/binding.md`).
+(`TsonApiDescriptionExternTest`). A plain alias hop within a schema is followed the same way for the checks that judge
+a shape (`Landed.pastAliases()`): a request, response or error that is a plain alias of a record is that record, and a
+field typed by an alias of a record or array is no scalar (`TsonApiDescriptionTest`). A route keeps the name written;
+`payloadTypes()` and `payloadType(ref)` give the `PayloadType`, the declaring schema's `!!id` and the entry's own
+name, which for an extern's landing and a plainly named entry is what the binder is asked (by `identity()`) and what
+the codec reads the type under in either encoding. So a context binding `order_v1` binds nothing a read asks for, and
+is refused at startup (`design/binding.md`). For a plain alias the name is the alias as written, and a TSON read asks
+for the entry the alias reaches (`TsonApiDescriptionTest.aPayloadTypeThatIsAPlainAliasIsNamedAsWritten`).
 
 ## Wiring, and what a server derives
 
@@ -75,10 +81,10 @@ subtype binds; skipping it would serve the description with that projection's ro
   imports though none of its names enters the namespace. That is the catalog, so a referenced-but-unpublished schema is
   impossible, not merely tested for.
 - `boundClasses(bindings)`: what to `prepareToWrite`, from every request, response and error the endpoints name, each
-  looked up in a name-only map by its `PayloadType.name()`, the name a read asks. `boundClasses()` asks the
-  description's own `Tson` context instead, by the declaring schema and the name, so a context keyed by schema
-  (`TsonBindings.bySchema`) warms two versions' `order` as two classes. Hand-listing lets a new response type go
-  unwarmed, which costs only latency, so nothing reports it.
+  looked up in a name-only map by its `PayloadType.name()`, the name a read asks for an extern's landing or a plainly
+  named entry. `boundClasses()` asks the description's own `Tson` context instead, by the declaring schema and the
+  name, so a context keyed by schema (`TsonBindings.bySchema`) warms two versions' `order` as two classes.
+  Hand-listing lets a new response type go unwarmed, which costs only latency, so nothing reports it.
 
 **`TsonApiCoverage` holds a server to that contract at startup.** `serving(verb, path)` claims a declared endpoint and
 hands back its `Route`, so the path and media types come from the description wherever the framework can take them; an

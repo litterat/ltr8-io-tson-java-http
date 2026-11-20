@@ -965,6 +965,164 @@ class TsonApiDescriptionTest {
         return problems.getFirst().message();
     }
 
+    // ── a plain alias: judged as its target, named as written ──
+
+    /**
+     * Plain aliases within one schema, none reaching an extern, and the records whose fields they type: {@code sku}
+     * aliases {@code text} and {@code sku_alias} aliases {@code sku}; {@code ref_alias2} aliases {@code ref_alias},
+     * which aliases the protocol's record {@code order_ref}; {@code order_alias} a record, {@code orders_alias} an
+     * array of records, {@code sku_missing} the business error {@code sku_not_found}, which fixes 404.
+     */
+    static final String ALIASES = """
+          sku          => text
+          sku_alias    => sku
+          ref_alias    => order_ref
+          ref_alias2   => ref_alias
+          order_alias  => order
+          orders_list  => [order]
+          orders_alias => orders_list
+          sku_missing  => sku_not_found
+          by_sku       => { sku: sku_alias }
+          by_order     => { id: order_alias }
+          by_list      => { id: orders_alias }
+          by_tags      => { id: text  tags: [order_alias] }
+          by_skus      => { id: text  skus: [sku_alias] }
+          reply        => { id: text  order: order_alias  orders: orders_alias  sku: sku_alias }
+          reply_alias  => reply
+        """;
+
+    /** A description declaring {@link #ALIASES}, with one safe GET at {@code path} whose operation is {@code body}. */
+    static String aliased(String path, String body) {
+        return api(ALIASES + "a => !service.http { resources: { \"" + path + "\" => { @service.safe GET => "
+                + "!service.operation { " + body + " } } } }");
+    }
+
+    private static String refusedAliased(String path, String body) {
+        return assertThrows(IllegalArgumentException.class, () -> routes(aliased(path, body))).getMessage();
+    }
+
+    /**
+     * <b>A payload type that is a plain alias is named as the description writes it.</b> {@code payloadTypes()} and
+     * {@code payloadType(ref)} give the alias's own name in the schema declaring the alias, and both forms of {@code
+     * boundClasses} look a class up by that name, so a map binding {@code order_alias} warms its class and one
+     * binding only {@code order} warms nothing. The shape checks see past the alias; this naming is what they leave
+     * alone.
+     */
+    @Test
+    void aPayloadTypeThatIsAPlainAliasIsNamedAsWritten() {
+        String api = aliased("/o/{id}", "request: order_ref  response: order_alias");
+        TsonApiDescription described = routes(api);
+
+        assertEquals(List.of(new PayloadType(PROTOCOL_ID, "order_ref"), new PayloadType(API_ID, "order_alias")),
+                List.copyOf(described.payloadTypes()));
+        assertEquals(new PayloadType(API_ID, "ref_alias"), described.payloadType(TypeRef.of("ref_alias")));
+        assertEquals(new PayloadType(API_ID, "ref_alias2"), described.payloadType(TypeRef.of("ref_alias2")));
+        assertEquals(List.of(Order.class), described.boundClasses(Map.of("order_alias", Order.class)));
+        assertEquals(List.of(), described.boundClasses(Map.of("order", Order.class)));
+
+        assertEquals(List.of(Order.class), TsonApiSchema.describedBy(boundTson(api, Map.of("order_alias",
+                Order.class)), API_ID).boundClasses());
+        assertEquals(List.of(), TsonApiSchema.describedBy(boundTson(api, Map.of("order", Order.class)), API_ID)
+                .boundClasses());
+    }
+
+    private static Tson boundTson(String api, Map<String, Class<?>> application) {
+        Tson tson = tson(api, application);
+        tson.resolve(api);
+        return tson;
+    }
+
+    /**
+     * A request that is a plain alias of a record is placed as the record, past every hop: {@code ref_alias2} reaches
+     * {@code order_ref} through {@code ref_alias}, so its {@code id} binds the path segment. The route and {@code
+     * payloadTypes()} still name the alias.
+     */
+    @Test
+    void aRequestThatIsAPlainAliasOfARecordIsPlacedAsTheRecord() {
+        TsonApiDescription described = routes(aliased("/o/{id}", "request: ref_alias2  response: order"));
+        Route fetch = described.route(HttpVerb.GET, "/o/{id}").orElseThrow();
+
+        assertEquals(Map.of("id", Location.PATH), fetch.placement().fields());
+        assertEquals("ref_alias2", fetch.request().orElseThrow().name());
+        assertTrue(described.payloadTypes().contains(new PayloadType(API_ID, "ref_alias2")),
+                () -> "" + described.payloadTypes());
+    }
+
+    /**
+     * A field typed by a plain alias is judged in the path as what the alias reaches: an alias of a record is no
+     * scalar, and an alias of an array of records carries more than one value.
+     */
+    @Test
+    void aFieldTypedByAPlainAliasOfAContainerIsRefusedInThePath() {
+        assertEquals("'a GET /o/{id}' places 'id' in the PATH, but it is a order_alias, which is not a scalar",
+                refusedAliased("/o/{id}", "request: by_order  response: order"));
+        assertEquals("'a GET /o/{id}' places 'id' in the PATH, but it is an array, and a URL segment carries exactly "
+                + "one scalar", refusedAliased("/o/{id}", "request: by_list  response: order"));
+    }
+
+    /**
+     * And a field typed by a plain alias of a scalar is admitted there, past every hop: {@code sku_alias} reaches
+     * {@code text} through {@code sku}.
+     */
+    @Test
+    void aFieldTypedByAPlainAliasOfAScalarIsAdmittedInThePath() {
+        Route route = routes(aliased("/o/{sku}", "request: by_sku  response: order")).routes().getFirst();
+
+        assertEquals(Map.of("sku", Location.PATH), route.placement().fields());
+    }
+
+    /**
+     * An array's element type is judged past its plain alias: {@code [order_alias]} is an array of records, refused in
+     * the query, and {@code [sku_alias]} an array of scalars, admitted there.
+     */
+    @Test
+    void anArrayOfAPlainAliasIsJudgedByWhatTheAliasReaches() {
+        assertEquals("'a GET /o' places 'tags' in the QUERY, but it is an array of order_alias, and a repeated query "
+                + "value carries a scalar", refusedAliased("/o", "request: by_tags  response: order"));
+
+        Route route = routes(aliased("/o", "request: by_skus  response: order")).routes().getFirst();
+        assertEquals(List.of("id", "skus"), route.placement().at(Location.QUERY));
+    }
+
+    /**
+     * A response type that is a plain alias of a record expands a response header from the record's fields: {@code
+     * reply_alias} reaches {@code reply}, whose {@code sku} is a scalar through two hops.
+     */
+    @Test
+    void aResponseHeaderExpandsOverARecordReachedThroughAPlainAlias() {
+        Route route = routes(aliased("/o/{id}", "request: order_ref  response: reply_alias  "
+                + "response_headers: { ETag => \"{sku}\" }")).routes().getFirst();
+
+        assertEquals(Map.of("etag", "A-1"), route.expandResponseHeaders(field -> field.equals("sku") ? "A-1" : null));
+    }
+
+    /**
+     * A response header's variable over a field typed by a plain alias is judged as what the alias reaches: an alias
+     * of a record is no scalar, and an alias of an array is an array.
+     */
+    @Test
+    void aResponseHeaderOverAFieldTypedByAPlainAliasOfAContainerIsRefused() {
+        String declared = "'a GET /o/{id}' declares the response header ";
+        assertEquals(declared + "'etag: {order}', but 'order' of 'reply' is a order_alias, which is not a scalar, and "
+                + "a header's variable expands from one scalar", refusedAliased("/o/{id}", "request: order_ref  "
+                + "response: reply  response_headers: { ETag => \"{order}\" }"));
+        assertEquals(declared + "'etag: {orders}', but 'orders' of 'reply' is an array, and a header's variable "
+                + "expands from one scalar", refusedAliased("/o/{id}", "request: order_ref  response: reply  "
+                + "response_headers: { ETag => \"{orders}\" }"));
+    }
+
+    /**
+     * A business error that is a plain alias fixes the status the record it reaches fixes: {@code sku_missing} reaches
+     * {@code sku_not_found}, which fixes 404, and the route names the error as written.
+     */
+    @Test
+    void anErrorThatIsAPlainAliasFixesTheStatusItsTargetFixes() {
+        Route route = routes(aliased("/o/{id}", "request: order_ref  response: order  errors: [sku_missing]"))
+                .routes().getFirst();
+
+        assertEquals("sku_missing", route.errorFor(404).orElseThrow().name());
+    }
+
 
     // ── kept for comparison: an exchange as a TYPE, and the operation IS-A the exchange ──────────
 

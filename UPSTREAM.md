@@ -197,17 +197,23 @@ written in place, follow its `Alias` hops, cast to `RefBody` and call `memberNam
 place, one more shape the walk has to know. A pinned sibling and a discriminator, which narrow that set, are worked out
 again by hand from `FieldRole.FIXED` pins and `chain().subtypes()`. Two yes-or-no questions are answered only by
 exception. "Is this name the kernel's vocabulary" is `SchemaModelNameBinder.INSTANCE.resolve(name)` and
-`catch (DataBindException)`, the set it consults (`Vocabulary.NAMES`) being private. "Does this type bind" is
-`DataBindContext.getDescriptor(name)` and the same catch, which cannot tell a name no class is mapped to from a mapped
-class that cannot be analysed without asking `nameBinder().resolve(name)` the same way first.
+`catch (DataBindException)`, the set it consults (`Vocabulary.NAMES`) being private. The catch is also coarser than
+the question: `resolve` refuses a name the vocabulary holds and binds to no class (`text`, `schema`, `enum`, `set`)
+with the exception class it uses for a name outside the vocabulary, so the catch reads those as not vocabulary. "Does
+this type bind" is `DataBindContext.getDescriptor(name)` and a catch: an unmapped name is an `UnboundNameException` and
+a mapped class that cannot be analysed a plain `DataBindException`, so the two failures are told apart, though only by
+exception type.
 
-**The change:** public predicates for both (a vocabulary test on `SchemaModelNameBinder`, and a `DataBindContext`
-query answering with the descriptor or the reason as a value), and an accessor on the compiled schema for the types a
+**The change:** public predicates for both, answering by value rather than by exception (a vocabulary test on
+`SchemaModelNameBinder` that is true for every name the vocabulary holds, and a `DataBindContext` query answering with
+the descriptor or the reason as a value), and an accessor on the compiled schema for the types a
 dependent field admits, with a pin and a discriminator already applied: the set the reader judges a sibling against.
 
 **Workaround in place:** `ChosenTypes` does the alias walk, the cast and both catches, and
 `TsonHttpCodec.isKernelVocabulary` repeats the vocabulary catch to keep the kernel's names out of the JSON reader's bind
-context (item 2). Not yet pinned in `UpstreamGapsTest`.
+context (item 2). Pinned by `UpstreamGapsTest.whetherANameIsTheKernelsVocabularyIsAnsweredOnlyByACatch`,
+`UpstreamGapsTest.whetherATypeBindsIsAnsweredOnlyByAnException` and
+`UpstreamGapsTest.noAccessorAnswersTheTypesADependentFieldAdmits`.
 
 ---
 

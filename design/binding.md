@@ -8,7 +8,8 @@ are the server's own. Current form only.
 - A bound class is public. Bindings come from `TsonBindings.of(map)`, `of(map, profile)` or `bySchema(maps)`, never a
   hand-rolled `DataBindContext.builder()`.
 - A reader asks the binder for a type by the canonical identity of the schema declaring it and its name there, and for
-  an extern the entry it lands on, never the extern's local name. A name-only map answers every schema alike;
+  an extern the entry it lands on, never the extern's local name; a TSON read of a root type that is a plain alias asks
+  for the entry the alias reaches. A name-only map answers every schema alike;
   `bySchema` keys a map per schema, for two schemas declaring one name. A class bound by an extern's local name is
   refused at startup by `TsonApiDescription`.
 - One bind context per `Tson` binds a schema's value entries and a data document's values alike, so a vocabulary's

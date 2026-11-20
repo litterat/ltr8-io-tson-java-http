@@ -86,6 +86,11 @@ import java.util.regex.Pattern;
  * it where it is declared, the declaring schema and the entry's own name, which is what the binder is asked ({@link
  * PayloadType}).
  *
+ * <p><b>A payload type that is a plain alias</b>, reaching no extern, is judged as the entry the alias reaches past
+ * every hop, so a request, a response or an error aliasing a record is that record to its placement, its response
+ * headers and its status pin; a route and {@link #payloadTypes()} name it as written, the alias in the schema
+ * declaring it.
+ *
  * <p>The security schemes in force for an endpoint are resolved here too, {@link Route#security()}: the endpoint's
  * own {@code security} when it writes one, an empty one meaning open, else its projection's. The resolver judged
  * every name a scheme, and an api key carried in a header is held to RFC 9110's token grammar here, since its
@@ -326,8 +331,8 @@ public final class TsonApiDescription {
      * Each response header's template expands from the response value: every variable names a field of the response
      * type, and that field is one scalar, as a path segment's is. An endpoint with no response type -- a document, or
      * one answering no body -- has nothing to expand a variable from, so its headers are literals. A response type
-     * named through an extern is the foreign record it lands on, and each field's type is judged as what it lands on
-     * from that record's landing, past any further extern ({@link Landed}).
+     * named through an extern or a plain alias is the record it lands on, and each field's type is judged as what it
+     * lands on from that record's landing, past any further extern or plain alias ({@link Landed}).
      */
     private static void requireTemplatesExpand(String label, Map<String, String> headers, Optional<TypeRef> response,
                                                TsonLinkedSchema scope) {
@@ -339,7 +344,7 @@ public final class TsonApiDescription {
                             + variable + "' from -- a document's header, or one answering no body, is a literal");
                 }
                 String type = response.get().name();
-                Landed landed = Landed.of(scope, type);
+                Landed landed = Landed.of(scope, type).pastAliases();
                 if (!(landed.definition() instanceof RecordBody record)) {
                     throw new IllegalArgumentException(declared + ", but the response type '" + type + "' is not a "
                             + "record, so it has no field '" + variable + "'");
@@ -475,13 +480,13 @@ public final class TsonApiDescription {
     /**
      * Each business error by the status its type fixes ({@code sku_not_found => problem.details & { status: = 404
      * }}), which is what tells an error from the response by status alone. An error fixing none, or two errors
-     * fixing one, would leave a client unable to say which type a failure is. An error named through an extern fixes
-     * the status the foreign record it lands on fixes.
+     * fixing one, would leave a client unable to say which type a failure is. An error named through an extern or a
+     * plain alias fixes the status the record it lands on fixes.
      */
     private static Map<Integer, TypeRef> errorStatuses(String label, List<TypeRef> errors, TsonLinkedSchema scope) {
         Map<Integer, TypeRef> byStatus = new LinkedHashMap<>();
         for (TypeRef error : errors) {
-            int status = fixedStatus(Landed.of(scope, error.name()).definition()).orElseThrow(() ->
+            int status = fixedStatus(Landed.of(scope, error.name()).pastAliases().definition()).orElseThrow(() ->
                     new IllegalArgumentException("'" + label + "' names the error '" + error.name() + "', which "
                             + "fixes no status -- write `status: = <code>` on it, so a client can tell it from the "
                             + "response by status"));
@@ -569,7 +574,8 @@ public final class TsonApiDescription {
      * reader asks the bind context for its class ({@link PayloadType}). A type named through an extern is the foreign
      * entry it lands on, so {@code order_v1} and {@code order_v2}, externs of two schemas' {@code order}, are two
      * payload types named {@code order}, and a route still names each by its local name ({@link Route#response()},
-     * {@link #payloadType}).
+     * {@link #payloadType}). A plain alias reaching no extern is named as written, the alias in the schema declaring
+     * it, though a TSON read of it asks the bind context for the entry the alias reaches.
      *
      * <p>Not every one is a type the application binds: a parameter record bound only to be placed, or the {@code
      * problem.details} this library writes itself, may be named here and mapped by nobody. {@link #boundClasses} is the
@@ -581,8 +587,8 @@ public final class TsonApiDescription {
 
     /**
      * {@code type}, a name a route of this description writes, where it is declared: past its extern to the foreign
-     * entry it lands on, where it names one. Its {@link PayloadType#schemaId()} is the schema a body of the type is
-     * read under by its own name, in either encoding.
+     * entry it lands on, where it names one, and otherwise as written, a plain alias included. Its {@link
+     * PayloadType#schemaId()} is the schema a body of the type is read under by its own name, in either encoding.
      */
     public PayloadType payloadType(TypeRef type) {
         Landed landed = Landed.of(linked, type.name());

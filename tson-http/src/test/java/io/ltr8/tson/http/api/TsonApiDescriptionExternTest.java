@@ -188,6 +188,20 @@ class TsonApiDescriptionExternTest {
     }
 
     /**
+     * A plain alias inside the foreign schema is judged as what it reaches there: {@code aliased_span}'s {@code id} is
+     * {@code span_alias}, which {@code keys-1.tn} declares as an alias of its record {@code span}, so it is no scalar
+     * in the path, though the description declares neither name.
+     */
+    @Test
+    void aForeignFieldTypedByAForeignPlainAliasOfARecordIsRefusedInThePath() {
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> keyed("aliased_span",
+                "  span_alias   => span\n  aliased_span => { id: span_alias }\n", ""));
+
+        assertEquals("'orders_http GET /v1/orders/{id}' places 'id' in the PATH, but it is a span_alias, which is not a "
+                + "scalar", refused.getMessage());
+    }
+
+    /**
      * {@link #KEYED} with {@code order_key_v1} an extern of {@code keys-1.tn}'s {@code request}, and {@code placement}
      * spliced into the v1 endpoint.
      */

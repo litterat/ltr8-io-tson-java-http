@@ -1,6 +1,10 @@
 package io.ltr8.tson.http;
 
+import io.ltr8.bind.DataBindContext;
+import io.ltr8.bind.DataBindException;
+import io.ltr8.bind.DataClass;
 import io.ltr8.bind.DataNameBinder;
+import io.ltr8.bind.UnboundNameException;
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.BindMismatchException;
@@ -14,13 +18,18 @@ import io.ltr8.tson.base.policy.LimitsPolicy;
 import io.ltr8.tson.base.source.HttpSchemaSource;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
+import io.ltr8.tson.compiler.TsonCompiledSchema;
+import io.ltr8.tson.compiler.config.SchemaModelNameBinder;
 import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.json.Json;
+import io.ltr8.tson.schema.TsonLinkedSchema;
+import io.ltr8.tson.schema.meta.Alias;
 import io.ltr8.tson.schema.meta.ChoiceBody;
 import io.ltr8.tson.schema.meta.FieldRole;
 import io.ltr8.tson.schema.meta.Namespace;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.RecordField;
+import io.ltr8.tson.schema.meta.RefBody;
 import io.ltr8.tson.schema.meta.Top;
 import io.ltr8.tson.schema.meta.TypeInline;
 import io.ltr8.tson.schema.meta.TypeRef;
@@ -29,7 +38,10 @@ import io.ltr8.tson.schema.meta.ValueRef;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -1642,6 +1654,160 @@ class UpstreamGapsTest {
         assertInstanceOf(io.ltr8.tson.base.MissingBindingException.class, thrown);
         assertTrue(thrown.getMessage().contains("which cannot be analysed: Failed to resolve: Unable to find a valid"
                 + " data conversion for class: class java.lang.Object"), thrown.getMessage());
+    }
+
+    // ── open: what a dependent field's sender may name, and whether a name binds, through casts and catches ──
+
+    /**
+     * <b>Whether a name is the kernel's vocabulary is answered only by catching a {@link DataBindException} from
+     * {@code SchemaModelNameBinder.INSTANCE.resolve(name)}</b>: the set it consults is private, and no public method
+     * of {@code SchemaModelNameBinder} tests a name against it or hands it out. The catch answers a nearby question
+     * instead: a name the vocabulary holds and binds to no class ({@code text}) is refused with the same exception
+     * class as a name it does not hold ({@code order}), told apart only by the message, so the catch reads it as no
+     * vocabulary. {@code ChosenTypes} and {@code TsonHttpCodec} each carry the catch as {@code isKernelVocabulary}.
+     * {@code UPSTREAM.md}'s entry "What a dependent field's sender may name, and whether a name binds, are reached
+     * through casts and catches". Fails the day {@code SchemaModelNameBinder} answers membership by value.
+     */
+    @Test
+    void whetherANameIsTheKernelsVocabularyIsAnsweredOnlyByACatch() {
+        assertTrue(Arrays.stream(SchemaModelNameBinder.class.getMethods()).noneMatch(UpstreamGapsTest::testsMembership),
+                "SchemaModelNameBinder answers vocabulary membership now -- ask it in place of the catch, delete "
+                        + "ChosenTypes.isKernelVocabulary and TsonHttpCodec.isKernelVocabulary, update UPSTREAM.md's "
+                        + "entry and flip this");
+
+        assertEquals(RecordBody.class, assertDoesNotThrow(() -> SchemaModelNameBinder.INSTANCE.resolve("meta.record")));
+        DataBindException held = assertThrows(DataBindException.class,
+                () -> SchemaModelNameBinder.INSTANCE.resolve("text"));
+        DataBindException notHeld = assertThrows(DataBindException.class,
+                () -> SchemaModelNameBinder.INSTANCE.resolve("order"));
+        assertEquals(notHeld.getClass(), held.getClass(),
+                "a vocabulary name binding no class is refused apart from a name outside it now -- update UPSTREAM.md");
+        assertTrue(notHeld.getMessage().contains("is declared by neither the kernel"), notHeld.getMessage());
+        assertFalse(held.getMessage().contains("is declared by neither the kernel"),
+                "'text' is outside the vocabulary now: " + held.getMessage());
+    }
+
+    /**
+     * A public method that tests a name against a set or hands the set out: a {@code String} to {@code boolean}, or a
+     * collection or predicate taken with no argument. A method of any other shape is not this.
+     */
+    private static boolean testsMembership(Method method) {
+        Class<?>[] parameters = method.getParameterTypes();
+        Class<?> returned = method.getReturnType();
+        return parameters.length == 1 && parameters[0] == String.class && returned == boolean.class
+                || parameters.length == 0 && (Collection.class.isAssignableFrom(returned)
+                        || java.util.function.Predicate.class.isAssignableFrom(returned));
+    }
+
+    /** Mapped to {@code hidden} below; package-private, so binding cannot analyse it. */
+    record Unanalysable(int x) {
+    }
+
+    /**
+     * <b>Whether a type binds is answered only by an exception</b>: {@code DataBindContext.getDescriptor(namespace,
+     * name)} returns the descriptor or throws, and no public method of {@code DataBindContext} taking a name answers
+     * with anything but a descriptor, so the descriptor or the reason never arrives as a value. The two failures
+     * arrive as two exception types: a name no class is mapped to is an {@link UnboundNameException}, and a mapped
+     * class that cannot be analysed a plain {@link DataBindException} naming the class. {@code ChosenTypes} catches
+     * both, and asks {@code nameBinder().resolve} the same way first to name the reason. {@code UPSTREAM.md}'s entry
+     * "What a dependent field's sender may name, and whether a name binds, are reached through casts and catches".
+     * Fails the day a query by name answers by value.
+     */
+    @Test
+    void whetherATypeBindsIsAnsweredOnlyByAnException() {
+        assertTrue(Arrays.stream(DataBindContext.class.getMethods()).noneMatch(UpstreamGapsTest::asksByNameForAValue),
+                "DataBindContext answers whether a name binds by value now -- ask it in place of the catches in "
+                        + "ChosenTypes.binds and ChosenTypes.whyNot, delete them, update UPSTREAM.md's entry and flip this");
+
+        DataBindContext context = TsonBindings.of(Map.of("point", Point.class, "hidden", Unanalysable.class));
+        assertDoesNotThrow(() -> context.getDescriptor(NOTES_ID, "point"));
+        DataBindException unmapped = assertThrows(DataBindException.class,
+                () -> context.getDescriptor(NOTES_ID, "secret"));
+        assertInstanceOf(UnboundNameException.class, unmapped,
+                "an unmapped name arrives as a plain DataBindException now -- update UPSTREAM.md's entry");
+        DataBindException unanalysable = assertThrows(DataBindException.class,
+                () -> context.getDescriptor(NOTES_ID, "hidden"));
+        assertFalse(unanalysable instanceof UnboundNameException,
+                "an unanalysable class arrives as an unbound name now -- update UPSTREAM.md's entry");
+        assertTrue(unanalysable.getMessage().contains("'hidden' binds " + Unanalysable.class.getName()
+                + ", which cannot be analysed"), unanalysable.getMessage());
+    }
+
+    /** A public method taking a name, alone or with its namespace, and answering anything but a descriptor. */
+    private static boolean asksByNameForAValue(Method method) {
+        Class<?>[] parameters = method.getParameterTypes();
+        return parameters.length >= 1 && parameters.length <= 2
+                && Arrays.stream(parameters).allMatch(String.class::equals)
+                && method.getReturnType() != DataClass.class;
+    }
+
+    private static final String CHOSEN_ID = "https://s.example.com/2026/40/chosen-1.tn";
+
+    /** A dependent field whose sibling reaches {@code meta.type_ref} through an alias of it. */
+    private static final String CHOSEN = """
+            !!id:"https://s.example.com/2026/40/chosen-1.tn"
+            !!import:"https://tson.io/2026/40/m/meta.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
+            !schema {
+                point      => { x: int32  y: int32 }
+                kind_alias => meta.type_ref
+                aliased    => { kind: kind_alias  payload: kind! }
+            }""";
+
+    /**
+     * <b>No accessor answers the types a dependent field admits</b>, the set a sibling is judged against. {@code
+     * ChosenTypes} assembles it: the sibling's type looked up as an entry of the linked schema, its {@link Alias}
+     * hops followed, the body cast to {@link RefBody} and {@code memberNames()} read, with a pin and a discriminator
+     * worked out again from {@code FieldRole.FIXED} and {@code chain().subtypes()}. Here {@code aliased}'s sibling
+     * {@code kind_alias} reaches {@code meta.type_ref} in one hop, whose members hold {@code point} and the kernel's
+     * {@code meta.record}, and nothing on {@code TsonCompiledSchema}, {@code TsonLinkedSchema}, {@code RecordBody} or
+     * {@code RecordField} answers it. {@code UPSTREAM.md}'s entry "What a dependent field's sender may name, and
+     * whether a name binds, are reached through casts and catches". Fails the day one does, or the walk stops reaching
+     * a reference.
+     */
+    @Test
+    void noAccessorAnswersTheTypesADependentFieldAdmits() {
+        for (Class<?> holder : List.of(TsonCompiledSchema.class, TsonLinkedSchema.class, RecordBody.class,
+                RecordField.class)) {
+            assertTrue(Arrays.stream(holder.getMethods()).noneMatch(UpstreamGapsTest::answersAdmittedTypes),
+                    holder.getSimpleName() + " answers the types a dependent field admits now -- ask it in "
+                            + "ChosenTypes.offered in place of the alias walk and the RefBody cast, update UPSTREAM.md's "
+                            + "entry and flip this");
+        }
+
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(Map.of(CHOSEN_ID, CHOSEN)))));
+        tson.resolve(CHOSEN);
+        TsonLinkedSchema linked = tson.loader().resolveLinked(CHOSEN_ID);
+        RecordField kind = ((RecordBody) linked.schema().entries().get("aliased")).fields().get("kind");
+        assertEquals(Optional.of("kind"), ((RecordBody) linked.schema().entries().get("aliased")).fields()
+                .get("payload").sibling());
+        Top type = linked.schema().entries().get(assertInstanceOf(TypeRef.class, kind.type()).name());
+        int hops = 0;
+        while (type instanceof Alias(TypeRef target)) {
+            type = linked.schema().entries().get(target.name());
+            hops++;
+        }
+        assertEquals(1, hops);
+        List<String> members = assertInstanceOf(RefBody.class, type,
+                "the sibling's type no longer reaches a RefBody -- revisit ChosenTypes.offered").memberNames();
+        assertTrue(members.contains("point") && members.contains("meta.record"), () -> "" + members);
+    }
+
+    /**
+     * A public method answering a set of types for a dependent field: one whose name says so, or one taking a
+     * record's and a field's names (or the field itself) and answering a collection.
+     */
+    private static boolean answersAdmittedTypes(Method method) {
+        String name = method.getName().toLowerCase(java.util.Locale.ROOT);
+        if (name.contains("admit") || name.contains("chosen") || name.contains("candidate")
+                || name.contains("dependent")) {
+            return true;
+        }
+        Class<?>[] parameters = method.getParameterTypes();
+        return parameters.length >= 1 && Collection.class.isAssignableFrom(method.getReturnType())
+                && Arrays.stream(parameters).allMatch(type -> type == String.class || type == RecordField.class
+                        || type == RecordBody.class || type == io.ltr8.tson.schema.meta.TypeExpr.class);
     }
 
     // ── open: a record field's type through an accessor that throws on a dependent field ────────────────

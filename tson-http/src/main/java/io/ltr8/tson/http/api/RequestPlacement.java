@@ -51,6 +51,10 @@ import java.util.regex.Pattern;
  * in the schema declaring the entry holding it ({@link Landed}): an array's element type where the array is declared,
  * so a field typed by an extern of an array of records declared in a third schema is refused in the query, whatever
  * the request record's own schema declares under the element's name.
+ *
+ * <p>A plain alias is judged as the entry it reaches past every hop ({@link Landed#pastAliases()}): a request that
+ * aliases a record is placed as that record, a field typed by an alias of a record or an array is no scalar in the
+ * path, and an array of an alias of a record has no query spelling. A refusal names the type as it was written.
  */
 public record RequestPlacement(Map<String, Location> fields) {
 
@@ -61,9 +65,9 @@ public record RequestPlacement(Map<String, Location> fields) {
     private static final Pattern SEGMENT = Pattern.compile("\\{[+]?([^}]+)}");
 
     /**
-     * The placement of {@code request}'s fields at the endpoint {@code name}. A request reached through an extern is
-     * the foreign record it lands on; its fields' types are judged in the foreign schema, and each name such a type's
-     * definition writes in the schema declaring that definition ({@link Landed}).
+     * The placement of {@code request}'s fields at the endpoint {@code name}. A request reached through an extern or a
+     * plain alias is the record it lands on; its fields' types are judged in the schema declaring that record, and
+     * each name such a type's definition writes in the schema declaring that definition ({@link Landed}).
      *
      * @param scope the description, in whose namespace {@code request} is written
      */
@@ -71,7 +75,8 @@ public record RequestPlacement(Map<String, Location> fields) {
                                Optional<String> body, Optional<TypeRef> request, TsonLinkedSchema scope) {
         Map<String, RecordField> declared = new LinkedHashMap<>();
         // No request: no field is declared to judge, so the landing is never asked a name.
-        Landed landed = request.map(ref -> Landed.of(scope, ref.name())).orElseGet(() -> new Landed(scope, ""));
+        Landed landed = request.map(ref -> Landed.of(scope, ref.name()).pastAliases())
+                .orElseGet(() -> new Landed(scope, ""));
         if (request.isPresent()) {
             TypeRef ref = request.get();
             if (!(landed.definition() instanceof RecordBody record)) {
@@ -152,7 +157,8 @@ public record RequestPlacement(Map<String, Location> fields) {
      * A URL segment carries exactly one scalar; a query parameter and a header may repeat, so either admits an
      * array of scalars as well -- {@code ?tag=a&tag=b} is ordinary HTTP, and refusing it would push a
      * multi-valued parameter into the body where no GET can carry it. A record, a map, a tuple, or an array of
-     * any of those has no spelling in any of the three. An array's element type is judged where the array is declared.
+     * any of those has no spelling in any of the three. An array's element type is judged where the array is declared,
+     * and a type named by a plain alias as what the alias reaches.
      *
      * @param request the landing of the record declaring {@code field}
      */
@@ -182,8 +188,8 @@ public record RequestPlacement(Map<String, Location> fields) {
     /**
      * Why {@code field} is not one scalar, if it is not: what a URL segment carries, and what a response header's
      * template expands a variable from. A dependent field, an array, a record, a map and a tuple are not. The field's
-     * type is judged as what it lands on, past its externs; an array is refused whatever its element type, so no name
-     * the landed definition writes is read.
+     * type is judged as what it lands on, past its externs and its plain alias hops; an array is refused whatever its
+     * element type, so no name the landed definition writes is read.
      *
      * @param record the landing of the record declaring {@code field}
      */
@@ -200,7 +206,7 @@ public record RequestPlacement(Map<String, Location> fields) {
 
     /**
      * A type's definition with the landing whose namespace resolves the names that definition writes: a named type's
-     * entry where it lands, a type written in place with the landing it was written in.
+     * entry where it lands past its plain alias hops, a type written in place with the landing it was written in.
      */
     private record Body(Top definition, Landed at) {
     }
@@ -209,7 +215,7 @@ public record RequestPlacement(Map<String, Location> fields) {
     private static Body body(TypeExpr type, Landed at) {
         return switch (type) {
             case TypeRef reference -> {
-                Landed landed = at.resolve(reference.name());
+                Landed landed = at.resolve(reference.name()).pastAliases();
                 yield new Body(landed.definition(), landed);
             }
             case TypeInline inline -> new Body(inline.of(), at);

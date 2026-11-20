@@ -35,8 +35,9 @@ unless registered or reachable through the configured source. From a `Tson`:
   so every kernel name binds to the schema model. It binds a schema's value entries and a data document's values
   alike (`design/binding.md`). `tson-json` given it whole binds nothing; `design/json-encoding.md` has the workaround.
   The vocabulary is `SchemaModelNameBinder` (`compiler.config`), the bind context for the schema model's classes: it
-  answers only for the names the bundled schemas declare and refuses the rest, which is how the codec asks whether a
-  name is the kernel's own.
+  answers only for the names the bundled schemas declare and bind to a class, and refuses the rest (a vocabulary name
+  bound to no class, as `text` or `schema`, is refused like a name outside it); that refusal is how the codec asks
+  whether a name is the kernel's own.
 - `resolve(schemaText)` / `validateSchema(schemaText)` — register a schema by its own `!!id`; the second collects
   rather than throws, and registers only a sound schema.
 - `validate(data)` — a data document, schemaless where it imports nothing. A document rooted `!schema` is refused as
