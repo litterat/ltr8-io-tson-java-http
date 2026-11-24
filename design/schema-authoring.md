@@ -130,6 +130,16 @@ URIs under `https://ltr8.io/2026/<revision>/http/problems/` move with them. **A 
 identities** — the header's directives, the path a bundled name is written by — so the substitution is the floor and
 the build is the check.
 
+The survivor search misses some things. The substitution reaches the orientation files too: the root and module
+`CLAUDE.md`s and `.claude/agents/code-editor.md` carry the identity prefix. Two things carry the revision without a
+`2026/` string: `tson.version` in `gradle.properties` (the included build ignores it, so only a `-Ptson.published=true`
+build notices a stale one) and prose naming the revision by number, as root `CLAUDE.md`'s "Built against" line does.
+One survivor is deliberate: `ExternProbeTest.anExternAcrossKernelRevisionsIsRefusedByIdentity` names an earlier
+revision's kernel to prove an extern across kernel revisions is refused. The `tson-data` and `tson-schema` skills are
+published per revision (tson.io's `<revision>/skills/`) and reach a session from outside this repo, so nothing here
+moves them; a session on an earlier revision's skills is taught that revision's header and forms. A bump checks the
+skills in use are the new revision's.
+
 
 ## Traps
 

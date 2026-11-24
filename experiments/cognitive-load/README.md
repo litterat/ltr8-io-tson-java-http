@@ -85,7 +85,7 @@ Phase 3 tool and is not built until a hypothesis calls for it.
 
 ## Phases
 
-1. **Baseline.** The existing syntax, Revision 39, measured feature by feature over the inventory. The output is the
+1. **Baseline.** The existing syntax, Revision 40, measured feature by feature over the inventory. The output is the
    per-feature profile.
 2. **Hypotheses.** Derived from the profile: which features are hard, and why (an operator overloaded, a convention
    carrying meaning, a distinction the syntax does not mark, an order dependence), naming feature and cause together.
