@@ -20,7 +20,7 @@ class: bound as `TsonApiSchema.bindings()` binds, naming the layer's records alo
 `bindingsWith` naming it, a name the server must know before the description resolves.
 
 The derived shape buys little. A list cannot be pinned (§5.2), so `media_types` stays per
-endpoint; `status` already defaults to 200; a template cannot fix `response`, since a parameter is a type and
+endpoint; `status` already defaults to 200; a parametric record cannot fix `response`, since a parameter is a type and
 `response` holds a type reference as its value; and `@service.safe` sits on the verb key, which a type does not carry.
 What paged lists share is a payload shape, and `page => <T> { items: [T]  next_page?: int32 }` with `order_list =>
 page<order>` says it today with no change to the layer. **Recommended verdict: not proposed.** Writing the operation
@@ -33,7 +33,7 @@ answer, sharing the facts in the document as a base value an endpoint completes 
 admit an endpoint shape declared in the description, so what every paged list shares is fixed once?
 
 ```
-paged_get => service.operation & { … }        # or a refinement, or an open record applied
+paged_get => service.operation & { … }        # or a refinement, or a parametric record applied
 "/orders" => { GET => !paged_get { response: order_page  request: order_query } }
 ```
 
@@ -51,7 +51,7 @@ and `order_page`.
 `meta.type_ref` is a reference atom, so `request` takes a pin. Each of these is refused with one diagnostic:
 
 - `status: = 200`, unmarked (`SCHEMA_ERROR`): *'paged_get': tightening 'status' from defaulted to required is not a
-  permitted state transition -- a refinement can only restrict, never expand (§5.7)*. The spelling is `status?: = 200`.
+  permitted state transition -- a refinement can only restrict, never expand (§5.8)*. The spelling is `status?: = 200`.
 - `media_types?: = ["application/tson"]` (`VALIDATION_ERROR`): *expected a scalar token, the void sentinel '_', or '?'
   after '=', found '['*. A value modifier is a scalar token (§5.2), so no list field is ever pinned.
 - `operation ^ { status?: = 200  request?: = order_query }`, or any body (`VALIDATION_ERROR`, a parse error): *'^'
@@ -64,10 +64,10 @@ and `order_page`.
 A composition adding a field, `operation & { page_size?: int32 }`, loads. Nothing refuses a field naming no inherited
 one, so a misspelt restatement (`statsu?: = 200`) adds a field too; its spelling is the author's to check.
 
-**A template cannot fix the response** (`aTemplateCannotFixAnOperationsResponse`). `paged => <T> operation & {
-response: T }` loads, since nothing is judged until it is applied. Applied:
+**A parametric record cannot fix the response** (`aParametricRecordCannotFixAnOperationsResponse`).
+`paged => <T> operation & { response: T }` loads, since what `T` decides is judged where it is applied. Applied:
 
-- `paged_orders => paged<order>`: *'paged_orders': not a valid restatement of 'operation''s fields (§5.7): field
+- `paged_orders => paged<order>`: *'paged_orders': not a valid restatement of 'operation''s fields (§5.8): field
   'response' is typed 'order', which is not 'meta.type_ref' or IS-A it*. `response: T` restates the field's type,
   where the shape wants its value fixed.
 - `paged => <T> operation & { response?: = T }`: *parameter 'T' stands at the value of field 'response'
@@ -75,7 +75,7 @@ response: T }` loads, since nothing is judged until it is applied. Applied:
 - `GET => !paged<order> { … }` (`VALIDATION_ERROR`): *'!paged<...>' applies type arguments, which are schema syntax
   and not available in a data value (§3.2) …*.
 
-So the question's third form is no form: the template that would parameterise an operation by its response does not
+So the question's third form is no form: the parametric record that would parameterise an operation by its response does not
 exist in the grammar.
 
 **At a slot the description declares** (`theDescriptionsSubtypeIsAdmittedAtItsOwnRecordsSlot`). With `wrapper => {
@@ -120,7 +120,7 @@ bound, and with `paged_get` bound to `Operation` the one diagnostic `BIND_MISMAT
 …Operation do not agree: no component for field 'page_size' …*. The mismatch is the type's, so leaving the field out
 of a value does not help. In a data document the tree reader admits it and the object reader refuses it the same way.
 
-**What the sharing is** (`aTemplateOverTheResponseRecordSaysWhatPagedListsShare`). `page => <T> { items: [T]
+**What the sharing is** (`aParametricRecordOverTheResponseRecordSaysWhatPagedListsShare`). `page => <T> { items: [T]
 next_page?: int32 }`, `order_list => page<order>` and a plain `!operation { request: order_query  response: order_list
 }` at the layer's slot load and bind in the description's value entry, with no change to the layer.
 
@@ -170,7 +170,7 @@ that loads composes `service.operation` as it stands.
 
 ## Not proposed
 
-- **An open record over an operation** (`paged<T>`): the grammar has no way to substitute a parameter into a field's
+- **A parametric record over an operation** (`paged<T>`): the grammar has no way to substitute a parameter into a field's
   value (§5.10), and substituting it into the type is refused as no `meta.type_ref`.
 - **A list pin for `media_types`**: §5.2 restricts value modifiers to scalar tokens in v1; asking for a list pin
   is spec work for one convenience.
@@ -185,8 +185,8 @@ that loads composes `service.operation` as it stands.
    `theRealLayerAdmitsADescriptionsOwnOperation` pin the admission and the bound read.
 2. Fold those pins into `UpstreamGapsTest` if the layer ever depends on the behaviour; until then the probe holds
    them, as the record of why.
-3. Close the backlog item as not proposed, pointing here; the payload template is what a CRUD family should use, and
-   an example in `orders-types-1.tn` (`page => <T> …`) would show it.
+3. Close the backlog item as not proposed, pointing here; the payload's parametric record is what a CRUD family should
+   use, and an example in `orders-types-1.tn` (`page => <T> …`) would show it.
 
 ## Open questions
 
@@ -208,7 +208,7 @@ that loads composes `service.operation` as it stands.
 2. **Even working, it fixes little.** Of what a paged list shares, the composition can fix `status` (already 200) and,
    only where it is shared, `request`. It cannot fix `media_types` (no list pins), `response` (no value
    parameters), or `@service.safe` (a key annotation).
-3. **What a paged list does share is its payload**, and a response template (`page<T>`) with a shared query record
+3. **What a paged list does share is its payload**, and a response parametric record (`page<T>`) with a shared query record
    says it now, in the domain schema, with no change to the layer, the reader or the bindings.
 4. **It costs every reader.** The server and every conformance client would have to resolve a description's own
    types before they can tell what an endpoint is, where `!service.operation` says so at the tag.

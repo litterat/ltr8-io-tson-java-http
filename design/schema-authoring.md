@@ -144,8 +144,10 @@ the build is the check.
   kernel. Two more that bite: a default needs the name marked (`page?: int32 ~ 1`; `page: int32 ~ 1` is refused), and a pin
   on an unmarked name (`status: int32 = 404`) is a **marker** the document must write and is never injected — only `status?:
   int32 = 404` injects. A restated field cannot move from required to optional (`x?: int32` over `x: int32` is refused), but
-  it may take a default or a pin with its name marked (`x?: = 5` over `x: int32` loads and injects); and a restated field's
-  type is the inherited one or a type IS-A it ([TSON-SCHEMA] §5.7, judged at link), so `int32` does not restate a choice
+  it may take a default or a pin with its name marked (`x?: = 5` over `x: int32` loads and injects), but a pin once
+  written is never changed by a restatement, only restated as itself, `= 255` for `= 0xFF` included ([TSON-SCHEMA] §5.8);
+  and a restated field's
+  type is the inherited one or a type IS-A it ([TSON-SCHEMA] §5.8, judged at link), so `int32` does not restate a choice
   holding it. A type written in place is IS-A nothing but itself and narrows only to an equal one, so `[int8]` does not
   restate `[int32]`; and a name never restates as its construction or the reverse: over `text_list => [text]`, a field `tags:
   text_list` is not restated `tags: [text]`. Bound values cannot tell the three optional-ish spellings apart; only a tree
@@ -155,6 +157,10 @@ the build is the check.
   error naming `name & { … }` ([TSON-SCHEMA] §5.5, §5.8). A composition body is field definitions, and it admits a new
   field where nothing refuses a misspelt restatement, so `operation & { statsu?: = 200 }` adds a field and the author
   checks a restated field's spelling.
+- **A namespace's `key_type`, or a record's `name_type`, whose profile admits `.` is refused at load.** A reference
+  splits at each dot and every segment is a name of the family it enters ([TSON-SCHEMA] §4.2, §5.12), so a family
+  holding a dot could name a key no reference reaches. A concrete path (`/.well-known/tson-deployment`) cannot key a
+  namespace, which is why `service.resources` is a plain map (`design/http-projection.md`, "A path is not a name").
 - **A `text` field accepts any token, including `42`, `true` and `2026-01-01`.** It rejects only what is
   not a token at all — an array, a record. Correct per spec, and it reliably reads as a bug: [TSON-DATA]
   §4 says base type resolution does not apply at a schema-typed position, and §7.1's "form is not meaning"
@@ -168,8 +174,8 @@ the build is the check.
   `date`, `time`, `period`, `uuid`, `email`, `host`, `hostname`, `uri`, `uri_reference`, `media_type`, `title`,
   `comment` among them — and the map names `meta`, `atom`, `numeric`, `unicode`, `net`, `binary`, `temporal`. A schema
   importing `policy.tn`, as `deployment.tn` does, reserves the map name `policy` too. So an application type is
-  never named after one. The bundled roots are kept to what an author writes, so `record`, `identifier`, `field_name`
-  and `kind` stay free. Core declares no sign bounds, no `non_empty_text` and no bare `identifier`, so a schema wanting
+  never named after one. The bundled roots are kept to what an author writes, so `record`, `identifier` and `kind`
+  stay free. Core declares no sign bounds, no `non_empty_text` and no bare `identifier`, so a schema wanting
   one declares it — `non_empty_text => !text ^ { min_length: 1 }`, `identifier => !unicode.identifier_type {
   continue_add: "-" }` — or writes `meta.identifier`. A schema naming one it never declared fails as *"field 'sku' has
   an unresolved reference 'non_empty_text'"*, which reads like a typo in the schema and is a library upgrade. A

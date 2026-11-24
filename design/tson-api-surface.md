@@ -54,8 +54,8 @@ unconfigured deployment gets), `of(source)`, `httpSchemas(hosts…)`, `fileSchem
 carrying a `FetchPolicy` beside the source. `registeredOnly()` is the shape the validator demo wants.
 
 **The shared vocabulary lives in `io.ltr8.tson.base`**, a module of its own, with the `Tson` prefix stripped —
-`Diagnostic`, `SourcePosition`, `DiagnosticsCollector`/`Receiver`, `CanonicalIdentity`, `ProcessorConfig`,
-`policy.IdentifierPolicy`/`ScriptPolicy`/`LimitsPolicy`/`ProcessorPolicy`,
+`Diagnostic`, `SourcePosition`, `DiagnosticsCollector`/`DiagnosticsReceiver`, `CanonicalIdentity`, `ProcessorConfig`,
+`policy.IdentifierPolicy`/`TokenPolicy`/`LimitsPolicy`/`ProcessorPolicy`,
 `source.SchemaSource`/`HttpSchemaSource`/`FileSchemaSource`,
 `bind.AtomContext`, and the exceptions. It is one vocabulary across both encodings by specification, which is
 why it is not in `tson-compiler`. **The classifying factories are in `tson-compiler`**: `TsonDiagnostics` there

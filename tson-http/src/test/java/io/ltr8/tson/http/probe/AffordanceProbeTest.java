@@ -59,7 +59,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * composing the endpoint base is admitted beside {@code binding} and {@code document}, its one {@code meta.ref} slot
  * reaching an event or a property through their common base, and an untagged endpoint is refused naming every
  * subtype. A namespace keyed by concrete paths needs an identifier family widened as {@code path_template} is; a text
- * family is refused as a key type and {@code meta.identifier} refuses the leading {@code /}. Read as a data document
+ * family is refused as a key type and {@code meta.identifier} refuses the leading {@code /}. A family admitting {@code
+ * .} is refused as a key type too, so a concrete path holding one, a well-known path or a schema's identity path, keys
+ * no namespace. Read as a data document
  * importing the description, an instance's objects arrive with their references delivered through the tree reader and
  * the object reader, but only while the document imports one schema: importing the description and a separate
  * instance vocabulary throws at the first reference walking a protocol's field.
@@ -76,10 +78,13 @@ class AffordanceProbeTest {
     /** The protocol record: required exchanges, and two optional sibling namespaces. */
     static final String PROTOCOL = "protocol => { exchanges: exchanges  properties?: properties  events?: events }";
 
-    /** The concrete-path key family: {@code path_template}'s character set without a template's braces. */
+    /**
+     * The concrete-path key family: {@code path_template}'s character set without a template's braces. Neither holds
+     * {@code .}, which no namespace's key type admits ([TSON-SCHEMA] §5.12).
+     */
     static final String CONCRETE = """
             concrete_path => !unicode.identifier_type {
-                start: NONE  start_add: "/"  continue_add: "/+%-._~!$&()*,;=:@"
+                start: NONE  start_add: "/"  continue_add: "/+%-_~!$&()*,;=:@"
                 pattern: "/([^%{}]|%[0-9A-Fa-f]{2})*" }""";
 
     /** The instance vocabulary over {@code concrete_path}: a tagged family of object kinds keyed by path. */
@@ -114,7 +119,7 @@ class AffordanceProbeTest {
               writable        => @meta.annotation void
               observable      => @meta.annotation void
               path_template   => !unicode.identifier_type {
-                start: NONE  start_add: "/"  continue_add: "/{}+%%-._~!$&()*,;=:@"
+                start: NONE  start_add: "/"  continue_add: "/{}+%%-_~!$&()*,;=:@"
                 pattern: "/([^%%{}]|%%[0-9A-Fa-f]{2}|\\\\{[+]?[A-Za-z0-9_]+\\\\})*" }
               http_verb       => !enum [GET PUT POST]
               endpoint        => { status?: integer  media_types?: [media_type] }
@@ -378,8 +383,7 @@ class AffordanceProbeTest {
               "/lamp/brightness"                 => !served_property { property: lamp.properties.brightness }
               "/rpc/lamp"                        => !served_interface { protocol: lamp }
               "/lamp/events"                     => !event_source { event: lamp.events.overheated }
-              "/.well-known/tson-deployment"     => !served_document { media_type: "application/tson" }
-              "/2026/40/io/ltr8/http/service.tn" => !served_document { media_type: "application/tson"
+              "/schemas/service"                 => !served_document { media_type: "application/tson"
                                                       identity: "https://tson.io/2026/40/io/ltr8/http/service.tn" }""");
 
     /** The diagnostics a tree read of {@code data} reports. */
@@ -397,9 +401,11 @@ class AffordanceProbeTest {
     /**
      * <b>A namespace keyed by concrete paths needs an identifier family widened to a path's characters</b>, as {@code
      * path_template} is. A text family with a {@code pattern} is refused as a namespace's key type. {@code
-     * meta.identifier} is accepted as one and refuses {@code /orders/42} at its first character. The widened family
-     * admits the root, a digit segment, a well-known path and a schema's identity path, and refuses a template
-     * variable, a relative path, a query and a mixed-script path, each naming the key.
+     * meta.identifier} is accepted as one and refuses {@code /orders/42} at its first character. A family admitting
+     * {@code .} is refused as a key type, since a name holding one could not be reached by a reference ([TSON-SCHEMA]
+     * §5.12), so the widened family leaves {@code .} out: it admits the root, a digit segment and a nested path, and
+     * refuses a template variable, a relative path, a query, a mixed-script path, a well-known path and a schema's
+     * identity path, each naming the key.
      */
     @Test
     void aConcretePathKeyIsAnIdentifierFamilyWidenedAsAPathTemplateIs() {
@@ -416,10 +422,22 @@ class AffordanceProbeTest {
         assertEquals("ATOM_FORM_INVALID: 'concrete_path': '/orders/42': U+002F at index 0 cannot start an identifier",
                 one(plain, "\"/orders/42\" => !served_exchange { exchange: orders.exchanges.get_order }"));
 
+        String dotted = layer(PROTOCOL, "  " + CONCRETE.replace("\"/+%-_~", "\"/+%-._~") + "\n" + INSTANCE);
+        Diagnostic dot = only(tson(dotted, DESCRIPTION).validateSchema(dotted));
+        assertEquals(Diagnostic.Code.SCHEMA_ERROR, dot.code());
+        assertEquals("'objects' key_type names 'concrete_path', which cannot name a namespace's keys -- its profile "
+                + "admits '.' (U+002E), which joins the segments of a qualified name, so a name holding one could not be "
+                + "reached by a reference ([TSON-SCHEMA] §5.12) ([TSON-SCHEMA] §4.2)", dot.message());
+
         Tson tson = tson(DESCRIPTION);
         assertEquals(List.of(), tson.validateSchema(DESCRIPTION));
         assertEquals(List.of(), read(tson, SERVED));
         String exchange = " => !served_exchange { exchange: orders.exchanges.get_order }";
+        String document = " => !served_document { media_type: \"application/tson\" }";
+        assertEquals("ATOM_FORM_INVALID: 'concrete_path': '/.well-known/tson-deployment': U+002E at index 1 cannot "
+                + "appear in an identifier", one(tson, "\"/.well-known/tson-deployment\"" + document));
+        assertEquals("ATOM_FORM_INVALID: 'concrete_path': '/2026/40/io/ltr8/http/service.tn': U+002E at index 29 "
+                + "cannot appear in an identifier", one(tson, "\"/2026/40/io/ltr8/http/service.tn\"" + document));
         assertEquals("ATOM_FORM_INVALID: 'concrete_path': '/orders/{id}': U+007B at index 8 cannot appear in an "
                 + "identifier", one(tson, "\"/orders/{id}\"" + exchange));
         assertEquals("ATOM_FORM_INVALID: 'concrete_path': 'orders/42': U+006F at index 0 cannot start an identifier -- "
@@ -457,8 +475,7 @@ class AffordanceProbeTest {
 
         Instance instance = tson.objectReader().read(SERVED, Instance.class);
         assertEquals("objects", instance.objects().type());
-        assertEquals(List.of("/", "/orders/42", "/lamp/brightness", "/rpc/lamp", "/lamp/events",
-                "/.well-known/tson-deployment", "/2026/40/io/ltr8/http/service.tn"),
+        assertEquals(List.of("/", "/orders/42", "/lamp/brightness", "/rpc/lamp", "/lamp/events", "/schemas/service"),
                 List.copyOf(instance.objects().keySet()));
         ServedExchange served = assertInstanceOf(ServedExchange.class, instance.objects().get("/orders/42"));
         assertEquals("order", served.exchange().get().response().orElseThrow().name());
@@ -469,7 +486,7 @@ class AffordanceProbeTest {
         assertEquals("heat", assertInstanceOf(EventSource.class, instance.objects().get("/lamp/events")).event().get()
                 .payload().name());
         assertEquals(Optional.of("https://tson.io/2026/40/io/ltr8/http/service.tn"), assertInstanceOf(
-                ServedDocument.class, instance.objects().get("/2026/40/io/ltr8/http/service.tn")).identity());
+                ServedDocument.class, instance.objects().get("/schemas/service")).identity());
 
         assertEquals("ATOM_CONSTRAINT_VIOLATION: 'meta.ref<exchange>': this reference names 'orders.exchanges.nope', "
                 + "and 'orders.exchanges' has no key 'nope' -- it holds get_order",

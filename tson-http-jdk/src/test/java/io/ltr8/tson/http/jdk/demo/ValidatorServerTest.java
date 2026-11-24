@@ -324,9 +324,9 @@ class ValidatorServerTest {
 
     /**
      * <b>The deployment descriptor is a decision, not a description, and this is where that shows.</b> The
-     * demo's descriptor sets {@code tokens: { level: SINGLE_SCRIPT }}, so a value mixing scripts is refused
-     * -- by this deployment, under a policy another one need not apply. Remove the setting and the same
-     * document conforms.
+     * demo's descriptor sets {@code token_policy: { level: SINGLE_SCRIPT  permitting: [] }}, so a value
+     * mixing scripts is refused -- by this deployment, under a policy another one need not apply. Lower the
+     * level to {@code UNRESTRICTED} and the same document conforms.
      */
     @Test
     void theDeploymentsTokenPolicyDecidesTheVerdict() throws Exception {

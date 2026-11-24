@@ -101,27 +101,28 @@ Exchanges are keys inside their protocol and endpoints are values under a path a
 operationId. `demo/schemas/orders-api-1.tn` binds a protocol in an http projection; `validate-api-1.tn` is web-service
 only, every endpoint inline.
 
-**The maps borrow namespaces TSON does not own**: exchange names, URL path templates, RFC 9110's verbs, header names.
-A key type is how a document borrows one, with **one naming role per borrowed namespace**, as the kernel has
-`type_name` and `field_name` over one grammar. A namespace's key is a name, so its role is an identifier family
-(`UpstreamGapsTest.aNamespaceKeyTypeMustBeAnIdentifierFamily`), `exchange_name => meta.identifier` or an
-`identifier_type` widened with `start_add` and `continue_add`. A plain map's key is no name, and its role may be a
-text family with a `pattern`, as `service.path_template` and `service.header_name` are. Which a key is follows from
-whether anything references it: a binding's reference walks into a protocol's exchanges, so they are a namespace and
-an exchange name is a name; nothing references a path or a header, so a projection's resources and an endpoint's
-response headers are plain maps, and a path is where the schema stops and HTTP begins. A role names itself in its refusal
-(`NameRoleTest`), and §8.2's hygiene refuses a mixed-script or confusable name, a namespace key's and never a text
-key's. So an exchange's identity is `(schema identity, qualified name)`, `…/orders-1.tn` and
-`orders.exchanges.place_order`, held as `ExchangeName`. The HTTP roles and their `ASCII_CASEFOLD` are
-`design/http-projection.md`.
+**The maps borrow namespaces TSON does not own**: exchange names, URL path templates, RFC 9110's verbs, header names. A key
+type is how a document borrows one, with **one naming role per borrowed namespace**, as the kernel has `type_name` and
+`param_name` over one grammar; a record stating no `name_type` has `meta.identifier`'s. A namespace's key is a name, so its
+role is an identifier family (`UpstreamGapsTest.aNamespaceKeyTypeMustBeAnIdentifierFamily`), `exchange_name =>
+meta.identifier` or an `identifier_type` widened with `start_add` and `continue_add`. A plain map's key is no name, and its
+role may be a text family with a `pattern`, as `service.path_template` and `service.header_name` are. Which a key is follows
+from whether anything references it: a binding's reference walks into a protocol's exchanges, so they are a namespace and an
+exchange name is a name; nothing references a path or a header, so a projection's resources and an endpoint's response
+headers are plain maps, and a path is where the schema stops and HTTP begins. A role names itself in its refusal
+(`NameRoleTest`), and §8.2's hygiene refuses a mixed-script or confusable name, a namespace key's and never a text key's. So
+an exchange's identity is `(schema identity, qualified name)`, `…/orders-1.tn` and `orders.exchanges.place_order`, held as
+`ExchangeName`. The HTTP roles and their `ASCII_CASEFOLD` are `design/http-projection.md`.
 
 **A namespace is a map composed to name keys**: `meta.map & { key_type: meta.identifier_ref  voidable?: = false }`, a
 composition restating `key_type` under a narrower type and pinning `voidable`, so its `key_type` is required and an
-identifier family and no value is `_`. A qualified name walks its keys, and a record
-value's field to reach one: `orders.exchanges.place_order` is the protocol's entry, its `exchanges` field and a key
+identifier family and no value is `_`. A family whose profile admits `.` is a resolver error as a key type, since a qualified
+name splits at each dot ([TSON-SCHEMA] §4.2, §5.12;
+`AffordanceProbeTest.aConcretePathKeyIsAnIdentifierFamilyWidenedAsAPathTemplateIs`). A qualified name walks its keys, and a
+record value's field to reach one: `orders.exchanges.place_order` is the protocol's entry, its `exchanges` field and a key
 (`UpstreamGapsTest.aReferenceThroughARecordValuesFieldIsJudged`), so `orders.place_order` is refused at load naming the
-fields a protocol declares (`TsonApiDescriptionTest.aTwoSegmentExchangeNameIsRefusedNamingTheField`). A record's
-fields are no namespace, and no qualified name reaches a field declaration.
+fields a protocol declares (`TsonApiDescriptionTest.aTwoSegmentExchangeNameIsRefusedNamingTheField`). A record's fields are
+no namespace, and no qualified name reaches a field declaration.
 
 **A protocol is a record holding a namespace.** A namespace type declares its facets and nothing else
 (`UpstreamGapsTest.aNamespaceTypeDeclaresOnlyItsFacets`), so a value of one is the map alone, with nowhere to write a
@@ -159,6 +160,6 @@ the second and concluding `@doc` is dropped looks exactly like a library bug
 
 ## What builds on the protocol, and is not built
 
-`experiments/rpc/` is its wire form, `call` and `return` as templates applied per exchange, outside `tson-http` once it
-lands. `experiments/agent/`, a plan of calls, is the draft of the LLM-facing projection (above): a consumer that is not
+`experiments/rpc/` is its wire form, `call` and `return` as parametric records applied per exchange, outside `tson-http` once
+it lands. `experiments/agent/`, a plan of calls, is the draft of the LLM-facing projection (above): a consumer that is not
 HTTP, pressing on the protocol for what a model needs. A decision that is a projection's alone lands in the projection.

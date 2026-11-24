@@ -22,21 +22,22 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Whether a layer importing the kernel -- the shape of {@code service.tn} -- can type a record field as a media
- * type value. Every test pins Revision 39's measured outcome; one failing after a library change means the answer has
+ * type value. Every test pins Revision 40's measured outcome; one failing after a library change means the answer has
  * moved.
  *
  * <p>The answer measured: yes. One namespace per schema lets a layer import {@code net.tn} and either name its {@code
  * media_type} or apply {@code !net.media_type_type} itself, and the value binds to a {@link String} or a {@link
  * MediaType} alike. What a layer cannot do is declare a {@code media_type} of its own beside {@code net.tn}'s, or have
  * a schema importing core and it: two declarations of one name in one closure collide. A kind slot over {@code
- * net.media_type_type} resolves too, and holds a type's name, never a value. Revision 38 answered no to each, a layer
- * reaching {@code meta.tn}'s constructors and {@code net.tn}'s types through neither its meta nor an import.
+ * net.media_type_type} resolves too, and holds a type's name, never a value: a quoted token there is read as the
+ * reference its text spells, so {@code "application/json"} is refused as no name.
  */
 class MediaTypeKindProbeTest {
 
@@ -183,8 +184,8 @@ class MediaTypeKindProbeTest {
     /**
      * <b>{@code meta.ref<net.media_type_type>} resolves at a layer importing {@code net.tn}, and holds a type's
      * name.</b> {@code media_type} is admitted, {@code host} is refused as built by another constructor, and the
-     * literal {@code "application/json"} is refused as no type name. Revision 38 refused the kind at the layer, its
-     * {@code of} naming no constructor of the governing meta.
+     * literal {@code "application/json"} is read as the reference its text spells ([TSON-DATA] §2.4) and refused as no
+     * name. The refusal names the token as written, not a parser event.
      */
     @Test
     void kindOfMediaTypeTypeHoldsATypeName() {
@@ -201,17 +202,20 @@ class MediaTypeKindProbeTest {
                 only(tson(KIND_LAYER, host, KindEp.class).validateSchema(host)).message());
 
         String literal = governed("\"application/json\"", CORE);
-        assertTrue(only(tson(KIND_LAYER, literal, KindEp.class).validateSchema(literal)).message()
-                .contains("expected a type's name, found TokenEvent[text=application/json"));
+        String refused = only(tson(KIND_LAYER, literal, KindEp.class).validateSchema(literal)).message();
+        assertEquals("'x': the body is no value of the type 'eps' -- at /one/media_types/0: "
+                + "'meta.ref<net.media_type_type>': 'application/json' is no reference -- 'application/json' is no name: "
+                + "'application/json': U+002F at index 11 cannot appear in an identifier", refused);
+        assertFalse(refused.contains("TokenEvent"), refused);
     }
 
     /**
      * <b>An application written as a tagged {@code meta.apply} at a kind slot is refused through a stream event's
      * {@code toString}.</b> {@code !meta.apply { head: order  arguments: [order] }} is no type's name, and the refusal
      * says so as {@code found TypeRef[name=meta.apply, position=Position[line=0, …]]}: the record rendering of {@code
-     * io.ltr8.tson.compiler.stream.TypeRef}, the tag's event, with a zero position, as the quoted token's refusal in
-     * {@link #kindOfMediaTypeTypeHoldsATypeName} renders its {@code TokenEvent}. {@code UPSTREAM.md}'s entry "A quoted
-     * token or a tag at a kind slot in a value body is refused through an event's {@code toString}"; the fragment
+     * io.ltr8.tson.compiler.stream.TypeRef}, the tag's event, with a zero position, where the quoted token's refusal in
+     * {@link #kindOfMediaTypeTypeHoldsATypeName} names the token as written. {@code UPSTREAM.md}'s entry "A tagged
+     * application at a kind slot in a value body is refused through an event's {@code toString}"; the fragment
      * asserted here flips when the tag is named as written.
      */
     @Test
@@ -229,12 +233,7 @@ class MediaTypeKindProbeTest {
      * <b>A kind over the kernel's {@code meta.atom} holds a type's name, never a value.</b> {@code media_type} reads to
      * the {@link TypeRef} {@code media_type}, and so does {@code host}: the kind cannot narrow to media types. A
      * record's name is refused as no atom, a name the closure does not declare as no type, and the literal {@code
-     * "application/json"} as no type name.
-     *
-     * <p>The literal's refusal names the token through the parser event's {@code toString}, a Java record's rendering
-     * carrying a zero position ({@code TokenEvent[text=application/json, …, position=Position[line=0, …]]}), rather
-     * than as the token written. Asserted here by the fragments either side of it, so a fix to that rendering does not
-     * fail this test.
+     * "application/json"}, read as the reference its text spells, as no name.
      */
     @Test
     void aKernelKindHoldsATypeNameAndRefusesAMediaTypeValue() {
@@ -260,10 +259,9 @@ class MediaTypeKindProbeTest {
         String literal = governed("\"application/json\"", CORE);
         Diagnostic problem = only(tson(ATOM_KIND_LAYER, literal, KindEp.class).validateSchema(literal));
         assertEquals(Diagnostic.Code.SCHEMA_ERROR, problem.code());
-        assertTrue(problem.message().startsWith("'x': the body is no value of the type 'eps' -- at /one/media_types/0: "
-                + "expected a type's name, found "), problem.message());
-        assertTrue(problem.message().endsWith("-- a position typed by a kind holds the name of a type, one bare "
-                + "token"), problem.message());
+        assertEquals("'x': the body is no value of the type 'eps' -- at /one/media_types/0: 'meta.ref<meta.atom>': "
+                + "'application/json' is no reference -- 'application/json' is no name: 'application/json': U+002F at "
+                + "index 11 cannot appear in an identifier", problem.message());
     }
 
     /** A schema importing core, typing one field by the kind and one by the type. */
@@ -314,7 +312,7 @@ class MediaTypeKindProbeTest {
         assertEquals("application/json", assertInstanceOf(MediaType.class, mediaType.value()).toString());
     }
 
-    // ── case 4: the Revision 38 compromise, a text_type with a pattern ──────────────────────────────────────────
+    // ── case 4: the compromise, a text_type with a pattern ──────────────────────────────────────────────────────
 
     static final String TEXT_LAYER = layer("media_type => !unicode.text_type { pattern: \"" + TOKEN + "/" + TOKEN
             + "\" }  ep => { media_types?: [media_type] }");
@@ -323,8 +321,7 @@ class MediaTypeKindProbeTest {
      * <b>The {@code text_type} compromise still reads, and the value is a {@link String}</b> -- but only where nothing
      * else in the closure declares {@code media_type}: a schema importing it and core meets the collision. Bound
      * through the schema's {@code eps} entry and read as a tree under the layer alike, and a record value standing as
-     * an entry of its own ({@code x => !ep { … }}) is a value entry. Revision 38 refused that entry, a record not
-     * being IS-A {@code top}.
+     * an entry of its own ({@code x => !ep { … }}) is a value entry.
      */
     @Test
     void theTextTypeCompromiseReadsAsAStringAndCollidesWithCore() {

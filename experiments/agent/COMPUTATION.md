@@ -5,9 +5,9 @@ schema system or the agent sketches ([`README.md`](README.md)), and nothing in t
 
 ## The idea
 
-TSON stays immutable: no assignment, and no computation beyond composition, refinement and template substitution. The
-agent sketches (`agent.tn`, `agent-vm.tn`) already show a way to use immutable data and schemas from something that
-computes: a plan is a TSON value typed by a schema, and running it is the interpreter's business.
+TSON stays immutable: no assignment, and no computation beyond composition, refinement and substitution into a parametric
+record. The agent sketches (`agent.tn`, `agent-vm.tn`) already show a way to use immutable data and schemas from something
+that computes: a plan is a TSON value typed by a schema, and running it is the interpreter's business.
 
 Generalised, that is a programming-language AST written in TSON. **TSON is the representation of programs, never their
 execution.** A program is an immutable, schema-typed value, and its computation lives in whatever interprets it. Data
@@ -44,7 +44,7 @@ keeps the shape/value invariant: types still never depend on values, only contro
 
 | layer | power | checked by | example |
 |---|---|---|---|
-| values and schemas | composition, refinement, template substitution | the dependency model | today's TSON |
+| values and schemas | composition, refinement, parametric-record substitution | the dependency model | today's TSON |
 | total expressions | no unbounded recursion; always terminates | one pass | constraints and policies, in the spirit of CEL or Dhall |
 | plans | straight-line; effects only through calls | one forward pass | `agent.tn`, `agent-vm.tn` |
 | programs | structured branching, loops, functions | a real type checker | a Truffle-style interpreter |

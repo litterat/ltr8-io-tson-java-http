@@ -111,7 +111,7 @@ Each level is a named entry: a composition is declared, never written in place (
 `!int32 ^ { max: 5 }` is no type at a field's position (§5.3), so it is declared and named too.
 
 - The agent's request must validate against the delegated type. That's a check the validator already makes.
-- A restated field only narrows: [TSON-SCHEMA] §5.7 checks its type is the inherited one or IS-A it, and an atom
+- A restated field only narrows: [TSON-SCHEMA] §5.8 checks its type is the inherited one or IS-A it, and an atom
   refinement narrows facet by facet (a lower bound may rise, an upper bound may fall, a step may only tighten to a
   multiple). So **attenuation holds for every field the delegation restates**, the property capability tokens work hard
   for, and a further delegation composing this one can only narrow those fields again.

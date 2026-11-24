@@ -16,7 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * How to separate exchange names from {@code type_name}: declare a naming ROLE for the borrowed namespace, as the
- * kernel declares {@code type_name}, {@code field_name} and {@code param_name} -- all {@code => identifier}.
+ * kernel declares {@code type_name} and {@code param_name} -- each {@code => identifier}. A record's field names
+ * take no role of their own: a record stating no {@code name_type} has {@code identifier}'s ([TSON-SCHEMA] §5.2).
  *
  * <p>Measured: a role declared in the meta layer ({@code exchange_name => identifier}) enforces the identifier
  * grammar at a map key and <em>names itself</em> in the refusal ("'exchange_name': 'place order': U+0020 …"), where
@@ -86,7 +87,8 @@ class NameRoleTest {
      * A namespace's keys are names, so a {@code text} key family is refused where the layer declares it: {@code
      * key_type} is an {@code identifier_ref}. A map keyed by {@code text} is still a map, and accepts anything --
      * it is just no namespace, so a qualified name does not enter it, and an entry in it is reached by location. A
-     * text-keyed namespace is not proposed in Revision 39, a qualified name's segment being an identifier.
+     * qualified name splits at {@code .}, each segment a name of the family it enters, so a key type admitting
+     * {@code .} is a resolver error ([TSON-SCHEMA] §5.2).
      */
     @Test
     void aNamespaceCannotBeKeyedByText() {

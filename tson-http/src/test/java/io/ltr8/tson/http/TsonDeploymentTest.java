@@ -4,7 +4,7 @@ import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.policy.IdentifierPolicy;
 import io.ltr8.tson.base.policy.ProcessorPolicy;
-import io.ltr8.tson.base.policy.ScriptPolicy;
+import io.ltr8.tson.base.policy.TokenPolicy;
 import io.ltr8.unicode.RestrictionLevel;
 import org.junit.jupiter.api.Test;
 
@@ -72,10 +72,10 @@ class TsonDeploymentTest {
         // `permitting` is the narrowest relaxation §8.2 offers: Cyrillic beside Latin, without dropping a
         // level and losing the rule everywhere else. A mixed Latin/Cyrillic name is refused at Moderately
         // Restrictive and admitted once that combination is named.
-        ScriptPolicy tokens = policy.tokenPolicy();
+        TokenPolicy tokens = policy.tokenPolicy();
         assertTrue(tokens.violation("аdmin").isEmpty(),
                 () -> "LATIN+CYRILLIC was permitted: " + tokens.violation("аdmin").orElse(""));
-        assertTrue(ScriptPolicy.moderatelyRestrictive().violation("аdmin").isPresent(),
+        assertTrue(TokenPolicy.moderatelyRestrictive().violation("аdmin").isPresent(),
                 "and is refused without it, or this asserts nothing");
     }
 
@@ -240,7 +240,7 @@ class TsonDeploymentTest {
     /**
      * <b>A token policy cannot be given a unit.</b> A value has no segments — {@code _} and {@code -} separate
      * a name's words and are ordinary characters in a value, so segmenting one would admit UTS #39's own
-     * {@code Toys-Я-Us} — and {@code policy.tn}'s {@code script_policy} has no {@code per_segment} to write.
+     * {@code Toys-Я-Us} — and {@code policy.tn}'s {@code token_policy} has no {@code per_segment} to write.
      */
     @Test
     void aTokenPolicyCannotBeGivenAUnit() {

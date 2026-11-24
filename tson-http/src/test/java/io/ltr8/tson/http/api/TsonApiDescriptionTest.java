@@ -708,9 +708,9 @@ class TsonApiDescriptionTest {
                 + "which has no field 'place_order' -- it declares exchanges",
                 only(projection("orders", List.of("orders.place_order"), post)));
 
-        assertEquals("'a' at /not_bound/0/exchange holds '42', which is no qualified name: each segment between the "
-                + "dots is an identifier, and '42' is not -- '42': U+0034 at index 0 cannot start an identifier -- an "
-                + "identifier never begins with a digit or a sign", only(projection("orders", List.of("42"), post)));
+        assertEquals("'a' at /not_bound/0/exchange holds '42', which is no qualified name -- '42' is no name: '42': "
+                + "U+0034 at index 0 cannot start an identifier -- an identifier never begins with a digit or a sign",
+                only(projection("orders", List.of("42"), post)));
     }
 
     /**
@@ -860,7 +860,8 @@ class TsonApiDescriptionTest {
     /**
      * A name in {@code security} is a reference the resolver judges at load: a type and a protocol are each refused
      * there, naming the slot, on a projection and on an endpoint alike; a scheme tagged with the abstract base is
-     * refused naming the subtypes.
+     * refused naming the subtypes, and without offering to omit the tag, since the base states no discriminators to
+     * place an untagged value by.
      */
     @Test
     void aSecurityNamingNoSchemeIsRefusedAtLoad() {
@@ -877,7 +878,7 @@ class TsonApiDescriptionTest {
 
         assertEquals("'k': the body is no value of the type 'service.security_scheme' -- a tag naming "
                 + "'service.security_scheme' selects nothing -- it is abstract and has no direct instances. Name the "
-                + "member this value is, one of (service.http_auth | service.api_key), or omit the tag",
+                + "member this value is, one of (service.http_auth | service.api_key)",
                 only(api("raw => { scheme: Bearer }\nk => !service.security_scheme { }")));
     }
 

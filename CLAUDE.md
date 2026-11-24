@@ -21,7 +21,7 @@ Each under ~20 KB and opening with its invariants. Pick by what you are about to
 | `TsonHttpCodec`, `TsonSchemaHeader`, `TsonSchemaCatalog`, peeks, `describing` | `codec.md` |
 | An adapter's error boundary, `negotiate`, committed responses, the concurrency suites | `adapters.md` |
 | `TsonHttpException.from`, a `Diagnostic.Code`, a problem `type`, the rank order, limits | `status-classification.md` |
-| Name hygiene, `IdentifierPolicy`/`ScriptPolicy`, a refusal under this deployment's policy, the token policy | `name-policy.md` |
+| Name hygiene, `IdentifierPolicy`/`TokenPolicy`, a refusal under this deployment's policy, the token policy | `name-policy.md` |
 | What tson-java offers and its concurrency contract (`Tson`, `ProcessorConfig`, `SchemaAccess`) | `tson-api-surface.md` |
 | A bound class, `TsonBindings`, `prepareToRead`, a 500 that should be a 400 or vice versa | `binding.md` |
 | `acceptingJson`, `application/json` bodies, `respondDescribed`, `application/problem+json` | `json-encoding.md` |
@@ -49,7 +49,7 @@ responses, and serving and fetching schema documents over HTTP. It is a **consum
 it. The library is the sibling repo [ltr8-io-tson-java](https://github.com/litterat/ltr8-io-tson-java), checked out at
 `../ltr8-io-tson-java` and consumed as a Gradle included build (below). Destination remote: `https://github.com/litterat/`.
 
-**Built against Revision 40**, on the sibling's `r2026-40-proposal` branch; CI checks out the sibling's default branch.
+**Built against Revision 40**, as published on the sibling's `main`, which CI checks out.
 Every identity in this repo carries `/2026/40/` and `tson.version` names `0.40.0-SNAPSHOT`. The revision series changes
 without compatibility guarantees, so a `git pull` of the sibling can move the whole identity space;
 `design/schema-authoring.md` says what a bump touches.

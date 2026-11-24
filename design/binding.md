@@ -90,7 +90,7 @@ are the server's own. Current form only.
   is a `BIND_MISMATCH` naming both hosts, which `prepareToRead` makes a startup failure
   (`UpstreamGapsTest.aValueReferenceIsDeliveredToAValueRefAndRefusedAtATypeRef`). A slot naming a type
   (`meta.type_ref`, `meta.ref<meta.record>`) binds to `TypeRef`, which is a name and never an application: an
-  application is `ApplyBody`, written in place only inside an open record.
+  application is `ApplyBody`, written in place only inside a parametric record.
 - **A URI atom reads to `io.ltr8.net.Iri`, not `java.net.URI`.** `uri`, `uri_reference`, `iri` and
   `iri_reference` all do, recognised to RFC 3986/3987 by `tson-net`, so `TsonValue.as(URI.class)` finds nothing;
   ask for `Iri` and read `text()`. A bound component may still declare `URI`.

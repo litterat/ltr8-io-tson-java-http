@@ -167,7 +167,7 @@ class UpstreamGapsTest {
     // ── decided upstream: a value differing per application is pinned where the application is declared ──
 
     /**
-     * <b>A template takes types, never values</b> ([TSON-SCHEMA] §5.10): an argument is a reference, so {@code
+     * <b>A parametric record takes types, never values</b> ([TSON-SCHEMA] §5.10): an argument is a reference, so {@code
      * resp<order, 201>} over {@code resp => <T, S> { status: int32 = S  body: T }} is a parse error at the {@code
      * 201}. A value that differs per application is written where the application is declared, {@code created =>
      * resp<order> & { status?: = 201 }}, and the restatement both carries 201 and enforces it: a document writing
@@ -224,16 +224,16 @@ class UpstreamGapsTest {
     /**
      * <b>A layer's declarations are names its importer may use, every kind of them.</b> A schema's namespace is
      * its own entries and every entry its {@code !!import}s bring in, one namespace with no second store for a
-     * layer's vocabulary ([TSON-SCHEMA] §2.2.3, §3.4), so an atom, a record, a namespace type and a template's
-     * application, each declared by the imported layer, all resolve where the importer names them. A template named
-     * bare is no type in either place, {@link #aTemplatesBareNameAsAFieldTypeIsRefused}.
+     * layer's vocabulary ([TSON-SCHEMA] §2.2.3, §3.4), so an atom, a record, a namespace type and a parametric
+     * record's application, each declared by the imported layer, all resolve where the importer names them. A
+     * parametric record named bare is no type in either place, {@link #aParametricRecordsBareNameAsAFieldTypeIsRefused}.
      */
     @Test
     void everyNameAnImportedLayerDeclaresResolvesInTheImporter() {
         String metaSource = meta("""
                   scalar => !integer ^ { min: 100  max: 599 }
                   plain  => { a: text }
-                  tmpl   => <T> { v: T }
+                  box    => <T> { v: T }
                   item   => { a: text }
                   ctor   => !meta.namespace { key_type: meta.identifier  value_type: item }""");
 
@@ -243,7 +243,7 @@ class UpstreamGapsTest {
                 new Case("an atom", "  x => { s: scalar }"),
                 new Case("a record", "  x => { s: plain }"),
                 new Case("a namespace type as a type", "  x => { s: ctor }"),
-                new Case("a template, applied", "  x => tmpl<text>"));
+                new Case("a parametric record, applied", "  x => box<text>"));
 
         for (Case one : cases) {
             String doc = governed(one.declaration());
@@ -251,9 +251,9 @@ class UpstreamGapsTest {
         }
     }
 
-    /** And the control: the same template declared locally applies fine. */
+    /** And the control: the same parametric record declared locally applies fine. */
     @Test
-    void aLocallyDeclaredTemplateApplies() {
+    void aLocallyDeclaredParametricRecordApplies() {
         String metaSource = meta("""
                   item => { a: text }
                   ctor => !meta.namespace { key_type: meta.identifier  value_type: item }""");
@@ -285,30 +285,31 @@ class UpstreamGapsTest {
                 thrown.getMessage());
     }
 
-    // ── decided upstream: a template takes no value, and an http projection is written out ──────────
+    // ── decided upstream: a parametric record takes no value, and an http projection is written out ──
 
     /**
-     * <b>A template's body is a record body</b> ([TSON-SCHEMA] §5.10), so a template over an http projection, {@code
-     * fetching => <T> !service.http { … }}, is refused at its declaration: a {@code !service.http { … }} is a value of
-     * the record type {@code service.http}, no type, and a template over a value is no record. The remedy the refusal
-     * names is one value per instantiation, which for an API description is the projection written out, {@code orders
-     * => !service.http { … }}, and that describes to its route the way any projection does. Asserted through {@link
-     * io.ltr8.tson.http.api.TsonApiDescription}, the consumer the projection is for.
+     * <b>A parametric record's body is a record body</b> ([TSON-SCHEMA] §5.10), so a parametric record over an http
+     * projection, {@code fetching => <T> !service.http { … }}, is refused at its declaration: a {@code !service.http {
+     * … }} is a value of the record type {@code service.http}, no type, and a parametric record over a value is no
+     * record. The remedy the refusal names is one value per instantiation, which for an API description is the
+     * projection written out, {@code orders => !service.http { … }}, and that describes to its route the way any
+     * projection does. Asserted through {@link io.ltr8.tson.http.api.TsonApiDescription}, the consumer the projection
+     * is for.
      */
     @Test
-    void aTemplateOverAnHttpValueIsRefused() {
+    void aParametricRecordOverAnHttpValueIsRefused() {
         String types = """
                   order     => { sku: text }
                   order_ref => { id: text }
                 """;
-        String template = types + """
+        String parametric = types + """
                   fetching  => <T> !service.http { resources: { "/orders/{id}" => {
                     @service.safe GET => !service.operation { request: order_ref  response: T } } } }
                   orders    => fetching<order>""";
 
         String refused = assertThrows(io.ltr8.tson.base.SchemaValidationException.class,
-                () -> resolveAgainstServiceMeta(template)).getMessage();
-        assertTrue(refused.contains("a template's body is a record body")
+                () -> resolveAgainstServiceMeta(parametric)).getMessage();
+        assertTrue(refused.contains("a parametric record's body is a record body")
                 && refused.contains("Declare one value per instantiation"), refused);
 
         String written = types + """
@@ -472,16 +473,19 @@ class UpstreamGapsTest {
                 + "key_type | value_type | voidable | ordered | min_items | max_items)"), problems.getFirst().message());
     }
 
-    // ── open: a reference inside an annotation's value is not judged ─────────────────────────────
+    // ── open: a reference inside an annotation's value is not judged in a schema document ─────────────
 
     /**
-     * <b>The resolver does not judge a reference inside an annotation's value.</b> A layer may declare an annotation
-     * whose value holds references -- {@code binds => @meta.annotation [meta.ref<protocol>]}, or a record carrying a
-     * {@code meta.ref<exchange>} -- and the value's <em>shape</em> is checked ({@code @binds:42} is refused), but no
-     * name in it is: an unknown protocol and an exchange key the protocol does not hold both load clean. The {@code
-     * [meta.ref<protocol>]} elements and the record's {@code meta.ref<exchange>} each arrive as a {@code ValueRef}
-     * holding the name and never delivered: {@code isResolved()} is false and {@code get()} throws, where the same
-     * reference in a field of a value entry is delivered when the schema links.
+     * <b>The resolver does not judge a reference inside an annotation's value in a schema document.</b> [TSON-SCHEMA]
+     * §5.12 puts an annotation's value among the slots a reference is judged at, so this is an implementation gap. A
+     * layer may declare an annotation whose value holds references -- {@code binds => @meta.annotation
+     * [meta.ref<protocol>]}, or a record carrying a {@code meta.ref<exchange>} -- and the value's <em>shape</em> is
+     * checked ({@code @binds:42} is refused), but no name in it is: an unknown protocol and an exchange key the
+     * protocol does not hold both load clean. The {@code [meta.ref<protocol>]} elements and the record's {@code
+     * meta.ref<exchange>} each arrive as a {@code ValueRef} holding the name and never delivered: {@code isResolved()}
+     * is false and {@code get()} throws, where the same reference in a field of a value entry is delivered when the
+     * schema links. {@code UPSTREAM.md}'s entry "A reference inside an annotation's value is not judged in a schema
+     * document".
      *
      * <p>{@code service.tn} holds no reference inside an annotation's value: an http projection's claims are fields of
      * {@code service.http}, judged at load and delivered, so nothing in this project depends on the gap. When it is
@@ -829,16 +833,16 @@ class UpstreamGapsTest {
     // ── decided upstream: an application at a kind slot in a value is named through a declaration ──
 
     /**
-     * <b>Not a gap -- the spec's design, pinned because it decides how an API description applies a template.</b> A
-     * slot typed by a kind holds the name of a type, one bare token, and a value holds no application: the braced
-     * record is refused as no type's name, and the sugar {@code page<order>} is a parse error at the {@code <}, the
-     * data grammar holding no argument list ([TSON-DATA] §7.2.5), so neither diagnostic names the remedy. The
+     * <b>Not a gap -- the spec's design, pinned because it decides how an API description applies a parametric
+     * record.</b> A slot typed by a kind holds the name of a type, one bare token, and a value holds no application:
+     * the braced record is refused as no type's name, and the sugar {@code page<order>} is a parse error at the
+     * {@code <}, the data grammar holding no argument list ([TSON-DATA] §7.2.5), so neither diagnostic names the remedy. The
      * declaration {@code order_page => page<order>} gives the application its entry, and its name is what the slot
      * holds. The sugar's refusal is the generic separator error, which {@code UPSTREAM.md}'s entry asks to name the form
      * ({@link #anApplicationInADataValueIsRefusedAsItsHeadThenASeparatorAndAsATagByItsRemedy}).
      */
     @Test
-    void aTemplateApplicationAtAKindSlotInAValueIsNamedThroughAnAlias() {
+    void anApplicationAtAKindSlotInAValueIsNamedThroughAnAlias() {
         String metaSource = meta("""
                   operation => { method: text  path: text  responses: [meta.type_ref] }
                   ops       => !meta.namespace { key_type: meta.identifier  value_type: operation }""");
@@ -1300,42 +1304,42 @@ class UpstreamGapsTest {
                 !schema { a => { b: c }  c => { } }"""));
     }
 
-    // ── fixed upstream, pinned here: a template's bare name as a field type is refused ───────────────
+    // ── fixed upstream, pinned here: a parametric record's bare name as a field type is refused ──────
 
     /**
-     * <b>{@code x => { s: tmpl }}, {@code tmpl} a template, is refused at the declaration</b> -- declared locally or
-     * brought by an import. No template is a type a position names ([TSON-SCHEMA] §5.10): the refusal says how many
-     * type arguments the template takes and names the remedy, {@code tmpl<...>}, so the slip is reported in the
-     * schema that made it rather than as every value at the field being refused.
+     * <b>{@code x => { s: box }}, {@code box} a parametric record, is refused at the declaration</b> -- declared
+     * locally or brought by an import. No parametric record is a type a position names ([TSON-SCHEMA] §5.10): the
+     * refusal says how many type arguments the parametric record takes and names the remedy, {@code box<...>}, so the
+     * slip is reported in the schema that made it rather than as every value at the field being refused.
      */
     @Test
-    void aTemplatesBareNameAsAFieldTypeIsRefused() {
+    void aParametricRecordsBareNameAsAFieldTypeIsRefused() {
         String local = """
-                !!id:"https://example.com/2026/40/app/bare-template.tn"
+                !!id:"https://example.com/2026/40/app/bare-parametric.tn"
                 !!import:"https://tson.io/2026/40/m/core.tn"
                 !schema {
-                  tmpl => <T> { v: T }
-                  x    => { s: tmpl }
+                  box => <T> { v: T }
+                  x   => { s: box }
                 }""";
         String library = """
-                !!id:"https://example.com/2026/40/app/bare-template-lib.tn"
+                !!id:"https://example.com/2026/40/app/bare-parametric-lib.tn"
                 !!import:"https://tson.io/2026/40/m/core.tn"
-                !schema { tmpl => <T> { v: T } }""";
+                !schema { box => <T> { v: T } }""";
         String importer = """
-                !!id:"https://example.com/2026/40/app/bare-template-importer.tn"
+                !!id:"https://example.com/2026/40/app/bare-parametric-importer.tn"
                 !!import:"https://tson.io/2026/40/m/core.tn"
-                !!import:"https://example.com/2026/40/app/bare-template-lib.tn"
-                !schema { x => { s: tmpl } }""";
+                !!import:"https://example.com/2026/40/app/bare-parametric-lib.tn"
+                !schema { x => { s: box } }""";
         Tson tson = Tson.of(ProcessorConfig.defaults().withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(
-                Map.of("https://example.com/2026/40/app/bare-template-lib.tn", library)))));
+                Map.of("https://example.com/2026/40/app/bare-parametric-lib.tn", library)))));
 
         for (String schema : List.of(local, importer)) {
             List<Diagnostic> problems = tson.validateSchema(schema);
             assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), problems.stream().map(Diagnostic::code).toList(),
                     () -> "" + problems);
             String message = problems.getFirst().message();
-            assertTrue(message.contains("'tmpl' is a template taking 1 type argument")
-                    && message.contains("a template is not a type -- write 'tmpl<...>'"), message);
+            assertTrue(message.contains("'box' is a parametric record taking 1 type argument")
+                    && message.contains("no position names a parametric record bare -- write 'box<...>'"), message);
         }
     }
 

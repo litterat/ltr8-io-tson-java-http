@@ -153,11 +153,11 @@ It fetches nothing. The submitted schema is served at its own `!!id` and every o
 reference in an untrusted document is an untrusted URL.
 
 It also runs under a **deployment descriptor** — the third artifact kind, beside a schema (what a document
-must be) and an API description (what an endpoint offers). Revision 34 added [TSON-DATA] §8.2's name-hygiene
-policies as a security control with no artifact, and a schema cannot hold one: an artifact that declared its
-own strictness would choose its own check, and §3.5 makes a published schema immutable while a policy has to
-move. So the descriptor is *data*, it is handed to the process rather than found, and no document may name
-one — which Revision 37 made the spec's own rule, bundling `policy.tn` as the policy's vocabulary. The demo's
+must be) and an API description (what an endpoint offers). [TSON-DATA] §8.2's name-hygiene policies are a
+security control with no artifact of their own, and a schema cannot hold one: an artifact that declared its own
+strictness would choose its own check, and §3.5 makes a published schema immutable while a policy has to move. So the
+descriptor is *data*, it is handed to the process rather than found, and no document may name one, which is the
+spec's own rule; `policy.tn` is the policy's bundled vocabulary. The demo's descriptor
 sets a token policy, which you can see refuse a document the default would accept:
 
 ```

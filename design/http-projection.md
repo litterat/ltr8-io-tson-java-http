@@ -19,8 +19,8 @@ projection binding it; the resolver-versus-reader split, the wiring, `TsonApiCov
   base, is refused by the resolver naming the subtypes. The tag selects `operation`, `binding` or `document`. A
   projection whose value did not bind is a startup failure (`design/service-reader.md`, "Wiring").
 - A path key is a `service.path_template`, an RFC 6570 template at levels 1 and 2 and a text family whose `pattern`
-  is ASCII-exact; it is no name, so no name hygiene reaches it and a key is held as written. No qualified name walks
-  a path key, and nothing references a resource or an endpoint.
+  is ASCII-exact and admits `.`; it is no name, so no name hygiene reaches it and a key is held as written. No
+  namespace could hold it, and nothing references a resource or an endpoint.
 - Each request record's fields are placed exactly once over the path, the query, the headers and the body; a field in
   the path, the query or a header is a scalar. A request or response named through an extern is the foreign record it
   lands on, and a plain alias of a record is that record; each field's type is resolved from the landing of the entry
@@ -59,13 +59,16 @@ verbs so that `method` names nothing in the layer.
 
 **A path is not a name.** It is where the schema stops and HTTP begins: a server matches it against a request's
 target, and nothing in a description references it, so `resources` is a plain map rather than a namespace and its key
-a text family with a `pattern`, as `service.header_name` is. The `pattern` is ASCII-exact, read in four classes and
-two forms: `/`, then any run of RFC 3986's unreserved characters `[A-Za-z0-9._~-]`, its sub-delimiters
-`[!$&'()*+,;=]`, `[:@/]`, a percent-encoded octet `%[0-9A-Fa-f]{2}` and an expression `\{[+]?[A-Za-z0-9_]+\}`.
+a text family with a `pattern`, as `service.header_name` is. A namespace could not hold these paths in any case: its
+`key_type` may not admit `.` ([TSON-SCHEMA] §4.2, §5.12), and a path holds one (`/.well-known/tson-deployment`, a
+schema's identity path). A map that is no namespace is not entered by a reference ([TSON-SCHEMA] §5.12). The
+`pattern` is ASCII-exact: `/`, then any run of RFC 3986's unreserved characters `[A-Za-z0-9._~-]`, its
+sub-delimiters `[!$&'()*+,;=]`, `[:@/]`, a percent-encoded octet `%[0-9A-Fa-f]{2}` and an expression
+`\{[+]?[A-Za-z0-9_]+\}`.
 Anything else, a bare `%`, `{` or `}` and every non-ASCII character included, is refused at the key, so
 percent-encoding is the one way a path carries another character. No normalization is stated, so a key is held as
-written, and no name hygiene applies (`UpstreamGapsTest.anHttpPathKeyIsJudgedByItsPatternAlone`). A qualified name
-walks a namespace's keys only, so none walks a path key; an endpoint is reached by location.
+written, and no name hygiene applies (`UpstreamGapsTest.anHttpPathKeyIsJudgedByItsPatternAlone`). An endpoint is
+reached by location.
 `TsonApiSchemaTest.aPathIsAUriTemplateCheckedAtSchemaLoad` lists what the pattern admits and refuses.
 
 **An endpoint is one of three kinds, and its tag says which.** `service.endpoint` is the `abstract` base, placement
@@ -109,7 +112,7 @@ protocol and the projection over it may look different. The reader checks it (`R
 **A request named through an extern is placed as the foreign record it lands on**: its fields are that record's, and
 each field's type is looked up where its declaration wrote it, so `id: span` in `keys-1.tn` is a record in the path
 though the description declares no `span`. At every hop, so an array declared in a third schema, or held by import, has
-its element type looked up there; a map is refused outright (`TsonApiDescriptionExternTest`).
+its element type looked up there; a map is refused (`TsonApiDescriptionExternTest`).
 
 A plain alias is followed past its hops before a shape is judged: a request that is a plain alias of a record is placed
 as that record (`TsonApiDescriptionTest.aRequestThatIsAPlainAliasOfARecordIsPlacedAsTheRecord`), a field typed by an
@@ -223,10 +226,11 @@ documents use it for a resource and write a protocol and a projection in full: a
 fields or keys and never both. A second required field on any of the three withdraws the positional form, and every
 document written in it stops parsing, so a new field there is optional or a new type.
 
-**A projection is a value of its own, never a template's application.** An endpoint is no entry, so the one thing a
-template could hold is a whole `!service.http` value, and a template's body is a record body ([TSON-SCHEMA] §5.10):
+**A projection is a value of its own, never a parametric record's application.** An endpoint is no entry, so the one
+thing a parametric record could hold is a whole `!service.http` value, and its body is a record body ([TSON-SCHEMA]
+§5.10):
 `fetching => <T> !service.http { resources: { "/orders/{id}" => { … response: T … } } }` is refused at its declaration,
-the diagnostic naming the remedy, one value per instantiation (`UpstreamGapsTest.aTemplateOverAnHttpValueIsRefused`).
+the diagnostic naming the remedy, one value per instantiation (`UpstreamGapsTest.aParametricRecordOverAnHttpValueIsRefused`).
 
 ## `Route`, and the conformance test
 

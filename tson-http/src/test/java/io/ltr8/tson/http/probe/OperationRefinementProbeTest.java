@@ -50,15 +50,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code status} or {@code request} load; {@code status: = 200} unmarked is refused as moving a default to required, and a
  * list cannot be pinned at all ([TSON-SCHEMA] §5.2). {@code ^} follows {@code !name} and takes values, so {@code operation ^
  * { … }} is a parse error and {@code !operation ^ { … }} a resolver error, each naming {@code operation & { … }}. A
- * composition adding a field loads, and a subtype adding one does not bind to the base's class. A template cannot fix an
- * operation's response: a parameter is a type, so {@code response: T} restates the field's type and is refused where it is
- * applied, and {@code response?: = T} is refused at the declaration. The description's own subtype is admitted, and binds to
+ * composition adding a field loads, and a subtype adding one does not bind to the base's class. A parametric record
+ * cannot fix an operation's response: a parameter is a type, so {@code response: T} restates the field's type and is
+ * refused where it is applied, and {@code response?: = T} is refused at the declaration. The description's own subtype
+ * is admitted, and binds to
  * the base's class once it is bound to it, wherever the slot is: at a record the description declares, at the layer's record
  * in the description's own value entry, and at the layer's record in a data document importing the description. The real
  * layer admits it the same way through {@code TsonApiSchema}, and {@code describedBy} reads the endpoint. The base is {@code
  * abstract}, as {@code service.endpoint} is, so a subtype bound to nothing leaves a value entry holding it a tree, which
  * {@code describedBy} refuses, and is a missing binding to the object reader in a data document. What paged lists share is a
- * response shape, and a template over the response record says it too.
+ * response shape, and a parametric record over the response record says it too.
  */
 class OperationRefinementProbeTest {
 
@@ -174,7 +175,7 @@ class OperationRefinementProbeTest {
      * refused</b>: a record derives by {@code &} alone. Empty, or pinning {@code status} and {@code request}, it loads:
      * a pin moves {@code status?: integer ~ 200} from DEFAULT to FIXED, and {@code request} is a {@code
      * meta.type_ref}, a reference atom, so it takes a value. Two spellings of a restated field are refused: {@code
-     * status: = 200} unmarked, which moves an injected field back to required (§5.7), and a pin on {@code
+     * status: = 200} unmarked, which moves an injected field back to required (§5.8), and a pin on {@code
      * media_types}, a list, which the grammar refuses at the {@code [} since a value modifier is a scalar token
      * (§5.2). {@code ^} follows {@code !name} and its body is values, so {@code operation ^ { … }} is a parse error
      * whatever its body, and {@code !operation ^ { … }} a resolver error, a record stating no rule for a body of values
@@ -189,7 +190,7 @@ class OperationRefinementProbeTest {
             assertEquals(List.of(), tson(schema, LAYER_BOUND).validateSchema(schema), form);
         }
         assertEquals("'paged_get': tightening 'status' from defaulted to required is not a permitted state transition "
-                        + "-- a refinement can only restrict, never expand (§5.7)",
+                        + "-- a refinement can only restrict, never expand (§5.8)",
                 refusal(schema("  paged_get => operation & { status: = 200 }"), LAYER_BOUND,
                         Diagnostic.Code.SCHEMA_ERROR));
         assertEquals("expected a scalar token, the void sentinel '_', or '?' after '=', found '['",
@@ -209,30 +210,30 @@ class OperationRefinementProbeTest {
     }
 
     /**
-     * <b>A template cannot fix an operation's response.</b> A parameter is a type, and {@code response} holds a type
-     * <em>reference</em> as its value. {@code paged => <T> operation & { response: T }} loads, since nothing is
+     * <b>A parametric record cannot fix an operation's response.</b> A parameter is a type, and {@code response} holds
+     * a type <em>reference</em> as its value. {@code paged => <T> operation & { response: T }} loads, since nothing is
      * judged until it is applied, but {@code response: T} restates the field's type, so {@code paged_orders =>
      * paged<order>} is refused: {@code order} is no {@code meta.type_ref}. Writing the parameter as the value, {@code
      * response?: = T}, is refused at the declaration (§5.10). A tag carries no arguments, so {@code !paged<order>} is
      * refused where it is written.
      */
     @Test
-    void aTemplateCannotFixAnOperationsResponse() {
-        String open = "  paged => <T> operation & { response: T }";
-        assertEquals(List.of(), tson(schema(open), LAYER_BOUND).validateSchema(schema(open)));
-        assertEquals("'paged_orders': not a valid restatement of 'operation''s fields (§5.7): field 'response' is typed "
+    void aParametricRecordCannotFixAnOperationsResponse() {
+        String parametric = "  paged => <T> operation & { response: T }";
+        assertEquals(List.of(), tson(schema(parametric), LAYER_BOUND).validateSchema(schema(parametric)));
+        assertEquals("'paged_orders': not a valid restatement of 'operation''s fields (§5.8): field 'response' is typed "
                         + "'order', which is not 'meta.type_ref' or IS-A it",
-                refusal(schema(open, "  paged_orders => paged<order>"), Map.of(), Diagnostic.Code.SCHEMA_ERROR));
+                refusal(schema(parametric, "  paged_orders => paged<order>"), Map.of(), Diagnostic.Code.SCHEMA_ERROR));
         assertEquals("parameter 'T' stands at the value of field 'response' (meta.record_field.value) -- a parameter is "
                         + "a type, and stands only at a field's type or as an argument of an application there or in "
                         + "a parent, so a field's value is never one (§5.10). State the value where the application "
-                        + "is declared: 'name => template<argument> & { response?: = value }'",
+                        + "is declared: 'name => head<argument> & { response?: = value }'",
                 refusal(schema("  paged => <T> operation & { response?: = T }"), Map.of(),
                         Diagnostic.Code.SCHEMA_ERROR));
         assertEquals("'!paged<...>' applies type arguments, which are schema syntax and not available in a data value "
                         + "(§3.2): a data type-ref is a bare name. Name the application in the schema ('my_type => "
                         + "paged<...>') and write '!my_type' here",
-                refusal(schema(open, http("!paged<order> { request: order_query }")), PAGED_BOUND,
+                refusal(schema(parametric, http("!paged<order> { request: order_query }")), PAGED_BOUND,
                         Diagnostic.Code.VALIDATION_ERROR));
     }
 
@@ -432,13 +433,13 @@ class OperationRefinementProbeTest {
     // ── what paged lists share ──────────────────────────────────────────────────────────────────────────────────
 
     /**
-     * <b>What paged lists share is a response shape, and a template over the response record says it today</b>, with
-     * no change to the layer: {@code page => <T> { items: [T]  next_page?: int32 }} and {@code order_list =>
+     * <b>What paged lists share is a response shape, and a parametric record over the response record says it</b>,
+     * with no change to the layer: {@code page => <T> { items: [T]  next_page?: int32 }} and {@code order_list =>
      * page<order>}, named by a plain {@code !operation} at the layer's slot, load and bind in the description's own
      * value entry.
      */
     @Test
-    void aTemplateOverTheResponseRecordSaysWhatPagedListsShare() {
+    void aParametricRecordOverTheResponseRecordSaysWhatPagedListsShare() {
         String schema = schema("  page => <T> { items: [T]  next_page?: int32 }", "  order_list => page<order>",
                 http("!operation { request: order_query  response: order_list }"));
         Tson tson = tson(schema, LAYER_BOUND);

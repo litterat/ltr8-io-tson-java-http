@@ -7,7 +7,7 @@ import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.policy.IdentifierPolicy;
 import io.ltr8.tson.base.policy.LimitsPolicy;
 import io.ltr8.tson.base.policy.ProcessorPolicy;
-import io.ltr8.tson.base.policy.ScriptPolicy;
+import io.ltr8.tson.base.policy.TokenPolicy;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.unicode.RestrictionLevel;
 
@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * How one instance is configured, read from a {@code deployment.tn} document.
@@ -66,7 +67,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
             "policy.restriction_level", RestrictionLevel.class,
             "policy.processor", Policy.class,
             "policy.identifier_policy", Policy.Identifiers.class,
-            "policy.script_policy", Policy.Scripts.class,
+            "policy.token_policy", Policy.Tokens.class,
             "policy.limits", Policy.Limits.class);
 
     /**
@@ -100,7 +101,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
      */
     @Typename(name = "policy.processor")
     public record Policy(@Field("identifier_policy") Identifiers identifierPolicy,
-                         @Field("token_policy") Scripts tokenPolicy,
+                         @Field("token_policy") Tokens tokenPolicy,
                          @Field("unicode_data_version") Optional<String> unicodeDataVersion,
                          Limits limits) {
 
@@ -108,21 +109,23 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
         public static Policy of(ProcessorPolicy policy) {
             IdentifierPolicy identifiers = policy.identifierPolicy();
             return new Policy(
-                    new Identifiers(identifiers.scripts().level(), identifiers.isPerSegment(),
-                            identifiers.appliesSkeletonDistinctness(), aliases(identifiers.scripts())),
-                    new Scripts(policy.tokenPolicy().level(), aliases(policy.tokenPolicy())),
+                    new Identifiers(identifiers.level(), identifiers.isPerSegment(),
+                            identifiers.appliesSkeletonDistinctness(), aliases(identifiers.permittedScripts())),
+                    new Tokens(policy.tokenPolicy().level(), aliases(policy.tokenPolicy().permittedScripts())),
                     Optional.of(policy.unicodeDataVersion()), Limits.of(policy.limits()));
         }
 
         /** This policy as the library's own type, stamped with the data version this processor carries. */
         public ProcessorPolicy toProcessorPolicy() {
-            IdentifierPolicy identifiers = IdentifierPolicy.of(scriptPolicy(identifierPolicy.level(),
-                    identifierPolicy.permitting()));
+            IdentifierPolicy identifiers = IdentifierPolicy.of(identifierPolicy.level());
+            for (List<String> combination : identifierPolicy.permitting()) {
+                identifiers = identifiers.permitting(scripts(combination));
+            }
             if (identifierPolicy.perSegment()) {
                 identifiers = identifiers.perSegment();
             }
             return ProcessorPolicy.of(identifiers.withSkeletonDistinctness(identifierPolicy.skeletonDistinctness()),
-                    scriptPolicy(tokenPolicy.level(), tokenPolicy.permitting()),
+                    tokenPolicy(tokenPolicy.level(), tokenPolicy.permitting()),
                     limits.toLimitsPolicy());
         }
 
@@ -141,14 +144,14 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
         }
 
         /**
-         * {@code policy.tn}'s {@code policy.script_policy}: a level and the script combinations admitted over it.
+         * {@code policy.tn}'s {@code policy.token_policy}: a level and the script combinations admitted over it.
          * It has no unit because a value has no segments — {@code _} and {@code -} separate a name's words and
          * are ordinary characters in a value — which the library makes unwritable rather than refused.
          */
-        @Typename(name = "policy.script_policy")
-        public record Scripts(RestrictionLevel level, List<List<String>> permitting) {
+        @Typename(name = "policy.token_policy")
+        public record Tokens(RestrictionLevel level, List<List<String>> permitting) {
             /** @throws IllegalArgumentException if {@code permitting} names something that is not a script */
-            public Scripts {
+            public Tokens {
                 permitting = canonical(permitting);
             }
         }
@@ -213,8 +216,8 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
         }
 
         /** Each admitted combination as UAX #24 aliases, sorted so two policies compare as text. */
-        private static List<List<String>> aliases(ScriptPolicy policy) {
-            return policy.permittedScripts().stream()
+        private static List<List<String>> aliases(List<Set<UnicodeScript>> permitted) {
+            return permitted.stream()
                     .map(scripts -> scripts.stream().map(Policy::alias).sorted().toList()).toList();
         }
 
@@ -245,13 +248,16 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
             }
         }
 
-        private static ScriptPolicy scriptPolicy(RestrictionLevel level, List<List<String>> permitting) {
-            ScriptPolicy policy = ScriptPolicy.of(level);
+        private static TokenPolicy tokenPolicy(RestrictionLevel level, List<List<String>> permitting) {
+            TokenPolicy policy = TokenPolicy.of(level);
             for (List<String> combination : permitting) {
-                policy = policy.permitting(combination.stream().map(UnicodeScript::forName)
-                        .toArray(UnicodeScript[]::new));
+                policy = policy.permitting(scripts(combination));
             }
             return policy;
+        }
+
+        private static UnicodeScript[] scripts(List<String> combination) {
+            return combination.stream().map(UnicodeScript::forName).toArray(UnicodeScript[]::new);
         }
 
         /**

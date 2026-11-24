@@ -140,7 +140,7 @@
 
     @doc:"""
       The naming roles of the namespaces this layer borrows -- one per namespace, as the kernel declares
-      `meta.type_name`, `meta.field_name` and `meta.param_name` over `meta.identifier`. A key typed by a role
+      `meta.type_name` and `meta.param_name` over `meta.identifier`. A key typed by a role
       enforces that namespace's grammar and names the namespace in the refusal ("'exchange_name': 'place
       order': U+0020 cannot appear in an identifier"), where `type_name` would misname the namespace doing the
       refusing. A namespace type's key is a name, so its role is an identifier family: where the authority's
@@ -210,9 +210,9 @@
       present and is not a record is refused too, since there would be nothing to distribute.
       """
     placement => {
-      query?:   [meta.field_name]
-      headers?: {meta.field_name => service.header_name}
-      body?:    meta.field_name
+      query?:   [meta.identifier]
+      headers?: {meta.identifier => service.header_name}
+      body?:    meta.identifier
     }
 
     @doc:"""

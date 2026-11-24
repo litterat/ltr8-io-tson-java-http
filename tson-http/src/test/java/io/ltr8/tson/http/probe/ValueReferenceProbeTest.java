@@ -151,8 +151,8 @@ class ValueReferenceProbeTest {
                         + "instances, so a value here is a value of one of (operation)",
                 refusal(schema(PAGED, http("!paged { response: order_page }")), Diagnostic.Code.SCHEMA_ERROR));
         assertEquals("'paged2': '!paged ^ { ... }' needs an atom instance, an array or a map type to narrow, or a "
-                        + "constructor of types to build from (§5.5), and 'paged' is kind=VALUE, which is finished and "
-                        + "takes no refinement",
+                        + "constructor of types to build from (§5.5), and 'paged' is a '!operation' value, which is "
+                        + "finished and takes no refinement",
                 refusal(schema(PAGED, "  paged2 => !paged ^ { response: order_page }"),
                         Diagnostic.Code.SCHEMA_ERROR));
     }

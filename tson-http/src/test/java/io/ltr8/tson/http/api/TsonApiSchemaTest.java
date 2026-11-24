@@ -359,7 +359,7 @@ class TsonApiSchemaTest {
         assertTrue(refused.contains("stauts"), refused);
     }
 
-    // ── templates, in the shipping design ──
+    // ── parametric records, in the shipping design ──
 
     private static final String PAGED = """
             !!id:"https://schemas.example.com/2026/40/app/orders-api-1.tn"
@@ -375,13 +375,13 @@ class TsonApiSchemaTest {
             }""";
 
     /**
-     * <b>Templates work, and an endpoint references an application by name.</b> {@code page<order>} is written once
-     * and applied, where OpenAPI hand-rolls the envelope per endpoint or bolts it on with {@code allOf}. The
-     * application is a real entry with structural identity (§8.2), so two endpoints returning a page of orders
+     * <b>Parametric records work, and an endpoint references an application by name.</b> {@code page<order>} is
+     * written once and applied, where OpenAPI hand-rolls the envelope per endpoint or bolts it on with {@code allOf}.
+     * The application is a real entry with structural identity (§8.2), so two endpoints returning a page of orders
      * share one.
      */
     @Test
-    void anEndpointReferencesATemplateApplication() {
+    void anEndpointReferencesAnApplication() {
         Tson tson = resolved(PAGED.formatted("order_page"));
         Route list = TsonApiSchema.describedBy(tson, API_ID).route(HttpVerb.GET, "/orders").orElseThrow();
         assertEquals("order_page", list.response().orElseThrow().name());
@@ -416,7 +416,7 @@ class TsonApiSchemaTest {
 
     /** A bad argument is caught where the application is spelled, which is the alias. */
     @Test
-    void aBadTemplateArgumentIsCaughtAtTheAlias() {
+    void aBadArgumentIsCaughtAtTheAlias() {
         assertTrue(assertThrows(RuntimeException.class,
                 () -> resolved(PAGED.formatted("order_page").replace("page<order>", "page<no_such>")))
                 .getMessage().contains("unresolved reference 'no_such'"));

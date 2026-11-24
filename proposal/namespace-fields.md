@@ -160,13 +160,18 @@ place_order => … }` and `!http { "/orders" => … }` resolve and bind as the f
 the field the document did not write, `orders.exchanges.place_order`. A projection writing `binds` cannot use it: a
 brace holding a field and then a key is a parse error, *expected a record field's ':', found '=>'* (`VALIDATION_ERROR`).
 
-**A path key is no qualified-name segment** (`aPathKeyIsNoQualifiedNameSegment`). A segment is an identifier
-([TSON-DATA] §7.7) and a path key starts with `/`. At `r: meta.ref<resource>`, `orders_http.resources."/orders"` is a
-`VALIDATION_ERROR`, *adjacent values must be separated by whitespace, a comma, or both*; the bare
-`orders_http.resources./orders` is *unrecognised character U+002F*. Read in a data document, the slot first reports
-`ATOM_FORM_INVALID`, *'meta.ref<resource>': 'orders_http.resources.' is no reference -- 'orders_http.resources.' has an
-empty segment -- each segment between the dots is a name*, then the adjacency error. Nothing references an endpoint
-today, so nothing is lost; the proposal does not make a resource addressable.
+**A path key is reached by a reference quoted whole** (`aPathKeyIsReachedByAReferenceQuotedWhole`). A reference's text
+splits at each dot and each segment is a name of the family of what it enters ([TSON-SCHEMA] §5.12), here the
+namespace's `path_template`, which the probe's layer keeps free of `.` since no namespace's key type may admit one. At
+`r: meta.ref<resource>`, `"orders_http.resources./orders"` is admitted in a schema's value entry and delivered the
+`Resource` in a data document. A path key starts with `/`, which no bare token holds, so the two partial spellings are
+refused: `orders_http.resources."/orders"` is a `VALIDATION_ERROR`, *adjacent values must be separated by whitespace, a
+comma, or both*, and the bare `orders_http.resources./orders` is *unrecognised character U+002F*. Read in a data
+document, the slot first reports `ATOM_FORM_INVALID`, *'meta.ref<resource>': 'orders_http.resources.' is no reference
+-- 'orders_http.resources.' has an empty segment -- each segment between the dots is a name*, then the adjacency error.
+The JSON side is unmeasured. Nothing references an endpoint today, so nothing is lost; the proposal does not make a
+resource addressable. The adopted layer keeps `resources` a plain map, whose paths hold `.` (`design/http-projection.md`,
+"A path is not a name").
 
 **What a namespace-typed field binds to** (`aNamespaceTypedFieldBindsToAMapAnAnnotatedMapOrANamespace`). Written
 `zeta`, `@safe alpha`, `mid`:

@@ -81,18 +81,23 @@ names the library, and the import-nothing case by `UpstreamGapsTest.aSchemaImpor
 
 ---
 
-## 4. A reference inside an annotation's value is not judged
+## 4. A reference inside an annotation's value is not judged in a schema document
 
 **Hit:** a vocabulary stating a relation in an annotation's value. A layer declaring `binds => @meta.annotation
-[meta.ref<protocol>]`, or an annotation holding a record with `exchange: meta.ref<exchange>`, gets the value's shape
-checked (`@binds:42` is refused) but no name in it: a protocol nothing declares and an exchange key the protocol does
-not hold both load clean. Each arrives as a `ValueRef` holding the name and never delivered (`isResolved()` false),
-where the same reference in a field of a value entry is judged and delivered when the schema links. Measured on a probe
-layer, `UpstreamGapsTest.aReferenceInsideAnAnnotationValueIsNotJudged`, whose clean load flips when it is fixed.
+[meta.ref<protocol>]`, or an annotation holding a record with `exchange: meta.ref<exchange>`, and a schema document
+annotating an entry with it, gets the value's shape checked (`@binds:42` is refused) but no name in it: a protocol
+nothing declares and an exchange key the protocol does not hold both load clean. Each arrives as a `ValueRef` holding
+the name and never delivered (`isResolved()` false), where the same reference in a field of a value entry is judged and
+delivered when the schema links. Measured on a probe layer, `UpstreamGapsTest.aReferenceInsideAnAnnotationValueIsNotJudged`,
+whose clean load flips when it is fixed.
 
-**The change:** a `meta.ref<T>` in an annotation's value is judged as one in a field's value: its name resolved in the
-annotating document's namespace, and in a schema document at link ([TSON-SCHEMA] §5.12, §6, §3.3.3). The spec rule
-stands as written; the library's failure to judge it in a schema document is work upstream's `BACKLOG.md` holds.
+**The spec rules it.** [TSON-SCHEMA] §5.12, "Where the rule stands", says a name at a reference-typed slot of an
+annotation's value resolves in the annotating document's namespace and is judged by the same walk, when a data document
+is read and when a schema document links; an imported entry's names are judged once, when its own schema links.
+Upstream's first implementation judges a data document's annotation value and not yet a schema document's, which is
+the case the pin measures; the data-document case is not pinned here.
+
+**The change:** the judgement at schema link, which flips the pin's clean load. Work upstream's `BACKLOG.md` holds.
 
 **What this project does meanwhile:** nothing depends on the gap. `service.tn` carries an http projection's claims,
 `binds` and `not_bound`, as fields of `service.http`, so every name in them is judged at schema load and delivered its
@@ -257,27 +262,21 @@ two compiler packages kept from consumers that have no use for them.
 
 ---
 
-## 13. A quoted token or a tag at a kind slot in a value body is refused through an event's `toString`
+## 13. A tagged application at a kind slot in a value body is refused through an event's `toString`
 
-**Hit:** an http projection whose endpoint lists a media type as `"application/json"` at a kind slot
-(`[meta.ref<net.media_type_type>]`, and alike at `[meta.ref<meta.atom>]`), where a type's name belongs. The refusal is
-right, and its message embeds *"expected a type's name, found TokenEvent[text=application/json, form=SINGLE_LINE_QUOTED,
-position=Position[line=0, column=0, byteOffset=0]]"*: a Java record's `toString`, with a position of zero where the
-token stands somewhere else entirely. A schema author reads a parser's internals and a location that points nowhere.
-A tagged value at the same slot, an application written as `!meta.apply { head: order  arguments: [order] }`, is
-refused the same way: *"found TypeRef[name=meta.apply, position=Position[line=0, column=0, byteOffset=0]]"*, the
-rendering of the tag's stream event `io.ltr8.tson.compiler.stream.TypeRef`, as far as this project can see by the
-same cause.
+**Hit:** an http projection whose endpoint lists, at a kind slot (`[meta.ref<net.media_type_type>]`), an application
+written as a tagged value, `!meta.apply { head: order  arguments: [order] }`, where a type's name belongs. The refusal
+is right, and its message embeds *"expected a type's name, found TypeRef[name=meta.apply, position=Position[line=0,
+column=0, byteOffset=0]]"*: a Java record's `toString`, the rendering of the tag's stream event
+`io.ltr8.tson.compiler.stream.TypeRef`, with a position of zero where the value stands somewhere else entirely. A schema
+author reads a parser's internals and a location that points nowhere. A quoted token at the same slot is refused naming
+the token as written, so only the tag's rendering is open.
 
-**The change:** name the token or the tag as written (*"found the quoted token \"application/json\""*, *"found a
-value tagged !meta.apply"*) and report its real position.
+**The change:** name the tag as written (*"found a value tagged !meta.apply"*) and report its real position.
 
 **Workaround in place:** none needed; the status is right and nothing here shows the message to a client. Pinned by
-`MediaTypeKindProbeTest.kindOfMediaTypeTypeHoldsATypeName`, over `[meta.ref<net.media_type_type>]`, which asserts the
-`TokenEvent` rendering, and `aTaggedApplicationAtAKindSlotIsRefusedThroughTheTagEventsToString`, which asserts the
-`TypeRef[name=meta.apply` rendering; each flips when its case is fixed.
-`aKernelKindHoldsATypeNameAndRefusesAMediaTypeValue`, over `[meta.ref<meta.atom>]`, asserts only the fragments around
-the token and survives the fix.
+`MediaTypeKindProbeTest.aTaggedApplicationAtAKindSlotIsRefusedThroughTheTagEventsToString`, which asserts the
+`TypeRef[name=meta.apply` rendering and flips when the tag is named as written.
 
 ---
 
@@ -301,7 +300,7 @@ syntax; declare the application under a name and write that name"*. No refusal o
 status a malformed document should get. Pinned by
 `UpstreamGapsTest.anApplicationInADataValueIsRefusedAsItsHeadThenASeparatorAndAsATagByItsRemedy`, which asserts both
 diagnostics in order and the tag's message and flips when the two become one;
-`aTemplateApplicationAtAKindSlotInAValueIsNamedThroughAnAlias` measures the schema-document case.
+`anApplicationAtAKindSlotInAValueIsNamedThroughAnAlias` measures the schema-document case.
 
 ---
 
@@ -360,11 +359,11 @@ the declared-first message through `service.tn`.
 ## 17. A subtype nothing binds, at an abstract base's slot in a value entry, leaves the value a tree
 
 **Hit:** `service.endpoint` declared `abstract`, and a description writing an endpoint as its own subtype,
-`!paged_get { … }`, with `paged_get` bound to no class (`TsonApiSchema.bindings()` as a server passes it). While the
-base was open, the description was refused at load: *"'paged_get' is not a member of the union 'service.endpoint'
-binds against [Operation, Binding, Document]"*. Marked `abstract`, it loads clean, and the entry's whole value is held
+`!paged_get { … }`, with `paged_get` bound to no class (`TsonApiSchema.bindings()` as a server passes it). Under an open
+base the description is refused at load: *"'paged_get' is not a member of the union 'service.endpoint'
+binds against [Operation, Binding, Document]"*. Marked `abstract`, it loads clean and the entry's whole value is held
 as a tree rather than the bound `Http`, so a reader looking for the bound class finds no projection at all. In a data
-document the object reader throws `MissingBindingException` for the same value, where the open base gave a
+document the object reader throws `MissingBindingException` for the same value, where an open base gives a
 `TYPE_MISMATCH`.
 
 **The change:** refuse a subtype nothing binds at an abstract base's slot as the open base's is, so whether a value

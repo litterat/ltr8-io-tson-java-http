@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * A dependent field ({@code body: request!}, [TSON-SCHEMA] §5.2) as the alternative to closing {@code rpc.tn}'s
- * templates per exchange: one envelope whose payload is read, per packet, against the type a sibling field names.
+ * parametric records per exchange: one envelope whose payload is read, per packet, against the type a sibling field names.
  *
  * <p>Measured: an envelope keyed by the exchange, {@code { exchange: meta.ref<service.exchange>  body: exchange! }},
  * does not resolve. An exchange is a value, not a type, so a reference to exchanges names no type a body could be read

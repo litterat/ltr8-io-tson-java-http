@@ -116,19 +116,22 @@ values are a tagged family of object kinds.
 !service.instance { name: "orders-1"  objects: {
   "/orders/42"                       => !service.served_exchange { exchange: orders.exchanges.get_order }
   "/lamp/events"                     => !service.event_source { event: lamp.events.overheated }
-  "/2026/40/io/ltr8/http/service.tn" => !service.served_document { media_type: "application/tson"  identity: "…" }
+  "/schemas/service"                 => !service.served_document { media_type: "application/tson"  identity: "…" }
 } }
 ```
 
 - **The key** is a concrete path, not a `service.path_template`, and a namespace key must be an identifier family.
-  `path_template`'s character set without the braces does it, and admits `/`, `/orders/42` and an identity path; a
-  template variable, a relative path and a query are refused, and §8.2 judges the key as it judges a name.
+  `path_template`'s character set without the braces and without `.` does it, and admits `/` and `/orders/42`; a
+  template variable, a relative path, a query and a path holding a dot are refused, and §8.2 judges the key as it
+  judges a name. A family admitting `.` is refused as a key type, so neither the well-known path nor a schema's
+  identity path can be a key.
   `service.path_template` has since become a text family keying a plain map, a path being no name, and the probe's
   layer keeps the shape measured; nothing references a concrete path either, so whether the instance needs a
   namespace at all, or a plain map keyed by an ASCII-exact text family, is part of the open question.
 - **The back-reference** names what the model declares by its qualified name: an exchange, an event, a protocol. It
-  cannot name a resource or an endpoint, since no qualified name walks a path key (`NamespaceFieldProbeTest
-  .aPathKeyIsNoQualifiedNameSegment`); the exchange is the better referent anyway, being what a client acts on.
+  cannot name a resource or an endpoint without quoting the whole reference, `"orders_http.resources./orders"`, and
+  then only in a namespace keyed by a dotless path family (`NamespaceFieldProbeTest
+  .aPathKeyIsReachedByAReferenceQuotedWhole`); the exchange is the better referent anyway, being what a client acts on.
 - **Data, not a schema.** Nothing names into it, it changes as objects come and go, and it has no identity to pin,
   the descriptor's reasons (`design/deployment-descriptor.md`); like the acceptance profile, a hint at a well-known
   path. Both readers deliver every reference.
@@ -175,14 +178,20 @@ no type the governing schema declares (§6)*. An exchange and a property may sha
 **The instance key** (`aConcretePathKeyIsAnIdentifierFamilyWidenedAsAPathTemplateIs`). A text family is refused as a
 namespace's key type, *'objects' key_type names 'concrete_path', which is no identifier family*. `meta.identifier` is
 accepted and refuses the key, *'concrete_path': '/orders/42': U+002F at index 0 cannot start an identifier*. An
-`identifier_type` starting with `/` and continuing with `/+%-._~!$&()*,;=:@`, its `pattern` `/([^%{}]|%[0-9A-Fa-f]{2})*`,
-admits `/`, `/orders/42`, `/.well-known/tson-deployment` and `/2026/40/io/ltr8/http/service.tn`, and refuses (each
-`ATOM_FORM_INVALID` but the last):
+`identifier_type` starting with `/` and continuing with `/+%-_~!$&()*,;=:@`, its `pattern` `/([^%{}]|%[0-9A-Fa-f]{2})*`,
+admits `/` and `/orders/42`, and refuses (each `ATOM_FORM_INVALID` but the last):
 
+- `/.well-known/tson-deployment` and `/2026/40/io/ltr8/http/service.tn`: *U+002E at index 1 cannot appear in an
+  identifier*, and *at index 29*
 - `/orders/{id}`: *U+007B at index 8 cannot appear in an identifier*
 - `orders/42`: *U+006F at index 0 cannot start an identifier -- its Start characters are '/'*
 - `/orders/42?x=1`: *U+003F at index 10 cannot appear in an identifier*
 - `/pаth`, Cyrillic `а`: `RESTRICTED_SCRIPT`, *the name '/pаth' mixes the scripts [LATIN, CYRILLIC] …*
+
+The same family with `.` added to its continue characters is a `SCHEMA_ERROR` at the key type, *'objects' key_type
+names 'concrete_path', which cannot name a namespace's keys -- its profile admits '.' (U+002E), which joins the segments
+of a qualified name, so a name holding one could not be reached by a reference* ([TSON-SCHEMA] §5.12, §4.2). The
+probe's instance keys the description document as `/schemas/service` for that reason.
 
 **An instance as data** (`anInstanceIsADataDocumentReferringIntoTheDescription`). Importing the description alone, it
 validates clean; the tree reader's atom at `/objects/~1orders~142/exchange` holds a `ValueRef` delivered its `Exchange`;
@@ -210,6 +219,9 @@ Javalin's and Helidon's SSE support).
   (`design/adapters.md`); whether it ends with a final problem item or just closes is a rule still to write.
 - An events-only protocol writes `exchanges: {}`, since the required field keeps the positional form.
 - Each adapter's concurrency suite gains long-lived responses.
+- The `objects` namespace cannot be keyed by a concrete path holding a dot, which rules out the well-known path and a
+  schema's identity path it was meant to list; a document is listed under a dotless alias (`/schemas/service`) or the
+  instance is a plain map, which no reference enters.
 
 ## Not proposed
 
@@ -238,17 +250,18 @@ Javalin's and Helidon's SSE support).
 
 ## Open questions
 
-- **One event or several per stream**: `event: meta.ref<service.event>`, or a list with SSE's `event:` field naming
-  the key?
+- **One event or several per stream**: `event: meta.ref<service.event>`, or a list with SSE's `event:` field naming the
+  key?
 - **An item's wire form**: TSON text in `text/event-stream`'s `data:` lines, or a TSON sequential media type of its own,
   and what `TSON-Schema` states for a stream, once or per item?
 - **Webhooks**: the server requests a URL the client supplied. Is that an exchange the client serves, so callbacks
   stay absent, or a subscription exchange plus an event?
 - **The join**: does `tson-invoke` give an event a Java form (a listener interface, a `Flow.Publisher`), or do events
   stay outside it?
-- **The live namespace**: a document of its own at a well-known path, or a field of the acceptance profile? Entry
-  points only, or every object with paging? Its vocabulary in `service.tn`, or its own once a several-import closure
-  links with a bind context (`UPSTREAM.md`, the data document importing two schemas)?
+- **The live namespace**: keyed by a namespace, which no path with a dot can key, or by a plain map? A document of its
+  own at a well-known path, or a field of the acceptance profile? Entry points only, or every object with paging? Its
+  vocabulary in `service.tn`, or its own once a several-import closure links with a bind context (`UPSTREAM.md`, the
+  data document importing two schemas)?
 
 ## Sources
 

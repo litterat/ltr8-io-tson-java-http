@@ -22,7 +22,7 @@ publishes at `/.well-known/tson-deployment`. Current form only.
 endpoint offers): how *one instance* is configured. [TSON-DATA] §8.2 says no document may name, import or otherwise
 select the policy it is judged under, and the spec bundles `policy.tn` (`https://tson.io/2026/40/m/policy.tn`, which
 imports `meta.tn` alone) as the policy's vocabulary. Its entries are members of a schema map `policy` nested in its root
-(`policy => !schema { … }`), so each is written by path: `policy.restriction_level`, `policy.script_policy`,
+(`policy => !schema { … }`), so each is written by path: `policy.restriction_level`, `policy.token_policy`,
 `policy.identifier_policy`, `policy.limit`, `policy.limits`, and `policy.processor`, the shape a deployment writes its
 policy in and a processor reports it in. `deployment.tn` imports `core.tn`, which brings `host`, and `policy.tn`, and
 both ends are a `policy.processor`: the descriptor states one and the profile publishes one. A descriptor is a data
@@ -103,13 +103,13 @@ and it is in the profile because §8.3 marks all three rules unstable across Uni
 conforming processors may legitimately disagree about one name and the version is what explains it.
 
 **`policy.tn` mirrors the library's two policy types**: `policy.identifier_policy` is a level, `per_segment`,
-`skeleton_distinctness` and `permitting`, `policy.script_policy` a level and `permitting` — no unit, since a value has
+`skeleton_distinctness` and `permitting`, `policy.token_policy` a level and `permitting` — no unit, since a value has
 no segments, so a per-segment token policy is unwritable (`TsonDeploymentTest.aTokenPolicyCannotBeGivenAUnit`).
 `permitting` is a list of script combinations, each named by UAX #24 alias; `TsonDeployment.Policy` canonicalises
 every spelling (`Latn`, `cyrillic`) to the long alias, sorted within a combination, and a name that is not a
 script — `policy.tn` types it as `text` — stops the read.
 
 **`policy.restriction_level` is `policy.tn`'s**, imported rather than copied, so nothing here holds a copy to
-`ScriptPolicy.Level`; upstream's `PolicySchemaTest` holds the bundled one.
+`io.ltr8.unicode.RestrictionLevel`; upstream's `PolicySchemaTest` holds the bundled one.
 
 

@@ -6,9 +6,10 @@
   schema, not part of the meta layer -- the meta layer says what a protocol IS; this says what calling one
   of its exchanges looks like on a wire.
 
-  Both templates are CLOSED PER EXCHANGE by a wire schema derived from the protocol -- one entry per exchange,
-  `place_order_call => call<new_order>`, `place_order_return => return<order, place_order_errors>` -- and a
-  packet names the closed type: `!place_order_call { ... }`. That is what makes a packet fully typed: its
+  Both parametric records are CLOSED PER EXCHANGE by a wire schema derived from the protocol -- one entry
+  per exchange, `place_order_call => call<new_order>`,
+  `place_order_return => return<order, place_order_errors>` -- and a packet names the closed type:
+  `!place_order_call { ... }`. That is what makes a packet fully typed: its
   request and response are checked against the protocol's own types by the resolver, an error arm is one
   of the exchange's declared errors with its status fixed, and this schema imports no service's types. The
   wire schema is deterministic in the protocol, so it is generated, published at its own identity, and

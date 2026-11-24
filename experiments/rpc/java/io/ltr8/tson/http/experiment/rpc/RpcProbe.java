@@ -25,16 +25,16 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code rpc.tn} -- the wire form of a protocol, {@code call} and {@code return} as templates -- closed per
- * exchange by a wire schema ({@code orders-wire-1.tn}), so that a packet is a fully typed document. The protocol is
- * {@code tson-http}'s own {@link OrdersExamples}.
+ * {@code rpc.tn} -- the wire form of a protocol, {@code call} and {@code return} as parametric records -- closed
+ * per exchange by a wire schema ({@code orders-wire-1.tn}), so that a packet is a fully typed document. The protocol
+ * is {@code tson-http}'s own {@link OrdersExamples}.
  *
- * <p>Measured: both schemas resolve, each template argument a declared name (a choice of errors is declared under
+ * <p>Measured: both schemas resolve, each type argument a declared name (a choice of errors is declared under
  * a name before it is passed); a packet's request is checked against the protocol's own types ({@code quantity:
  * two} is an {@code int32} violation at {@code /request/order/quantity}); an error arm carries the declared error
  * with its status pin enforced, and where an exchange declares several the value takes the error's tag; a return
  * has exactly one outcome; the envelope reads, {@code deadline} as a duration; and the wire schema is what the
- * protocol determines. Nothing here needs a scope push: the templates type the payload at the schema, so no packet
+ * protocol determines. Nothing here needs a scope push: the applications type the payload at the schema, so no packet
  * names its own.
  */
 class RpcProbe {
@@ -152,7 +152,7 @@ class RpcProbe {
             boolean declaresErrors = !exchange.errors().isEmpty();
             Map<String, String> ret = closedOver(wire, name + "_return", declaresErrors ? "return" : "return_plain");
             assertEquals(exchange.response().map(TypeRef::name).orElse("void"), ret.get("response"),
-                    name + "_return closes its template over the wrong response");
+                    name + "_return closes its parametric record over the wrong response");
             if (exchange.errors().size() == 1) {
                 assertEquals(exchange.errors().getFirst().name(), ret.get("error"),
                         name + "_return does not carry the error its exchange declares");
@@ -161,14 +161,16 @@ class RpcProbe {
     }
 
     /**
-     * One closed template application, as its fields: a declaration naming an application is that application's
-     * entry ([TSON-SCHEMA] §8.2), so the application its key carries names the template it closes, and both halves
-     * -- which template, over what -- are readable from the resolved schema without parsing a generated name.
+     * One closed application of a parametric record, as its fields: a declaration naming an application is that
+     * application's entry ([TSON-SCHEMA] §8.2), so the application its key carries names the parametric record it
+     * closes, and both halves -- which parametric record, over what -- are readable from the resolved schema without
+     * parsing a generated name.
      */
-    static Map<String, String> closedOver(TsonSchema wire, String entry, String template) {
+    static Map<String, String> closedOver(TsonSchema wire, String entry, String parametric) {
         Top closed = wire.entries().get(entry);
         assertNotNull(closed, "the wire schema declares no '" + entry + "'");
-        assertEquals(template, wire.applicationOf(entry).orElseThrow().head().name(), entry + " closes the wrong template");
+        assertEquals(parametric, wire.applicationOf(entry).orElseThrow().head().name(),
+                entry + " closes the wrong parametric record");
         Map<String, String> fields = new LinkedHashMap<>();
         assertInstanceOf(RecordBody.class, closed).fields()
                 .forEach((name, field) -> fields.put(name, field.type().text()));

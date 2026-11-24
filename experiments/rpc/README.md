@@ -19,7 +19,7 @@ per service?
 
 ## The design
 
-[`rpc.tn`](rpc.tn) declares two templates: `call => <Req> { … }` -- address `(interface !!id, method key)`, the
+[`rpc.tn`](rpc.tn) declares two parametric records: `call => <Req> { … }` -- address `(interface !!id, method key)`, the
 protocol schema and the exchange's key, correlation `id`, `deadline`, opaque `meta`, the exchange's `request` -- and
 `return => <Resp, Err> { … }`, exactly one of `response`, a declared `error` (a typed value composing
 `problem.details`, its status pinned on the type) or a `fault` (the transport's or processor's own `problem.details`,
@@ -28,7 +28,7 @@ its `type` from the same closed set the HTTP problem types use).
 **Both are closed once per exchange by a wire schema derived from the protocol** -- `place_order_call =>
 call<new_order>`, `place_order_return => return<order, sku_not_found>`, a choice of errors where an exchange declares
 several (declared as an entry of its own, since an argument is a name), `return_plain` where it declares none. `call`
-and `return` are templates, open records (`meta.record` with `parameters`) that no position names bare and nothing is
+and `return` are parametric records (`meta.record` with `parameters`) that no position names bare and nothing is
 read or written against; each declaration naming an application is its entry, an ordinary closed record.
 [`orders-wire-1.tn`](orders-wire-1.tn) is that schema for the orders protocol, written by hand to show what a
 generator emits. A packet is then `!place_order_call { … }`: a fully typed
@@ -58,25 +58,24 @@ errors declared per method and returned as typed values, not codes. Connect/Twir
 and an enveloped end-of-stream frame. Taken from none of them: numeric method ids -- the identity URI plus key
 carries more for the same purpose.
 
-**Two things TSON has that they lack, and the packet leans on both.** Templates closed per exchange give a typed
+**Two things TSON has that they lack, and the packet leans on both.** Parametric records closed per exchange give a typed
 envelope with no per-service code: the packet is checked end to end by the resolver -- `quantity: two` in a call is
 an `int32` violation at `/request/order/quantity`, an error's fixed `status` is enforced, and where an exchange
 declares several errors the value carries the error's tag. And an exchange's address is a
 content-addressed identity -- versioned, unambiguous across every service a gateway fronts, with no registry.
 
-**Dependent fields do not replace the per-exchange closure.** A record field typed `kind!` is read per
-instance against the type its sibling `kind` names, so one generic envelope, `call => { method: meta.ref<service.exchange>
-request?: method! }`, would type the request by the exchange the packet addresses. It is refused: a sibling is typed
-by a reference over a constructor (`meta.type_ref`, a `meta.ref<C>`) or by `meta.type_expr`, and `meta.ref<service.exchange>`
-names values ([TSON-SCHEMA] §5.2). What the
-form does reach is `{ request_type: meta.type_ref  request?: request_type! }`, a request typed by a type name the
-packet carries, which ties it to no exchange the address names; pinning `request_type` per exchange in a composition is
-the template application spelled longer. `DependentEnvelopeProbe` measures both forms: the exchange-keyed envelope
-is a `SCHEMA_ERROR` at load, and the type-keyed one reads each body against the type it names, pointing a violation
-into the body and refusing an exchange's qualified name at the sibling. Typing a payload by a value's own member (an
-exchange's `request`) needs a projection through a value reference, which §5.2 records as deliberately absent, naming
-an envelope template applied per exchange as the form. Nor is a payload typed by a foreign schema pushed at the slot:
-that form is gone, and the spec has no external form in its place.
+**Dependent fields do not replace the per-exchange closure.** A record field typed `kind!` is read per instance against the
+type its sibling `kind` names, so one generic envelope, `call => { method: meta.ref<service.exchange> request?: method! }`,
+would type the request by the exchange the packet addresses. It is refused: a sibling is typed by a reference over a
+constructor (`meta.type_ref`, a `meta.ref<C>`) or by `meta.type_expr`, and `meta.ref<service.exchange>` names values
+([TSON-SCHEMA] §5.2). What the form does reach is `{ request_type: meta.type_ref  request?: request_type! }`, a request typed
+by a type name the packet carries, which ties it to no exchange the address names; pinning `request_type` per exchange in a
+composition is the application spelled longer. `DependentEnvelopeProbe` measures both forms: the exchange-keyed envelope is a
+`SCHEMA_ERROR` at load, and the type-keyed one reads each body against the type it names, pointing a violation into the body
+and refusing an exchange's qualified name at the sibling. Typing a payload by a value's own member (an exchange's `request`)
+needs a projection through a value reference, which §5.2 records as deliberately absent, naming an envelope parametric record
+applied per exchange as the form. Nor is a payload typed by a foreign schema pushed at the slot: that form is gone, and the
+spec has no external form in its place.
 
 ## Order of work
 
@@ -105,8 +104,8 @@ that admit the bidirectional shape by accident of encoding.
 
 ## Files
 
-- `rpc.tn` -- the wire form: `call` and `return` as templates; the design above, in its own `@doc`s.
-- `orders-wire-1.tn` -- the templates closed per exchange of the orders protocol: what a generator emits.
+- `rpc.tn` -- the wire form: `call` and `return` as parametric records; the design above, in its own `@doc`s.
+- `orders-wire-1.tn` -- the parametric records closed per exchange of the orders protocol: what a generator emits.
 - `java/…/experiment/rpc/RpcProbe` -- both schemas resolve; a call is typed by the protocol's own types and a bad
   request is refused at its field; a return carries the declared response or error with its status pin enforced,
   and exactly one outcome; and the wire schema is what the protocol determines.

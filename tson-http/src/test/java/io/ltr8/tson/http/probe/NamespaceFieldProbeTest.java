@@ -48,11 +48,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * load: {@code binds} naming nothing, or naming a type or a value of another record type, is refused, and so is an
  * exemption naming a key its protocol does not hold. A reference to an exchange walks the entry, the {@code
  * exchanges} field and the key, {@code orders.exchanges.place_order}; skipping the field, or stopping at it, is
- * refused, and the walk spells the field even where the positional form left it unwritten. No qualified name
- * reaches a path key: a segment is an identifier ([TSON-DATA] §7.7), and neither the quoted nor the bare form
- * parses. A namespace-typed field binds to a {@link Map}, an {@link AnnotatedMap} or a {@link Namespace}, and only
- * the last two keep the keys' order and annotations. A reference judged at load arrives in a schema's value entry as
- * a {@link ValueRef} delivered the value it names, where one from an annotation arrives undelivered.
+ * refused, and the walk spells the field even where the positional form left it unwritten. A reference reaches a
+ * path key only quoted whole: each segment is a name of the family it enters ([TSON-SCHEMA] §5.12), so {@code
+ * "orders_http.resources./orders"} names the resource, while a name quoting one segment, or leaving the {@code /}
+ * bare, does not parse. A namespace-typed field binds to a {@link Map}, an {@link AnnotatedMap} or a {@link
+ * Namespace}, and only the last two keep the keys' order and annotations. A reference judged at load arrives in a
+ * schema's value entry as a {@link ValueRef} delivered the value it names, where one from an annotation arrives
+ * undelivered.
  */
 class NamespaceFieldProbeTest {
 
@@ -64,7 +66,8 @@ class NamespaceFieldProbeTest {
 
     /**
      * The layer: {@code protocol} and {@code http} as records, each holding one namespace-typed field. {@code safe}
-     * marks an exchange's key; {@code claims} is the annotation form of {@code binds}, kept for the comparison.
+     * marks an exchange's key; {@code claims} is the annotation form of {@code binds}, kept for the comparison. {@code
+     * path_template} leaves out {@code .}, which no namespace's key type admits ([TSON-SCHEMA] §5.12).
      */
     static final String LAYER = "!!id:\"" + LAYER_ID + "\"\n!!import:\"" + META + "\"\n!!import:\"" + NET + "\"\n"
             + """
@@ -74,7 +77,7 @@ class NamespaceFieldProbeTest {
               exchanges     => !meta.namespace { key_type: exchange_name  value_type: exchange }
               protocol      => { version?: text  exchanges: exchanges }
               path_template => !unicode.identifier_type {
-                start: NONE  start_add: "/"  continue_add: "/{}+%-._~!$&()*,;=:@"
+                start: NONE  start_add: "/"  continue_add: "/{}+%-_~!$&()*,;=:@"
                 pattern: "/([^%{}]|%[0-9A-Fa-f]{2}|\\\\{[+]?[A-Za-z0-9_]+\\\\})*" }
               http_verb     => !enum [GET POST]
               binding       => { exchange: meta.ref<exchange>  status?: integer }
@@ -203,19 +206,21 @@ class NamespaceFieldProbeTest {
                 refusal(schema(ORDERS, http("orders", "orders.exchanges"))));
     }
 
-    // ── 4: a path key is no qualified-name segment ─────────────────────────────────────────────────────────────
+    // ── 4: a path key is reached by a reference quoted whole ───────────────────────────────────────────────────
 
     static final String PICK = "  pick => { r: meta.ref<resource> }";
 
     /**
-     * <b>No qualified name reaches a resource through its path key.</b> A segment is an identifier ([TSON-DATA]
-     * §7.7) and a path key starts with {@code /}, so neither spelling parses: {@code orders_http.resources."/orders"}
-     * ends the name at the dot and leaves a quoted token adjacent to it, and {@code orders_http.resources./orders} is
-     * no token. In a data document the reference slot reports the truncated name too, as an empty last segment. This
-     * project references no endpoint, so nothing is lost; the proposal states it.
+     * <b>A qualified name reaches a resource through its path key only when the reference is quoted whole.</b> A
+     * reference's text splits at each dot, and each segment is a name of the family of what it enters ([TSON-SCHEMA]
+     * §5.12), here the namespace's {@code path_template}: {@code "orders_http.resources./orders"} is admitted in a
+     * schema's value entry and delivered the {@link Resource} in a data document. A path key starts with {@code /},
+     * which no bare token holds, so the other two spellings do not parse: {@code orders_http.resources."/orders"} ends
+     * the name at the dot and leaves a quoted token adjacent to it, and {@code orders_http.resources./orders} is no
+     * token. In a data document the reference slot reports the truncated name too, as an empty last segment.
      */
     @Test
-    void aPathKeyIsNoQualifiedNameSegment() {
+    void aPathKeyIsReachedByAReferenceQuotedWhole() {
         String quoted = schema(ORDERS, http("orders", "orders.exchanges.place_order"), PICK,
                 "  p => !pick { r: orders_http.resources.\"/orders\" }");
         Diagnostic adjacent = only(tson(quoted).validateSchema(quoted));
@@ -228,9 +233,22 @@ class NamespaceFieldProbeTest {
         assertEquals(Diagnostic.Code.VALIDATION_ERROR, unrecognised.code());
         assertEquals("unrecognised character U+002F", unrecognised.message());
 
+        String whole = schema(ORDERS, http("orders", "orders.exchanges.place_order"), PICK,
+                "  p => !pick { r: \"orders_http.resources./orders\" }");
+        assertEquals(List.of(), tson(whole).validateSchema(whole));
+
         String picking = schema(ORDERS, http("orders", "orders.exchanges.place_order"), PICK);
         Tson tson = tson(picking);
         assertEquals(List.of(), tson.validateSchema(picking));
+        var delivered = DiagnosticsReceiver.collecting();
+        TsonAtom spelled = assertInstanceOf(TsonAtom.class, tson.treeReader().withDiagnostics(delivered)
+                .read("!!import:\"" + ID + "\"\n!pick { r: \"orders_http.resources./orders\" }").at("/r"));
+        assertEquals(List.of(), delivered.diagnostics());
+        ValueRef<?> reference = assertInstanceOf(ValueRef.class, spelled.value());
+        assertEquals("orders_http.resources./orders", reference.name());
+        assertEquals(Optional.of(201), assertInstanceOf(Resource.class, reference.get()).endpoints().get("POST")
+                .status());
+
         var problems = DiagnosticsReceiver.collecting();
         assertNull(tson.treeReader().withDiagnostics(problems)
                 .read("!!import:\"" + ID + "\"\n!pick { r: orders_http.resources.\"/orders\" }"));

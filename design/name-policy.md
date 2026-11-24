@@ -75,18 +75,17 @@ up. Not adding a `policy` member was therefore a layering decision, not an RFC 9
 members are the standard's own growth mechanism and `errors` already is one. If a client ever needs to know
 *which version* of the profile judged it, the answer is a `Link` header plus the profile's `name`, added then.
 
-**The two policies are two types, because they govern different things.** `IdentifierPolicy` is a `ScriptPolicy`
-level plus what only a name has: a unit (`perSegment()`, dividing at the name's profile's own separators) and
-`withSkeletonDistinctness`, the look-alike rule's own switch, which no level reaches. The token policy is a bare
-`ScriptPolicy`, so a per-segment token policy is *unwritable* rather than refused. **A name is decided by type,
-not position**: an identifier-typed field value, an identifier-keyed map's keys and a unique array of identifiers
-are names and meet all three rules, the key and element sets being look-alike scopes — in a data document and in a
-schema's value entries alike, where a namespace value and an annotation value are read under the same
-policy. `NameRoleTest` pins both places.
-Over HTTP the once-statement is `deployment.tn`'s acceptance profile at `/.well-known/tson-deployment`
-(`design/deployment-descriptor.md`). §8.3
-is why any of it matters: all three rules are unstable across Unicode releases, so two conforming processors
-may legitimately disagree about one name and the version is what explains it.
+**The two policies are two types, because they govern different things.** Each is flat: it holds a `RestrictionLevel` and the
+script combinations `permitting(...)` admits over it, judged by the package-private `ScriptRule` both share.
+`IdentifierPolicy` adds what only a name has: a unit (`perSegment()`, dividing at the name's profile's own separators) and
+`withSkeletonDistinctness`, the look-alike rule's own switch, which no level reaches. `TokenPolicy` has neither, so a
+per-segment token policy is *unwritable* rather than refused. **A name is decided by type, not position**: an
+identifier-typed field value, an identifier-keyed map's keys and a unique array of identifiers are names and meet all three
+rules, the key and element sets being look-alike scopes — in a data document and in a schema's value entries alike, where a
+namespace value and an annotation value are read under the same policy. `NameRoleTest` pins both places. Over HTTP the
+once-statement is `deployment.tn`'s acceptance profile at `/.well-known/tson-deployment` (`design/deployment-descriptor.md`).
+§8.3 is why any of it matters: all three rules are unstable across Unicode releases, so two conforming processors may
+legitimately disagree about one name and the version is what explains it.
 
 **The defaults are opposite on purpose**, and a server inherits both: `ProcessorConfig.withIdentifierPolicy` defaults
 to Highly Restrictive over *declared names*, so a schema a request body names is refused for a homograph;
@@ -102,4 +101,4 @@ spoofing surface §9.4 raises for names — and says such a deployment applies t
 pass `withTokenPolicy(...)` where it builds one. A trap if it does: a token policy stricter than the identifier
 policy **subsumes** it, since the check runs before anything knows which tokens are names. And there is no unit to
 reach for — `_` and `-` are word separators in a name and ordinary characters in a value, so segmenting one would
-admit UTS #39's own `Toys-Я-Us`, which is why `ScriptPolicy` has no per-segment form.
+admit UTS #39's own `Toys-Я-Us`, which is why `TokenPolicy` has no per-segment form.

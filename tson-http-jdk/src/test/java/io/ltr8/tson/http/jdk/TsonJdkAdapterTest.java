@@ -239,7 +239,7 @@ class TsonJdkAdapterTest {
     void aGapStillReportsTheProblemsItDidFind() throws Exception {
         route("/mixed", exchange -> {
             throw TsonHttpException.invalidDocument(java.util.List.of(
-                    TsonDiagnostics.ofSchemaGap(SCHEMA_ID, "order", "generic templates are not implemented yet",
+                    TsonDiagnostics.ofSchemaGap(SCHEMA_ID, "order", "parametric records are not implemented yet",
                             Optional.empty()),
                     TsonDiagnostics.ofSchemaError(SCHEMA_ID, "order", "'quantity' is required", Optional.empty()),
                     TsonDiagnostics.ofSchemaUnavailable(SCHEMA_ID, "order", new SchemaFetchException(

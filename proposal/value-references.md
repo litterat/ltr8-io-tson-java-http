@@ -57,7 +57,7 @@ at the layer's slot since upstream's imported-head read, but:
   `TsonApiSchema.bindings()` binds, it is no member of the union `service.endpoint` binds against, so supporting it in
   general means two resolutions or a nearest-supertype binder the library does not have;
 - **the pins fix little.** A composition pins `status` and `request` only: no list is pinned (§5.2), so `media_types`
-  stays per endpoint, and a parameter is a type, so no template fixes `response` (§5.10);
+  stays per endpoint, and a parameter is a type, so no parametric record fixes `response` (§5.10);
 - **every reader pays.** The server and every conformance client must resolve a description's own types before they can
   tell what an endpoint is, where `!service.operation` says so at the tag.
 
@@ -176,7 +176,7 @@ order_query  response: order_page }`, a complete value entry, which loads:
   (§7.2);
 - `paged2 => !paged ^ { response: order_page }` at an entry is refused (`SCHEMA_ERROR`): *'paged2': '!paged ^ { ... }'
   needs an atom instance, an array or a map type to narrow, or a constructor of types to build from (§5.5), and 'paged'
-  is kind=VALUE, which is finished and takes no refinement*.
+  is a '!operation' value, which is finished and takes no refinement*.
 
 **(iii) The alias half works** (`aValueEntryNamedByReferenceIsDelivered`). `bearer => !scheme { name: Bearer }` and `g
 => !guard { security: [bearer] }`, `guard` holding `[meta.ref<scheme>]`, load; bound, the reference arrives with
