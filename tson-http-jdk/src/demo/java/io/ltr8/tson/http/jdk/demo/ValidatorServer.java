@@ -58,12 +58,12 @@ import java.util.concurrent.Executors;
 public final class ValidatorServer {
 
     /** The envelope this service reads and writes. */
-    public static final String VALIDATE_ID = "https://schemas.example.com/2026/39/app/validate-1.tn";
+    public static final String VALIDATE_ID = "https://schemas.example.com/2026/40/app/validate-1.tn";
 
     public static final String VALIDATE = schema("validate-1.tn");
 
     /** This service's own description, published and resolved at startup like any other schema. */
-    public static final String API_ID = "https://schemas.example.com/2026/39/app/validate-api-1.tn";
+    public static final String API_ID = "https://schemas.example.com/2026/40/app/validate-api-1.tn";
 
     public static final String API = schema("validate-api-1.tn");
 
@@ -223,7 +223,7 @@ public final class ValidatorServer {
                 "validation_request", ValidationRequest.class,
                 "validation_result", ValidationResult.class,
                 "outcome", Outcome.class,
-                "diagnostic", TsonProblemDiagnostic.class));
+                "problem.diagnostic", TsonProblemDiagnostic.class));
         // deployment.tn is published; a descriptor governed by it never is. A client fetches the schema
         // to read the profile at /.well-known/tson-deployment, and there is nothing here to serve it the
         // descriptor itself with.
@@ -257,7 +257,7 @@ public final class ValidatorServer {
             ValidationRequest request = exchange.readObjectAs(VALIDATE_ID, "validation_request",
                     ValidationRequest.class);
             // Computed before the header is set, not inside the respond call: a header describes the body it
-            // goes out with, and setting it first would leave a failure's `problem` body labelled as a
+            // goes out with, and setting it first would leave a failure's `problem.details` body labelled as a
             // `validation_result`.
             byte[] body = exchange.codec()
                     .write(verdict(request, deployment), VALIDATE_ID, "validation_result");
@@ -277,7 +277,7 @@ public final class ValidatorServer {
         // The policy each per-request probe enforces, taken from the config verdict() builds it from rather
         // than from the descriptor: a profile of what is enforced cannot disagree with what refuses a request.
         byte[] profile = codec.write(deployment.profile(deployment.applyTo(ProcessorConfig.defaults())
-                .processorPolicy()), TsonDeployment.ID, "acceptance_profile");
+                .processorPolicy()), TsonDeployment.ID, "deployment.acceptance_profile");
         HttpHandler schemaHandler = TsonHandler.asHttpHandler(codec,
                 TsonSchemaHandler.of(catalog(described, schemas)));
         server.createContext("/", exchange -> {
@@ -302,7 +302,7 @@ public final class ValidatorServer {
 
     /**
      * Refuses an oversized body before the codec reads it. Thrown, not answered here, so it travels the same
-     * boundary as every other failure and comes back as a {@code problem} like the rest.
+     * boundary as every other failure and comes back as a {@code problem.details} like the rest.
      */
     private static void requireBodyWithinCap(HttpExchange exchange) {
         String declared = exchange.getRequestHeaders().getFirst("Content-Length");
@@ -398,8 +398,8 @@ public final class ValidatorServer {
 
                 The schemas it publishes:
 
-                  curl -s http://localhost:%d/2026/39/app/validate-1.tn
-                  curl -s http://localhost:%d/2026/39/io/ltr8/http/deployment.tn
+                  curl -s http://localhost:%d/2026/40/app/validate-1.tn
+                  curl -s http://localhost:%d/2026/40/io/ltr8/http/deployment.tn
                 """.formatted(bound, bound, bound, bound, bound));
     }
 }

@@ -36,10 +36,10 @@ no TSON knowledge of its own; what it *does* own is the error boundary, and that
    unredacted overload for the same reason. The exception goes to a `System.Logger` — which keeps that module
    dependency-free, since it may not take a logging dependency.
 
-   **Not a rule about 5xx**, which is the shortcut it used to be and got a 501 wrong: that status says the
-   request was fine and this server could not check it, so the violations the read *did* find are the client's
-   to act on and are carried, with the detail saying the list is incomplete. Dropping them left a sender
-   nothing to act on, so the next request was byte-for-byte the same one. A 500 (our wiring) and a 502/504
+   **Not a rule about 5xx**: the filter asks whom a message is about, and a 501 shows the difference. That status
+   says the request was fine and this server could not check it, so the violations the read *did* find are the
+   client's to act on and are carried, with the detail saying the list is incomplete. Without them a sender has
+   nothing to act on, and its next request is byte-for-byte the same one. A 500 (our wiring) and a 502/504
    (our dependency) do answer with status, type and title alone. The filter runs at two levels — the failure's
    own account, then each diagnostic — because a gap outranks a fetch failure, so a 501's list can carry a
    `SCHEMA_UNREACHABLE` naming a host beside violations that are the sender's. **Do not key it on
@@ -49,26 +49,25 @@ no TSON knowledge of its own; what it *does* own is the error boundary, and that
 
 A handler that returns without answering is a bug in the handler, so it is a 500 rather than a silent 200.
 
-**A `com.sun.net.httpserver` with no executor is serial**, and that quietly defeated this project's own
-concurrency test for the JDK adapter — `OrderServerConcurrencyTest` drove eight client threads at a server
-running every handler on its dispatch thread, so two handlers never ran at once and a race in the shared codec
-could not have been caught. The demo now sets a virtual-thread executor. **Virtual threads, not a pool**:
+**A `com.sun.net.httpserver` with no executor is serial**: it runs every handler on its dispatch thread, so two
+handlers never run at once, and `OrderServerConcurrencyTest` driving client threads at it could not catch a race in
+the shared codec. The demo therefore sets a virtual-thread executor. **Virtual threads, not a pool**:
 `HttpServer.stop()` does not shut down an executor you hand it, so a platform-thread pool keeps its
-non-daemon threads alive and the JVM never exits — which cost a hung ten-minute run to discover.
+non-daemon threads alive and the JVM never exits.
 
 **No lock is taken on the read or write path**, measured rather than assumed: 48,000 requests across 8 threads
 produced 1416 contended monitor entries and not one of them has a tson frame. The `synchronized` methods that
 exist are on the resolve and register paths, which run at startup on one thread. That is the "build during
 startup, then share for reads" shape working.
 
-**Reading the throughput numbers, because two wrong conclusions came out of them first.** The harnesses put
+**Reading the throughput numbers.** The harnesses put
 client and server in one JVM, so a single request stream already costs ~3.7 of 16 cores — client, server, GC
 and JIT together. Scaling therefore tops out near 16/3.7 ≈ 4x, which is what both adapters show
 (10.5k req/s on one thread, 43k on sixteen, at 14 of 16 cores — saturated). **That is a property of the
-measurement, not of the library.** Two things to avoid repeating: comparing runs that differ in more than one
+measurement, not of the library.** Two mistakes to avoid: comparing runs that differ in more than one
 variable (a serial server at 8 client threads against a concurrent one at 8 is not a scaling curve), and
-trusting a `ps` sample for CPU — use `OperatingSystemMXBean.getProcessCpuTime` over the timed region, which is
-what showed the machine was saturated after a `ps` sample suggested it was at a fifth.
+trusting a `ps` sample for CPU: use `OperatingSystemMXBean.getProcessCpuTime` over the timed region, which shows a
+saturated machine where a `ps` sample can suggest it is at a fifth.
 
 **A shared `HttpClient` costs 16–23%** at four threads and up, so a load generator that shares one measures
 itself as much as the server. Both harnesses take a flag for a client per thread, built and warmed before the
@@ -78,9 +77,9 @@ timed region.
 every other test in this repo is single-threaded — so a codec wrong under concurrency would pass all of them.
 `TsonHttpCodecConcurrencyTest` and each adapter's
 `demo/OrderServerConcurrencyTest` close that gap, and each task checks its own result: the failure worth
-looking for is a crossed or torn value, not a call that threw. Writing them is what found a real race in
-`DataBindContext`'s descriptor resolution, since fixed upstream. Keep them green, and add to them rather than
-around them.
+looking for is a crossed or torn value, not a call that threw. A race in the library's shared state, such as
+`DataBindContext`'s descriptor resolution, surfaces here and nowhere else in this repo. Keep them green, and add to
+them rather than around them.
 
 **The adapter test suites are near-copies on purpose.** `TsonJdkAdapterTest`, `TsonJavalinAdapterTest` and
 `TsonHelidonAdapterTest` ask the same questions and assert the same answers, because three adapters over one

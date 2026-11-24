@@ -1,41 +1,43 @@
-!!id:"https://schemas.example.com/2026/39/orders/orders-api-inline-1.tn"
-!!import:"https://tson.io/2026/39/io/ltr8/http/meta-service.tn"
-!!import:"https://schemas.example.com/2026/39/orders/orders-types-1.tn"
-!!import:"https://schemas.example.com/2026/39/orders/orders-errors-1.tn"
+!!id:"https://schemas.example.com/2026/40/orders/orders-api-inline-1.tn"
+!!import:"https://tson.io/2026/40/io/ltr8/http/service.tn"
+!!import:"https://schemas.example.com/2026/40/orders/orders-types-1.tn"
+!!import:"https://schemas.example.com/2026/40/orders/orders-errors-1.tn"
 @doc:"""
-  Web service only: an http projection on its own terms, with no protocol behind it and no `@binds`, so every
-  endpoint is an `!operation` carrying its signature inline. The verb and the path are the keys an endpoint
-  sits under; a path key is a name in the URL's own grammar, so `/orders/{id}` needs no identifier minted
+  Web service only: an http projection on its own terms, with no protocol behind it and no `binds`, so every
+  endpoint is a `!service.operation` carrying its signature inline. The verb and the path are the keys an endpoint
+  sits under; a path key is the URL's own grammar and no name, so `/orders/{id}` needs no identifier minted
   from it. A parameter-only endpoint is a one-field request record placed from the path.
 
   An exchange's facts ride on its own key, so on an inline operation they sit before the verb: a GET must be
-  `@safe`, and the reader refuses one that is not.
+  `@service.safe`, and the reader refuses one that is not.
 
-  Serving a schema at its identity's path answers bytes rather than a TSON value, so it is a `!document`
+  Serving a schema at its identity's path answers bytes rather than a TSON value, so it is a `!service.document`
   endpoint and not an operation; the demos' own description (demo/schemas/orders-api-1.tn) declares one.
 
   A resource is written either way: positionally, its map of verbs standing in for its one field, or tagged
-  `!resource`, as the last one is.
+  `!service.resource`, as the last one is.
   """
 !schema {
-  orders_http => !http {
-    "/orders" => {
-      @doc:"Place an order. The whole body is the order."
-      POST => !operation { request: order  response: order  errors: [sku_not_found]  status: 201 }
-    }
-    "/orders/{id}" => {
-      @safe
-      @doc:"One order, by the id in the path."
-      GET => !operation { request: order_ref  response: order  errors: [order_not_found] }
-    }
-    "/orders/{id}/items" => !resource {
-      @safe
-      @doc:"""
-        The lines of one order: a second parameter-only endpoint, and a nested path written as a template of
-        its own -- the URL namespace is hierarchical and a resource key is flat over it, which is the
-        qualified-name question wearing a slash.
-        """
-      GET => !operation { request: order_ref  response: order_page }
+  orders_http => !service.http {
+    resources: {
+      "/orders" => {
+        @doc:"Place an order. The whole body is the order."
+        POST => !service.operation { request: order  response: order  errors: [sku_not_found]  status: 201 }
+      }
+      "/orders/{id}" => {
+        @service.safe
+        @doc:"One order, by the id in the path."
+        GET => !service.operation { request: order_ref  response: order  errors: [order_not_found] }
+      }
+      "/orders/{id}/items" => !service.resource {
+        @service.safe
+        @doc:"""
+          The lines of one order: a second parameter-only endpoint, and a nested path written as a template of
+          its own -- a URL's path is hierarchical and a resource key is flat over it, and no qualified name
+          walks a path key, since nothing references a resource.
+          """
+        GET => !service.operation { request: order_ref  response: order_page }
+      }
     }
   }
 }

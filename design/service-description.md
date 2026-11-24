@@ -1,257 +1,165 @@
-# Describing a service (`meta-service.tn`, `io.ltr8.tson.http.api`)
+# Describing a service (`service.tn`, `io.ltr8.tson.http.api`)
 
-Why a service description is a schema, what the layer declares, what the reader checks, and how a server is held to it
-at startup. The orders examples under `tson-http/src/test/resources/io/ltr8/tson/http/api/orders/` are one real
-document per use of the layer, reached through `OrdersExamples`; `experiments/rpc/` and `experiments/agent/` read them
-there too.
+Why a service description is a schema, and what the layer declares at the protocol level. What the reader checks, how
+a server's bindings, catalog and warm-up derive from the description, coverage and business errors are
+`design/service-reader.md`. Everything HTTP, the http projection, its endpoints, placement, statuses, media
+types, security schemes, response headers, the verb checks and `Route`, is `design/http-projection.md`. The orders
+examples under `tson-http/src/test/resources/io/ltr8/tson/http/api/orders/` are one real document per use of the layer,
+reached through `OrdersExamples`; `experiments/rpc/` and `experiments/agent/` read them there too.
+
+**What the layer is for.** This project builds service capabilities that a model, as a caller, integrates with better
+than today's conventions allow. The Model Context Protocol and RFC 9880 (SDF) are design input for those capabilities,
+not targets: nothing here emits JSON Schema or implements the MCP specification as it stands. The aim is an alternative
+that keeps what MCP gets right, discovery, callable tools, resources and change subscriptions, and goes beyond it where
+TSON does: payloads that are the description's own types, self-describing and judged; business errors a model acts on;
+references that are judged names; a security scheme declared, not negotiated. Its shape is a projection of a protocol
+beside `service.http` (`BACKLOG.md`, "An LLM-facing projection of a protocol"), and `experiments/agent/` is its draft.
+A fact a model needs about an exchange belongs to the protocol, as `@service.destructive` does; how a model is offered
+the protocol belongs to the projection.
 
 **Invariants**
 
-- Data can name a schema; only a schema can name a type. Anything whose job is to relate types is a schema.
-- The description is a schema importing `meta-service.tn`, resolved at startup (`tson.resolve(API)` then
+- A document that exports a namespace is a schema; a document with at most a local scope is data; any document may
+  refer to a type or a value in the namespace it names. Anything others refer into is a schema.
+- The description is a schema importing `service.tn`, resolved at startup (`tson.resolve(API)` then
   `TsonApiSchema.describedBy`); an unsound description fails startup.
-- Naming is the resolver's (references, `type_ref`, `ref<…>`), except a reference inside an annotation's value,
-  which the reader checks; relating is `TsonApiDescription`'s, in one reader.
-- The description is the source of truth for what a server publishes (`referencedSchemas()`), warms
-  (`boundClasses(bindings)`) and speaks (`Route.mediaTypes()`). `TsonApiCoverage.requireComplete()` holds the server
-  to it, and `notServedHere` with a reason is the only way out.
-- A claim names the declared verb and path template, never the path the framework registers.
-- `protocol` and `http` are namespace types, so a value of either is the map alone; a projection's claims, `@binds`
-  and `@not_bound`, are annotations on its entry, and the names in them are checked by the reader.
-- A media type is listed, never implied, except `application/tson` on every endpoint but a `document`; a document
-  listing none, and a non-document listing a type no codec here speaks, are startup failures.
-- A namespace's `key_type` is required and an identifier family, so `path_template` is an `identifier_type` and §8.2
-  judges a path key.
-- `resource` alone has the positional form, one bare required field; adding a second withdraws it and breaks every
-  document written in it.
-- A business error composes `problem` and is written by the handler, not thrown.
+- Every entry of `service.tn`, its annotations included, is a member of the one schema map `service` at its root, so
+  the layer reserves one root name in every importer. A description writes `!service.protocol`, `@service.safe`; the
+  layer refers between its own entries by the same path; and the reader, the bindings and every `@Typename` use the
+  qualified names. Nothing else is declared at the root.
+- `service.protocol` is a record whose one required field is the namespace `exchanges`, so a qualified name walks the
+  field: `orders.exchanges.place_order`. A namespace's `key_type` is required and an identifier family.
+- `@service.safe`, `@service.idempotent` and `@service.destructive` are facts of an exchange, written before its key in
+  the protocol; safe implies idempotent, safe and destructive exclude each other, and nothing derives one from a verb.
+- A schema entry has two annotation positions and they land in different places.
 
-## Data can name a schema; only a schema can name a type
+## A schema exports a namespace; data refers into one
 
-Type-name resolution happens at type-ref positions in a **schema** document and nowhere else. A data document
-imports its schemas (`!!import`) and selects a type among them by its root's tag (a `!order` annotation), but a type
-name in a value position is a reference only where the slot is typed by a reference (`meta.type_ref`, a
-`meta.ref<…>`), and an inert token anywhere else; a directive inside a value is a parse error, so nothing switches
-scope mid-document.
+A data document declares nothing others resolve against. It imports its schemas (`!!import`), selects a type among
+them by its root's tag (a `!order` annotation), and may refer into the closure it imports: a name in a value position
+is a reference where the slot is typed by a reference (`meta.type_ref`, a `meta.ref<…>`), to a type or to a value
+alike, judged against that closure (`UpstreamGapsTest.aValueReferenceInADataDocumentIsJudged`), and an inert token
+anywhere else. An argument list after a name is a parse error in any value ([TSON-DATA] §7.2.5), and so is a
+directive, so nothing switches scope mid-document.
+
+So the line is not whether a document may name a type: **a document that exports a namespace is a schema, a document
+with at most a local scope is data, and any document may refer to a type or a value in the namespace it names.**
 
 Two consequences:
 
-- **Anything whose job is to relate types must be a schema**, not a data document governed by one. That is why the
-  service description is a schema importing `meta-service.tn`, and why a description written as *data* cannot check
-  anything it says.
-- **The recurring `(schema identity, root type name)` pair is the data layer's workaround for this.**
-  `describing(…)`, `readObjectAs(…)`, the `TSON-Schema` header plus a route-supplied type: two strings reassembled at
-  every call site, because the thing they name cannot be referenced.
+- **Anything others refer into must be a schema**, not a data document governed by one. That is why the service
+  description is a schema importing `service.tn`: a binding's `meta.ref<service.exchange>` and a claim in `binds`
+  refer into it, and a description written as data could refer out but never be referred into. The deployment
+  descriptor is data for the same reason turned round (`design/deployment-descriptor.md`).
+- **The recurring `(schema identity, root type name)` pair is how the data layer names a type from outside any
+  document**, `describing(…)`, `readObjectAs(…)`, the `TSON-Schema` header plus a route's type, because a reference
+  exists only inside a document that imports the closure.
 
-## The layer: a protocol, and an http projection of it
+## The layer: a protocol, and projections of it
 
 An OpenAPI-shaped description of a service whose payloads are TSON, minus the embedded schema language OpenAPI needs
 because JSON has none: an endpoint **references** a published, identity-addressed schema. It describes the service
 from the protocol's side, not the host language's (`design/invoke.md`): a **protocol** is a named set of
 **exchanges**, each a request record, a response record and error records; an **http projection** is HTTP's own
-constructs bridged to an exchange's request record by placement.
+constructs bridged to an exchange's request record by placement (`design/http-projection.md`).
 
 ```
-orders => !protocol {
-  @safe get_order => { request: order_ref  response: order  errors: [order_not_found] }
-  place_order     => { request: new_order  response: order  errors: [sku_not_found] }
+orders => !service.protocol {
+  exchanges: {
+    @service.safe get_order => { request: order_ref  response: order  errors: [order_not_found] }
+    place_order             => { request: new_order  response: order  errors: [sku_not_found] }
+  }
 }
 
-@binds:[orders]
-orders_http => !http {
-  "/orders"      => { POST => !binding { exchange: orders.place_order  status: 201 } }
-  "/orders/{id}" => { GET  => !binding { exchange: orders.get_order } }
+orders_http => !service.http {
+  binds: [orders]
+  resources: {
+    "/orders"      => { POST => !service.binding { exchange: orders.exchanges.place_order  status: 201 } }
+    "/orders/{id}" => { GET  => !service.binding { exchange: orders.exchanges.get_order } }
+  }
 }
 ```
 
-**The names.** `protocol` is Avro's word for a named set of messages each with request, response and errors;
-`exchange` is HTTP's own for a request and what answers it (RFC 9110, RFC 9113) and WSDL 2.0's. `http` is named for the
-transport it projects a protocol onto, as a gRPC projection would be: one projection among several, not the
-description. `@binds` takes the word `!binding` and `@not_bound` use. `http_verb` calls RFC 9110's request methods
-verbs so that `method` names nothing in the layer; `operation` names the inline endpoint, and `service` the layer and
-its module.
+**The names.** `protocol` is Avro's word for a named set of messages each with request, response and errors; `exchange`
+is HTTP's own for a request and what answers it (RFC 9110, RFC 9113) and WSDL 2.0's. `http` is named for the transport
+it projects a protocol onto, as a gRPC projection would be: one projection among several, not the description.
+`service.signature` is the transport-neutral request, response and errors an exchange and an inline operation share;
+`exchange => service.signature & {}` is a type of its own, where `exchange => service.signature` would be an alias and
+its values would read back as signatures. `operation` names the inline endpoint, and `service` the layer, its one root
+map and its module. Each is written by its path from that map.
 
-Exchanges are keys inside their protocol and endpoints are values under a path and then a verb, so neither is a global
-entry and nothing needs an invented operationId. `demo/schemas/orders-api-1.tn` binds a protocol in an http projection;
-`validate-api-1.tn` is web-service-only, every endpoint an inline `!operation` or `!document`; `OrdersExamples` holds
-all three forms.
+**One root name.** Every root name of an import closure is reserved in each importer, and a clash is unfixable by the
+importer ([TSON-SCHEMA] §2.2.3). A layer declaring `document`, `resource` or `operation` at its root would forbid the
+domain schemas beside it those names, so every entry of `service.tn`, the annotations included, is a member of the
+schema map `service => !schema { … }`, as the sibling's `policy.tn` nests `policy`. A name resolves in the schema's one
+namespace, so an entry refers to another by its path from inside the map as from outside it (`value_type:
+service.exchange`); a bare `signature` there is unresolved. A qualified annotation is reported under the name written,
+so the reader asks `Annotations` for `service.safe`, an entry applying `service.protocol` reports that qualified name,
+and each bound record's `@Typename` is its qualified name (`service.binding`), as `TsonApiSchema.bindings()` keys it.
 
-**The maps borrow namespaces TSON does not own.** A protocol is keyed by exchange names, a projection by URL path
-templates, a resource's `endpoints` by RFC 9110's verbs, and `placement` maps a request record's fields onto URL
-segments, query keys and header names. A key type is how a document borrows a namespace it does not govern, with **one
-naming role per borrowed namespace**, as the kernel has `type_name` for a schema map's keys and `field_name` for a
-record's field names, over one grammar. A namespace's key is a name, so its role is an identifier family
-(`UpstreamGapsTest.aNamespaceKeyTypeMustBeAnIdentifierFamily`): `exchange_name => meta.identifier`, or an
-`identifier_type` widened with `start_add` and `continue_add` and carrying a `pattern`, as `path_template` is. A map
-field's key may be a text family with a `pattern`, as `header_name` is, held case-folded as RFC 9110 §5.1 compares
-it. A role names the namespace in its refusal (`NameRoleTest`), and §8.2's hygiene refuses a mixed-script or confusable
-key, a path key included. So an exchange's identity is `(schema identity, qualified name)`: `…/orders-1.tn` and
-`orders.place_order`, held as `ExchangeName`.
+Exchanges are keys inside their protocol and endpoints are values under a path and a verb, so nothing needs an invented
+operationId. `demo/schemas/orders-api-1.tn` binds a protocol in an http projection; `validate-api-1.tn` is web-service
+only, every endpoint inline.
 
-**A namespace is a map refined to name keys**: `meta.map ^ { key_type: meta.identifier_ref  voidable?: = false }`, so
-its `key_type` is required and an identifier family, no value is `_`, and `ordered` and the size bounds are map's. A
-qualified name walks its keys, `orders.place_order`. A projection's paths are a namespace keyed by an identifier family
-widened to a path's characters, but nothing references an endpoint, so no qualified name walks a path key and an
-endpoint is reached by location. A record's fields are no namespace: they are a text-keyed map, each name judged by the
-record's `name_type`, and no qualified name reaches a field declaration.
+**The maps borrow namespaces TSON does not own**: exchange names, URL path templates, RFC 9110's verbs, header names. A key
+type is how a document borrows one, with **one naming role per borrowed namespace**, as the kernel has `type_name` and
+`param_name` over one grammar; a record stating no `name_type` has `meta.identifier`'s. A namespace's key is a name, so its
+role is an identifier family (`UpstreamGapsTest.aNamespaceKeyTypeMustBeAnIdentifierFamily`), `exchange_name =>
+meta.identifier` or an `identifier_type` widened with `start_add` and `continue_add`. A plain map's key is no name, and its
+role may be a text family with a `pattern`, as `service.path_template` and `service.header_name` are. Which a key is follows
+from whether anything references it: a binding's reference walks into a protocol's exchanges, so they are a namespace and an
+exchange name is a name; nothing references a path or a header, so a projection's resources and an endpoint's response
+headers are plain maps, and a path is where the schema stops and HTTP begins. A role names itself in its refusal
+(`NameRoleTest`), and §8.2's hygiene refuses a mixed-script or confusable name, a namespace key's and never a text key's. So
+an exchange's identity is `(schema identity, qualified name)`, `…/orders-1.tn` and `orders.exchanges.place_order`, held as
+`ExchangeName`. The HTTP roles and their `ASCII_CASEFOLD` are `design/http-projection.md`.
 
-**A binding refers to an exchange rather than being one.** An exchange could be a type under plain `meta.tn`, with an
-operation refining it, but a schema fact stated as a field is per-instance: `verb: = POST` pins an unmarked field, which
-[TSON-SCHEMA] §5.2 makes a *marker* each value must write (`TsonApiDescriptionTest`, the comparison kept at its end).
+**A namespace is a map composed to name keys**: `meta.map & { key_type: meta.identifier_ref  voidable?: = false }`, a
+composition restating `key_type` under a narrower type and pinning `voidable`, so its `key_type` is required and an
+identifier family and no value is `_`. A family whose profile admits `.` is a resolver error as a key type, since a qualified
+name splits at each dot ([TSON-SCHEMA] §4.2, §5.12;
+`AffordanceProbeTest.aConcretePathKeyIsAnIdentifierFamilyWidenedAsAPathTemplateIs`). A qualified name walks its keys, and a
+record value's field to reach one: `orders.exchanges.place_order` is the protocol's entry, its `exchanges` field and a key
+(`UpstreamGapsTest.aReferenceThroughARecordValuesFieldIsJudged`), so `orders.place_order` is refused at load naming the
+fields a protocol declares (`TsonApiDescriptionTest.aTwoSegmentExchangeNameIsRefusedNamingTheField`). A record's fields are
+no namespace, and no qualified name reaches a field declaration.
+
+**A protocol is a record holding a namespace.** A namespace type declares its facets and nothing else
+(`UpstreamGapsTest.aNamespaceTypeDeclaresOnlyItsFacets`), so a value of one is the map alone, with nowhere to write a
+fact about the whole. So `service.protocol` is a record whose one field, `exchanges`, is a `service.exchanges`, and a
+fact about the protocol as a whole is a field beside it. `service.http` is a record too, its one required field the
+plain map `resources`, since nothing references an endpoint (`design/http-projection.md`). An entry applying either
+record is a value, never a type. `service.exchange` is an ordinary record and heads no entry. `service.protocol` has the
+positional form, one bare required field; what that costs is `design/http-projection.md`, "The positional form".
+`proposal/namespace-fields.md` holds the measurement (`NamespaceFieldProbeTest`).
 
 **An import crosses no level**, so the layer takes `media_type` from `net.tn` and its kernel names from `meta.tn`, and
 an importer uses every name the layer declares (`UpstreamGapsTest.anImportCrossesNoLevel`,
-`everyNameAnImportedLayerDeclaresResolvesInTheImporter`). An ordinary schema wanting `status_code` imports the layer or
-declares its own: `problem.tn`'s `status` is an `int32`.
+`everyNameAnImportedLayerDeclaresResolvesInTheImporter`). An ordinary schema wanting `service.status_code` imports the
+layer or declares its own: `problem.tn` declares `problem.status`, the same refinement.
 
-**An entry applying a namespace type is a value, never a type.** Naming one where a type is expected is a resolver
-error ("a value and not a type", `UpstreamGapsTest.aNamespaceEntryCannotBeUsedWhereATypeBelongs`). **A namespace value
-is the map alone**: a namespace type declaring a field beside its facets is refused
-(`UpstreamGapsTest.aNamespaceTypeDeclaresOnlyItsFacets`), so what a projection claims about the protocols behind it is
-annotation before its entry's name, `@binds:[orders] @not_bound:[{ exchange: orders.refund  reason: "…" }]`, each
-declared in the layer as an `@meta.annotation`. Everything inside (`exchange`, `resource`, `endpoint`, `operation`,
-`binding`, `document`, `exemption`) is an ordinary record and heads no entry.
+## An exchange's facts
 
-## What the reader checks
+`@service.safe`, `@service.idempotent` and `@service.destructive` are bare markers before an exchange's key in its
+protocol: `@service.idempotent @service.destructive cancel_order => { … }`. Annotations, not fields, because they
+describe the exchange, not its request or response; they are the facts a caller composing calls needs, what may be retried,
+reordered or must be confirmed first. `safe` and `idempotent` are RFC 9110's words; safe implies idempotent.
+`@service.destructive` is an effect the caller cannot undo, the one fact an LLM tool-calling convention asks for that
+the other two do not state. No verb implies it, since a `DELETE` may cancel a reservation and a `POST` may wipe a table.
+It excludes `@service.safe`, and the reader refuses an exchange marked both, a bound protocol's exempted ones included.
+A projection checks its verb against these facts and never derives them (`design/http-projection.md`, "Verb checks").
 
-**Naming is the resolver's; relating is the reader's.** `request`, `response` and `errors` are typed `type_ref`, and a
-binding's `exchange` is `ref<exchange>`, so a type nothing declares, a reference to the wrong kind of thing, and an
-exchange key a protocol does not hold are refused at schema load; a qualified name says which protocol it means. **The
-exception is a reference inside an annotation's value**, which the resolver does not judge
-(`UpstreamGapsTest.aReferenceInsideAnAnnotationValueIsNotJudged`): `@binds` and an exemption's `exchange` keep their
-`ref<…>` typing to say what they mean, and the reader checks the names. **An unsound description has no model**, a
-startup failure rather than a published contract no client can act on:
+## Documentation, and the two annotation positions
 
-- each `@binds` name is an entry applying `protocol`, and each exemption's `exchange` a key of a protocol the
-  projection binds;
-- a binding's exchange belongs to a protocol its projection binds. There is no inheritance between protocols, and a
-  projection binding several names each;
-- the `@binds` claim holds: every exchange of every bound protocol is bound, or exempted in `@not_bound` with a reason,
-  held per `ExchangeName`, never per name, since two protocols may both declare `get_order`;
-- each request record's fields are placed exactly once over the path, the query, the headers and the body
-  (`RequestPlacement`): a `{segment}` binds the field of that name, `query` and `headers` name fields, `body` names one
-  field carried unwrapped, and the remainder is the body, or the query for a GET or HEAD; a field in the path, query or
-  a header is a scalar (an array of scalars in a query or header, which may repeat). A dependent field (`payload:
-  kind!`, a `SiblingRef` in `RecordField.type()`'s sealed `Reference`) travels in the remainder body with its sibling,
-  the one place a record instance holds both;
-- a bound request record holding a dependent field loads only if every type a sender may name in its sibling binds
-  (`ChosenTypes`): a free `meta.type_ref` sibling admits the kernel's records and never does, while a pinned sibling
-  or a discriminator over bound subtypes does;
-- the verb agrees with what the exchange says about itself, `@safe` and `@idempotent` on its key: GET safe, PUT and
-  DELETE idempotent; and a response-less endpoint answers a status that carries no body;
-- each business error fixes its status (`sku_not_found => problem & { status: = 404 … }`), which is how a client tells
-  an error from the response by status alone; two errors of one endpoint pinning one status is refused;
-- a `document` lists a media type, and every other endpoint lists only types a codec here speaks (below);
-- no two endpoints share a verb and a path, across every projection a description holds.
-
-## Media types
-
-`endpoint` carries `media_types?: [media_type]`, net.tn's `media_type`. **Every endpoint but a `document` speaks
-`application/tson`**, and the list says what it speaks beside it; absent is `application/tson` alone. **A label is
-listed, never implied**: an endpoint answering JSON lists `application/json`, `application/tson+json` or both, and
-Accept chooses among what is listed. Media types rather than an enum of encodings: HTTP already negotiates them, so a
-new encoding is a registered name and never an edit to the layer. One set serves both directions, as the codec does;
-a split between what an endpoint accepts and what it produces is a later field.
-
-`Route.mediaTypes()` is the resolved set, folded to lower case: `application/tson` first for a non-document, then what
-is listed. `Route.speaksJson()` is membership of either JSON label, and a demo builds the route's codec from it
-(`codec.acceptingJson()`), keeping the description the one statement.
-`TsonApiConformanceTest.everyEndpointSpeaksTheMediaTypesItLists` holds the server to it, each listed JSON label sent
-and asked for, and JSON refused where none is listed.
-
-**The closed world is checked at startup, the shape of `prepareToRead`** (`design/binding.md`): `TsonApiDescription`
-refuses a media type no codec it serves can speak, so a description naming an encoding the server lacks fails to start
-and never answers 500. "Can speak" is `application/tson`, `application/json` and `application/tson+json` for an
-endpoint writing a TSON value; a document's body is bytes, so any type labels it. And it refuses a `document` listing
-none: `application/tson` is not implied for a document, and the base record declares the field optional, so only the
-reader can require it.
-
-**An endpoint whose body is not a TSON value is a `!document`**: the schema route (schema documents served as
-published bytes, `application/tson`) and the validator's page (`text/html`). Its media types are the whole contract of
-its body; it may still take a request record to place and name business errors, and its success is labelled, not
-judged.
-
-## Wiring, and what a server derives
-
-**The wiring is two things**: this schema reachable from the `schemaSource` (`TsonApiSchema.publishedById()`), and
-`TsonApiSchema.bindings()` in the config's one bind context beside the application's own, merged by
-`TsonApiSchema.bindingsWith`. The map is explicit: a class in `io.ltr8.tson.http.api` binds only by being named there,
-and a name both maps bind is refused, since within one closure a name means one thing. Map keys bind as `String`
-whatever the key type, so `{http_verb => endpoint}` is `Map<String, Endpoint>`, never a `Map<HttpVerb, …>` holding
-strings. A slot typed by a record with no bare form needs a Java type of that name: `Endpoint` is a sealed interface,
-as abstract in Java as the base is in the schema.
-
-**What a server publishes and warms comes from the description**, not a document beside it:
-
-- `referencedSchemas()`: itself, the layer, and its imports transitively, minus the bundled standard library. That is
-  the catalog, so a referenced-but-unpublished schema is impossible, not merely tested for.
-- `boundClasses(bindings)`: what to `prepareToWrite`, from every request, response and error the endpoints name.
-  Hand-listing lets a new response type go unwarmed, which costs only latency, so nothing reports it.
-
-**`TsonApiCoverage` holds a server to that contract at startup.** `serving(verb, path)` claims a declared endpoint and
-hands back its `Route`, so the path and media types come from the description wherever the framework can take them; an
-undeclared endpoint is refused where the handler is written, and `requireComplete()` fails startup on a declared one
-left unclaimed rather than 404ing for a client that believed the contract.
-
-**An endpoint has no name, so a claim names the description's verb and template string**, which keeps it
-framework-agnostic: the JDK demo serves `/{+schemaPath}` from a `createContext("/")` prefix, Javalin needs `/<path>` to
-match across slashes, and Helidon uses `any()`. Comparing registered paths would need a per-framework translation
-table, where a wrong entry is a route that silently never matches.
-
-**"Everything declared is served" has a way out, and the reason is required.** `notServedHere(verb, path, reason)`
-makes the exemption a greppable, justified decision where a boolean would be a hole; `@not_bound` is the same rule one
-level up. Future helpers take this shape: a *named position with a rationale*, never a flag meaning "be sloppy".
-
-## Smaller rules
-
-**A path is a URI template**: RFC 6570 levels 1 and 2, absolute, checked at schema load. The demos declare
-`{+schemaPath}`, the reserved expansion an identity path with slashes needs, where `{schemaPath}` would
-percent-encode them. Its variables are fields of the endpoint's request record, so a parameter-only endpoint declares a
-one-field record (`schema_ref => { schemaPath: text }`) placed from the path: there is no parameter list.
-
-**Documentation is annotation on a key.** `@summary` and `@doc` before a verb key document that endpoint; an
+**Documentation is annotation on a key.** `@service.summary` and `@doc` before a verb key document that endpoint; an
 exchange's sit before its key in the protocol, and a binding falls back to them (`Route.summary()`, `Route.doc()`).
 **A schema entry has two annotation positions and they land in different places**: `@doc:"…" op => …` annotates the
 **entry**, read from `entries.getAnnotations(name)`; `op => @doc:"…" { … }` annotates the **definition**. Reading only
 the second and concluding `@doc` is dropped looks exactly like a library bug
 (`UpstreamGapsTest.anEntrysTwoAnnotationPositionsLandInDifferentPlaces`).
 
-**The positional form, and what it costs.** `resource` has exactly one bare required field, so §5.6 lets the map stand
-in for it: `"/orders" => { POST => … }` for `{ endpoints: { POST => … } }`. A second required field withdraws the
-positional form, and every document written in it stops parsing, so a new field there is optional or a new type.
+## What builds on the protocol, and is not built
 
-**A templated projection is applied by name.** An endpoint is no entry, so a template holds a whole `!http` value:
-`fetching => <T> !http { "/orders/{id}" => { … response: T … } }` declares, and `orders => fetching<order>` resolves to
-the namespace value with the argument substituted ([TSON-SCHEMA] §8.2), which `TsonApiDescription` finds by what the
-entry is (`UpstreamGapsTest.aTemplatedHttpProjectionIsAppliedByName`).
-
-**Deliberately absent**, each a decision: security schemes, response headers, links, callbacks, examples, tags,
-servers, more than one success response, custom and WebDAV verbs (`http_verb` is a closed enum), and a declaration of
-the transport's own refusals, which every endpoint has and the error boundary answers with a `problem`. `security` is
-the one that would disqualify this for a real service. Adding any is an edit in place until this is published, and a
-new identity after.
-
-**The description is checked, not just written.** `TsonApiConformanceTest` resolves it through a schema source
-fetching from the running server, proving that every referenced schema is published and every payload type exists,
-then holds the server to what no compiler can know: a reply at the success status carries the response type (a
-document, a media type it lists), one at a business error's fixed status that error, and any other is a 4xx or 5xx
-`problem`.
-
-**What builds on the protocol, and is not built.** `experiments/rpc/` is its wire form, `call` and `return` as
-templates closed per exchange, next in the order of work and outside `tson-http` once it lands. `experiments/agent/`, a
-plan of calls, is **future work** kept so a consumer that is not HTTP shapes the layer: do not build toward it, and do
-not let a decision that is the agent's alone move the layer.
-
-## Business errors compose `problem`
-
-A business error (the request was schema-valid and the domain still said no) is **written by the handler, not
-thrown**. It composes `problem` (§5.8) so it carries RFC 9457's members and adds its own, which means the error
-boundary cannot produce it: the boundary only renders a `problem`, and a `sku_not_found` has a field `problem` does not.
-
-These types belong in the **application's** schema, importing `problem.tn`: `tson-http` owns the transport envelope,
-the service owns "SKU not found".
-
-- **Imports are transitive, but name what you use anyway.** `order-1.tn` would get `text` through `problem.tn`; name
-  `core.tn` too. A collision is judged by the *declaring schema's identity*, so naming a dependency twice is no error.
-- **`errors` stays data-level.** A business failure carries `errors: []` and its own fields. They never co-occur
-  anyway: validation is a gate, so business logic is not reached on a document that failed it.
+`experiments/rpc/` is its wire form, `call` and `return` as parametric records applied per exchange, outside `tson-http` once
+it lands. `experiments/agent/`, a plan of calls, is the draft of the LLM-facing projection (above): a consumer that is not
+HTTP, pressing on the protocol for what a model needs. A decision that is a projection's alone lands in the projection.

@@ -30,8 +30,8 @@ import java.util.function.Function;
  * versions and prefer one:
  *
  * <pre>{@code
- * TSON-Accept-Schema: "https://schemas.example.com/2026/39/app/order-2.tn",
- *                     "https://schemas.example.com/2026/39/app/order-1.tn";q=0.5
+ * TSON-Accept-Schema: "https://schemas.example.com/2026/40/app/order-2.tn",
+ *                     "https://schemas.example.com/2026/40/app/order-1.tn";q=0.5
  * }</pre>
  *
  * <p><b>Absence means the server chooses</b>, as {@code Accept}'s absence means "anything". That keeps every

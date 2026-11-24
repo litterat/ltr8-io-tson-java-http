@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * A runnable TSON server on the JDK's own {@code com.sun.net.httpserver}, with no external dependency of any
@@ -39,12 +40,12 @@ import java.util.Optional;
 public final class OrderServer {
 
     /** The identity of the order schema. It names a host; where it is served is separate. */
-    public static final String SCHEMA_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
+    public static final String SCHEMA_ID = "https://schemas.example.com/2026/40/app/order-1.tn";
 
     /**
      * The schema this server governs orders by, and the business errors it answers with.
      *
-     * <p>{@code sku_not_found} composes {@code problem} (§5.8), so it carries RFC 9457's members and adds its
+     * <p>{@code sku_not_found} composes {@code problem.details} (§5.8), so it carries RFC 9457's members and adds its
      * own. A record is closed under its type (§7.2), so the extension is <em>declared</em> rather than assumed
      * — which is what RFC 9457 does with an open JSON object, made explicit.
      *
@@ -56,14 +57,14 @@ public final class OrderServer {
     public static final String SCHEMA = schema("order-1.tn");
 
     /**
-     * A description of this service, as a schema importing {@code meta-service.tn} -- published, resolved at
+     * A description of this service, as a schema importing {@code service.tn} -- published, resolved at
      * startup, and checked by a conformance test.
      *
      * <p><b>The payload types and the exchange a binding names are references, not strings.</b> {@code request:
-     * order} and {@code orders.place_order} are resolved when this schema loads, so a description
+     * order} and {@code orders.exchanges.place_order} are resolved when this schema loads, so a description
      * naming a type or an exchange nothing declares does not start this server.
      */
-    public static final String API_ID = "https://schemas.example.com/2026/39/app/orders-api-1.tn";
+    public static final String API_ID = "https://schemas.example.com/2026/40/app/orders-api-1.tn";
 
     public static final String API = schema("orders-api-1.tn");
 
@@ -71,17 +72,18 @@ public final class OrderServer {
     public static final String UNSTOCKED_SKU = "GONE-1";
 
     /**
-     * A bound {@code sku_not_found}: every member of {@code problem}, plus this error's own {@code sku}.
+     * A bound {@code sku_not_found}: every member of {@code problem.details}, plus this error's own {@code sku}.
      * Verbose on purpose -- a record is closed under its type, so composing one in the schema means spelling
-     * the composed shape here too.
+     * the composed shape here too. {@code errors} is a component because a class bound for reading has one for
+     * every field, and it is empty here: a business error carries no diagnostic, so its body omits the member.
      */
     @Typename(name = "sku_not_found")
     public record SkuNotFound(Optional<String> type, String title, int status, Optional<String> detail,
-                              Optional<String> instance, List<TsonProblemDiagnostic> errors, String sku) {
+                              Optional<String> instance, Optional<List<TsonProblemDiagnostic>> errors, String sku) {
 
         static SkuNotFound of(String sku) {
             return new SkuNotFound(Optional.of(TsonHttpException.TYPES + "sku-not-found"), "No such SKU", 404,
-                    Optional.of("'" + sku + "' is not stocked"), Optional.empty(), List.of(), sku);
+                    Optional.of("'" + sku + "' is not stocked"), Optional.empty(), Optional.empty(), sku);
         }
     }
 
@@ -126,7 +128,7 @@ public final class OrderServer {
         Map<String, String> schemas = new HashMap<>(Map.of(SCHEMA_ID, SCHEMA,
                 TsonProblemSchema.ID, TsonProblemSchema.source(), API_ID, API));
         schemas.putAll(TsonApiSchema.publishedById());
-        // One bind context for the data and the description: without meta-service.tn's records in it, the API
+        // One bind context for the data and the description: without service.tn's records in it, the API
         // schema below holds its endpoints as trees and nothing can read them.
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(schemas)))
@@ -176,15 +178,18 @@ public final class OrderServer {
                     ? exchange.readObjectAs(SCHEMA_ID, "order", Order.class)
                     : exchange.readObject(Order.class);
             if (UNSTOCKED_SKU.equals(order.sku())) {
-                // A business error is written, not thrown: it composes problem and carries fields no problem
-                // has, so the boundary -- which only knows how to render a problem -- could not produce it.
+                // A business error is written, not thrown: it composes problem.details and carries fields no
+                // problem body has, so the boundary -- which only renders a problem body -- could not produce it.
                 exchange.respondDescribed(404, SkuNotFound.of(order.sku()), SCHEMA_ID, "sku_not_found");
                 return;
             }
             // Self-describing: the reply names the schema governing it -- in band and in the header as TSON, in
             // the header alone as JSON -- and this server publishes that schema, so a client can validate what
             // it got without being told anything out of band.
-            exchange.respondDescribed(201, new Order(order.sku(), order.quantity() * 2), SCHEMA_ID, "order");
+            Order confirmed = new Order(order.sku(), order.quantity() * 2);
+            // The headers a success carries are the description's, expanded against the reply's fields.
+            create.expandResponseHeaders(fieldsOf(confirmed)).forEach(exchange::setHeader);
+            exchange.respondDescribed(201, confirmed, SCHEMA_ID, "order");
         }));
 
         // Publishing the schemas at their own identity paths is what makes the URL in an !!import directive --
@@ -194,15 +199,36 @@ public final class OrderServer {
         // a prefix rather than a pattern. A claim names the declared template rather than the registered path
         // for exactly this reason -- checking the paths were equal would need a translation table per
         // framework, and a wrong entry there is a route that silently never matches.
-        coverage.serving(HttpVerb.GET, "/{+schemaPath}");
+        Route getSchema = coverage.serving(HttpVerb.GET, "/{+schemaPath}");
         server.createContext("/", TsonHandler.asHttpHandler(codec,
-                TsonSchemaHandler.of(catalog(described, schemas))));
+                schemaRoute(getSchema, catalog(described, schemas))));
 
         coverage.requireComplete();
         server.start();
         return server;
     }
 
+
+    /** An order's fields as text, by name: what a response header's template expands from. */
+    private static Function<String, String> fieldsOf(Order order) {
+        return Map.of("sku", order.sku(), "quantity", String.valueOf(order.quantity()))::get;
+    }
+
+    /**
+     * The schema route, setting the headers its description declares on a success, before the catalog answers: a
+     * document's headers are literals, checked at startup, and a miss or a refused method is the error boundary's,
+     * carrying none of them.
+     */
+    private static TsonHandler schemaRoute(Route route, TsonSchemaCatalog catalog) {
+        TsonSchemaHandler served = TsonSchemaHandler.of(catalog);
+        return exchange -> {
+            if ((exchange.method().equals("GET") || exchange.method().equals("HEAD"))
+                    && catalog.find(exchange.uri().getPath()).isPresent()) {
+                route.responseHeaders().forEach(exchange::setHeader);
+            }
+            served.handle(exchange);
+        };
+    }
 
     /**
      * What this server publishes, <b>derived from its own description</b> rather than listed: the description,

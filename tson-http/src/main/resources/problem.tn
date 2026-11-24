@@ -1,5 +1,5 @@
-!!id:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
-!!import:"https://tson.io/2026/39/m/core.tn"
+!!id:"https://tson.io/2026/40/io/ltr8/http/problem.tn"
+!!import:"https://tson.io/2026/40/m/core.tn"
 @doc:"""
   The error body this project writes when a request cannot be fulfilled.
 
@@ -7,133 +7,149 @@
   and has since diverged, which is the right outcome rather than drift: a CLI reports on files and a
   server reports on requests, and holding one shape across both would have meant neither fitting.
 
-  problem follows RFC 9457 (Problem Details for HTTP APIs, obsoleting 7807) so that ordinary HTTP
+  ONE ROOT NAME. Every entry is a member of the schema map `problem` nested in the root, and is named by
+  its path from the root, from inside the map as from outside it: `problem.details`, `problem.diagnostic`,
+  `problem.diagnostic_code`. Every root name of an import closure is reserved in each importer
+  ([TSON-SCHEMA] §2.2.3), and a schema declaring a business error imports this one beside its own types, so
+  nested in one map it reserves `problem` alone. A problem body is `!problem.details { … }`, and a business
+  error composes it: `sku_not_found => problem.details & { status: = 404  sku: text }`.
+
+  problem.details follows RFC 9457 (Problem Details for HTTP APIs, obsoleting 7807) so that ordinary HTTP
   tooling recognises the body: type, title, status, detail and instance are its five members, and
   errors is an extension member of exactly the shape §3.1 of that RFC uses for its own
   multiple-validation-errors example.
 
-  diagnostic stays close to what a TSON read produces, because that is what it reports. It is not
+  problem.diagnostic stays close to what a TSON read produces, because that is what it reports. It is not
   RFC 9457's per-error shape -- that RFC suggests detail and pointer, which would throw away the
   code vocabulary, the two-ended location model and the source positions §8.1 requires.
 
-  Versioning, per §3.5: a shape change to a PUBLISHED schema is a new identity, never an edit, because
+  Versioning, per [TSON-SCHEMA] §3.5: a shape change to a PUBLISHED schema is a new identity, never an edit, because
   a document that named the old one must go on resolving. Nothing here is published yet, so this file
   is edited in place under the one identity it has. Once a release fixes it, adding so much as an enum
   member below is a new identity, and this document keeps being served alongside it.
   """
 !schema {
-  @doc:"""
-    A hand-written copy of io.ltr8.tson.compiler.Diagnostic.Code, which is the source of truth;
-    TsonProblemSchemaTest is the only thing that checks the two agree.
+  problem => !schema {
+    @doc:"""
+      A hand-written copy of io.ltr8.tson.compiler.Diagnostic.Code, which is the source of truth;
+      TsonProblemSchemaTest is the only thing that checks the two agree.
 
-    Eleven members are not a verdict on the request, and they differ by who could not give one.
-    NOT_IMPLEMENTED: this library could not check a construct the body uses -- the same split the CLI rides
-    its exit codes on (70, not 1) -- a 501. BIND_MISMATCH: a schema and the Java class bound to it disagree,
-    or the class refused a value the schema admits, which is this server's own wiring; its message names a
-    server class, so it is a 500 and the boundary drops it from the body entirely. The five SCHEMA_* codes:
-    no schema was obtained, one code per reason. The remaining four, with SCHEMA_NOT_PERMITTED and
-    SCHEMA_TOO_LARGE, are refusals: this processor declined under its own policy and limits, and the next one
-    along may accept the same body in full.
+      Eleven members are not a verdict on the request, and they differ by who could not give one.
+      NOT_IMPLEMENTED: this library could not check a construct the body uses -- the same split the CLI rides
+      its exit codes on (70, not 1) -- a 501. BIND_MISMATCH: a schema and the Java class bound to it disagree,
+      or the class refused a value the schema admits, which is this server's own wiring; its message names a
+      server class, so it is a 500 and the boundary drops it from the body entirely. The five schema-fetch codes,
+      SCHEMA_NOT_PERMITTED, SCHEMA_NOT_FOUND, SCHEMA_UNREACHABLE, SCHEMA_TIMEOUT and SCHEMA_TOO_LARGE: no schema was
+      obtained, one code per reason; SCHEMA_ERROR, a schema that was obtained and is wrong, is a verdict and not one
+      of them. The remaining four, with SCHEMA_NOT_PERMITTED and SCHEMA_TOO_LARGE, are refusals: this processor
+      declined under its own policy and limits, and the next one along may accept the same body in full.
 
-    Not being a verdict does not settle the status, and the SCHEMA_* five are where that shows.
-    SCHEMA_UNREACHABLE is a 502 and SCHEMA_TIMEOUT a 504 -- the reference was fine and the world was
-    not. SCHEMA_NOT_PERMITTED (a reference this deployment will not fetch), SCHEMA_NOT_FOUND (one
-    nothing serves) and SCHEMA_TOO_LARGE (one whose document exceeds the bytes a schema may be) are the
-    document's own doing and are 400s, because the sender is who can name something else. Nothing was
-    checked in any of the five; only two of them are worth retrying, and those two answer only when nothing
-    else in the body is the sender's to fix, since a retry would otherwise reach the same answer.
+      Not being a verdict does not settle the status, and the five fetch codes are where that shows.
+      SCHEMA_UNREACHABLE is a 502 and SCHEMA_TIMEOUT a 504 -- the reference was fine and the world was
+      not. SCHEMA_NOT_PERMITTED (a reference this deployment will not fetch), SCHEMA_NOT_FOUND (one
+      nothing serves) and SCHEMA_TOO_LARGE (one whose document exceeds the bytes a schema may be) are the
+      document's own doing and are 400s, because the sender is who can name something else. Nothing was
+      checked in any of the five; only two of them are worth retrying, and those two answer only when nothing
+      else in the body is the sender's to fix, since a retry would otherwise reach the same answer.
 
-    They are declared here even though a client should never see the first two, because this enum
-    copies Diagnostic.Code rather than the subset one server happens to emit.
+      They are declared here even though a client should never see the first two, because this enum
+      copies Diagnostic.Code rather than the subset one server happens to emit.
 
-    CONFUSABLE_NAMES, RESTRICTED_CHARACTER and RESTRICTED_SCRIPT are [TSON-DATA] §8.2's name hygiene,
-    one code per rule, and LIMIT_EXCEEDED is §9.1's nesting bound. They are this deployment's CONFIGURATION
-    speaking -- ProcessorConfig decides which scripts a name or token may carry and how deep a body may
-    nest -- so a refusal says nothing about whether the body is valid. It is still the client's to fix, by a
-    rename, a character, or a shallower body, so the three name rules are 400s and the limit a 413.
+      CONFUSABLE_NAMES, RESTRICTED_CHARACTER and RESTRICTED_SCRIPT are [TSON-DATA] §8.2's name hygiene,
+      one code per rule, and LIMIT_EXCEEDED is §9.1's nesting bound. They are this deployment's CONFIGURATION
+      speaking -- ProcessorConfig decides which scripts a name or token may carry and how deep a body may
+      nest -- so a refusal says nothing about whether the body is valid. It is still the client's to fix, by a
+      rename, a character, or a shallower body, so the three name rules are 400s and the limit a 413.
 
-    The rule rides the code rather than a field beside it, which is the right shape: a consumer routes
-    on the code, and the three want three different fixes -- rename one of a colliding pair, change a
-    character outside the identifier profile, or relax the level. A second enum would only restate what
-    the code already fixes and would be free to disagree with it.
+      The rule rides the code rather than a field beside it, which is the right shape: a consumer routes
+      on the code, and the three want three different fixes -- rename one of a colliding pair, change a
+      character outside the identifier profile, or relax the level. A second enum would only restate what
+      the code already fixes and would be free to disagree with it.
 
-    SCOPE_NOT_ADMITTED is a JSON body naming its imports ($import) anywhere but the leading member of its
-    top object ([TSON-JSON] §3.4): the binding written where no binding stands, a resolver error and a
-    400. A TSON body's !!import past the header is a parse error instead, a VALIDATION_ERROR.
+      SCOPE_NOT_ADMITTED is a JSON body naming its imports ($import) anywhere but the leading member of its
+      top object ([TSON-JSON] §3.4): the binding written where no binding stands, a resolver error and a
+      400. A TSON body's !!import past the header is a parse error instead, a VALIDATION_ERROR.
 
-    An atom refuses a token in two categories, so it carries two codes. §5.2 splits the refusal -- a
-    token the atom's grammar rejects is a parse error, a parsed value violating the atom's range is a
-    validation error -- and §8.1 files the halves apart, the first as a resolver error and the second as
-    a validation one. ATOM_FORM_INVALID is the first, ATOM_CONSTRAINT_VIOLATION the second. Both are
-    verdicts on the document and so both are 400; they are two codes because the fixes differ -- rewrite
-    the token, or change the value it denotes.
-    """
-  diagnostic_code => !enum [
-    FIELD_REQUIRED FIELD_FIXED FIELD_GROUP TYPE_MISMATCH WRONG_ARITY UNKNOWN_TYPE_REF SCOPE_NOT_ADMITTED
-    ATOM_FORM_INVALID ATOM_CONSTRAINT_VIOLATION UNRECOGNIZED_FIELD DUPLICATE_MAP_KEY DUPLICATE_FIELD CONFUSABLE_NAMES
-    RESTRICTED_CHARACTER RESTRICTED_SCRIPT SCHEMA_ERROR UNKNOWN_TYPE VALIDATION_ERROR NOT_IMPLEMENTED
-    BIND_MISMATCH
-    LIMIT_EXCEEDED SCHEMA_NOT_PERMITTED SCHEMA_NOT_FOUND SCHEMA_UNREACHABLE SCHEMA_TIMEOUT SCHEMA_TOO_LARGE
-  ]
+      An atom refuses a token in two categories, so it carries two codes. §5.2 splits the refusal -- a
+      token the atom's grammar rejects is a parse error, a parsed value violating the atom's range is a
+      validation error -- and §8.1 files the halves apart, the first as a resolver error and the second as
+      a validation one. ATOM_FORM_INVALID is the first, ATOM_CONSTRAINT_VIOLATION the second. Both are
+      verdicts on the document and so both are 400; they are two codes because the fixes differ -- rewrite
+      the token, or change the value it denotes.
+      """
+    diagnostic_code => !enum [
+      FIELD_REQUIRED FIELD_FIXED FIELD_GROUP TYPE_MISMATCH WRONG_ARITY UNKNOWN_TYPE_REF SCOPE_NOT_ADMITTED
+      ATOM_FORM_INVALID ATOM_CONSTRAINT_VIOLATION UNRECOGNIZED_FIELD DUPLICATE_MAP_KEY DUPLICATE_FIELD CONFUSABLE_NAMES
+      RESTRICTED_CHARACTER RESTRICTED_SCRIPT SCHEMA_ERROR UNKNOWN_TYPE VALIDATION_ERROR NOT_IMPLEMENTED
+      BIND_MISMATCH
+      LIMIT_EXCEEDED SCHEMA_NOT_PERMITTED SCHEMA_NOT_FOUND SCHEMA_UNREACHABLE SCHEMA_TIMEOUT SCHEMA_TOO_LARGE
+    ]
 
-  @doc:"""
-    One problem, located at up to two ends: the value in the data (path, data_position) and the rule
-    in the schema (schema_id, schema_pointer, schema_position). Either end may be absent -- a problem
-    found in a schema has no data, and a schemaless read has no schema.
+    @doc:"An HTTP status code, refined so 42 is not a status; a business error's `status: = 404` pins it."
+    status => !integer ^ { min: 100  max: 599 }
 
-    schema_id is the schema's canonical identity, "example.com/people.tn" ([TSON-DATA] §2.2.1), which
-    is no URI. It is text because the series defines no atom for an identity: a processor emits one in
-    its canonical spelling only, so text's equality is an identity's.
+    @doc:"""
+      One problem, located at up to two ends: the value in the data (path, data_position) and the rule
+      in the schema (schema_id, schema_pointer, schema_position). Either end may be absent -- a problem
+      found in a schema has no data, and a schemaless read has no schema.
 
-    A position is "line:column:byte_offset", all three 1-based except byte_offset, which counts
-    UTF-8 bytes from 0 ([TSON-DATA] §8.1). The offsets are into the request body as sent.
+      schema_id is the schema's canonical identity, "example.com/people.tn" ([TSON-DATA] §2.2.1), which
+      is no URI. It is text because the series defines no atom for an identity: a processor emits one in
+      its canonical spelling only, so text's equality is an identity's.
 
-    Every member here is a location or the problem itself; nothing is a payload meaningful to one code.
-    Why a schema could not be obtained is the code, one per reason, so a body cannot state a code and a
-    reason that contradict each other.
+      A position is "line:column:byte_offset", all three 1-based except byte_offset, which counts
+      UTF-8 bytes from 0 ([TSON-DATA] §8.1). The offsets are into the request body as sent.
 
-    LIMIT_EXCEEDED is the same shape one layer out: a §9.1 bound this deployment reads within, so
-    `expected` and `actual` carry the depth admitted against the depth reached and nothing states the
-    policy, which is published once at /.well-known/tson-deployment.
+      Every member here is a location or the problem itself; nothing is a payload meaningful to one code.
+      Why a schema could not be obtained is the code, one per reason, so a body cannot state a code and a
+      reason that contradict each other.
 
-    A refusal under a §8.2 policy (CONFUSABLE_NAMES, RESTRICTED_CHARACTER, RESTRICTED_SCRIPT) carries
-    nothing beyond its code. The level and the Unicode data version it was judged under are properties
-    of the processor, not of the problem -- constant for the life of the process -- so they are stated
-    once, in the deployment's published acceptance profile, rather than on every refusal, where they
-    would arrive only after the fact. Which rule fired is the code, one per rule.
-    """
-  diagnostic => {
-    path?: text
-    schema_pointer?: text
-    schema_id?: text
-    code: diagnostic_code
-    message: text
-    expected?: text
-    actual?: text
-    data_position?: text
-    schema_position?: text
-  }
-  @doc:"""
-    RFC 9457's five members, plus errors.
+      LIMIT_EXCEEDED is the same shape one layer out: a §9.1 bound this deployment reads within, so
+      `expected` and `actual` carry the depth admitted against the depth reached and nothing states the
+      policy, which is published once at /.well-known/tson-deployment.
 
-    type identifies the class of failure and is the member to match on: it is stable where title is
-    prose, and it dereferences. Absent means RFC 9457's "about:blank" -- no semantics beyond the
-    status code. title summarises the type; detail describes this one occurrence. instance
-    identifies this occurrence. Both type and instance are URI references, so either may be relative, per
-    that RFC (§3.1.1, §3.1.5) -- which is why they are uri_reference and not uri, which requires a scheme.
+      A refusal under a §8.2 policy (CONFUSABLE_NAMES, RESTRICTED_CHARACTER, RESTRICTED_SCRIPT) carries
+      nothing beyond its code. The level and the Unicode data version it was judged under are properties
+      of the processor, not of the problem -- constant for the life of the process -- so they are stated
+      once, in the deployment's published acceptance profile, rather than on every refusal, where they
+      would arrive only after the fact. Which rule fired is the code, one per rule.
+      """
+    diagnostic => {
+      path?: text
+      schema_pointer?: text
+      schema_id?: text
+      code: problem.diagnostic_code
+      message: text
+      expected?: text
+      actual?: text
+      data_position?: text
+      schema_position?: text
+    }
+    @doc:"""
+      RFC 9457's five members, plus errors.
 
-    status is restated here so a problem that is stored, logged or forwarded stays self-describing
-    once separated from its response.
+      type identifies the class of failure and is the member to match on: it is stable where title is
+      prose, and it dereferences. Absent means RFC 9457's "about:blank" -- no semantics beyond the
+      status code. title summarises the type; detail describes this one occurrence. instance
+      identifies this occurrence. Both type and instance are URI references, so either may be relative, per
+      that RFC (§3.1.1, §3.1.5) -- which is why they are uri_reference and not uri, which requires a scheme.
 
-    errors is empty for a failure that produced no diagnostic at all -- an unsupported media type, an
-    unacceptable Accept -- which is why it is a list rather than a required single value.
-    """
-  problem => {
-    type?: uri_reference
-    title: text
-    status: int32
-    detail?: text
-    instance?: uri_reference
-    errors: [diagnostic]
+      status is restated here so a problem that is stored, logged or forwarded stays self-describing
+      once separated from its response. It is a problem.status, so it is an HTTP status and nothing wider.
+
+      errors is optional. The error boundary writes it on every problem it renders: the diagnostics the read
+      produced, and an empty list for a failure that produced none -- an unsupported media type, an
+      unacceptable Accept. A business error omits it, the request having been schema-valid, so there is no
+      diagnostic to carry. A bound list component receives an omitted list as nothing, and TsonProblem reads
+      it as an empty list.
+      """
+    details => {
+      type?: uri_reference
+      title: text
+      status: problem.status
+      detail?: text
+      instance?: uri_reference
+      errors?: [problem.diagnostic]
+    }
   }
 }

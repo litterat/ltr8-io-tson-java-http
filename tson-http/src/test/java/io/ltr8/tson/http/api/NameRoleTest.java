@@ -16,7 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * How to separate exchange names from {@code type_name}: declare a naming ROLE for the borrowed namespace, as the
- * kernel declares {@code type_name}, {@code field_name} and {@code param_name} -- all {@code => identifier}.
+ * kernel declares {@code type_name} and {@code param_name} -- each {@code => identifier}. A record's field names
+ * take no role of their own: a record stating no {@code name_type} has {@code identifier}'s ([TSON-SCHEMA] §5.2).
  *
  * <p>Measured: a role declared in the meta layer ({@code exchange_name => identifier}) enforces the identifier
  * grammar at a map key and <em>names itself</em> in the refusal ("'exchange_name': 'place order': U+0020 …"), where
@@ -26,12 +27,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class NameRoleTest {
 
-    static final String META_ID = "https://tson.io/2026/39/io/ltr8/http/meta-probe-n.tn";
-    static final String DOC_ID = "https://schemas.example.com/2026/39/app/probe-n-1.tn";
+    static final String META_ID = "https://tson.io/2026/40/io/ltr8/http/meta-probe-n.tn";
+    static final String DOC_ID = "https://schemas.example.com/2026/40/app/probe-n-1.tn";
 
     static final String META = """
         !!id:"%s"
-        !!import:"https://tson.io/2026/39/m/meta.tn"
+        !!import:"https://tson.io/2026/40/m/meta.tn"
         !schema {
           signature   => { request?: meta.type_ref  response?: meta.type_ref  errors?: [meta.type_ref] }
           exchange      => signature & {}
@@ -44,7 +45,7 @@ class NameRoleTest {
         String doc = """
             !!id:"%s"
             !!import:"%s"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
               order => { sku: text }
             %s
@@ -86,7 +87,8 @@ class NameRoleTest {
      * A namespace's keys are names, so a {@code text} key family is refused where the layer declares it: {@code
      * key_type} is an {@code identifier_ref}. A map keyed by {@code text} is still a map, and accepts anything --
      * it is just no namespace, so a qualified name does not enter it, and an entry in it is reached by location. A
-     * text-keyed namespace is not proposed in Revision 39, a qualified name's segment being an identifier.
+     * qualified name splits at {@code .}, each segment a name of the family it enters, so a key type admitting
+     * {@code .} is a resolver error ([TSON-SCHEMA] §5.2).
      */
     @Test
     void aNamespaceCannotBeKeyedByText() {
@@ -106,10 +108,10 @@ class NameRoleTest {
      */
     @Test
     void aDataDocumentsIdentifierKeysAreNames() {
-        String schemaId = "https://schemas.example.com/2026/39/app/probe-n-data-1.tn";
+        String schemaId = "https://schemas.example.com/2026/40/app/probe-n-data-1.tn";
         Map<String, String> lib = Map.of(schemaId, """
             !!id:"%s"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
               identifier  => !unicode.identifier_type { continue_add: "-" }
               exchange_name => identifier

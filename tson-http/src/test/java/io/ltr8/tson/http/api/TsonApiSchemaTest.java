@@ -25,50 +25,54 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The shipping service-description layer: protocols and http projections declared in a schema importing {@code
- * meta-service.tn}, with payload types and exchange references the compiler resolves, read back by {@link
+ * service.tn}, with payload types and exchange references the compiler resolves, read back by {@link
  * TsonApiDescription} and held to a server by {@link TsonApiCoverage}. The reader's relational checks are {@link
  * TsonApiDescriptionTest}'s.
  */
 class TsonApiSchemaTest {
 
-    private static final String ORDER_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
-    private static final String API_ID = "https://schemas.example.com/2026/39/app/orders-api-1.tn";
+    private static final String ORDER_ID = "https://schemas.example.com/2026/40/app/order-1.tn";
+    private static final String API_ID = "https://schemas.example.com/2026/40/app/orders-api-1.tn";
 
     private static final String ORDER = """
-            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
-            !!import:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
+            !!id:"https://schemas.example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
+            !!import:"https://tson.io/2026/40/io/ltr8/http/problem.tn"
             !schema {
               non_empty_text => !text ^ { min_length: 1 }
               order          => { sku: non_empty_text  quantity: int32 }
-              sku_not_found  => problem & { status: = 404  sku: text }
+              sku_not_found  => problem.details & { status: = 404  sku: text }
             }""";
 
     /** A protocol, an http projection binding it, and the schema route as a document. */
     private static final String API = """
-            !!id:"https://schemas.example.com/2026/39/app/orders-api-1.tn"
-            !!import:"https://tson.io/2026/39/io/ltr8/http/meta-service.tn"
-            !!import:"https://schemas.example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/io/ltr8/http/problem.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/orders-api-1.tn"
+            !!import:"https://tson.io/2026/40/io/ltr8/http/service.tn"
+            !!import:"https://schemas.example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/io/ltr8/http/problem.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
               schema_ref => { schemaPath: text }
 
-              orders => !protocol {
-                @doc:"Accept an order and confirm it, with the quantity doubled."
-                place_order => { request: order  response: order  errors: [sku_not_found] }
+              orders => !service.protocol {
+                exchanges: {
+                  @doc:"Accept an order and confirm it, with the quantity doubled."
+                  place_order => { request: order  response: order  errors: [sku_not_found] }
+                }
               }
 
-              @binds:[orders]
-              orders_http => !http {
-                "/orders" => {
-                  @summary:"Place an order"
-                  POST => !binding { exchange: orders.place_order  status: 201 }
-                }
-                "/{+schemaPath}" => {
-                  @safe
-                  @summary:"Fetch a published schema"
-                  GET => !document { request: schema_ref  media_types: ["application/tson"] }
+              orders_http => !service.http {
+                binds: [orders]
+                resources: {
+                  "/orders" => {
+                    @service.summary:"Place an order"
+                    POST => !service.binding { exchange: orders.exchanges.place_order  status: 201 }
+                  }
+                  "/{+schemaPath}" => {
+                    @service.safe
+                    @service.summary:"Fetch a published schema"
+                    GET => !service.document { request: schema_ref  media_types: ["application/tson"] }
+                  }
                 }
               }
             }""";
@@ -118,7 +122,7 @@ class TsonApiSchemaTest {
         assertEquals("order", create.response().orElseThrow().name());
         assertEquals(201, create.status());
         assertEquals("sku_not_found", create.errorFor(404).orElseThrow().name(), "by the status its type fixes");
-        assertEquals(Optional.of("Place an order"), create.summary(), "the verb key's @summary");
+        assertEquals(Optional.of("Place an order"), create.summary(), "the verb key's @service.summary");
         assertEquals(Optional.of("Accept an order and confirm it, with the quantity doubled."), create.doc(),
                 "the exchange's @doc, since the verb key carries none");
         assertEquals(List.of("sku", "quantity"), create.placement().at(Location.BODY), "a POST's remainder");
@@ -157,13 +161,13 @@ class TsonApiSchemaTest {
     @Test
     void anInnerRecordHeadsAnEntryAsAValueOfIt() {
         for (String record : List.of("exchange", "operation", "document")) {
-            String api = API.replace("\n}", "\n  x => !" + record + " { }\n}");
+            String api = API.replace("\n}", "\n  x => !service." + record + " { }\n}");
             assertEquals(List.of(), tson(api).validateSchema(api), record);
             assertEquals(described(API).routes(), described(api).routes(), record + " adds no route");
         }
         for (String record : List.of("resource", "binding")) {
-            String refused = only(API.replace("\n}", "\n  x => !" + record + " { }\n}"));
-            assertTrue(refused.contains("the body is no value of the type '" + record + "'")
+            String refused = only(API.replace("\n}", "\n  x => !service." + record + " { }\n}"));
+            assertTrue(refused.contains("the body is no value of the type 'service." + record + "'")
                     && refused.contains("missing required field"), refused);
         }
     }
@@ -183,6 +187,22 @@ class TsonApiSchemaTest {
         assertEquals(List.of(TsonApiSchema.source()), TsonApiSchema.publishedSources());
     }
 
+    /**
+     * The security schemes bind as the endpoints do: the abstract base to a sealed interface, each subtype to its
+     * record, the enum as {@code http_verb} does; and an application binding one of those names is refused, since
+     * within one closure a name means one thing.
+     */
+    @Test
+    void theSecuritySchemesBindToTheirRecords() {
+        Map<String, Class<?>> bindings = TsonApiSchema.bindings();
+        assertEquals(SecurityScheme.class, bindings.get("service.security_scheme"));
+        assertEquals(HttpAuth.class, bindings.get("service.http_auth"));
+        assertEquals(ApiKey.class, bindings.get("service.api_key"));
+        assertEquals(ApiKeyIn.class, bindings.get("service.api_key_in"));
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> TsonApiSchema.bindingsWith(
+                Map.of("service.http_auth", String.class))).getMessage().contains("'service.http_auth'"));
+    }
+
     // ── paths, media types, documents and errors ──
 
     /** {@link #API} with the schema route's path replaced. */
@@ -190,24 +210,47 @@ class TsonApiSchemaTest {
         return API.replace("\"/{+schemaPath}\" =>", "\"" + path + "\" =>");
     }
 
+    /** {@link #API} with the schema route's path replaced, and the order route moved out of the way of {@code path}. */
+    private static String withPathKey(String path) {
+        return API.replace("\"/orders\" =>", "\"/placed\" =>").replace("\"/{+schemaPath}\" =>", "\"" + path + "\" =>");
+    }
+
     /**
-     * <b>A path is a URI template, checked by its shape at schema load</b>: levels 1 and 2, absolute. {@code
-     * {+schemaPath}} -- reserved expansion, what a path with slashes in it needs -- is admitted, as are a dot, a
-     * percent-encoded octet and RFC 3986's other path characters; the fragment operator, a level-3 form, an
-     * unclosed or stray brace, a broken percent-encoding, a space and a path not starting with {@code /} are not.
-     * The character set is the identifier family's and the structure its {@code pattern}'s, and either refusal
-     * names the role.
+     * <b>A path is a URI template, checked by its shape at schema load</b>: levels 1 and 2, absolute, ASCII-exact. A
+     * {@code /}, then RFC 3986's path characters, percent-encoded octets and {@code {var}} or {@code {+var}}
+     * expressions -- {@code {+schemaPath}}, reserved expansion, being what a path with slashes in it needs. A
+     * character outside ASCII, a broken percent-encoding, a stray or unclosed brace, a variable outside RFC 6570's
+     * varname, the fragment and query operators, a space and a path not starting with {@code /} are each refused at
+     * the key, by the {@code pattern} of {@code service.path_template}, a text family: a path is no name.
      */
     @Test
     void aPathIsAUriTemplateCheckedAtSchemaLoad() {
-        for (String admitted : List.of("/{schemaPath}", "/{+schemaPath}", "/schemas/{+schemaPath}",
-                "/v1.2/{+schemaPath}", "/a%2Fb/{schemaPath}", "/x:y@z/{schemaPath}")) {
+        for (String admitted : List.of("/", "/orders", "/orders/{id}", "/schemas/{+path}", "/a%2Fb",
+                "/a.b-c_d~e!$&'()*+,;=:@", "/{schemaPath}", "/v1.2/{+schemaPath}")) {
+            String api = withPathKey(admitted);
+            assertEquals(List.of(), tson(api).validateSchema(api), admitted);
+        }
+        for (String admitted : List.of("/{+schemaPath}", "/schemas/{+schemaPath}", "/a%2Fb/{schemaPath}")) {
             assertTrue(described(withSchemaPath(admitted)).route(HttpVerb.GET, admitted).isPresent(), admitted);
         }
-        for (String refused : List.of("/{#schemaPath}", "/{?schemaPath}", "/{schemaPath", "/a}/{schemaPath}",
-                "/a%zz/{schemaPath}", "/a b/{schemaPath}", "{+schemaPath}")) {
-            String message = only(withSchemaPath(refused));
-            assertTrue(message.contains("path_template"), refused + ": " + message);
+        for (String refused : List.of("/订单", "/a%2", "/a{", "/{a-b}", "orders", "/{{id}}", "/{#schemaPath}",
+                "/{?schemaPath}", "/a}/{schemaPath}", "/a b/{schemaPath}")) {
+            String at = "/resources/" + refused.replace("~", "~0").replace("/", "~1");
+            String why = "'service.path_template': '" + refused + "' does not match the required pattern ";
+
+            String api = withPathKey(refused);
+            List<Diagnostic> inSchema = tson(api).validateSchema(api);
+            assertEquals(List.of(Diagnostic.Code.SCHEMA_ERROR), inSchema.stream().map(Diagnostic::code).toList(),
+                    () -> refused + ": " + inSchema);
+            assertTrue(inSchema.getFirst().message().contains("at " + at + ": " + why), inSchema.getFirst().message());
+
+            String data = "!!import:\"" + TsonApiSchema.ID + "\"\n"
+                    + "!service.http { resources: { \"" + refused + "\" => { endpoints: {} } } }";
+            List<Diagnostic> inData = tson(API).validate(data);
+            assertEquals(List.of(Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION),
+                    inData.stream().map(Diagnostic::code).toList(), () -> refused + ": " + inData);
+            assertEquals(Optional.of(at), inData.getFirst().path(), refused);
+            assertTrue(inData.getFirst().message().startsWith(why), inData.getFirst().message());
         }
     }
 
@@ -247,7 +290,7 @@ class TsonApiSchemaTest {
                 "status: 201  media_types: [\"application/xml\"] }"))).getMessage();
         assertEquals("'orders_http POST /orders' lists the media type 'application/xml', which no codec this server "
                 + "holds can speak -- an endpoint answering a TSON value speaks [application/json, application/tson, "
-                + "application/tson+json]; an endpoint answering bytes is a !document", refused);
+                + "application/tson+json]; an endpoint answering bytes is a !service.document", refused);
 
         Route page = described(API.replace("media_types: [\"application/tson\"]", "media_types: [\"text/html\"]"))
                 .route(HttpVerb.GET, "/{+schemaPath}").orElseThrow();
@@ -279,8 +322,8 @@ class TsonApiSchemaTest {
      */
     @Test
     void anErrorFixesAStatusOfItsOwn() {
-        String unfixed = ORDER.replace("sku_not_found  => problem & { status: = 404  sku: text }",
-                "sku_not_found  => problem & { sku: text }");
+        String unfixed = ORDER.replace("sku_not_found  => problem.details & { status: = 404  sku: text }",
+                "sku_not_found  => problem.details & { sku: text }");
         Tson tson = tson(API);
         tson.resolve(unfixed);
         tson.resolve(API);
@@ -291,7 +334,7 @@ class TsonApiSchemaTest {
         String twice = assertThrows(IllegalArgumentException.class, () -> described(API.replace(
                 "errors: [sku_not_found]", "errors: [sku_not_found problem_404]").replace(
                 "schema_ref => { schemaPath: text }",
-                "schema_ref => { schemaPath: text }\n  problem_404 => problem & { status: = 404 }"))).getMessage();
+                "schema_ref => { schemaPath: text }\n  problem_404 => problem.details & { status: = 404 }"))).getMessage();
         assertTrue(twice.contains("both fix status 404"), twice);
     }
 
@@ -303,8 +346,8 @@ class TsonApiSchemaTest {
     void twoEndpointsCannotShareAVerbAndPath() {
         String refused = assertThrows(IllegalArgumentException.class, () -> described(API.replace("\n}", """
 
-                  again => !http { "/{+schemaPath}" => {
-                    @safe GET => !document { request: schema_ref  media_types: ["text/plain"] } } }
+                  again => !service.http { resources: { "/{+schemaPath}" => {
+                      @service.safe GET => !service.document { request: schema_ref  media_types: ["text/plain"] } } } }
                 }"""))).getMessage();
         assertTrue(refused.contains("'GET /{+schemaPath}' is declared twice"), refused);
     }
@@ -316,60 +359,64 @@ class TsonApiSchemaTest {
         assertTrue(refused.contains("stauts"), refused);
     }
 
-    // ── templates, in the shipping design ──
+    // ── parametric records, in the shipping design ──
 
     private static final String PAGED = """
-            !!id:"https://schemas.example.com/2026/39/app/orders-api-1.tn"
-            !!import:"https://tson.io/2026/39/io/ltr8/http/meta-service.tn"
-            !!import:"https://schemas.example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/orders-api-1.tn"
+            !!import:"https://tson.io/2026/40/io/ltr8/http/service.tn"
+            !!import:"https://schemas.example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
               page       => <T> { items: [T]  next?: uri  total: int32 }
               order_page => page<order>
 
-              orders_http => !http { "/orders" => {
-                @safe GET => !operation { response: %s } } }
+              orders_http => !service.http { resources: { "/orders" => {
+                  @service.safe GET => !service.operation { response: %s } } } }
             }""";
 
     /**
-     * <b>Templates work, and an endpoint references an application by name.</b> {@code page<order>} is written once
-     * and applied, where OpenAPI hand-rolls the envelope per endpoint or bolts it on with {@code allOf}. The
-     * application is a real entry with structural identity (§8.2), so two endpoints returning a page of orders
+     * <b>Parametric records work, and an endpoint references an application by name.</b> {@code page<order>} is
+     * written once and applied, where OpenAPI hand-rolls the envelope per endpoint or bolts it on with {@code allOf}.
+     * The application is a real entry with structural identity (§8.2), so two endpoints returning a page of orders
      * share one.
      */
     @Test
-    void anEndpointReferencesATemplateApplication() {
+    void anEndpointReferencesAnApplication() {
         Tson tson = resolved(PAGED.formatted("order_page"));
         Route list = TsonApiSchema.describedBy(tson, API_ID).route(HttpVerb.GET, "/orders").orElseThrow();
         assertEquals("order_page", list.response().orElseThrow().name());
 
         // A declaration naming an application is that application's entry (§8.2): no hop onto a minted name.
         var resolved = tson.schemaRegistry().get(API_ID).orElseThrow().schema();
-        assertEquals("page", resolved.applicationOf("order_page").orElseThrow().name(),
+        assertEquals("page", resolved.applicationOf("order_page").orElseThrow().head().name(),
                 "§8.2 records the application that built it");
     }
 
     /**
      * <b>An application is named through an alias, never written inline.</b> {@code response} is typed by a kind,
-     * so it holds the name of a type: one bare token. An endpoint is a value body, where nothing lifts or mints, so
-     * an application written there would be the name of no entry. §5.6's braced form is therefore refused, naming
-     * the alias spelling that gives the application its entry, and so is the schema sugar {@code page<order>} in the
-     * same position, which reads as a reference and is refused for the same reason.
+     * so it holds the name of a type: one bare token. An endpoint is a value body, where a reference-typed slot holds
+     * a name and nothing else. A record written there is refused as no type's name, and the schema sugar {@code
+     * page<order>} is a parse error, the data grammar holding no argument list ([TSON-DATA] §7.2.5). The remedy is a
+     * declaration that gives the application its entry ({@code order_page => page<order>}), whose name the slot holds.
      */
     @Test
     void anApplicationIsNamedThroughAnAliasNotInline() {
-        String message = assertThrows(RuntimeException.class,
-                () -> resolved(PAGED.formatted("{ name: page  arguments: [ { name: order } ] }"))).getMessage();
-        assertTrue(message.contains("declare an alias"), "the refusal names the alias spelling: " + message);
+        assertEquals("'orders_http': the body is no value of the type 'service.http' -- at "
+                        + "/resources/~1orders/endpoints/GET/response: expected a type's name, found a record -- a position "
+                        + "typed by a kind holds the name of a type, one bare token",
+                only(PAGED.formatted("{ head: page  arguments: [order] }")));
 
-        String sugar = assertThrows(RuntimeException.class, () -> resolved(PAGED.formatted("page<order>")))
-                .getMessage();
-        assertTrue(sugar.contains("found the reference page<order>") && sugar.contains("declare an alias"), sugar);
+        String sugar = PAGED.formatted("page<order>");
+        List<Diagnostic> problems = tson(sugar).validateSchema(sugar);
+        assertEquals(List.of(Diagnostic.Code.VALIDATION_ERROR), problems.stream().map(Diagnostic::code).toList(),
+                () -> "" + problems);
+        assertEquals("adjacent values must be separated by whitespace, a comma, or both",
+                problems.getFirst().message(), "the parser's ordinary refusal at the '<'");
     }
 
     /** A bad argument is caught where the application is spelled, which is the alias. */
     @Test
-    void aBadTemplateArgumentIsCaughtAtTheAlias() {
+    void aBadArgumentIsCaughtAtTheAlias() {
         assertTrue(assertThrows(RuntimeException.class,
                 () -> resolved(PAGED.formatted("order_page").replace("page<order>", "page<no_such>")))
                 .getMessage().contains("unresolved reference 'no_such'"));
@@ -379,7 +426,7 @@ class TsonApiSchemaTest {
 
     /**
      * <b>Everything a client needs to resolve the contract</b>: the description and its imports transitively, {@code
-     * meta-service.tn} among them. The bundled standard library is excluded -- every implementation has it, and a
+     * service.tn} among them. The bundled standard library is excluded -- every implementation has it, and a
      * service publishing {@code core.tn} would be claiming ownership of something it does not own.
      */
     @Test
@@ -390,20 +437,22 @@ class TsonApiSchemaTest {
         assertTrue(published.contains(TsonApiSchema.ID), "the meta layer, or the description will not resolve");
         assertTrue(published.contains(ORDER_ID));
         assertTrue(published.contains(TsonProblemSchema.ID));
-        assertFalse(published.stream().anyMatch(id -> id.startsWith("https://tson.io/2026/39/m/")),
+        assertFalse(published.stream().anyMatch(id -> id.startsWith("https://tson.io/2026/40/m/")),
                 () -> "the bundled standard library is not a service's to publish: " + published);
     }
 
     /**
      * <b>And which classes to warm.</b> Hand-listing them is how a response type added to a description never
      * gets warmed — nothing connects the two lists, and the omission costs only latency, so nothing reports
-     * it. A payload type nobody binds is skipped rather than refused.
+     * it. Each payload type is named as the binder is asked it, by the schema declaring it and its name there, and
+     * one nobody binds is skipped rather than refused.
      */
     @Test
     void aDescriptionKnowsWhichClassesToWarm() {
         TsonApiDescription api = described(API);
 
-        assertEquals(Set.of("order", "sku_not_found", "schema_ref"), api.payloadTypes());
+        assertEquals(Set.of(new PayloadType(ORDER_ID, "order"), new PayloadType(ORDER_ID, "sku_not_found"),
+                new PayloadType(API_ID, "schema_ref")), api.payloadTypes());
         assertEquals(List.of(String.class), api.boundClasses(Map.of("order", String.class)),
                 "only what the bindings map names");
     }

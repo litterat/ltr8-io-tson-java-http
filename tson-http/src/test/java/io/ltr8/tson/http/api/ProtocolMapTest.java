@@ -19,26 +19,27 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * A protocol as a map of exchanges, measured on the layer's own {@code protocol}: a value entry of it holds the
- * map, read back as a {@code Namespace} of {@link Exchange}s; a value under the typed slot needs no {@code !exchange}
- * tag; an unresolved reference inside a value is caught at load, because the slot is typed by a kind; and the
- * annotations written before an exchange's key survive into {@code Namespace.getAnnotations}, which is where a reader
- * finds an exchange's documentation and facts.
+ * A protocol as a record holding its exchanges, measured on the layer's own {@code protocol}: a value entry of it binds
+ * to {@link Protocol}, whose {@code exchanges} arrive as a {@code Namespace} of {@link Exchange}s in written order; a
+ * value under the typed slot needs no {@code !service.exchange} tag; an unresolved reference inside a value is caught at
+ * load, because the slot is typed by a kind; the annotations written before an exchange's key survive into {@code
+ * Namespace.getAnnotations}, which is where a reader finds an exchange's documentation and facts; and the positional
+ * form, the map written alone, stands in for the one required field.
  */
 class ProtocolMapTest {
 
-    static final String PROBE_META_ID = "https://tson.io/2026/39/io/ltr8/http/meta-probe.tn";
-    static final String DOC_ID = "https://schemas.example.com/2026/39/app/probe-1.tn";
+    static final String PROBE_META_ID = "https://tson.io/2026/40/io/ltr8/http/meta-probe.tn";
+    static final String DOC_ID = "https://schemas.example.com/2026/40/app/probe-1.tn";
 
     /** The layer, served under a probe identity. */
     static final String META = TsonApiSchema.source()
-            .replace("https://tson.io/2026/39/io/ltr8/http/meta-service.tn", PROBE_META_ID);
+            .replace("https://tson.io/2026/40/io/ltr8/http/service.tn", PROBE_META_ID);
 
     static String doc(String entries) {
         return """
         !!id:"%s"
         !!import:"%s"
-        !!import:"https://tson.io/2026/39/m/core.tn"
+        !!import:"https://tson.io/2026/40/m/core.tn"
         !schema {
           order     => { sku: text  quantity: int32 }
           order_ref => { id: text }
@@ -54,42 +55,49 @@ class ProtocolMapTest {
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(lib)))));
     }
 
-    /** The entry {@code orders}, which applies {@code protocol}: the map of exchanges itself. */
-    static Namespace<?> resolvedProtocol(String entries) {
+    /** The entry {@code orders}, which applies {@code service.protocol}, bound. */
+    static Protocol resolvedProtocol(String entries) {
         String doc = doc(entries);
         Tson tson = tson(doc);
         List<Diagnostic> problems = tson.validateSchema(doc);
         assertEquals(List.of(), problems, () -> "" + problems);
         Top entry = tson.schemaRegistry().get(DOC_ID).orElseThrow().schema().entries().get("orders");
         ValueEntry value = assertInstanceOf(ValueEntry.class, entry);
-        assertEquals("protocol", value.type());
-        return assertInstanceOf(Namespace.class, value.value());
+        assertEquals("service.protocol", value.type());
+        return assertInstanceOf(Protocol.class, value.value());
     }
 
-    /** The entry is the map of exchanges, with nothing beside it: its keys are the exchanges, in written order. */
+    /**
+     * The entry is a record whose one field is the namespace of its exchanges: its keys are the exchanges, in written
+     * order, and the namespace names its type, {@code service.exchanges}.
+     */
     @Test
-    void aProtocolIsTheMapOfExchangesItself() {
-        Namespace<?> orders = resolvedProtocol("""
-                  orders => !protocol { place_order  => !exchange { request: order  response: order }
-                                        cancel_order => !exchange { request: order_ref } }""");
+    void aProtocolIsARecordHoldingItsExchanges() {
+        Namespace<Exchange> orders = resolvedProtocol("""
+                  orders => !service.protocol {
+                    exchanges: { place_order  => !service.exchange { request: order  response: order }
+                                 cancel_order => !service.exchange { request: order_ref } }
+                  }""").exchanges();
 
-        assertEquals("protocol", orders.type());
+        assertEquals("service.exchanges", orders.type());
         assertEquals(List.of("place_order", "cancel_order"), List.copyOf(orders.keySet()));
-        assertEquals("order", assertInstanceOf(Exchange.class, orders.get("place_order")).request().orElseThrow().name());
+        assertEquals("order", orders.get("place_order").request().orElseThrow().name());
     }
 
     /** The slot's type supplies the record, so the tag is optional -- as at any typed position. */
     @Test
     void aValueUnderAnExchangeTypedSlotNeedsNoTag() {
-        Namespace<?> orders = resolvedProtocol("  orders => !protocol { place_order => { request: order } }");
+        Protocol orders = resolvedProtocol(
+                "  orders => !service.protocol { exchanges: { place_order => { request: order } } }");
 
-        assertInstanceOf(Exchange.class, orders.get("place_order"));
+        assertInstanceOf(Exchange.class, orders.exchanges().get("place_order"));
     }
 
     /** A name inside a map value is judged at load: the slot is typed by a kind, so the read records it. */
     @Test
     void anUnresolvedReferenceInsideAMapValueIsCaughtAtLoad() {
-        String doc = doc("  orders => !protocol { place_order => !exchange { request: no_such } }");
+        String doc = doc("  orders => !service.protocol { exchanges: { place_order => !service.exchange { "
+                + "request: no_such } } }");
         List<Diagnostic> problems = tson(doc).validateSchema(doc);
 
         assertEquals(1, problems.size(), () -> "" + problems);
@@ -103,10 +111,26 @@ class ProtocolMapTest {
      */
     @Test
     void anAnnotationOnAnExchangeKeySurvivesIntoTheNamespace() {
-        Namespace<?> orders = resolvedProtocol(
-                "  orders => !protocol { @safe @doc:\"Fetch it.\" get_order => { request: order_ref } }");
+        Namespace<Exchange> orders = resolvedProtocol("  orders => !service.protocol { exchanges: { @service.safe "
+                + "@doc:\"Fetch it.\" get_order => { request: order_ref } } }").exchanges();
 
         assertEquals("Fetch it.", orders.getAnnotations("get_order").value("doc", String.class).orElseThrow());
-        assertTrue(orders.getAnnotations("get_order").has("safe"));
+        assertTrue(orders.getAnnotations("get_order").has("service.safe"));
+    }
+
+    /**
+     * {@code exchanges} is a protocol's one required field and it is bare, so [TSON-SCHEMA] §5.6 lets the map stand in
+     * for it: written alone, it binds as the full form does. The documents write the full form, since a reference
+     * into the protocol spells {@code exchanges} whether written or not; a second required field on {@code
+     * service.protocol} would withdraw the positional form and break every document written in it.
+     */
+    @Test
+    void thePositionalFormStandsInForTheExchangesField() {
+        Protocol positional = resolvedProtocol("  orders => !service.protocol { @service.safe get_order => { "
+                + "request: order_ref } }");
+        Protocol full = resolvedProtocol("  orders => !service.protocol { exchanges: { @service.safe get_order => { "
+                + "request: order_ref } } }");
+
+        assertEquals(full.exchanges(), positional.exchanges());
     }
 }

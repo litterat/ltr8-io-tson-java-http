@@ -33,7 +33,7 @@ class MapKeyPointerTest {
 
     private static final String SCHEMA = """
             !!id:"%s"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
               point => { x: int32  y: int32 }
               tally => { counts?: {int32 => int32}  grid?: {point => int32} }

@@ -19,13 +19,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TsonSchemaHeaderTest {
 
-    private static final String V1 = "https://schemas.example.com/2026/39/app/order-1.tn";
-    private static final String V2 = "https://schemas.example.com/2026/39/app/order-2.tn";
-    private static final String MONEY = "https://schemas.example.com/2026/39/app/money.tn";
+    private static final String V1 = "https://schemas.example.com/2026/40/app/order-1.tn";
+    private static final String V2 = "https://schemas.example.com/2026/40/app/order-2.tn";
+    private static final String MONEY = "https://schemas.example.com/2026/40/app/money.tn";
 
     private static final String V1_SCHEMA = """
-            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema { order => { sku: text  quantity: int32 } }
             """;
 
@@ -279,12 +279,12 @@ class TsonSchemaHeaderTest {
     @Test
     void aBodyWithNoMarkSupportIsStillReadableAfterTheLook() {
         String document = """
-                !!import:"https://schemas.example.com/2026/39/app/order-1.tn"
+                !!import:"https://schemas.example.com/2026/40/app/order-1.tn"
                 !order { sku: "ABC-1"  quantity: 3 }""";
 
         TsonSchemaHeader.Governing governing = TsonSchemaHeader.resolve(TSON.begin(oneShot(document)), null);
 
-        assertEquals(List.of("https://schemas.example.com/2026/39/app/order-1.tn"), governing.schemas());
+        assertEquals(List.of("https://schemas.example.com/2026/40/app/order-1.tn"), governing.schemas());
         var order = TSON.treeReader().read(governing.body());
         assertEquals("ABC-1", order.get("sku").asString().orElseThrow(),
                 "the value half of the document, read after the header was taken off it");

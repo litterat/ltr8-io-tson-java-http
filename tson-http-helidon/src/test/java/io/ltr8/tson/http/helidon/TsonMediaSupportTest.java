@@ -39,11 +39,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonMediaSupportTest {
 
-    private static final String SCHEMA_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://schemas.example.com/2026/40/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
                 order => { sku: text  quantity: int32 }
             }""";
@@ -111,7 +111,7 @@ class TsonMediaSupportTest {
     private TsonProblem problemFrom(HttpResponse<String> response) {
         TsonHttpCodec problems = new TsonHttpCodec(TsonProblemSchema.tson());
         return problems.readObjectAs(new ByteArrayInputStream(response.body().getBytes(StandardCharsets.UTF_8)),
-                "application/tson", TsonProblemSchema.ID, "problem", TsonProblem.class);
+                "application/tson", TsonProblemSchema.ID, "problem.details", TsonProblem.class);
     }
 
     /** No TSON-specific code in the handler at all -- content().as() and send() do both halves. */

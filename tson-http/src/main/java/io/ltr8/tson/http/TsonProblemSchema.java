@@ -23,9 +23,13 @@ import java.util.Map;
  * document. Serving it from this constant is what makes the URL in the body true rather than decorative.
  *
  * <p><b>This is tson-http's own schema.</b> It began as a copy of {@code tson-cli}'s {@code diagnostics.tn} and
- * has diverged: a CLI reports on files and a server reports on requests, so {@code problem} follows RFC 9457
- * while the CLI's envelope is built around file reports. Holding one shape across both would have meant neither
- * fitting.
+ * has diverged: a CLI reports on files and a server reports on requests, so {@code problem.details} follows RFC
+ * 9457 while the CLI's envelope is built around file reports. Holding one shape across both would have meant
+ * neither fitting.
+ *
+ * <p><b>One root name.</b> Every type the schema declares is a member of its one root map, {@code problem}, so a
+ * schema importing it reserves that name alone: a body is {@code !problem.details { … }}, a diagnostic is a
+ * {@code problem.diagnostic}, and a business error composes {@code problem.details}.
  *
  * <p>{@link #tson} builds a fresh {@link Tson} of its own each call, with this schema resolved and bound to the
  * two wire records, so registering it never collides with an application's. It is the read path, not the write
@@ -36,7 +40,7 @@ import java.util.Map;
 public final class TsonProblemSchema {
 
     /** The current error-body schema's identity -- the {@code !!id} it declares and the URL it is served at. */
-    public static final String ID = "https://tson.io/2026/39/io/ltr8/http/problem.tn";
+    public static final String ID = "https://tson.io/2026/40/io/ltr8/http/problem.tn";
 
     /**
      * Every version of this schema that is still published, current first -- one, today.
@@ -65,9 +69,9 @@ public final class TsonProblemSchema {
 
     /** The two wire records and the code enum -- everything this schema declares that a read binds. */
     private static final Map<String, Class<?>> BINDINGS = Map.of(
-            "problem", TsonProblem.class,
-            "diagnostic", TsonProblemDiagnostic.class,
-            "diagnostic_code", Diagnostic.Code.class);
+            "problem.details", TsonProblem.class,
+            "problem.diagnostic", TsonProblemDiagnostic.class,
+            "problem.diagnostic_code", Diagnostic.Code.class);
 
     private static final String SOURCE = readResource("/problem.tn");
 
@@ -93,7 +97,7 @@ public final class TsonProblemSchema {
 
     /**
      * This schema compiled in object-binding mode -- what {@code TsonProblemSchemaTest} reads the declared
-     * {@code diagnostic_code} members out of, so the check is against what a reader would actually enforce
+     * {@code problem.diagnostic_code} members out of, so the check is against what a reader would actually enforce
      * rather than against the source text.
      */
     public static TsonCompiledSchema compiled() {

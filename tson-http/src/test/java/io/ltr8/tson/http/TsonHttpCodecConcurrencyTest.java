@@ -53,11 +53,11 @@ class TsonHttpCodecConcurrencyTest {
     private static final int THREADS = Math.max(8, Runtime.getRuntime().availableProcessors() * 2);
     private static final int ITERATIONS = 150;
 
-    private static final String SCHEMA_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://schemas.example.com/2026/40/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
                 order => { sku: text  quantity: int32 }
             }""";

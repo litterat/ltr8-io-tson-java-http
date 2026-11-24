@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The orders examples: real documents governed by {@code meta-service.tn}, one per use of the layer, under
+ * The orders examples: real documents governed by {@code service.tn}, one per use of the layer, under
  * {@code orders/} beside this class. {@link OrdersExamplesTest} resolves every one against the shipped layer on each
  * build, so they cannot drift from it; the experiments under {@code experiments/} build on them as the protocol
  * their wire form and plans call.
@@ -27,22 +27,28 @@ import java.util.Map;
  * <ul>
  * <li>{@code orders-types-1.tn} (shared) -- the request and response records: one request record per exchange, a
  * one-field record for a parameter-only endpoint.</li>
- * <li>{@code orders-errors-1.tn} (shared) -- business errors composing {@code problem} and pinning {@code status},
+ * <li>{@code orders-errors-1.tn} (shared) -- business errors composing {@code problem.details} and pinning {@code status},
  * which is how an endpoint's {@code errors} get one.</li>
- * <li>{@code orders-1.tn} (protocol only) -- {@code orders} as a map of exchanges with a {@code @doc} per exchange,
- * and {@code orders_v2} beside it declaring only {@code refund}.</li>
+ * <li>{@code orders-1.tn} (protocol only) -- {@code orders} as a record whose {@code exchanges} hold a {@code @doc}
+ * per exchange and its facts ({@code cancel_order} idempotent and destructive), and {@code orders_v2} beside it
+ * declaring only {@code refund}.</li>
  * <li>{@code orders-api-inline-1.tn} (web service only) -- an http projection with no protocol behind it, every
  * endpoint an
- * {@code !operation} with its signature inline; a parameter-only endpoint as a one-field record placed from the
+ * {@code !service.operation} with its signature inline; a parameter-only endpoint as a one-field record placed from the
  * path.</li>
- * <li>{@code orders-api-1.tn} (both) -- an http projection whose entry claims {@code @binds:[orders]}, every
- * endpoint a
- * {@code !binding} with its placement.</li>
+ * <li>{@code orders-api-1.tn} (both) -- an http projection claiming {@code binds: [orders]}, every endpoint a {@code
+ * !service.binding} with its placement.</li>
+ * <li>{@code orders-api-secured-1.tn} (security) -- the same protocol bound again, with two security schemes declared
+ * as value entries, a projection default, an endpoint replacing it, one open by {@code security: []}, and a literal
+ * response header.</li>
  * </ul>
  *
  * <p>Both spellings of a resource appear, deliberately: most write their one required field positionally -- {@code
  * "/orders" => { POST => … }} for {@code "/orders" => { endpoints: { POST => … } }}, which [TSON-SCHEMA] §5.6 admits
- * because {@code resource} has exactly one bare required field -- and one is tagged {@code !resource}.
+ * because {@code resource} has exactly one bare required field -- and one is tagged {@code !service.resource}. A
+ * protocol and a projection are written in full, {@code exchanges: { … }} and {@code resources: { … }}, though each
+ * has the positional form too: a reference into a protocol spells {@code exchanges} whether the document wrote it or
+ * not, and a projection writing {@code binds} cannot use the form.
  *
  * <p>Each file is served at the identity its own {@code !!id} declares, so the examples name each other the way
  * published documents do, literally.
@@ -50,11 +56,11 @@ import java.util.Map;
 public final class OrdersExamples {
 
     /** The identity prefix every example declares; {@link #id} completes it. */
-    public static final String BASE = "https://schemas.example.com/2026/39/orders/";
+    public static final String BASE = "https://schemas.example.com/2026/40/orders/";
 
     /** Every example, dependencies first. */
     public static final List<String> FILES = List.of("orders-types-1.tn", "orders-errors-1.tn", "orders-1.tn",
-            "orders-api-inline-1.tn", "orders-api-1.tn");
+            "orders-api-inline-1.tn", "orders-api-1.tn", "orders-api-secured-1.tn");
 
     private OrdersExamples() {
     }
@@ -99,14 +105,14 @@ public final class OrdersExamples {
     }
 
     /**
-     * Every value entry of the namespace type {@code type} -- {@code protocol} or {@code http} -- by its name, each
-     * as the {@code Namespace} it holds: a protocol's keys are its exchanges, an http projection's its paths.
+     * Every value entry whose bound value is a {@code bound} -- {@link Protocol} or {@link Http} -- by its name: a
+     * protocol's {@code exchanges} are keyed by exchange name, an http projection's {@code resources} by path.
      */
-    public static Map<String, Namespace<?>> applying(Namespace<Top> entries, String type) {
-        Map<String, Namespace<?>> found = new LinkedHashMap<>();
+    public static <T> Map<String, T> applying(Namespace<Top> entries, Class<T> bound) {
+        Map<String, T> found = new LinkedHashMap<>();
         entries.forEach((name, value) -> {
-            if (value instanceof ValueEntry(String applied, Namespace<?> namespace) && applied.equals(type)) {
-                found.put(name, namespace);
+            if (value instanceof ValueEntry(_, Object held) && bound.isInstance(held)) {
+                found.put(name, bound.cast(held));
             }
         });
         return found;

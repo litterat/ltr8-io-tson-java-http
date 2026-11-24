@@ -1,9 +1,9 @@
 package io.ltr8.tson.http.probe.field;
 
 import io.ltr8.annotation.Typename;
-import io.ltr8.tson.schema.meta.TypeRef;
+import io.ltr8.tson.schema.meta.ValueRef;
 
-/** A binding naming a method by reference, the host shape a reference is delivered into. */
+/** A binding naming a method by reference, held in a {@code ValueRef} that is delivered the {@link Method} named. */
 @Typename(name = "binding")
-public record Binding(TypeRef method) {
+public record Binding(ValueRef<Method> method) {
 }

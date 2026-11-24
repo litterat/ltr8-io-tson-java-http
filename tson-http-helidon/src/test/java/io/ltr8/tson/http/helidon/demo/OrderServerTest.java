@@ -5,6 +5,7 @@ import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonProblem;
 import io.ltr8.tson.http.TsonProblemSchema;
+import io.ltr8.tson.http.TsonSchemaCatalog;
 import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.json.Json;
 import io.ltr8.tson.json.tree.JsonValue;
@@ -18,6 +19,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -80,7 +82,7 @@ class OrderServerTest {
         TsonHttpCodec problems = new TsonHttpCodec(TsonProblemSchema.tson());
         TsonProblem problem = problems.readObjectAs(
                 new ByteArrayInputStream(response.body().getBytes(StandardCharsets.UTF_8)),
-                "application/tson", TsonProblemSchema.ID, "problem", TsonProblem.class);
+                "application/tson", TsonProblemSchema.ID, "problem.details", TsonProblem.class);
         assertEquals(2, problem.errors().size());
         assertTrue(problem.errors().stream().allMatch(e -> e.code() == Diagnostic.Code.FIELD_REQUIRED));
     }
@@ -128,8 +130,21 @@ class OrderServerTest {
     /** The last two: both schemas published at their own identity paths. */
     @Test
     void publishesBothSchemasAtTheirIdentityPaths() throws Exception {
-        assertEquals(OrderServer.SCHEMA, get("/2026/39/app/order-1.tn").body());
-        assertEquals(TsonProblemSchema.source(), get("/2026/39/io/ltr8/http/problem.tn").body());
+        assertEquals(OrderServer.SCHEMA, get("/2026/40/app/order-1.tn").body());
+        assertEquals(TsonProblemSchema.source(), get("/2026/40/io/ltr8/http/problem.tn").body());
+    }
+
+    /**
+     * The schema route carries the headers its description declares on a success, and a miss carries none of them,
+     * so a cache keeps a published schema and never a 404.
+     */
+    @Test
+    void theSchemaRouteCarriesTheHeadersItsDescriptionDeclares() throws Exception {
+        assertEquals(Optional.of(TsonSchemaCatalog.IMMUTABLE),
+                get("/2026/40/app/order-1.tn").headers().firstValue("Cache-Control"));
+        HttpResponse<String> miss = get("/2026/40/app/nope-1.tn");
+        assertEquals(404, miss.statusCode());
+        assertEquals(Optional.empty(), miss.headers().firstValue("Cache-Control"));
     }
     /**
      * <b>The schemas name their identities literally, so something has to hold them to the constants.</b>
@@ -147,7 +162,7 @@ class OrderServerTest {
         assertTrue(OrderServer.SCHEMA.contains("!!import:\"" + TsonProblemSchema.ID + "\""),
                 "the error schema composes the CURRENT problem schema");
         assertTrue(OrderServer.API.contains("!!import:\"" + TsonApiSchema.ID + "\""),
-                "the description imports the CURRENT meta-service.tn");
+                "the description imports the CURRENT service.tn");
     }
 
 
@@ -167,7 +182,7 @@ class OrderServerTest {
     @Test
     void aDocumentNamingAnUnknownSchemaIsTheSendersMistake() throws Exception {
         HttpResponse<String> response = post("""
-                !!import:"https://schemas.example.com/2026/39/app/nowhere-1.tn"
+                !!import:"https://schemas.example.com/2026/40/app/nowhere-1.tn"
                 !order { sku: "ABC-1"  quantity: 3 }""");
 
         assertEquals(400, response.statusCode(), response.body());

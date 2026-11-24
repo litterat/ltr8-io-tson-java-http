@@ -10,10 +10,10 @@ probe tests join `tson-http`'s test source set from `<experiment>/java`.
   the shipped layer's own examples (`design/service-description.md`). An experiment reads it from the classpath and
   never copies it.
 - `rpc/` is the protocol's wire form, next in the order of work and homed outside `tson-http` when it lands.
-- **The agent sketches (`agent/`) are future work.** They press on the protocol layer from a direction that is not
-  HTTP so the layer is shaped by more than one consumer. Do not build toward them, and do not let a decision that is
-  the agent's alone move the descriptor.
-- `one-level/` is the design direction Revision 39 implements; its probes pin Revision 39's behaviour.
+- **The agent sketches (`agent/`) are the draft of the LLM-facing projection** (`BACKLOG.md`, "An LLM-facing
+  projection of a protocol"), which they are built toward. They press on the protocol layer from a direction that is
+  not HTTP, so the layer is shaped by more than one consumer; a decision that is the projection's alone lands in the
+  projection and never moves the descriptor.
 - `cognitive-load/` is a protocol for measuring the syntax against LLMs, not code; it has no probe, and its item banks
   are the existing probes and the bundled schemas. Do not run it from a session on your own initiative; it costs
   model calls the user decides on.

@@ -11,7 +11,7 @@ import java.util.Optional;
 /**
  * The on-the-wire shape of one {@link Diagnostic} inside a {@link TsonProblem} -- same fields, with
  * {@code dataPosition}/{@code schemaPosition} pre-rendered to {@code "line:column:byteOffset"} strings, matching
- * {@code problem.tn}'s own {@code text} fields.
+ * {@code problem.tn}'s own {@code text} fields in {@code problem.diagnostic}.
  *
  * <p><b>An absent field is absent, not empty.</b> {@link Diagnostic} spells "nothing to say here" as {@code ""}
  * for {@code schemaId}/{@code expected}/{@code actual}, and says so once itself --
@@ -38,7 +38,7 @@ import java.util.Optional;
  * and a server reports on requests, so the two are free to diverge. What it must stay in step with is
  * {@link Diagnostic} itself, and {@code TsonProblemSchemaTest} is what checks that.
  */
-@Typename(name = "diagnostic")
+@Typename(name = "problem.diagnostic")
 public record TsonProblemDiagnostic(Optional<String> path, @Field("schema_pointer") Optional<String> schemaPointer,
                                     @Field("schema_id") Optional<String> schemaId,
                                     Diagnostic.Code code, String message,

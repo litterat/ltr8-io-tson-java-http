@@ -23,11 +23,12 @@ import java.util.Set;
  *
  * <h2>Why a codec per version, and not one codec for all of them</h2>
  *
- * <p>Because binding resolves a schema <em>type name</em> to a Java class, and
- * {@code DataNameBinder.resolve(String)} is handed the name alone -- no schema, no version. Two versions of a
- * schema both declare {@code order}, so one binder cannot map that name to two classes. Try it and the failure
- * is at least loud: <em>"the schema's root type `order` binds to OrderV1, which is not assignable to the
- * requested OrderV2"</em>. So each version gets its own {@code DataBindContext}, and that is what this holds.
+ * <p>Because a version is chosen by routing (below), and each codec reads and writes under its version alone. The
+ * binder does not need it for a class per version: it is asked a type within the canonical identity of the schema
+ * declaring it, so one context binds two versions' {@code order} to two classes ({@code TsonBindings.bySchema}). A
+ * name-only map binds {@code order} to one class for both, and reading the other version is loud: <em>"the schema's
+ * root type `order` binds to OrderV1, which is not assignable to the requested OrderV2"</em>. A context per version is
+ * what one class serving both needs, since its {@code @Profile} is fixed when a context is built.
  *
  * <p>Tree-mode reads have no such problem -- no classes are involved, and one {@code Tson} happily holds every
  * version at once. This exists for the binding case.

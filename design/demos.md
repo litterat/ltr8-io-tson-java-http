@@ -22,7 +22,7 @@ the same `curl` commands work against each. Starting one prints what to try. The
 second demo, on the JDK adapter only.
 
 **One bind context, the description's and the application's.** A server publishes a description of itself
-(`orders-api-1.tn`, importing `meta-service.tn`), and the `Tson` that resolves it binds the description's value
+(`orders-api-1.tn`, importing `service.tn`), and the `Tson` that resolves it binds the description's value
 entries with the same context it binds an order with (`design/binding.md`). So each demo merges its own bindings
 with the vocabulary's, `TsonBindings.of(TsonApiSchema.bindingsWith(bindings))`, and hands that one context to
 `ProcessorConfig.withDataBindContext`; the validator does the same for `validate-api-1.tn`.
@@ -75,7 +75,7 @@ other identity, because a reference in an untrusted document is an untrusted URL
 one would be a request forger for anyone who could reach it.
 
 **It runs under a deployment descriptor, and the policy applies to the probe and not to the envelope.**
-`validator-deployment.tn` is a data document: it imports `deployment.tn` and its root is `!deployment { … }`. It
+`validator-deployment.tn` is a data document: it imports `deployment.tn` and its root is `!deployment.descriptor { … }`. It
 states its policy whole, every `limits` member written out at `policy.tn`'s default so that no limit rests on a
 default the file does not show, and the profile it publishes at `/.well-known/tson-deployment` writes every limit,
 from the policy in force (`design/deployment-descriptor.md`). That

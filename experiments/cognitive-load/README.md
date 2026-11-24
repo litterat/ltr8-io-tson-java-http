@@ -11,11 +11,10 @@ Given the schema syntax as written, which features does an LLM read and write co
 it effort, and which does it get wrong? It is asked with no proposal in hand: a proposal made before the baseline risks
 improving a feature that was never hard while the one that was goes unmeasured.
 
-The question is live now because of the one-level work in tson-java (the sibling repo, `../ltr8-io-tson-java`;
-[`../one-level/README.md`](../one-level/README.md) here). Under one level a schema's map is
-`schema => !namespace { key_type: type_name  value_type: declared }`, so every entry is a value of some declared type,
-and the author is still deciding the syntax that writes it. A measured profile is evidence for that decision; a list
-of suspicions is not.
+The question is live because the schema syntax is still moving in tson-java (the sibling repo,
+`../ltr8-io-tson-java`). A schema's map is `schema => !namespace { key_type: type_name  value_type: declared }`, so
+every entry is a value of some declared type, and the author is still deciding the syntax that writes it. A measured
+profile is evidence for that decision; a list of suspicions is not.
 
 ## The feature inventory
 
@@ -28,7 +27,7 @@ written, and each item asks a model to **classify** a construct, **predict** whe
 | Entry arrow and declaration | `name => ...` | Classify the entry: a type, a constructor, a value, an annotation. |
 | Constructor application | `!C { ... }`, `!enum [A B]` | Classify what `!C` produces; write one. |
 | Atom refinement | `!integer ^ { min: 0 }` | Predict which tokens it admits; write a bounded atom. |
-| Record refinement | `T ^ { x: ~"hello" }` | Predict what the refinement admits that its source refused, and the reverse. |
+| Restated field | `T & { x?: ~"hello" }` | Predict what the composition admits that its source refused, and the reverse; whether a name restates a field or adds one. |
 | Composition | `A & B & { ... }` | Predict the merged fields; classify admissible operands. |
 | Subtraction | `head - { fields }` | Predict the fields left, and whether the result IS-A `head`. |
 | Bare record | `{ sku: text }` | Write one from a prose shape. |
@@ -38,11 +37,11 @@ written, and each item asks a model to **classify** a construct, **predict** whe
 | Choice | `( circle \| square )` | Predict the variant a value reads as; when a tag is needed. |
 | Labelled field groups | `{ ( on: date \| note: text ) }` | Predict a document with both members, with neither, with one. |
 | Container sugar | `[T]`, `{K => V}`, `[T, U]`, `[T; 1..]` | Classify the desugared constructor; predict at the size bounds. |
-| Templates | `<T> { item: T }`, `box<order>`, `uuid_pair => <B> pair<uuid, B>` | Predict the closed type an application yields. |
-| Name-holding slots | `meta.type_ref`, `meta.ref<T>`, `orders.place_order` | Predict which names the slot admits: a type's or a value's. |
-| Namespace types and values | `orders => !protocol { ... }` | Classify the entry; predict what its keys may hold. |
+| Templates | `<T> { item: T }`, `box<order>`, `uuid_pair => <B> { first: uuid  second: B }` | Predict the closed type an application yields. |
+| Name-holding slots | `meta.type_ref`, `meta.ref<T>`, `orders.exchanges.place_order` | Predict which names the slot admits: a type's or a value's. |
+| Namespace types and values | `exchanges => !meta.namespace { ... }`, `orders => !service.protocol { exchanges: { ... } }` | Classify the entry; predict what its keys may hold. |
 | Positional form | `"/orders" => { GET => ... }` | Predict what the map stands in for, and what a new required field breaks. |
-| Annotations | `doc => @annotation text`, `@binds:[x]` | Predict where an annotation on an entry lands. |
+| Annotations | `doc => @annotation text`, `@service.safe get_order => { ... }` | Predict where an annotation on an entry lands. |
 | Directives | `!!id`, `!!meta`, `!!import`, `!!schema` | Predict which names are visible, and at which level. |
 | Void and absence | `_`, an omitted key | Predict admission of each at `a?: T`, `a: T?` and `a: T`. |
 | Quoting | `"/orders/{id}"` | Predict whether a token needs quotes; write a key that does. |
@@ -61,17 +60,16 @@ Phase 3 tool and is not built until a hypothesis calls for it.
 
 - **The compiler is the judge wherever a judge is needed.** tson-java's resolver (its `tson` CLI and Java API) grades
   every generated schema and every predicted admission. Its diagnostics already name error classes a feature can be
-  charged with: a type applied where a constructor was needed, refinement of a finished entry, a facet body in field
-  grammar, an unresolved constructor. An LLM judge is used only for prose, with a rubric drawn from the
+  charged with: a type applied where a constructor was needed, `^` over a record whose fields `&` restates, a facet body in
+  field grammar, an unresolved constructor. An LLM judge is used only for prose, with a rubric drawn from the
   stripped documentation, and never to grade syntax.
-- **The stripped documentation is the answer key.** Stripping `@doc` and `@summary` from a layer produces the stimulus;
-  what was stripped is the rubric for comprehension items and the target for the unknowns experiment.
+- **The stripped documentation is the answer key.** Stripping `@doc` and `@service.summary` from a layer produces the
+  stimulus; what was stripped is the rubric for comprehension items and the target for the unknowns experiment.
 - **The item banks already exist.** The bundled schemas, `meta-kernel.tn`, `meta.tn`, `core.tn` and `net.tn` in the
-  sibling's `spec/m/`, and this repo's `meta-service.tn`, `deployment.tn`, `problem.tn` and the orders fixtures under
-  `tson-http/src/test/resources/io/ltr8/tson/http/api/orders/`. The pinned diagnostics in `UpstreamGapsTest`,
-  [`OneLevelProbe`](../one-level/java/io/ltr8/tson/http/experiment/onelevel/OneLevelProbe.java) and
-  `MediaTypeKindProbeTest` (`tson-http/src/test/java/io/ltr8/tson/http/probe/`): each is a planted error with its
-  exact message. Each item is tagged with the inventory features it exercises.
+  sibling's `spec/m/`, and this repo's `service.tn`, `deployment.tn`, `problem.tn` and the orders fixtures under
+  `tson-http/src/test/resources/io/ltr8/tson/http/api/orders/`. The pinned diagnostics in `UpstreamGapsTest` and
+  `MediaTypeKindProbeTest` (`tson-http/src/test/java/io/ltr8/tson/http/`): each is a planted error with its exact
+  message. Each item is tagged with the inventory features it exercises.
 - **Phase 3 variants are printed mechanically from one resolved form** (the sibling's `spec/m/*-resolved.tn` for the
   bundled layers), so they are semantically identical and a difference in outcome is one the syntax made. No prompt
   names a variant or says which is in use today.
@@ -228,7 +226,7 @@ on the line: the signature of a convention or an order dependence.
 **Weight: Low.** The most informative single artefact, but most attempts fail and grading is by hand.
 
 **Steps:**
-1. Give the stripped kernel and `meta.tn`; ask for a layer describing a service, in the shape of `meta-service.tn`.
+1. Give the stripped kernel and `meta.tn`; ask for a layer describing a service, in the shape of `service.tn`.
 2. Compile each attempt, and tag each diagnostic with its feature.
 3. Keep the diagnostics and the attempts as a record of the failure shapes per model.
 
@@ -242,7 +240,7 @@ on the line: the signature of a convention or an order dependence.
 4. Only then build the variant printer, rendering each variant from resolved output.
 5. Phase 3: rerun the experiments the hypotheses call for, over the variants.
 
-Nothing here changes the spec. The result feeds the one-level decision in tson-java, and `UPSTREAM.md` as spec
+Nothing here changes the spec. The result feeds tson-java's syntax decisions, and `UPSTREAM.md` as spec
 feedback if the spec should hear it.
 
 ## What this experiment is not
@@ -264,27 +262,30 @@ entry's value is a type, otherwise it is data, and `!T body` is the same instant
 The `_type` suffix (`integer_type`, `text_type`, `media_type_type`) carries most of that; `record`, `enum`, `choice` and
 `namespace` carry none of it. Across a layer the size of `meta.tn`, that would be a lookup per line.
 
-Refinement, `^`, is different in kind: it refines any value under the rules its type states, field by field, a
-facet's (bounds inward, member sets shrinking), a field's modifier (`=` fixed, `~` replaceable) or a reference's `of`
-(narrowed to a subtype), so `int8 => !integer ^ { min: 0  max: 255 }`, `defaultbase => base ^ { x: ~"hello" }` and
-`identifier_ref => !meta.type_ref ^ { of: unicode.identifier_type }` are one rule, record refinement being the case
-whose type is `record`. **The parser note:** the `!` prefix on atom refinement (`!integer ^ { ... }`) tells the
-parser the body is facet data, not field declarations, before anything resolves; without it something else must, or
-one grammar covers both bodies and defers the choice to resolution.
+Refinement, `^`, is different in kind: it follows `!name` and refines a type a constructor built by values, under
+the rules that type states, facet by facet (bounds inward, member sets shrinking) or a reference's `of` (narrowed to a
+subtype), so `int8 => !integer ^ { min: 0  max: 255 }` and `identifier_ref => !meta.type_ref ^ { of:
+unicode.identifier_type }` are one rule. A record is never refined: it derives by composition, `&`, whose body is field
+definitions, and a field restated there narrows by the same rules, its modifier (`=` fixed, `~` replaceable) or its
+type (one IS-A the inherited), so `defaultbase => base & { x?: ~"hello" }` restates `x` where a name `base` lacks adds
+a field. **The parser note:** the operator tells the parser the body's grammar before anything resolves, values after
+`^` and field definitions after `&`, so a bare `T ^ { ... }` is a parse error naming `T & { ... }` ([TSON-SCHEMA]
+§12.1) and `!R ^ { ... }` over a record is a resolver error naming the same (§4.3).
 
 **Syntax variants**, named neutrally in any prompt:
 
-- **V0** -- Revision 39: `!` marks an instance, so `!C { ... }` is a value of `C` (a type when `C` IS-A `meta.type`)
-  whether `C` is a constructor or an ordinary type; `!I ^ { ... }` and `T ^ { ... }` refine a value under its type's
-  rules; `A & B` composes. This is the baseline itself.
+- **V0** -- Revision 40: `!` marks an instance, so `!C { ... }` is a value of `C` (a type when `C` IS-A `meta.type`)
+  whether `C` is a constructor or an ordinary type; `!I ^ { ... }` refines a type a constructor built by values; `A & B
+  & { ... }` composes, the one way to derive a record. This is the baseline itself.
 - **V1** -- `!` removed from every type-producing form (`integer => integer_type { min: 0 }`,
-  `age => integer ^ { min: 0 }`), and kept only where a value follows.
+  `age => integer ^ { min: 0 }`, which V0 refuses as a parse error), and kept only where a value follows; the operator
+  still decides the body.
 - **V2** -- an infix construction operator, `integer => integer_type <- { min: 0 }`, beside `^` and `&`; `!` only on
   values. tson-java proposed it as spec feedback and withdrew it: under one level the head's chain says whether an
   entry is a type, so there is no head-position ambiguity for it to remove. It stays a variant because the question
   here is load on a reader, which that argument does not settle.
-- **V3** -- V2 with atom refinement also spelled `<-` (`small_int => integer <- { max: 10 }`), so `^` has only the
-  field-declaration body grammar and `<-` only the facet-data one.
+- **V3** -- V2 with atom refinement also spelled `<-` (`small_int => integer <- { max: 10 }`), so one operator takes
+  a body of values, whether it constructs or refines, `^` goes, and `&` alone takes field definitions.
 
 **Naming:** N0, the `_type` suffix as it stands; N1, neutral names with the suffix removed; N2, names replaced by
 meaningless but pronounceable tokens, measuring how much the names carry. **Ordering:** O0, declare-before-use, as the

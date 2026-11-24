@@ -89,7 +89,7 @@ public final class TsonHttpCodec {
         // Built once: an error body always names problem.tn and its root type, so there is nothing per-call
         // to decide. Both arguments are required -- a bound record writes no type-ref of its own, so a
         // !!import without one produces a document a reader cannot select a type from.
-        this.problemWriter = objectWriter.describing(TsonProblemSchema.ID, "problem");
+        this.problemWriter = objectWriter.describing(TsonProblemSchema.ID, "problem.details");
         // Warm-up, not a correctness measure. writeProblem runs when something has already gone wrong, often
         // for many requests at once, and resolving a descriptor for the first time on that path adds latency
         // exactly where it is least wanted.
@@ -421,8 +421,8 @@ public final class TsonHttpCodec {
      * out-of-band carrier on a response as on a request. And a tree is the TSON encoding's own model, so a
      * {@code TsonValue} is written as TSON or not at all -- {@link #requireTson} is that rule.
      *
-     * <p><b>A problem written as JSON is RFC 9457's own format.</b> {@code problem.tn}'s {@code problem} is
-     * RFC 9457's five members plus {@code errors}, an extension member, so its JSON encoding <em>is</em> an
+     * <p><b>A problem written as JSON is RFC 9457's own format.</b> {@code problem.tn}'s {@code problem.details}
+     * is RFC 9457's five members plus {@code errors}, an extension member, so its JSON encoding <em>is</em> an
      * {@code application/problem+json} body, and is labelled so wherever the client accepts that type; where it
      * accepts only the negotiated JSON type, it is labelled with that.
      *
@@ -618,16 +618,33 @@ public final class TsonHttpCodec {
      * a context, checks those records against their classes when it compiles a closure and refuses each one --
      * every closure holds the kernel, so no JSON body would bind at all. {@code UpstreamGapsTest} pins that gap.
      * The JSON reader needs the application's names only, which are the ones the vocabulary does not answer.
+     *
+     * <p>Both forms of the binder's question pass through: the reader asks a name within the canonical identity of
+     * the schema declaring it, so a binder routing by schema ({@code DataNameBinder.byNamespace}, two versions that
+     * both declare {@code order}) is asked as it would be by the TSON reader.
      */
     private static DataBindContext withoutKernelVocabulary(DataBindContext composed) {
         DataNameBinder names = composed.nameBinder();
-        return composed.toBuilder().nameBinder(name -> {
-            if (isKernelVocabulary(name)) {
-                throw new DataBindException("'" + name + "' is the kernel's own vocabulary, which a JSON body "
-                        + "does not bind");
+        return composed.toBuilder().nameBinder(new DataNameBinder() {
+            @Override
+            public Class<?> resolve(String name) throws DataBindException {
+                requireNotKernel(name);
+                return names.resolve(name);
             }
-            return names.resolve(name);
+
+            @Override
+            public Class<?> resolve(String namespace, String name) throws DataBindException {
+                requireNotKernel(name);
+                return names.resolve(namespace, name);
+            }
         }).build();
+    }
+
+    private static void requireNotKernel(String name) throws DataBindException {
+        if (isKernelVocabulary(name)) {
+            throw new DataBindException("'" + name + "' is the kernel's own vocabulary, which a JSON body does not "
+                    + "bind");
+        }
     }
 
     private static boolean isKernelVocabulary(String name) {

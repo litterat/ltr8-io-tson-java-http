@@ -34,28 +34,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonSchemaVersionsTest {
 
-    private static final String V1_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
-    private static final String V2_ID = "https://schemas.example.com/2026/39/app/order-2.tn";
+    private static final String V1_ID = "https://schemas.example.com/2026/40/app/order-1.tn";
+    private static final String V2_ID = "https://schemas.example.com/2026/40/app/order-2.tn";
 
     private static final String V1 = """
-            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema { order => { sku: text  quantity: int32 } }""";
 
     private static final String V2 = """
-            !!id:"https://schemas.example.com/2026/39/app/order-2.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/order-2.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema { order => { sku: text  quantity: int32  currency: text } }""";
 
     private static final String V1_PROFILE = "orders-1";
     private static final String V2_PROFILE = "orders-2";
 
     /** A schema a body imports beside its version: a helper, not a version, and never served as one. */
-    private static final String MONEY_ID = "https://schemas.example.com/2026/39/app/money.tn";
+    private static final String MONEY_ID = "https://schemas.example.com/2026/40/app/money.tn";
 
     private static final String MONEY = """
-            !!id:"https://schemas.example.com/2026/39/app/money.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/money.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema { amount => { value: int32  currency: text } }""";
 
     private static final Map<String, String> SCHEMAS = Map.of(V1_ID, V1, V2_ID, V2, MONEY_ID, MONEY);
@@ -165,7 +165,7 @@ class TsonSchemaVersionsTest {
     /** And the guard: routing refuses before that can happen. */
     @Test
     void routingRefusesAVersionThisEndpointDoesNotServe() {
-        String unknown = "https://schemas.example.com/2026/39/app/order-3.tn";
+        String unknown = "https://schemas.example.com/2026/40/app/order-3.tn";
         TsonHttpException refused = assertThrows(TsonHttpException.class,
                 () -> versions.route(body(order(unknown, "{ sku: \"A\" quantity: 1 }"))));
         assertEquals(TsonHttpException.BAD_REQUEST, refused.status());
@@ -406,7 +406,10 @@ class TsonSchemaVersionsTest {
                 () -> codec.readTree(body(order(V2_ID, "{ sku: \"B\" quantity: 2 }")), "application/tson"));
     }
 
-    /** The failure a single shared binder gives, so the reason for a context per version stays visible. */
+    /**
+     * The failure a binder answering by name alone gives, one class for {@code order} in both versions; a binder
+     * keyed by schema ({@code TsonBindings.bySchema}) binds the two apart.
+     */
     @Test
     void oneBinderCannotServeTwoVersionsOfOneTypeName() {
         DataNameBinder binder = name -> "order".equals(name) ? OrderV1.class
@@ -487,7 +490,7 @@ class TsonSchemaVersionsTest {
     @Test
     void anUnknownVersionDoesNotSpoilTheRest() {
         assertEquals(V1_ID, versions.chooseResponseVersion(
-                "\"https://schemas.example.com/2026/39/app/order-9.tn\", \"" + V1_ID + "\""));
+                "\"https://schemas.example.com/2026/40/app/order-9.tn\", \"" + V1_ID + "\""));
     }
 
     /**
@@ -498,7 +501,7 @@ class TsonSchemaVersionsTest {
     @Test
     void nothingAcceptableIs406() {
         TsonHttpException refused = assertThrows(TsonHttpException.class, () -> versions.chooseResponseVersion(
-                "\"https://schemas.example.com/2026/39/app/order-9.tn\""));
+                "\"https://schemas.example.com/2026/40/app/order-9.tn\""));
 
         assertEquals(TsonHttpException.NOT_ACCEPTABLE, refused.status());
         assertTrue(refused.getMessage().contains("order-1"), refused.getMessage());

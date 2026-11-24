@@ -4,7 +4,7 @@ import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.policy.IdentifierPolicy;
 import io.ltr8.tson.base.policy.ProcessorPolicy;
-import io.ltr8.tson.base.policy.ScriptPolicy;
+import io.ltr8.tson.base.policy.TokenPolicy;
 import io.ltr8.unicode.RestrictionLevel;
 import org.junit.jupiter.api.Test;
 
@@ -20,8 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TsonDeploymentTest {
 
     private static final String FULL = """
-            !!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
-            !deployment {
+            !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
+            !deployment.descriptor {
               name:     "production"
               listener: { host: "127.0.0.1"  port: 8080 }
               policy: {
@@ -36,8 +36,8 @@ class TsonDeploymentTest {
     /** A descriptor whose policy is {@code policy}. */
     private static String withPolicy(String policy) {
         return """
-                !!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
-                !deployment { name: "n"  policy: %s }""".formatted(policy);
+                !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
+                !deployment.descriptor { name: "n"  policy: %s }""".formatted(policy);
     }
 
     private static final String DEFAULT_IDENTIFIERS =
@@ -72,10 +72,10 @@ class TsonDeploymentTest {
         // `permitting` is the narrowest relaxation §8.2 offers: Cyrillic beside Latin, without dropping a
         // level and losing the rule everywhere else. A mixed Latin/Cyrillic name is refused at Moderately
         // Restrictive and admitted once that combination is named.
-        ScriptPolicy tokens = policy.tokenPolicy();
+        TokenPolicy tokens = policy.tokenPolicy();
         assertTrue(tokens.violation("аdmin").isEmpty(),
                 () -> "LATIN+CYRILLIC was permitted: " + tokens.violation("аdmin").orElse(""));
-        assertTrue(ScriptPolicy.moderatelyRestrictive().violation("аdmin").isPresent(),
+        assertTrue(TokenPolicy.moderatelyRestrictive().violation("аdmin").isPresent(),
                 "and is refused without it, or this asserts nothing");
     }
 
@@ -139,8 +139,8 @@ class TsonDeploymentTest {
     /** A descriptor with this {@code schema_hosts} and, where given, this {@code listener.host}. */
     private static String withHosts(String hosts, String listenerHost) {
         return """
-                !!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
-                !deployment { name: "n"  %s schema_hosts: [%s] }""".formatted(
+                !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
+                !deployment.descriptor { name: "n"  %s schema_hosts: [%s] }""".formatted(
                 listenerHost == null ? "" : "listener: { host: " + listenerHost + " }", hosts);
     }
 
@@ -213,8 +213,8 @@ class TsonDeploymentTest {
     @Test
     void anAbsentPolicyIsNotAPermissiveOne() {
         TsonDeployment deployment = TsonDeployment.read("""
-                !!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
-                !deployment { name: "minimal" }""");
+                !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
+                !deployment.descriptor { name: "minimal" }""");
 
         assertTrue(deployment.processorPolicy().isEmpty());
         assertEquals(List.of(), deployment.schemaHosts(), "an omitted list is empty, not null");
@@ -240,7 +240,7 @@ class TsonDeploymentTest {
     /**
      * <b>A token policy cannot be given a unit.</b> A value has no segments — {@code _} and {@code -} separate
      * a name's words and are ordinary characters in a value, so segmenting one would admit UTS #39's own
-     * {@code Toys-Я-Us} — and {@code policy.tn}'s {@code script_policy} has no {@code per_segment} to write.
+     * {@code Toys-Я-Us} — and {@code policy.tn}'s {@code token_policy} has no {@code per_segment} to write.
      */
     @Test
     void aTokenPolicyCannotBeGivenAUnit() {
@@ -289,7 +289,7 @@ class TsonDeploymentTest {
 
         // Nothing about what this deployment trusts, and nothing about where it listens.
         String written = TsonDeployment.tson().objectWriter()
-                .describing(TsonDeployment.ID, "acceptance_profile").toTson(profile);
+                .describing(TsonDeployment.ID, "deployment.acceptance_profile").toTson(profile);
         assertFalse(written.contains("schemas.example.com"), written);
         assertFalse(written.contains("127.0.0.1"), written);
         assertFalse(written.contains("8080"), written);
@@ -308,8 +308,8 @@ class TsonDeploymentTest {
     @Test
     void aDescriptorWithNoPolicyPublishesTheDefaults() {
         TsonDeployment.Policy policy = profileOf(TsonDeployment.read("""
-                !!import:"https://tson.io/2026/39/io/ltr8/http/deployment.tn"
-                !deployment { name: "minimal" }""")).policy();
+                !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
+                !deployment.descriptor { name: "minimal" }""")).policy();
 
         assertEquals(TsonDeployment.Policy.of(ProcessorPolicy.defaults()), policy);
         assertEquals(RestrictionLevel.HIGHLY_RESTRICTIVE, policy.identifierPolicy().level());
@@ -325,9 +325,10 @@ class TsonDeploymentTest {
     @Test
     void theProfileIsWrittenInPolicyTnsShape() {
         String written = TsonDeployment.tson().objectWriter()
-                .describing(TsonDeployment.ID, "acceptance_profile").toTson(profileOf(TsonDeployment.read(FULL)));
+                .describing(TsonDeployment.ID, "deployment.acceptance_profile").toTson(profileOf(TsonDeployment.read(FULL)));
 
         assertEquals(List.of(), TsonDeployment.tson().validate(written), written);
+        assertTrue(written.contains("!deployment.acceptance_profile"), written);
         assertTrue(written.contains("identifier_policy") && written.contains("token_policy"), written);
     }
 

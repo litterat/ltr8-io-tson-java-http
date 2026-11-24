@@ -1,7 +1,7 @@
 # Serving several schema versions (`TsonSchemaVersions`)
 
-Why versions coexist, why bind mode needs a `DataBindContext` per version, how a request is routed and a response
-negotiated, and the two ways to model the Java side. Current form only.
+Why versions coexist, what binding two versions takes, how a request is routed and a response negotiated, and the two
+ways to model the Java side. Current form only.
 
 **Invariants**
 
@@ -12,6 +12,9 @@ negotiated, and the two ways to model the Java side. Current form only.
   binding naming no version it serves, one naming no schema at all, and one naming two of its versions. Never add a
   guessing fallback; `defaultVersion` is off by default for the same reason.
 - `Routed.schemaId()` is the registered id, not the spelling the document used.
+- The binder is asked a type by its declaring schema's canonical identity and its name there, so one context binds two
+  versions' `order` to two classes (`TsonBindings.bySchema`). A context per version is needed only for the `@Profile`
+  model, one class serving both; the routing and its refusals hold either way.
 - Binding uses the canonical constructor only. A version is selected by routing or a `@Profile`, never by overloads.
 
 ## Serving several schema versions
@@ -20,11 +23,19 @@ negotiated, and the two ways to model the Java side. Current form only.
 `order-2.tn`), so versions coexist rather than replace each other, and a server outliving one of its clients
 serves both. `TsonSchemaVersions` is that, and `TsonDocumentPeek` is what lets it route.
 
-**A `DataBindContext` per version, because binding is name-based.** `DataNameBinder.resolve(String)` is handed a
-schema *type name* and nothing else — no schema, no version. Both versions declare `order`, so one binder cannot
-map it to two classes. The failure is at least loud: *"the schema's root type `order` binds to OrderV1, which is
-not assignable to the requested OrderV2"*. Tree mode has none of this difficulty; one `Tson` holds every version
-happily, because no classes are involved. Reach for `TsonSchemaVersions` only in bind mode.
+**One context binds two versions; a context per version is for the `@Profile` model.** A reader asks the binder for a
+type within the canonical identity of the schema declaring it, `DataNameBinder.resolve(namespace, name)`, so
+`order-1.tn`'s `order` and `order-2.tn`'s are two questions. `TsonBindings.bySchema`, `DataNameBinder.byNamespace` over
+a map per schema, binds them to two classes through one `Tson`, the same whether a body imports a version or a
+description names both by extern (`TsonApiDescriptionExternTest.twoVersionsBindToTwoClassesThroughOneContext`,
+`ExternProbeTest.oneContextBindsTwoVersionsByTheDeclaringSchema`). A name-only map, `TsonBindings.of`, answers every
+schema alike, so it maps `order` to one class for both, and reading the other version is loud: *"the schema's root type
+`order` binds to OrderV1, which is not assignable to the requested OrderV2"*
+(`TsonSchemaVersionsTest.oneBinderCannotServeTwoVersionsOfOneTypeName`). A context per version remains where one class
+serves both through `@Profile`, since a profile is fixed when a context is built. `TsonSchemaVersions` holds a codec per
+version in both models, for the routing and its refusals below, which no binding replaces. Tree mode has none of the
+binding question; one `Tson` holds every version happily, because no classes are involved. Reach for
+`TsonSchemaVersions` in bind mode, where routing is what keeps a v2 document out of a v1 class.
 
 **Reading is governed, writing is negotiated.** A request body names the schema that governs it and `route`
 obeys it — a JSON one through the `TSON-Schema` header alone, since its in-band `$import` is not read: `route(body,

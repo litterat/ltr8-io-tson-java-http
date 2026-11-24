@@ -7,7 +7,7 @@ import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.policy.IdentifierPolicy;
 import io.ltr8.tson.base.policy.LimitsPolicy;
 import io.ltr8.tson.base.policy.ProcessorPolicy;
-import io.ltr8.tson.base.policy.ScriptPolicy;
+import io.ltr8.tson.base.policy.TokenPolicy;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.unicode.RestrictionLevel;
 
@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * How one instance is configured, read from a {@code deployment.tn} document.
@@ -28,7 +29,9 @@ import java.util.Optional;
  * endpoint offers). {@code deployment.tn} carries the argument for why the [TSON-DATA] §8.2 policies can
  * live in neither of the other two, and the bundled {@code policy.tn} is the policy's vocabulary. A descriptor
  * states a {@code policy.processor}, complete, and {@link #profile} publishes the policy in force in the same
- * shape.
+ * shape. Every type {@code deployment.tn} declares is a member of its one root map, {@code deployment}: a
+ * descriptor's root is {@code !deployment.descriptor { … }} and the profile is a {@code
+ * deployment.acceptance_profile}.
  *
  * <p><b>Two rules this class exists to enforce by shape rather than by documentation.</b>
  *
@@ -48,23 +51,23 @@ import java.util.Optional;
  * exists to prevent. A descriptor stating no policy leaves the library's defaults alone — Highly Restrictive
  * over declared names, unrestricted over values — rather than overwriting them with a guess.
  */
-@Typename(name = "deployment")
+@Typename(name = "deployment.descriptor")
 public record TsonDeployment(String name, Optional<Listener> listener, Optional<Policy> policy,
                              @Field("schema_hosts") List<String> schemaHosts) {
 
     /** The schema a descriptor names. Published like any other, unlike the descriptors it governs. */
-    public static final String ID = "https://tson.io/2026/39/io/ltr8/http/deployment.tn";
+    public static final String ID = "https://tson.io/2026/40/io/ltr8/http/deployment.tn";
 
     private static final String SOURCE = readResource("/deployment.tn");
 
     private static final Map<String, Class<?>> BINDINGS = Map.of(
-            "deployment", TsonDeployment.class,
-            "acceptance_profile", AcceptanceProfile.class,
-            "listener", Listener.class,
+            "deployment.descriptor", TsonDeployment.class,
+            "deployment.acceptance_profile", AcceptanceProfile.class,
+            "deployment.listener", Listener.class,
             "policy.restriction_level", RestrictionLevel.class,
             "policy.processor", Policy.class,
             "policy.identifier_policy", Policy.Identifiers.class,
-            "policy.script_policy", Policy.Scripts.class,
+            "policy.token_policy", Policy.Tokens.class,
             "policy.limits", Policy.Limits.class);
 
     /**
@@ -84,7 +87,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
     }
 
     /** Where this instance listens. Absent members leave the caller's own defaults alone. */
-    @Typename(name = "listener")
+    @Typename(name = "deployment.listener")
     public record Listener(Optional<String> host, Optional<Integer> port) {
     }
 
@@ -98,7 +101,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
      */
     @Typename(name = "policy.processor")
     public record Policy(@Field("identifier_policy") Identifiers identifierPolicy,
-                         @Field("token_policy") Scripts tokenPolicy,
+                         @Field("token_policy") Tokens tokenPolicy,
                          @Field("unicode_data_version") Optional<String> unicodeDataVersion,
                          Limits limits) {
 
@@ -106,21 +109,23 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
         public static Policy of(ProcessorPolicy policy) {
             IdentifierPolicy identifiers = policy.identifierPolicy();
             return new Policy(
-                    new Identifiers(identifiers.scripts().level(), identifiers.isPerSegment(),
-                            identifiers.appliesSkeletonDistinctness(), aliases(identifiers.scripts())),
-                    new Scripts(policy.tokenPolicy().level(), aliases(policy.tokenPolicy())),
+                    new Identifiers(identifiers.level(), identifiers.isPerSegment(),
+                            identifiers.appliesSkeletonDistinctness(), aliases(identifiers.permittedScripts())),
+                    new Tokens(policy.tokenPolicy().level(), aliases(policy.tokenPolicy().permittedScripts())),
                     Optional.of(policy.unicodeDataVersion()), Limits.of(policy.limits()));
         }
 
         /** This policy as the library's own type, stamped with the data version this processor carries. */
         public ProcessorPolicy toProcessorPolicy() {
-            IdentifierPolicy identifiers = IdentifierPolicy.of(scriptPolicy(identifierPolicy.level(),
-                    identifierPolicy.permitting()));
+            IdentifierPolicy identifiers = IdentifierPolicy.of(identifierPolicy.level());
+            for (List<String> combination : identifierPolicy.permitting()) {
+                identifiers = identifiers.permitting(scripts(combination));
+            }
             if (identifierPolicy.perSegment()) {
                 identifiers = identifiers.perSegment();
             }
             return ProcessorPolicy.of(identifiers.withSkeletonDistinctness(identifierPolicy.skeletonDistinctness()),
-                    scriptPolicy(tokenPolicy.level(), tokenPolicy.permitting()),
+                    tokenPolicy(tokenPolicy.level(), tokenPolicy.permitting()),
                     limits.toLimitsPolicy());
         }
 
@@ -139,14 +144,14 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
         }
 
         /**
-         * {@code policy.tn}'s {@code policy.script_policy}: a level and the script combinations admitted over it.
+         * {@code policy.tn}'s {@code policy.token_policy}: a level and the script combinations admitted over it.
          * It has no unit because a value has no segments — {@code _} and {@code -} separate a name's words and
          * are ordinary characters in a value — which the library makes unwritable rather than refused.
          */
-        @Typename(name = "policy.script_policy")
-        public record Scripts(RestrictionLevel level, List<List<String>> permitting) {
+        @Typename(name = "policy.token_policy")
+        public record Tokens(RestrictionLevel level, List<List<String>> permitting) {
             /** @throws IllegalArgumentException if {@code permitting} names something that is not a script */
-            public Scripts {
+            public Tokens {
                 permitting = canonical(permitting);
             }
         }
@@ -180,7 +185,6 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
                              @Field("max_schema_entries") long maxSchemaEntries,
                              @Field("max_alias_chain") long maxAliasChain,
                              @Field("max_supertype_chain") long maxSupertypeChain,
-                             @Field("max_materialisation_depth") long maxMaterialisationDepth,
                              @Field("max_wait_depth") long maxWaitDepth) {
 
             /** {@code limits} as this record, every value as the library holds it. */
@@ -189,7 +193,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
                         limits.maxNumericLiteralLength(), limits.maxBinarySize(), limits.maxDocumentSize(),
                         limits.maxElements(), limits.maxEntries(), limits.maxFields(), limits.maxAnnotations(),
                         limits.maxValues(), limits.maxImportClosure(), limits.maxSchemaEntries(), limits.maxAliasChain(),
-                        limits.maxSupertypeChain(), limits.maxMaterialisationDepth(), limits.maxWaitDepth());
+                        limits.maxSupertypeChain(), limits.maxWaitDepth());
             }
 
             /**
@@ -203,7 +207,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
                         capped(maxNumericLiteralLength), maxBinarySize, maxDocumentSize, capped(maxElements),
                         capped(maxEntries), capped(maxFields), capped(maxAnnotations), capped(maxValues),
                         capped(maxImportClosure), capped(maxSchemaEntries), capped(maxAliasChain),
-                        capped(maxSupertypeChain), capped(maxMaterialisationDepth), capped(maxWaitDepth));
+                        capped(maxSupertypeChain), capped(maxWaitDepth));
             }
 
             private static int capped(long limit) {
@@ -212,8 +216,8 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
         }
 
         /** Each admitted combination as UAX #24 aliases, sorted so two policies compare as text. */
-        private static List<List<String>> aliases(ScriptPolicy policy) {
-            return policy.permittedScripts().stream()
+        private static List<List<String>> aliases(List<Set<UnicodeScript>> permitted) {
+            return permitted.stream()
                     .map(scripts -> scripts.stream().map(Policy::alias).sorted().toList()).toList();
         }
 
@@ -244,13 +248,16 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
             }
         }
 
-        private static ScriptPolicy scriptPolicy(RestrictionLevel level, List<List<String>> permitting) {
-            ScriptPolicy policy = ScriptPolicy.of(level);
+        private static TokenPolicy tokenPolicy(RestrictionLevel level, List<List<String>> permitting) {
+            TokenPolicy policy = TokenPolicy.of(level);
             for (List<String> combination : permitting) {
-                policy = policy.permitting(combination.stream().map(UnicodeScript::forName)
-                        .toArray(UnicodeScript[]::new));
+                policy = policy.permitting(scripts(combination));
             }
             return policy;
+        }
+
+        private static UnicodeScript[] scripts(List<String> combination) {
+            return combination.stream().map(UnicodeScript::forName).toArray(UnicodeScript[]::new);
         }
 
         /**
@@ -279,7 +286,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
      * <p><b>A hint, not the authority.</b> It can be cached and a policy can change under it; only the
      * refusal a request actually receives says what applied to that request, which is where §8.2 puts it.
      */
-    @Typename(name = "acceptance_profile")
+    @Typename(name = "deployment.acceptance_profile")
     public record AcceptanceProfile(String name, Policy policy) {
     }
 

@@ -35,8 +35,9 @@ unless registered or reachable through the configured source. From a `Tson`:
   so every kernel name binds to the schema model. It binds a schema's value entries and a data document's values
   alike (`design/binding.md`). `tson-json` given it whole binds nothing; `design/json-encoding.md` has the workaround.
   The vocabulary is `SchemaModelNameBinder` (`compiler.config`), the bind context for the schema model's classes: it
-  answers only for the names the bundled schemas declare and refuses the rest, which is how the codec asks whether a
-  name is the kernel's own.
+  answers only for the names the bundled schemas declare and bind to a class, and refuses the rest (a vocabulary name
+  bound to no class, as `text` or `schema`, is refused like a name outside it); that refusal is how the codec asks
+  whether a name is the kernel's own.
 - `resolve(schemaText)` / `validateSchema(schemaText)` — register a schema by its own `!!id`; the second collects
   rather than throws, and registers only a sound schema.
 - `validate(data)` — a data document, schemaless where it imports nothing. A document rooted `!schema` is refused as
@@ -53,12 +54,12 @@ unconfigured deployment gets), `of(source)`, `httpSchemas(hosts…)`, `fileSchem
 carrying a `FetchPolicy` beside the source. `registeredOnly()` is the shape the validator demo wants.
 
 **The shared vocabulary lives in `io.ltr8.tson.base`**, a module of its own, with the `Tson` prefix stripped —
-`Diagnostic`, `SourcePosition`, `DiagnosticsCollector`/`Receiver`, `CanonicalIdentity`, `ProcessorConfig`,
-`policy.IdentifierPolicy`/`ScriptPolicy`/`LimitsPolicy`/`ProcessorPolicy`,
+`Diagnostic`, `SourcePosition`, `DiagnosticsCollector`/`DiagnosticsReceiver`, `CanonicalIdentity`, `ProcessorConfig`,
+`policy.IdentifierPolicy`/`TokenPolicy`/`LimitsPolicy`/`ProcessorPolicy`,
 `source.SchemaSource`/`HttpSchemaSource`/`FileSchemaSource`,
 `bind.AtomContext`, and the exceptions. It is one vocabulary across both encodings by specification, which is
-why it is not in `tson-compiler`. **The classifying factories stayed behind**: `TsonDiagnostics` in
-`tson-compiler` owns `ofBaseSyntaxError` and friends, because they switch on the TSON reader's own exception
+why it is not in `tson-compiler`. **The classifying factories are in `tson-compiler`**: `TsonDiagnostics` there
+owns `ofBaseSyntaxError` and friends, because they switch on the TSON reader's own exception
 types. The schema model's classes live in `io.ltr8.tson.schema.<namespace>` by the bundled map that declares them
 (`schema.meta.ValueEntry`, `schema.meta.Namespace`, `schema.net.IriType`).
 
@@ -92,7 +93,7 @@ shape is:
 > handler.
 
 A schema arriving at runtime (an unknown `!!import` URL) must go through a single guarded resolution
-path, not a concurrent one. The contract is now stated where a server reads it — `Tson`'s class Javadoc
+path, not a concurrent one. The contract is stated where a server reads it — `Tson`'s class Javadoc
 (concurrent reads through one instance are safe; on a race work may be duplicated but state never is;
 `resolve`/`validateSchema` and mutating a `DataBindContext` under live reads are outside the guarantee) and
 `ProcessorConfig.withDataBindContext` — and pinned upstream by `ReadPathConcurrencyTest` and

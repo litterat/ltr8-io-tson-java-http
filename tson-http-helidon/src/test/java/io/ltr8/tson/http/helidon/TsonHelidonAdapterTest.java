@@ -48,21 +48,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TsonHelidonAdapterTest {
 
-    private static final String SCHEMA_ID = "https://schemas.example.com/2026/39/app/order-1.tn";
+    private static final String SCHEMA_ID = "https://schemas.example.com/2026/40/app/order-1.tn";
 
     private static final String SCHEMA = """
-            !!id:"https://schemas.example.com/2026/39/app/order-1.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/order-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema {
                 order => { sku: text  quantity: int32 }
             }""";
 
     /** A schema a body imports beside the one its route reads: a second member of its binding. */
-    private static final String MONEY_ID = "https://schemas.example.com/2026/39/app/money.tn";
+    private static final String MONEY_ID = "https://schemas.example.com/2026/40/app/money.tn";
 
     private static final String MONEY = """
-            !!id:"https://schemas.example.com/2026/39/app/money.tn"
-            !!import:"https://tson.io/2026/39/m/core.tn"
+            !!id:"https://schemas.example.com/2026/40/app/money.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
             !schema { amount => { value: int32  currency: text } }""";
 
     @Typename(name = "order")
@@ -121,7 +121,7 @@ class TsonHelidonAdapterTest {
     private TsonProblem problemFrom(HttpResponse<String> response) {
         TsonHttpCodec problems = new TsonHttpCodec(TsonProblemSchema.tson());
         return problems.readObjectAs(new ByteArrayInputStream(response.body().getBytes(StandardCharsets.UTF_8)),
-                "application/tson", TsonProblemSchema.ID, "problem", TsonProblem.class);
+                "application/tson", TsonProblemSchema.ID, "problem.details", TsonProblem.class);
     }
 
     @Test
@@ -237,7 +237,7 @@ class TsonHelidonAdapterTest {
     void aGapStillReportsTheProblemsItDidFind() throws Exception {
         start(routing -> routing.post("/mixed", TsonHandler.asHandler(codec, tson -> {
             throw TsonHttpException.invalidDocument(java.util.List.of(
-                    TsonDiagnostics.ofSchemaGap(SCHEMA_ID, "order", "generic templates are not implemented yet",
+                    TsonDiagnostics.ofSchemaGap(SCHEMA_ID, "order", "parametric records are not implemented yet",
                             Optional.empty()),
                     TsonDiagnostics.ofSchemaError(SCHEMA_ID, "order", "'quantity' is required", Optional.empty()),
                     TsonDiagnostics.ofSchemaUnavailable(SCHEMA_ID, "order", new SchemaFetchException(
@@ -415,7 +415,7 @@ class TsonHelidonAdapterTest {
     }
 
     /**
-     * <b>A JSON client's problem is RFC 9457's own format</b>: {@code problem.tn}'s {@code problem} written as
+     * <b>A JSON client's problem is RFC 9457's own format</b>: {@code problem.tn}'s {@code problem.details} written as
      * JSON is an {@code application/problem+json} body, labelled so where the client accepts that type and with
      * the JSON type it asked for where it does not.
      */

@@ -172,6 +172,8 @@ class ReadmeTest {
         assertEquals(400, empty.statusCode(), empty.body());
         assertTrue(empty.body().contains(io.ltr8.tson.http.TsonProblemSchema.ID),
                 () -> "the error body names the problem schema: " + empty.body());
+        assertTrue(readme.contains("!problem.details {") && empty.body().contains("!problem.details"),
+                () -> "the error body's root is the type the README shows: " + empty.body());
         assertTrue(empty.body().contains("/sku") && empty.body().contains("/quantity"),
                 () -> "both problems in one response, which is the point the README makes: " + empty.body());
         assertTrue(empty.body().contains("FIELD_REQUIRED"), empty.body());
@@ -204,7 +206,7 @@ class ReadmeTest {
     void theModuleTableNamesTheSchemasThatExist() {
         assertTrue(readme.contains("`problem.tn`"),
                 "the table should name the error-body schema it ships");
-        assertTrue(readme.contains("`meta-service.tn`"),
+        assertTrue(readme.contains("`service.tn`"),
                 "the table should name the service-description meta layer it ships");
         assertTrue(readme.contains(io.ltr8.tson.http.TsonProblemSchema.ID.substring(
                         io.ltr8.tson.http.TsonProblemSchema.ID.lastIndexOf('/') + 1)),
@@ -222,8 +224,8 @@ class ReadmeTest {
      *
      * <p>Derived from source rather than from a hand-kept list, so adding a type to any module's main code
      * fails here until the table names it, and deleting one fails until the row goes. Main source sets only:
-     * a demo's {@code sku-not-found} is the application's own business error composing {@code problem}, not
-     * part of this project's vocabulary, which is the distinction the table would otherwise blur.
+     * a demo's {@code sku-not-found} is the application's own business error composing {@code problem.details},
+     * not part of this project's vocabulary, which is the distinction the table would otherwise blur.
      */
     @Test
     void theProblemTypeTableMatchesTheTypesThatExist() throws Exception {
