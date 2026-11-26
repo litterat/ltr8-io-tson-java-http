@@ -4,16 +4,17 @@ Integrating [TSON](https://tson.io) into a Java HTTP server — reading `applica
 writing `application/tson` responses, mapping schema violations onto HTTP status codes, and resolving
 `!!import` URLs over HTTP.
 
-Four modules:
+The modules:
 
 | Module | What it is |
 |---|---|
-| `tson-http` | Server-agnostic core: media type and `Accept` negotiation, codec, status policy, TSON error body (`problem.tn`), service description (`service.tn`), schema catalog. No external dependencies. |
+| `tson-http` | Server-agnostic core: media type and `Accept` negotiation, codec, status policy, TSON error body (`problem.tn`), schema catalog. Depends on `tson-service`. No external dependencies. |
+| `tson-service` | A service's description of itself (`service.tn`), the reader that checks it against what resolves, and the bind context that maps schema types to classes. Independent of HTTP. No external dependencies. |
 | `tson-http-jdk` | Adapter for the JDK's own `com.sun.net.httpserver`, plus schema serving. No external dependencies. |
 | `tson-http-javalin` | Adapter for [Javalin](https://javalin.io) 6. |
 | `tson-http-helidon` | Adapter for [Helidon](https://helidon.io) 4 SE, plus `TsonMediaSupport` so plain handlers read and write TSON natively. |
 
-**Status.** All four modules are built and tested, concurrency included — every adapter driven over real HTTP
+**Status.** The modules are built and tested, concurrency included — every adapter driven over real HTTP
 rather than by calling handlers, because the point of three adapters is that each framework's own body and
 content-negotiation handling differs. Each proves the same loop: a schema served at its own identity path,
 fetched back over HTTP under policy, and used to validate a posted document. Serves multiple schema versions

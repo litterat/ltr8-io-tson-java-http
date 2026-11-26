@@ -3,11 +3,11 @@
 **Status: not landed, and first in the order of work after the descriptor.** `service.tn` describes a
 protocol, a web service over it, and the endpoints of both; this is what calling an exchange of that protocol looks
 like on a wire. The protocol it is measured against is the orders example that ships as `tson-http`'s test fixture
-(`OrdersExamples`, under `tson-http/src/test/resources/io/ltr8/tson/http/api/orders/`), so this directory holds only
+(`OrdersExamples`, under `tson-http/src/test/resources/io/ltr8/tson/service/http/orders/`), so this directory holds only
 what is its own: the packet schema, the wire schema a generator would emit for that protocol, and the probe.
 
 **Where it lives when it lands: not `tson-http`.** The packet, dispatch and the processor are transport-neutral. A
-`tson-service` module (or repo) for protocol + packet + dispatch, with `tson-http`'s adapters becoming the http
+protocol + packet + dispatch belong in `tson-service`, with `tson-http`'s adapters becoming the http
 gateway over it -- and the RPC transport over HTTP is then itself one http projection with a single endpoint,
 described in the same vocabulary.
 
@@ -37,12 +37,12 @@ types. The wire schema is deterministic in the protocol, so it is generated, pub
 fetched like any other; `RpcProbe.theWireSchemaIsWhatTheProtocolDetermines` derives it from the protocol and
 holds the hand-written file to it, which is the check a generator makes unnecessary.
 
-**Both gateways translate into this.** An http projection describes a translator, not a server: `TsonApiDescription` is its
-table, and `RequestPlacement` run in reverse -- `id` from the path segment, `order_query` from the query string,
-`order` from the body beside `Idempotency-Key` -- is its request path, producing a `call`. Which is why a generic
-gateway process can read an http projection and an RPC address and need no code per service. An agent processor
-(`experiments/agent/`) does the same for several calls in one request. In-process Java dispatch is the first
-transport: an `Orders` implementation wires to the protocol once, and everything else translates into a call.
+**Both gateways translate into this.** An http projection describes a translator, not a server: `TsonServiceDescription` is
+its table, and `RequestPlacement` run in reverse -- `id` from the path segment, `order_query` from the query string, `order`
+from the body beside `Idempotency-Key` -- is its request path, producing a `call`. Which is why a generic gateway process can
+read an http projection and an RPC address and need no code per service. An agent processor (`experiments/agent/`) does the
+same for several calls in one request. In-process Java dispatch is the first transport: an `Orders` implementation wires to
+the protocol once, and everything else translates into a call.
 
 **The exchange's address is a content-addressed identity**: the protocol schema's `!!id` and the exchange's key,
 unambiguous across every service a gateway fronts, versioned by the identity, with no registry and no numeric ids --

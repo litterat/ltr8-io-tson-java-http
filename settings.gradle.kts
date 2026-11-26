@@ -31,6 +31,7 @@ gradle.projectsEvaluated {
     }
 }
 
+include("tson-service")
 include("tson-http")
 include("tson-http-jdk")
 include("tson-http-javalin")

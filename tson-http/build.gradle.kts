@@ -13,6 +13,9 @@ dependencies {
     // [TSON-JSON]'s reader, for a JSON body TsonHttpCodec.acceptingJson() admits. `api` because a JsonValue is
     // what a JSON tree read hands back. tson-java's own module, so the no-external-dependency rule holds.
     api("io.ltr8:tson-json:${property("tson.version")}")
+    // The service description and TsonBindings. `api` though no type of it is in this module's signatures: a
+    // consumer serving a description names those types beside the codec, so this module hands them on.
+    api(project(":tson-service"))
 }
 
 // Experiments -- design explorations that stay compiled and passing rather than rotting in a scratchpad. The

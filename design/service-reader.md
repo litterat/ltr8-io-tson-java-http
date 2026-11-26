@@ -1,7 +1,10 @@
-# Reading a description: `TsonApiDescription`, `TsonApiCoverage`, externs and the wiring
+# Reading a description: `TsonServiceDescription`, `TsonServiceCoverage`, externs and the wiring
 
-What `TsonApiDescription` checks before a description has a model, how it follows an extern to its landing, how a
-server's bindings, catalog and warm-up derive from the description, how `TsonApiCoverage` and the conformance test hold
+The reader, the schema class and the coverage are in `io.ltr8.tson.service.http` (`tson-service`): `service.tn` is one
+schema holding the http projection, so its reader is the `!service.http` reader.
+
+What `TsonServiceDescription` checks before a description has a model, how it follows an extern to its landing, how a
+server's bindings, catalog and warm-up derive from the description, how `TsonServiceCoverage` and the conformance test hold
 a server to it, and how business errors compose `problem.details`. The layer it reads, `service.tn` and its protocol
 level, is `design/service-description.md`; everything HTTP, the projection, its endpoints and `Route`, is
 `design/http-projection.md`.
@@ -9,11 +12,12 @@ level, is `design/service-description.md`; everything HTTP, the projection, its 
 **Invariants**
 
 - Naming is the resolver's (references, `type_ref`, `ref<…>`), a projection's claims included; relating is
-  `TsonApiDescription`'s, in one reader.
-- A class in `io.ltr8.tson.http.api` binds only by being named in `TsonApiSchema.bindings()`; a `service.http` entry
-  whose value did not bind is a startup failure, since the resolver holds one with an unbound subtype in it as a tree.
+  `TsonServiceDescription`'s, in one reader.
+- A class in `io.ltr8.tson.service.protocol` or `io.ltr8.tson.service.http` binds only by being named in
+  `TsonServiceSchema.bindings()`; a `service.http` entry whose value did not bind is a startup failure, since the resolver
+  holds one with an unbound subtype in it as a tree.
 - The description is the source of truth for what a server publishes (`referencedSchemas()`), warms
-  (`boundClasses(bindings)`, `boundClasses()`) and speaks (`Route.mediaTypes()`). `TsonApiCoverage.requireComplete()`
+  (`boundClasses(bindings)`, `boundClasses()`) and speaks (`Route.mediaTypes()`). `TsonServiceCoverage.requireComplete()`
   holds the server to it, and `notServedHere` with a reason is the only way out.
 - A claim names the declared verb and path template, never the path the framework registers.
 - A business error composes `problem.details`, fixes its status, and is written by the handler, not thrown.
@@ -28,7 +32,7 @@ level, is `design/service-description.md`; everything HTTP, the projection, its 
 **Naming is the resolver's; relating is the reader's.** `request`, `response` and `errors` are typed `type_ref`, and
 every reference the layer holds is a `meta.ref<…>` (a binding's or an exemption's `exchange`, a name in `binds` or in
 `security`), so a type nothing declares, a reference to the wrong kind of thing, and a key a protocol does not hold are
-refused at schema load (`TsonApiDescriptionTest.aBindsNamingNoProtocolIsRefusedAtLoad`). Each
+refused at schema load (`TsonServiceDescriptionTest.aBindsNamingNoProtocolIsRefusedAtLoad`). Each
 reference arrives delivered its referent (`ValueRef<Protocol>`, `ValueRef<Exchange>`); the reader builds `ExchangeName`
 from the name, whose first segment is the protocol's entry. **An unsound description has no model**, a startup failure
 rather than a published contract no client can act on:
@@ -52,25 +56,25 @@ placement and chosen types are the foreign record's. Each type expression is res
 writes it, hop by hop, so an array of a third schema has its element type looked up where the array is declared. The
 landing's namespace is enough even where its schema holds the entry by import: an import merges the declarer's whole
 namespace transitively and refuses a redefinition ([TSON-SCHEMA] §2.2.3), so no lookup of the declaring schema is made
-(`TsonApiDescriptionExternTest`). A plain alias hop within a schema is followed the same way for the checks that judge
+(`TsonServiceDescriptionExternTest`). A plain alias hop within a schema is followed the same way for the checks that judge
 a shape (`Landed.pastAliases()`): a request, response or error that is a plain alias of a record is that record, and a
-field typed by an alias of a record or array is no scalar (`TsonApiDescriptionTest`). A route keeps the name written;
+field typed by an alias of a record or array is no scalar (`TsonServiceDescriptionTest`). A route keeps the name written;
 `payloadTypes()` and `payloadType(ref)` give the `PayloadType`, the declaring schema's `!!id` and the entry's own
 name, which for an extern's landing and a plainly named entry is what the binder is asked (by `identity()`) and what
 the codec reads the type under in either encoding. So a context binding `order_v1` binds nothing a read asks for, and
 is refused at startup (`design/binding.md`). For a plain alias the name is the alias as written, and a TSON read asks
-for the entry the alias reaches (`TsonApiDescriptionTest.aPayloadTypeThatIsAPlainAliasIsNamedAsWritten`).
+for the entry the alias reaches (`TsonServiceDescriptionTest.aPayloadTypeThatIsAPlainAliasIsNamedAsWritten`).
 
 ## Wiring, and what a server derives
 
-**The wiring is two things**: this schema reachable from the `schemaSource` (`TsonApiSchema.publishedById()`), and
-`TsonApiSchema.bindings()` in the config's one bind context beside the application's own, merged by
-`TsonApiSchema.bindingsWith`. The map is explicit: a class in `io.ltr8.tson.http.api` binds only by being named there,
+**The wiring is two things**: this schema reachable from the `schemaSource` (`TsonServiceSchema.publishedById()`), and
+`TsonServiceSchema.bindings()` in the config's one bind context beside the application's own, merged by
+`TsonServiceSchema.bindingsWith`. The map is explicit: a class of either package binds only by being named there,
 and a name both maps bind is refused, since within one closure a name means one thing. Map keys bind as `String`
 whatever the key type, so `{http_verb => endpoint}` is `Map<String, Endpoint>`. A slot typed by an abstract record
 needs a Java type of that name, a sealed interface (`Endpoint`, `SecurityScheme`). A subtype nothing binds, written at
 that slot in a value entry, leaves the entry's whole value a tree rather than being refused (`UPSTREAM.md`, "A subtype
-nothing binds, at an abstract base's slot in a value entry, leaves the value a tree"), so `TsonApiDescription` refuses a
+nothing binds, at an abstract base's slot in a value entry, leaves the value a tree"), so `TsonServiceDescription` refuses a
 `service.http` entry whose value is not an `Http`, naming `bindingsWith`, through which a description's own endpoint
 subtype binds; skipping it would serve the description with that projection's routes missing.
 
@@ -86,7 +90,7 @@ subtype binds; skipping it would serve the description with that projection's ro
   name, so a context keyed by schema (`TsonBindings.bySchema`) warms two versions' `order` as two classes.
   Hand-listing lets a new response type go unwarmed, which costs only latency, so nothing reports it.
 
-**`TsonApiCoverage` holds a server to that contract at startup.** `serving(verb, path)` claims a declared endpoint and
+**`TsonServiceCoverage` holds a server to that contract at startup.** `serving(verb, path)` claims a declared endpoint and
 hands back its `Route`, so the path and media types come from the description wherever the framework can take them; an
 undeclared endpoint is refused where the handler is written, and `requireComplete()` fails startup on a declared one
 left unclaimed rather than 404ing for a client that believed the contract.
@@ -100,7 +104,7 @@ route that silently never matches.
 the exemption a greppable, justified decision where a boolean would be a hole; `not_bound` is the same rule one level
 up. Future helpers take this shape: a *named position with a rationale*, never a flag meaning "be sloppy".
 
-**The running server is held to it over HTTP** by `TsonApiConformanceTest` (`design/http-projection.md`, "`Route`,
+**The running server is held to it over HTTP** by `TsonServiceConformanceTest` (`design/http-projection.md`, "`Route`,
 and the conformance test").
 
 ## Business errors compose `problem.details`

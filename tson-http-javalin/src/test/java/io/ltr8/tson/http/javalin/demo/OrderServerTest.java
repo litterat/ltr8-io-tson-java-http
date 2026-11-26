@@ -6,9 +6,9 @@ import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonProblem;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaCatalog;
-import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.json.Json;
 import io.ltr8.tson.json.tree.JsonValue;
+import io.ltr8.tson.service.http.TsonServiceSchema;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -161,7 +161,7 @@ class OrderServerTest {
 
         assertTrue(OrderServer.SCHEMA.contains("!!import:\"" + TsonProblemSchema.ID + "\""),
                 "the error schema composes the CURRENT problem schema");
-        assertTrue(OrderServer.API.contains("!!import:\"" + TsonApiSchema.ID + "\""),
+        assertTrue(OrderServer.API.contains("!!import:\"" + TsonServiceSchema.ID + "\""),
                 "the description imports the CURRENT service.tn");
     }
 

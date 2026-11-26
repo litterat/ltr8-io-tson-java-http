@@ -20,7 +20,6 @@ import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonCompiledSchema;
 import io.ltr8.tson.compiler.config.SchemaModelNameBinder;
-import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.json.Json;
 import io.ltr8.tson.schema.TsonLinkedSchema;
 import io.ltr8.tson.schema.meta.Alias;
@@ -35,6 +34,8 @@ import io.ltr8.tson.schema.meta.TypeInline;
 import io.ltr8.tson.schema.meta.TypeRef;
 import io.ltr8.tson.schema.meta.ValueEntry;
 import io.ltr8.tson.schema.meta.ValueRef;
+import io.ltr8.tson.service.TsonBindings;
+import io.ltr8.tson.service.http.TsonServiceSchema;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -277,9 +278,9 @@ class UpstreamGapsTest {
                   y   => { a: text }
                   api => !ops { op => { method: "GET"  path: "/x"  responses: [ y ] } }""");
 
-        // io.ltr8.tson.http.api.Operation has `request`, `response`, `errors` and more; this meta declares none.
+        // io.ltr8.tson.service.http.Operation has `request`, `response`, `errors` and more; this meta declares none.
         BindMismatchException thrown = assertThrows(BindMismatchException.class,
-                () -> tson(metaSource, doc, "io.ltr8.tson.http.api").resolve(doc));
+                () -> tson(metaSource, doc, "io.ltr8.tson.service.http").resolve(doc));
 
         assertTrue(thrown.getMessage().contains("component 'request'") && thrown.getMessage().contains("'method'"),
                 thrown.getMessage());
@@ -293,8 +294,8 @@ class UpstreamGapsTest {
      * … }} is a value of the record type {@code service.http}, no type, and a parametric record over a value is no
      * record. The remedy the refusal names is one value per instantiation, which for an API description is the
      * projection written out, {@code orders => !service.http { … }}, and that describes to its route the way any
-     * projection does. Asserted through {@link io.ltr8.tson.http.api.TsonApiDescription}, the consumer the projection
-     * is for.
+     * projection does. Asserted through {@link io.ltr8.tson.service.http.TsonServiceDescription}, the consumer the
+     * projection is for.
      */
     @Test
     void aParametricRecordOverAnHttpValueIsRefused() {
@@ -315,11 +316,11 @@ class UpstreamGapsTest {
         String written = types + """
                   orders    => !service.http { resources: { "/orders/{id}" => {
                     @service.safe GET => !service.operation { request: order_ref  response: order } } } }""";
-        var described = TsonApiSchema.describedBy(resolveAgainstServiceMeta(written), API_ID);
+        var described = TsonServiceSchema.describedBy(resolveAgainstServiceMeta(written), API_ID);
 
         assertEquals(List.of("GET /orders/{id}"),
-                described.routes().stream().map(io.ltr8.tson.http.api.Route::key).sorted().toList());
-        var get = described.route(io.ltr8.tson.http.api.HttpVerb.GET, "/orders/{id}").orElseThrow();
+                described.routes().stream().map(io.ltr8.tson.service.http.Route::key).sorted().toList());
+        var get = described.route(io.ltr8.tson.service.http.HttpVerb.GET, "/orders/{id}").orElseThrow();
         assertEquals("order", get.response().orElseThrow().name());
     }
 
@@ -340,15 +341,15 @@ class UpstreamGapsTest {
                   }""";
 
         for (String path : List.of("/", "/x", "/orders/42")) {
-            var described = assertDoesNotThrow(() -> TsonApiSchema.describedBy(
+            var described = assertDoesNotThrow(() -> TsonServiceSchema.describedBy(
                     resolveAgainstServiceMeta(body.formatted(path)), API_ID), path);
-            assertTrue(described.route(io.ltr8.tson.http.api.HttpVerb.GET, path).isPresent(), path);
+            assertTrue(described.route(io.ltr8.tson.service.http.HttpVerb.GET, path).isPresent(), path);
         }
         String alike = body.formatted("/l").replace("} } }", "} }\n      \"/I\" => { @service.safe GET => "
                 + "!service.operation { response: order } } }");
-        var both = assertDoesNotThrow(() -> TsonApiSchema.describedBy(resolveAgainstServiceMeta(alike), API_ID));
+        var both = assertDoesNotThrow(() -> TsonServiceSchema.describedBy(resolveAgainstServiceMeta(alike), API_ID));
         assertEquals(List.of("GET /I", "GET /l"),
-                both.routes().stream().map(io.ltr8.tson.http.api.Route::key).sorted().toList());
+                both.routes().stream().map(io.ltr8.tson.service.http.Route::key).sorted().toList());
         for (String path : List.of("/путь", "/pаth")) {
             String refused = assertThrows(RuntimeException.class,
                     () -> resolveAgainstServiceMeta(body.formatted(path))).getMessage();
@@ -370,10 +371,10 @@ class UpstreamGapsTest {
                 !!import:"https://tson.io/2026/40/m/core.tn"
                 !schema {
                 %s
-                }""".formatted(API_ID, TsonApiSchema.ID, declarations);
+                }""".formatted(API_ID, TsonServiceSchema.ID, declarations);
         Tson tson = Tson.of(ProcessorConfig.defaults()
-                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(TsonApiSchema.publishedById())))
-                .withDataBindContext(TsonBindings.of(TsonApiSchema.bindings())));
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(TsonServiceSchema.publishedById())))
+                .withDataBindContext(TsonBindings.of(TsonServiceSchema.bindings())));
         tson.resolve(doc);
         return tson;
     }
@@ -1216,7 +1217,7 @@ class UpstreamGapsTest {
     /**
      * <b>A closure holding a record whose field is a namespace binds in TSON and is refused in JSON.</b> A schema
      * importing {@code service.tn}, read in bind mode with the layer's records bound, compiles {@code service.protocol}
-     * against {@link io.ltr8.tson.http.api.Protocol}, whose {@code exchanges} component is a {@code Namespace}: the
+     * against {@link io.ltr8.tson.service.protocol.Protocol}, whose {@code exchanges} component is a {@code Namespace}: the
      * TSON registry binds it and the JSON registry refuses it as a map, so a JSON body read under a service
      * description, here its own {@code note}, is a {@code BIND_MISMATCH} the same TSON body is not. {@code UPSTREAM.md},
      * "The JSON bind registry refuses a namespace-typed component". Fails the day the JSON read binds.
@@ -1231,11 +1232,11 @@ class UpstreamGapsTest {
                 !schema {
                     note => { title: text }
                 }""";
-        Map<String, String> library = new LinkedHashMap<>(TsonApiSchema.publishedById());
+        Map<String, String> library = new LinkedHashMap<>(TsonServiceSchema.publishedById());
         library.put(id, schema);
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(library)))
-                .withDataBindContext(TsonBindings.of(TsonApiSchema.bindingsWith(Map.of("note", Note.class)))));
+                .withDataBindContext(TsonBindings.of(TsonServiceSchema.bindingsWith(Map.of("note", Note.class)))));
         tson.resolve(schema);
         TsonHttpCodec codec = new TsonHttpCodec(tson).acceptingJson();
 
@@ -1247,7 +1248,7 @@ class UpstreamGapsTest {
         assertEquals(List.of(Diagnostic.Code.BIND_MISMATCH), refused.diagnostics().stream().map(Diagnostic::code)
                 .toList(), () -> "" + refused.diagnostics());
         assertTrue(refused.diagnostics().getFirst().message().contains("'service.protocol' and "
-                + io.ltr8.tson.http.api.Protocol.class.getName() + " do not agree: field 'exchanges' is a map, and "
+                + io.ltr8.tson.service.protocol.Protocol.class.getName() + " do not agree: field 'exchanges' is a map, and "
                 + "component 'exchanges' binds " + Namespace.class.getName()), refused::getMessage);
     }
 
@@ -1587,7 +1588,7 @@ class UpstreamGapsTest {
      * <b>A dependent field lets the sender choose a type nothing binds, and the read throws {@code
      * MissingBindingException}</b>, which {@link TsonHttpException#from} answers 500: a server-fault status a client
      * produces at will by naming a type of the closure the application never mapped ([TSON-SCHEMA] §5.2 says nothing
-     * of a sender choosing the type). {@code TsonApiDescription} closes it at startup ({@code ChosenTypes}); this pins
+     * of a sender choosing the type). {@code TsonServiceDescription} closes it at startup ({@code ChosenTypes}); this pins
      * the raw read, so a library that refuses the choice as the sender's fault flips it.
      */
     @Test
@@ -1914,7 +1915,7 @@ class UpstreamGapsTest {
      * <b>An optional list a document omits reaches a bound record's {@code List} component as {@code null}</b>: the
      * binder does not normalise it, and the convention upstream follows is that the record does, in its compact
      * constructor. {@code TsonProblem} relies on it for {@code problem.details}'s optional {@code errors}, which a
-     * business error omits, as {@code TsonDeployment} and the {@code api} records do for theirs. Fails the day the
+     * business error omits, as {@code TsonDeployment} and {@code tson-service}'s records do for theirs. Fails the day the
      * binder delivers an empty list, or refuses a {@code List} component for an optional field.
      */
     @Test
@@ -1948,7 +1949,7 @@ class UpstreamGapsTest {
      * sealed interface and {@code two} bound to nothing, is refused as no member of the union the interface closes.
      * Mark the base {@code abstract} and the same schema loads clean, the entry's value held as a tree rather than
      * the bound {@code Holder}, so a reader looking for the bound class finds nothing to read. {@code
-     * TsonApiDescription} refuses a {@code service.http} entry whose value did not bind for that reason. Fails the
+     * TsonServiceDescription} refuses a {@code service.http} entry whose value did not bind for that reason. Fails the
      * day the abstract case is refused as the open one is. {@code UPSTREAM.md}'s entry "A subtype nothing binds, at
      * an abstract base's slot in a value entry, leaves the value a tree" stages it.
      */

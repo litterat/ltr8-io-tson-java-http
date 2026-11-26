@@ -13,6 +13,7 @@ import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.compiler.TsonDiagnostics;
 import io.ltr8.tson.compiler.config.SchemaModelNameBinder;
+import io.ltr8.tson.service.TsonBindings;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

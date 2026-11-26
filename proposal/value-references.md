@@ -43,7 +43,7 @@ endpoint is open, and absent inherits ("Security schemes", the override rule). T
 empty (`Optional<List<ValueRef<SecurityScheme>>>`), `Route.security()` is a resolved list the reader computes, and
 `CLAUDE.md` carries the sharp edge as a trap. The default status 200 is a record default that the reader then
 qualifies: it holds for an endpoint with a response, and an operation with none must write 204, 205 or 304 ("Status").
-Each is a rule of this vocabulary alone, implemented in `TsonApiDescription`, with its own paragraph explaining where it
+Each is a rule of this vocabulary alone, implemented in `TsonServiceDescription`, with its own paragraph explaining where it
 cuts. A mechanism at the document level lets `service.tn` drop the one that is sharing, the inherited `security`, and
 leave the other as what it properly is, a record's own default.
 
@@ -54,7 +54,7 @@ service.operation & { status?: = 200  request?: = order_query }`, and writes `!p
 at the layer's slot since upstream's imported-head read, but:
 
 - **a server must bind it by name before resolving the description that declares it.** Bound as
-  `TsonApiSchema.bindings()` binds, it is no member of the union `service.endpoint` binds against, so supporting it in
+  `TsonServiceSchema.bindings()` binds, it is no member of the union `service.endpoint` binds against, so supporting it in
   general means two resolutions or a nearest-supertype binder the library does not have;
 - **the pins fix little.** A composition pins `status` and `request` only: no list is pinned (§5.2), so `media_types`
   stays per endpoint, and a parameter is a type, so no parametric record fixes `response` (§5.10);
@@ -146,7 +146,7 @@ never fold absent into empty" has nothing left to describe. `@service.safe` and 
 no base carries.
 
 **What it costs.** Secure by default is lost: with inheritance an endpoint that forgets `security` is secured, and with a
-base an endpoint that forgets to complete `secured` is open. `TsonApiDescription` can recover the property as a check,
+base an endpoint that forgets to complete `secured` is open. `TsonServiceDescription` can recover the property as a check,
 a projection stating that every endpoint names a scheme, but that is a rule the layer would have to add back. A reader of
 the source must find `paged`'s declaration to know an endpoint's status and request, as with any named value.
 

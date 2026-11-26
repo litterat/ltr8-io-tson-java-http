@@ -13,16 +13,10 @@ import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.source.HttpSchemaSource;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
-import io.ltr8.tson.http.TsonBindings;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaHeader;
-import io.ltr8.tson.http.api.ExternExamples;
-import io.ltr8.tson.http.api.OrdersExamples;
-import io.ltr8.tson.http.api.PayloadType;
-import io.ltr8.tson.http.api.TsonApiDescription;
-import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.http.probe.extern.Envelope;
 import io.ltr8.tson.http.probe.extern.OrderV1;
 import io.ltr8.tson.http.probe.extern.OrderV2;
@@ -34,6 +28,12 @@ import io.ltr8.tson.schema.meta.FieldRole;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.RecordField;
 import io.ltr8.tson.schema.meta.TypeRef;
+import io.ltr8.tson.service.TsonBindings;
+import io.ltr8.tson.service.http.ExternExamples;
+import io.ltr8.tson.service.http.OrdersExamples;
+import io.ltr8.tson.service.http.PayloadType;
+import io.ltr8.tson.service.http.TsonServiceDescription;
+import io.ltr8.tson.service.http.TsonServiceSchema;
 import io.ltr8.tson.tree.TsonRecord;
 import org.junit.jupiter.api.Test;
 
@@ -45,18 +45,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static io.ltr8.tson.http.api.ExternExamples.API;
-import static io.ltr8.tson.http.api.ExternExamples.BASE;
-import static io.ltr8.tson.http.api.ExternExamples.CORE;
-import static io.ltr8.tson.http.api.ExternExamples.DESCRIPTION;
-import static io.ltr8.tson.http.api.ExternExamples.ERRORS;
-import static io.ltr8.tson.http.api.ExternExamples.KEYS;
-import static io.ltr8.tson.http.api.ExternExamples.ORDER_1;
-import static io.ltr8.tson.http.api.ExternExamples.ORDER_1_SOURCE;
-import static io.ltr8.tson.http.api.ExternExamples.ORDER_2;
-import static io.ltr8.tson.http.api.ExternExamples.ORDER_2_SOURCE;
-import static io.ltr8.tson.http.api.ExternExamples.description;
-import static io.ltr8.tson.http.api.ExternExamples.described;
+import static io.ltr8.tson.service.http.ExternExamples.API;
+import static io.ltr8.tson.service.http.ExternExamples.BASE;
+import static io.ltr8.tson.service.http.ExternExamples.CORE;
+import static io.ltr8.tson.service.http.ExternExamples.DESCRIPTION;
+import static io.ltr8.tson.service.http.ExternExamples.ERRORS;
+import static io.ltr8.tson.service.http.ExternExamples.KEYS;
+import static io.ltr8.tson.service.http.ExternExamples.ORDER_1;
+import static io.ltr8.tson.service.http.ExternExamples.ORDER_1_SOURCE;
+import static io.ltr8.tson.service.http.ExternExamples.ORDER_2;
+import static io.ltr8.tson.service.http.ExternExamples.ORDER_2_SOURCE;
+import static io.ltr8.tson.service.http.ExternExamples.description;
+import static io.ltr8.tson.service.http.ExternExamples.described;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -74,10 +74,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * that both declare {@code order} loads, and an exchange may name either as its response; a choice of the two is no
  * value at a {@code meta.type_ref} slot, where a named choice of them stands. An extern entry's body is an {@link
  * Extern}, never a {@link RecordBody}, and {@code TsonLinkedSchema.landing} reaches the target record; {@code
- * TsonApiDescription} reads through it, so a business error through an extern fixes the status its target pins, a
+ * TsonServiceDescription} reads through it, so a business error through an extern fixes the status its target pins, a
  * response header's template expands over the target's fields, and {@code payloadTypes()} names each type by its
  * declaring schema and its own name. {@code referencedSchemas()} lists the externed schemas, walking {@code
- * dependencies()}. {@code TsonApiDescriptionExternTest} holds the reader to the rest.
+ * dependencies()}. {@code TsonServiceDescriptionExternTest} holds the reader to the rest.
  *
  * <p>A foreign value reads through the codec in TSON and in JSON, bound and as a tree, the body's {@code !!import}
  * of the declaring schema alone agreeing with {@code TSON-Schema}; a JSON boundary {@code $type} is the enclosing
@@ -146,7 +146,7 @@ class ExternProbeTest {
 
         TsonLinkedSchema linked = tson.loader().resolveLinked(API);
         assertEquals(new Extern(ORDER_1, "order"), linked.schema().entries().get("order_v1"));
-        assertEquals(List.of(CanonicalIdentity.canonicalize(TsonApiSchema.ID), CanonicalIdentity.canonicalize(CORE),
+        assertEquals(List.of(CanonicalIdentity.canonicalize(TsonServiceSchema.ID), CanonicalIdentity.canonicalize(CORE),
                 CanonicalIdentity.canonicalize(ORDER_1), CanonicalIdentity.canonicalize(ORDER_2),
                 CanonicalIdentity.canonicalize(ERRORS), CanonicalIdentity.canonicalize(KEYS)), linked.dependencies());
         ExternTarget.Landing v2 = linked.landing("order_v2").orElseThrow();
@@ -188,11 +188,11 @@ class ExternProbeTest {
         assertEquals(List.of("order_v1", "order_v2"), choice.variants().stream()
                 .map(variant -> assertInstanceOf(TypeRef.class, variant).name()).toList());
         assertEquals("order_any",
-                TsonApiSchema.describedBy(tson, API).routes().get(1).response().orElseThrow().name());
+                TsonServiceSchema.describedBy(tson, API).routes().get(1).response().orElseThrow().name());
     }
 
     /**
-     * {@code TsonApiDescription} reads a description whose responses are externs: each route names the extern as
+     * {@code TsonServiceDescription} reads a description whose responses are externs: each route names the extern as
      * written, and {@code payloadTypes} each where it is declared, the declaring schema and the entry's own name, which
      * is what the binder is asked, so the two versions are two payload types named {@code order}. {@code referencedSchemas}
      * lists both versions, the error's schema with its own import and the request records' schema, walking {@code
@@ -200,13 +200,13 @@ class ExternProbeTest {
      */
     @Test
     void theReaderNamesAnExternTypedResponseByWhereItLands() {
-        TsonApiDescription described = TsonApiSchema.describedBy(described(DESCRIPTION), API);
+        TsonServiceDescription described = TsonServiceSchema.describedBy(described(DESCRIPTION), API);
 
         assertEquals(List.of("order_v1", "order_v2"),
                 described.routes().stream().map(route -> route.response().orElseThrow().name()).toList());
         assertEquals(List.of(new PayloadType(API, "order_ref"), new PayloadType(ORDER_1, "order"),
                 new PayloadType(ORDER_2, "order")), List.copyOf(described.payloadTypes()));
-        assertEquals(List.of(API, TsonApiSchema.ID, ORDER_1, ORDER_2, ERRORS, TsonProblemSchema.ID, KEYS),
+        assertEquals(List.of(API, TsonServiceSchema.ID, ORDER_1, ORDER_2, ERRORS, TsonProblemSchema.ID, KEYS),
                 List.copyOf(described.referencedSchemas()));
     }
 
@@ -218,7 +218,7 @@ class ExternProbeTest {
     @Test
     void aHeaderTemplateOverAnExternTypedResponseExpandsOverTheForeignRecord() {
         String headed = description("", "  response_headers: { ETag => \"{sku}\" }");
-        TsonApiDescription described = TsonApiSchema.describedBy(described(headed), API);
+        TsonServiceDescription described = TsonServiceSchema.describedBy(described(headed), API);
 
         assertEquals(Map.of("etag", "A-1"), described.routes().get(1)
                 .expandResponseHeaders(field -> field.equals("sku") ? "A-1" : null));
@@ -235,7 +235,7 @@ class ExternProbeTest {
     void aBusinessErrorThroughAnExternFixesItsStatusForTheReader() {
         String erring = description("  errors: [not_found_v1]", "");
         Tson tson = described(erring);
-        TsonApiDescription described = TsonApiSchema.describedBy(tson, API);
+        TsonServiceDescription described = TsonServiceSchema.describedBy(tson, API);
 
         assertEquals("not_found_v1", described.routes().getFirst().errorFor(404).orElseThrow().name());
         RecordBody target = assertInstanceOf(RecordBody.class,
@@ -331,8 +331,8 @@ class ExternProbeTest {
     /**
      * The binder is asked the target's name in its own schema, never the extern's local name: a map keyed by {@code
      * order_v1}, the name a description writes, prepares clean and answers every read a 500, the missing binding
-     * deferred to the read as any type nothing binds is. {@code TsonApiDescription} refuses such a binding at startup
-     * where a description names the extern ({@code TsonApiDescriptionExternTest}); the codec alone cannot.
+     * deferred to the read as any type nothing binds is. {@code TsonServiceDescription} refuses such a binding at startup
+     * where a description names the extern ({@code TsonServiceDescriptionExternTest}); the codec alone cannot.
      */
     @Test
     void aNameOnlyBinderIsAskedTheTargetsNameNotTheExterns() {

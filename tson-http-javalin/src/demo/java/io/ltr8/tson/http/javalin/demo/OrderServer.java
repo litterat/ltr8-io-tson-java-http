@@ -6,18 +6,18 @@ import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
-import io.ltr8.tson.http.TsonBindings;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonMediaType;
 import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonProblemDiagnostic;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaCatalog;
-import io.ltr8.tson.http.api.HttpVerb;
-import io.ltr8.tson.http.api.Route;
-import io.ltr8.tson.http.api.TsonApiCoverage;
-import io.ltr8.tson.http.api.TsonApiDescription;
-import io.ltr8.tson.http.api.TsonApiSchema;
+import io.ltr8.tson.service.TsonBindings;
+import io.ltr8.tson.service.http.HttpVerb;
+import io.ltr8.tson.service.http.Route;
+import io.ltr8.tson.service.http.TsonServiceCoverage;
+import io.ltr8.tson.service.http.TsonServiceDescription;
+import io.ltr8.tson.service.http.TsonServiceSchema;
 import io.ltr8.tson.http.javalin.TsonHandler;
 import io.ltr8.tson.http.javalin.TsonSchemaHandler;
 
@@ -124,12 +124,12 @@ public final class OrderServer {
         Map<String, Class<?>> bindings = Map.of("order", Order.class, "sku_not_found", SkuNotFound.class);
         Map<String, String> schemas = new HashMap<>(Map.of(SCHEMA_ID, SCHEMA,
                 TsonProblemSchema.ID, TsonProblemSchema.source(), API_ID, API));
-        schemas.putAll(TsonApiSchema.publishedById());
+        schemas.putAll(TsonServiceSchema.publishedById());
         // One bind context for the data and the description: without service.tn's records in it, the API
         // schema below holds its endpoints as trees and nothing can read them.
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(schemas)))
-                .withDataBindContext(TsonBindings.of(TsonApiSchema.bindingsWith(bindings))));
+                .withDataBindContext(TsonBindings.of(TsonServiceSchema.bindingsWith(bindings))));
         tson.resolve(SCHEMA);
         // Resolving the description is what checks it: a payload type nothing declares fails startup here,
         // rather than being published as a contract no client can act on.
@@ -137,7 +137,7 @@ public final class OrderServer {
         TsonHttpCodec codec = new TsonHttpCodec(tson);
 
         // From here on the description is the source of truth for what this server publishes and warms.
-        TsonApiDescription described = TsonApiSchema.describedBy(tson, API_ID);
+        TsonServiceDescription described = TsonServiceSchema.describedBy(tson, API_ID);
 
         // Every type this server writes, warmed now rather than on a request thread -- derived from the
         // description's payload types rather than listed, so a response type added there cannot be missed.
@@ -156,7 +156,7 @@ public final class OrderServer {
         // The description is a contract, so hold this server to it before it accepts anything. `serving`
         // hands back the endpoint, which is where the path and the media types below come from -- and refuses
         // one the description does not declare, so a moved endpoint fails at the handler that outlived it.
-        TsonApiCoverage coverage = TsonApiCoverage.of(described);
+        TsonServiceCoverage coverage = TsonServiceCoverage.of(described);
 
         Route create = coverage.serving(HttpVerb.POST, "/orders");
         // The description says whether the endpoint speaks JSON, so the route's codec follows it rather than a
@@ -228,7 +228,7 @@ public final class OrderServer {
      * <p>§3.5 still applies to what goes in: when a published schema is superseded, both versions stay served,
      * because a document that named the old one must go on resolving.
      */
-    private static TsonSchemaCatalog catalog(TsonApiDescription described, Map<String, String> schemas) {
+    private static TsonSchemaCatalog catalog(TsonServiceDescription described, Map<String, String> schemas) {
         List<String> published = new ArrayList<>();
         for (String id : described.referencedSchemas()) {
             String source = schemas.get(id);

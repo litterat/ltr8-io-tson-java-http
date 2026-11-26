@@ -101,7 +101,7 @@ the case the pin measures; the data-document case is not pinned here.
 
 **What this project does meanwhile:** nothing depends on the gap. `service.tn` carries an http projection's claims,
 `binds` and `not_bound`, as fields of `service.http`, so every name in them is judged at schema load and delivered its
-referent (`TsonApiDescriptionTest.aBindsNamingNoProtocolIsRefusedAtLoad`).
+referent (`TsonServiceDescriptionTest.aBindsNamingNoProtocolIsRefusedAtLoad`).
 
 ---
 
@@ -166,7 +166,7 @@ build is a mismatch, and the startup step is where it belongs.
 naming the type, the class and the component, as a disagreeing class already is.
 
 **Workaround in place:** `TsonBindings` registers `Object` as an atom, so a dependent field binds, and
-`TsonApiDescription` analyses a bound request record holding one at startup. Pinned by
+`TsonServiceDescription` analyses a bound request record holding one at startup. Pinned by
 `UpstreamGapsTest.aMappedClassThatCannotBeAnalysedPreparesCleanAndFailsEachRead`.
 
 ---
@@ -359,7 +359,7 @@ the declared-first message through `service.tn`.
 ## 17. A subtype nothing binds, at an abstract base's slot in a value entry, leaves the value a tree
 
 **Hit:** `service.endpoint` declared `abstract`, and a description writing an endpoint as its own subtype,
-`!paged_get { … }`, with `paged_get` bound to no class (`TsonApiSchema.bindings()` as a server passes it). Under an open
+`!paged_get { … }`, with `paged_get` bound to no class (`TsonServiceSchema.bindings()` as a server passes it). Under an open
 base the description is refused at load: *"'paged_get' is not a member of the union 'service.endpoint'
 binds against [Operation, Binding, Document]"*. Marked `abstract`, it loads clean and the entry's whole value is held
 as a tree rather than the bound `Http`, so a reader looking for the bound class finds no projection at all. In a data
@@ -370,8 +370,8 @@ document the object reader throws `MissingBindingException` for the same value, 
 entry binds does not turn on a definition mark; or report it, rather than holding a value a bind context was given
 for as a tree.
 
-**Workaround in place:** `TsonApiDescription` refuses a value entry applying `service.http` whose value did not bind,
-naming `TsonApiSchema.bindingsWith` as the remedy, so the description is a startup failure rather than one served with
+**Workaround in place:** `TsonServiceDescription` refuses a value entry applying `service.http` whose value did not bind,
+naming `TsonServiceSchema.bindingsWith` as the remedy, so the description is a startup failure rather than one served with
 its routes missing. Pinned by `UpstreamGapsTest.aSubtypeNothingBindsAtAnAbstractBasesSlotLeavesAValueEntryATree`,
 which flips when the abstract case is refused, and by `OperationRefinementProbeTest`.
 
@@ -384,7 +384,7 @@ which flips when the abstract case is refused, and by `OperationRefinementProbeT
 **Hit:** a JSON body read in bind mode under a service description, or under any schema importing `service.tn` with
 the layer's records bound. The JSON bind registry compiles the closure and checks `service.protocol` against
 `Protocol`, whose `exchanges` component is a `Namespace`, and refuses it: *"'service.protocol' and
-io.ltr8.tson.http.api.Protocol do not agree: field 'exchanges' is a map, and component 'exchanges' binds
+io.ltr8.tson.service.protocol.Protocol do not agree: field 'exchanges' is a map, and component 'exchanges' binds
 io.ltr8.tson.schema.meta.Namespace"*, a `BIND_MISMATCH` for the whole read. The TSON registry binds the same field to
 the same class, so the same body reads in TSON and is a 500 in JSON. It surfaces where a payload type is named by
 extern: a route's `order_v1` reads under the description in TSON and not in JSON.
@@ -393,7 +393,7 @@ extern: a route's `order_v1` reads under the description in TSON and not in JSON
 TSON registry does, or not judging a closure's records that the read never reaches.
 
 **Workaround in place:** a caller reads a payload type under the schema declaring it, `PayloadType.schemaId()` and
-`PayloadType.name()` from `TsonApiDescription.payloadType`, whose closure holds no `service.tn`. Pinned by
+`PayloadType.name()` from `TsonServiceDescription.payloadType`, whose closure holds no `service.tn`. Pinned by
 `UpstreamGapsTest.jsonBindingRefusesANamespaceComponentInTheClosure`, which flips when the JSON read binds.
 
 **Priority:** medium.
@@ -487,7 +487,7 @@ reserves no root name.
 - `problem.diagnostic`'s `path` and `schema_pointer` stay `text` until 1 exists.
 - The HTTP vocabulary lives in `service.tn`, which uses it — `service.http_verb`, `service.status_code`,
   `service.header_name` and `service.path_template` (RFC 6570 levels 1–2, so `{+var}` is expressible) — and `media_type` is
-  `net.tn`'s. `TsonApiDescription` places each endpoint's request record over its path, which no pattern can.
+  `net.tn`'s. `TsonServiceDescription` places each endpoint's request record over its path, which no pattern can.
   `problem.details`'s `status` stays `int32`.
 
 **Priority:** medium-high, since the library emits values its own schemas cannot describe.

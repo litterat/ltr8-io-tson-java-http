@@ -1,7 +1,7 @@
 # A protocol and an http projection as records with a namespace field
 
 **Status:** adopted. `service.tn` declares `service.protocol` and `service.http` as records with a namespace field, read
-by `TsonApiDescription` through `Protocol` and `Http` (`design/service-description.md`, `design/http-projection.md`),
+by `TsonServiceDescription` through `Protocol` and `Http` (`design/service-description.md`, `design/http-projection.md`),
 without `version` and `base` and with every document in the full form. Measured by
 `tson-http/src/test/java/io/ltr8/tson/http/probe/NamespaceFieldProbeTest.java`; what follows is the record of the
 measurement. It concerns this project's own vocabulary, `service.tn`, and asks nothing of tson-java or the spec.
@@ -17,7 +17,7 @@ field typed by a namespace (`exchanges`, `resources`) that holds the keyed map t
 through that field, `orders.exchanges.place_order`, which the resolver already judges. What an http projection claims
 about the protocols behind it, `@service.binds` and `@service.not_bound`, become fields, judged at schema load like any
 other reference, where today they are annotations on the projection's entry that the resolver does not judge and
-`TsonApiDescription` checks by hand. The kernel and the spec are left as they are: the walk through a record value's
+`TsonServiceDescription` checks by hand. The kernel and the spec are left as they are: the walk through a record value's
 field is Revision 40 as published (`UpstreamGapsTest.aReferenceThroughARecordValuesFieldIsJudged`).
 
 ## What it changes in `service.tn`
@@ -51,7 +51,7 @@ which the layer already imports. `version` and `base` are new facts with no read
 shown because a record is the shape that can hold them, and a namespace value cannot
 (`UpstreamGapsTest.aNamespaceTypeDeclaresOnlyItsFacets`).
 
-`orders-1.tn` (`tson-http/src/test/resources/io/ltr8/tson/http/api/orders/`), written in full:
+`orders-1.tn` (`tson-http/src/test/resources/io/ltr8/tson/service/http/orders/`), written in full:
 
 ```
 !schema {
@@ -182,7 +182,7 @@ resource addressable. The adopted layer keeps `resources` a plain map, whose pat
 | `AnnotatedMap<String, Exchange>` | `AnnotatedMap` | kept | kept |
 | `Namespace<Exchange>` | `Namespace`, `type()` `exchanges` | kept | kept |
 
-`TsonApiDescription` reads `@service.safe` and `@service.idempotent` from an exchange's key and walks routes in written
+`TsonServiceDescription` reads `@service.safe` and `@service.idempotent` from an exchange's key and walks routes in written
 order, so the component is `Namespace<Exchange>` (or `AnnotatedMap`), never `Map`.
 
 **What a judged reference carries** (`aClaimFieldArrivesAsADeliveredValueRefAndAnAnnotationsAsUndelivered`,
@@ -205,7 +205,7 @@ an `io.ltr8.net.Iri`.
   per-(protocol, exchange) claim (`Set<ExchangeName>` in `requireComplete`) and `Route.exchange()` are unchanged in
   kind. Its `toString`, today the reference spelling `orders.get_order`, either becomes `orders.exchanges.get_order`,
   staying the reference spelling, or stays two-segment as an identity label (Open questions).
-- **`TsonApiDescription`**. `applying(entries, type)` matches `ValueEntry(String, Namespace<?>)`; a protocol and a
+- **`TsonServiceDescription`**. `applying(entries, type)` matches `ValueEntry(String, Namespace<?>)`; a protocol and a
   projection now hold bound records, so it matches `ValueEntry("service.protocol", Protocol p)` and
   `ValueEntry("service.http", Http h)`. The protocol map becomes `Map<String, Protocol>`, reached by
   `p.exchanges().get(name)` and `p.exchanges().getAnnotations(name)` for an exchange's facts and documentation. `read`
@@ -216,15 +216,15 @@ an `io.ltr8.net.Iri`.
   the resolver loaded and can go, or stay as a net with a comment saying so. What stays the reader's is relating,
   unchanged: a binding's or an exemption's exchange belonging to a protocol *this* projection binds, and the claim held
   per `ExchangeName`.
-- **`TsonApiSchema.bindings()`** gains `"service.protocol" -> Protocol.class` and `"service.http" -> Http.class`, two
-  new records in `io.ltr8.tson.http.api`, each `@Typename` its qualified name; its Javadoc's "`service.protocol` and
-  `service.http` need no class: a value of a namespace type is a `Namespace`" goes. `service.exemption` stays bound.
-  `Exchange`'s Javadoc ("read from the entry's `Namespace`") and `Exemption`'s (held in an annotation's value, checked
-  by the reader) are rewritten.
-- **`TsonApiCoverage`** keys on `Route.key()`, the declared verb and path template, and names no exchange, so it is
+- **`TsonServiceSchema.bindings()`** gains `"service.protocol" -> Protocol.class` and `"service.http" -> Http.class`, two new
+  records in `io.ltr8.tson.service.protocol` and `io.ltr8.tson.service.http`, each `@Typename` its qualified name; its
+  Javadoc's "`service.protocol` and `service.http` need no class: a value of a namespace type is a `Namespace`" goes.
+  `service.exemption` stays bound. `Exchange`'s Javadoc ("read from the entry's `Namespace`") and `Exemption`'s (held in an
+  annotation's value, checked by the reader) are rewritten.
+- **`TsonServiceCoverage`** keys on `Route.key()`, the declared verb and path template, and names no exchange, so it is
   unchanged.
 - **Tests.** `ProtocolMapTest` measures a protocol as the map itself and is rewritten for the record; the
-  `TsonApiDescriptionTest` cases for an unknown `@service.binds` name or exemption become schema-load refusals;
+  `TsonServiceDescriptionTest` cases for an unknown `@service.binds` name or exemption become schema-load refusals;
   `OrdersExamples` and the demos' `orders-api-1.tn` follow the documents.
   `UpstreamGapsTest.aReferenceInsideAnAnnotationValueIsNotJudged` stays, since the gap is still upstream's, but stops
   describing `service.tn`.
@@ -273,9 +273,10 @@ Nothing measured fails: every shape the proposal needs resolves, binds and is ju
 ## Order of work, if adopted
 
 1. `service.tn`: the four declarations, the two annotation declarations deleted, its `@doc` rewritten.
-2. `Protocol` and `Http` records in `io.ltr8.tson.http.api`, bound in `TsonApiSchema.bindings()`.
-3. `ExchangeName.of` over segments; `TsonApiDescription` reading the records and their fields.
-4. The description documents and their `@doc`s; `OrdersExamples`; `ProtocolMapTest` and `TsonApiDescriptionTest`.
+2. `Protocol` and `Http` records in `io.ltr8.tson.service.protocol` and `io.ltr8.tson.service.http`, bound in
+   `TsonServiceSchema.bindings()`.
+3. `ExchangeName.of` over segments; `TsonServiceDescription` reading the records and their fields.
+4. The description documents and their `@doc`s; `OrdersExamples`; `ProtocolMapTest` and `TsonServiceDescriptionTest`.
 5. `design/service-description.md`, `CLAUDE.md`'s traps, `UPSTREAM.md` item 4's Hit and the namespace-fields spec
    entry; the `experiments/` READMEs naming `orders.place_order`.
 6. `NamespaceFieldProbeTest` stays as the record of why, or folds into `UpstreamGapsTest` once the layer depends on
@@ -287,7 +288,7 @@ Nothing measured fails: every shape the proposal needs resolves, binds and is ju
   document, or the two-segment `(protocol, exchange)` label it is today, which is shorter and no longer a valid name?
 - **`version` and `base`**: adopt them with the record, or leave the records with the namespace field and the claims
   alone until something reads them? `base` would need a rule against the path template (whether `Route.path()` is
-  joined to it, and what `TsonApiCoverage` claims), and `version` a relation to `TsonSchemaVersions`.
+  joined to it, and what `TsonServiceCoverage` claims), and `version` a relation to `TsonSchemaVersions`.
 - **Full form or positional form in the examples**: the positional form keeps three documents unchanged but teaches a
   reference spelling that names a field the reader cannot see.
 - **The reader's name checks**: delete them as unreachable, or keep them as a second net, as

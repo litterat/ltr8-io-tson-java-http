@@ -6,7 +6,7 @@ import io.ltr8.tson.base.DiagnosticsReceiver;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
-import io.ltr8.tson.http.api.OrdersExamples;
+import io.ltr8.tson.service.http.OrdersExamples;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.Test;
 

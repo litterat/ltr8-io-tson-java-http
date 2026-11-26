@@ -1,15 +1,15 @@
 # tson-http — the server-agnostic core (`io.ltr8.tson.http`)
 
-Everything that is about *TSON over HTTP* rather than about a particular server. Start with the note for the type you
-are touching:
+Everything that is about *TSON over HTTP* rather than about a particular server. The service description and
+`TsonBindings` are `tson-service`, which this module depends on and re-exports (`requires transitive`). Start with the
+note for the type you are touching:
 
 | Working in | Read (`design/…`) |
 |---|---|
 | `TsonHttpCodec`, `TsonMediaType`, `TsonAcceptHeader`, `TsonSchemaHeader`, `TsonAcceptSchemaHeader`, `TsonSchemaCatalog` | `codec.md`, then `json-encoding.md` for the `acceptingJson` side |
 | `TsonHttpException`, `TsonProblem*`, `problem.tn` | `status-classification.md`, `name-policy.md`, `schema-authoring.md` |
 | `TsonSchemaVersions`, `TsonDocumentPeek` use | `schema-versions.md` |
-| `TsonBindings` (`of`, `bySchema`) | `binding.md` |
-| `api/` (`TsonApiSchema`, `TsonApiDescription`, `TsonApiCoverage`, `Landed`, `PayloadType`, the bound records), `service.tn`, the `OrdersExamples` and `ExternExamples` fixtures | `service-description.md` for the layer, `service-reader.md` for the reader and the wiring, `http-projection.md` for `service.http`, endpoints and `Route` |
+| The description's tests and fixtures (`OrdersExamples`, `ExternExamples`, `TsonServiceDescriptionTest`), under `src/test/…/io/ltr8/tson/service/http/`; the code they test is `tson-service`'s | `tson-service/CLAUDE.md` |
 | `TsonDeployment`, `deployment.tn` | `deployment-descriptor.md` |
 | `probe/` (a proposal's probe, its bound records in a sub-package named for it), `UpstreamGapsTest` | `tson-api-surface.md` and the proposal under `proposal/`; `experiments/CLAUDE.md` for the probes that live there |
 
@@ -27,12 +27,8 @@ Rules that bite here:
   `deployment` (a descriptor is `deployment.descriptor`); a bound class's `@Typename` is the qualified name.
 - `HttpSchemaSource` is upstream's. What stays here is the mapping of its failures to statuses and
   `TsonHttpSchemaSourceIntegrationTest`; do not retest upstream's policy.
-- A class in `io.ltr8.tson.http.api` binds to a `service.tn` record only by being named in
-  `TsonApiSchema.bindings()`, an explicit map keyed by qualified name (`service.binding`), as its `@Typename` is; a
-  record added to the layer binds nothing until a line is added there, and an application binding one of those names
-  is refused by `bindingsWith`.
-- A payload type a route names through an extern is read as the entry it lands on in the declaring schema
-  (`PayloadType`), so a binding keyed by the extern's local name serves nothing; `TsonApiDescription` refuses it at
-  startup, and two schemas declaring one name bind through `TsonBindings.bySchema`.
+- The description's tests and fixtures are in this module's test tree, though the code is `tson-service`'s: the fixtures
+  import `problem.tn` and one test uses `TsonHttpCodec`, neither of which `tson-service` may name. They reach the
+  package-private members of `io.ltr8.tson.service.http` because this module's tests run on the class path.
 - Experiments' probe tests join this module's test source set from `experiments/*/java`; a probe failing after a
   library change is information, not a regression.
