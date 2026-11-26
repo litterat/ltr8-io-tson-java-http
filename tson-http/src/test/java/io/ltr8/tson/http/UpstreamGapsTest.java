@@ -1656,7 +1656,7 @@ class UpstreamGapsTest {
         RuntimeException thrown = assertThrows(RuntimeException.class, () -> tson.objectReader().read(
                 "!!import:\"" + NOTES_ID + "\"\n!typed_note { note_id: n  kind: int32  payload: 5 }", TypedNote.class));
         assertInstanceOf(io.ltr8.tson.base.MissingBindingException.class, thrown);
-        assertTrue(thrown.getMessage().contains("which cannot be analysed: Failed to resolve: Unable to find a valid"
+        assertTrue(thrown.getMessage().contains("which cannot be analysed: Unable to find a valid"
                 + " data conversion for class: class java.lang.Object"), thrown.getMessage());
     }
 

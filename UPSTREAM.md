@@ -157,8 +157,8 @@ schema is prepared, naming the field, its type and the component, as an undeclar
 **Hit:** found binding a request record that holds a dependent field (`payload: kind!`), whose component is `Object`.
 Under a bind context that does not register `Object` as an atom, the class the map names cannot be analysed, and the
 bind registry treats that as a missing binding: `prepareToRead` passes, and every read of the record throws
-`MissingBindingException: 'typed_note' binds …TypedNote, which cannot be analysed: Failed to resolve: Unable to find a
-valid data conversion for class: class java.lang.Object`, a 500 per request. Deferral is right for a type no class is
+`MissingBindingException: 'typed_note' binds …TypedNote, which cannot be analysed: Unable to find a valid data
+conversion for class: class java.lang.Object`, a 500 per request. Deferral is right for a type no class is
 mapped to, since a schema declares types a consumer never binds; a class the map does name and the binder cannot
 build is a mismatch, and the startup step is where it belongs.
 
