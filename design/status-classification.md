@@ -52,7 +52,7 @@ reading application, this deployment's own policy and budget, whoever was to ser
 | `SCHEMA_TOO_LARGE` | the document exceeds this deployment's size cap | 400 |
 
 A type nothing binds is a 500 because the server chose the types it reads; a dependent field (`payload: kind!`), where
-the sender names the type, cannot reach it, since `TsonApiDescription` refuses at startup a bound request record whose
+the sender names the type, cannot reach it, since `TsonServiceDescription` refuses at startup a bound request record whose
 sibling may name a type no class binds (`ChosenTypes`).
 
 **Not being a verdict does not settle the status**, and the fetch codes are where that shows. `verdict()` answers *was the

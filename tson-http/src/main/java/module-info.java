@@ -4,7 +4,6 @@
  */
 module io.ltr8.tson.http {
     exports io.ltr8.tson.http;
-    exports io.ltr8.tson.http.api;
 
     // transitive: TsonHttpCodec hands back a Tson's readers and writers, and java.net.http reaches a
     // consumer through it -- nothing here names that module directly.
@@ -15,4 +14,7 @@ module io.ltr8.tson.http {
     requires transitive io.ltr8.tson.base;
     // transitive: a JSON body read as a tree comes back as a JsonValue, which is in this module's signatures.
     requires transitive io.ltr8.tson.json;
+    // transitive, though no type of it is in this module's signatures: a consumer serving a description names
+    // TsonBindings and the description's types beside the codec, so this module hands them on.
+    requires transitive io.ltr8.tson.service;
 }

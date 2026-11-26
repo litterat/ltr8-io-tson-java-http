@@ -2,7 +2,7 @@
 
 **Status:** a proposal for review; nothing is adopted. Measured by
 `tson-http/src/test/java/io/ltr8/tson/http/probe/OperationRefinementProbeTest.java`, with its records under
-`probe/operationrefinement/`. It concerns this project's vocabulary, `service.tn`, and the reader `TsonApiDescription`;
+`probe/operationrefinement/`. It concerns this project's vocabulary, `service.tn`, and the reader `TsonServiceDescription`;
 tson-java admits the description's subtype at the layer's slot, and the one difference from a data document it
 surfaces, an untagged refusal naming the layer's subtypes only, is staged in `UPSTREAM.md`.
 
@@ -15,8 +15,8 @@ is a parse error naming the composition. The question's premise, that a descript
 `service.resource` read in the description's value entry, tson-java admits the description's subtype ([TSON-SCHEMA]
 §3.3.4 computes `subtypes` over the schema being resolved; §7.2 admits by the tag's chain), as it does at a record the
 description declares and in a data document importing it. It binds only once `paged_get` is bound to the base's
-class: bound as `TsonApiSchema.bindings()` binds, naming the layer's records alone, it is no member of the union
-`service.endpoint` binds against, so a description declaring `paged_get` resolves through `TsonApiSchema` only with
+class: bound as `TsonServiceSchema.bindings()` binds, naming the layer's records alone, it is no member of the union
+`service.endpoint` binds against, so a description declaring `paged_get` resolves through `TsonServiceSchema` only with
 `bindingsWith` naming it, a name the server must know before the description resolves.
 
 The derived shape buys little. A list cannot be pinned (§5.2), so `media_types` stays per
@@ -29,7 +29,7 @@ answer, sharing the facts in the document as a base value an endpoint completes 
 
 ## The question
 
-`BACKLOG.md`, "A description's own refinement of `service.operation`": should `service.tn` and `TsonApiDescription`
+`BACKLOG.md`, "A description's own refinement of `service.operation`": should `service.tn` and `TsonServiceDescription`
 admit an endpoint shape declared in the description, so what every paged list shares is fixed once?
 
 ```
@@ -126,10 +126,10 @@ next_page?: int32 }`, `order_list => page<order>` and a plain `!operation { requ
 
 **Through the real layer** (`theRealLayerAdmitsADescriptionsOwnOperation`). `orders-api-inline-1.tn` under a new
 identity, declaring `paged_get => service.operation & { status?: = 200 }` and writing `GET /orders/{id}/items` as
-`!paged_get`. Bound as a server binds by default (`TsonApiSchema.bindings()`) it loads with the projection held as a
+`!paged_get`. Bound as a server binds by default (`TsonServiceSchema.bindings()`) it loads with the projection held as a
 tree, and `describedBy` refuses it: *'orders_http' applies service.http, and its value did not bind to …Http but is
 held as TsonRecord -- a type written in it binds to no class; bind a description's own endpoint subtype through
-TsonApiSchema.bindingsWith*. Unbound it loads, the endpoint a tree tagged `paged_get` with status 200.
+TsonServiceSchema.bindingsWith*. Unbound it loads, the endpoint a tree tagged `paged_get` with status 200.
 With `bindingsWith(Map.of("paged_get", Operation.class))` it loads, the endpoint is an `api.Operation`, and
 `describedBy` reads the route with status 200, request `order_ref` and response `order_page`.
 
@@ -140,7 +140,7 @@ that loads composes `service.operation` as it stands.
 
 **In Java, if the proposal were taken up:**
 
-- **`TsonApiDescription`** would need no new case, as long as each description subtype binds to its base's class: the
+- **`TsonServiceDescription`** would need no new case, as long as each description subtype binds to its base's class: the
   reader switches on `Operation | Binding | Document`, and a `paged_get` bound to `Operation` is one. The route would
   not know it was a `paged_get`: the bound record carries no type name.
 - **Bindings must reach the description's own names**, and `TsonBindings.of` runs before the description resolves,
@@ -150,7 +150,7 @@ that loads composes `service.operation` as it stands.
   subtype to its nearest bound supertype's class (refusing one that adds a field, which would `BIND_MISMATCH`), then
   build a second `Tson` with `bindingsWith` those and resolve again. The alternative is a library feature: a binder
   falling back to the nearest bound supertype's class. That is a request upstream, not something this project writes.
-- **`TsonApiSchema.bindings()`** stays the layer's map. The subtype entries are per description, so the
+- **`TsonServiceSchema.bindings()`** stays the layer's map. The subtype entries are per description, so the
   `describedBy` contract (a `Tson` already binding the vocabulary) would change to "a `Tson` whose bindings were
   derived from this description".
 
@@ -159,10 +159,10 @@ that loads composes `service.operation` as it stands.
 - **A second way to write an operation.** A reader of a description must find `paged_get`'s declaration to know which
   fields an endpoint has, which pins hold, and that it is an operation at all. `!service.operation` says it at the tag.
 - **The reader's subtype logic**: two resolutions at startup, a nearest-supertype walk, and a refusal for a subtype
-  that adds a field. That is machinery in `TsonApiDescription` or `TsonApiSchema` serving one convenience.
+  that adds a field. That is machinery in `TsonServiceDescription` or `TsonServiceSchema` serving one convenience.
 - **What a conformance client sees**: `!paged_get` in the published description. A client that knows `service.tn`'s
   vocabulary but reads the description as a tree must resolve the description's schema to learn that `paged_get`
-  IS-A `service.operation`. One that binds by name, as `TsonApiSchema.bindings()` does, fails as the server does today.
+  IS-A `service.operation`. One that binds by name, as `TsonServiceSchema.bindings()` does, fails as the server does today.
 - **What it saves is small**: `status: 200` is already the default; `media_types` cannot be pinned; `request` can be
   pinned only where every paged list takes one query record; `response` differs per resource and cannot be
   parameterised; `@service.safe` is read from the verb key (`resource.endpoints().getAnnotations(verbKey)`), so every

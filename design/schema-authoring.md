@@ -209,7 +209,7 @@ skills in use are the new revision's.
   takes for one header that no server does. `ASCII_CASEFOLD` maps `A` to `Z` and nothing else, the comparison HTTP field
   names, URI schemes and DNS names state for themselves, so the same spelling stays outside the pattern and is refused.
   `service.header_name` and `service.auth_scheme` use it
-  (`TsonApiDescriptionTest.aHeaderNameIsFoldedInAsciiAndOneACompatibilityFoldWouldAdmitIsRefused`).
+  (`TsonServiceDescriptionTest.aHeaderNameIsFoldedInAsciiAndOneACompatibilityFoldWouldAdmitIsRefused`).
 - **`abstract` is grammar, and it is what makes a base have no values of its own.** `endpoint => abstract service.placement &
   { … }` ([TSON-SCHEMA] §5.2, §12.1's `definition-mark`, as the kernel writes `type => abstract meta.top & { … }`) makes the
   resolver refuse an untagged value at an `endpoint`-typed slot, and a value tagged `!service.endpoint`, naming the subtypes
@@ -217,5 +217,5 @@ skills in use are the new revision's.
   rather than in place of it. The mark is not inherited, so `operation`, `binding` and `document` stay open. A subtype
   nothing binds, at an abstract base's slot in a value entry, leaves the whole value a tree rather than being refused
   (`UPSTREAM.md`, "A subtype nothing binds, at an abstract base's slot in a value entry, leaves the value a tree"), which is
-  why `TsonApiDescription` refuses a `service.http` entry that did not bind.
+  why `TsonServiceDescription` refuses a `service.http` entry that did not bind.
 

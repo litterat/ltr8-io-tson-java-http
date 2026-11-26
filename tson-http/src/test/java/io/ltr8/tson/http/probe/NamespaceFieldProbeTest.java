@@ -303,7 +303,7 @@ class NamespaceFieldProbeTest {
      * the last two keep what an exchange's key carries. A {@code Map} component receives a {@link HashMap}: the keys
      * written {@code zeta}, {@code alpha}, {@code mid} lose their order and {@code @safe} on {@code alpha} is gone. An
      * {@code AnnotatedMap} keeps both, and a {@code Namespace} keeps both and names its namespace type, {@code
-     * exchanges}. {@code TsonApiDescription} reads {@code @safe} and {@code @idempotent} from the exchange's key, so a
+     * exchanges}. {@code TsonServiceDescription} reads {@code @safe} and {@code @idempotent} from the exchange's key, so a
      * {@code Map} would lose the verb check.
      */
     @Test

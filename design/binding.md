@@ -5,15 +5,15 @@ are the server's own. Current form only.
 
 **Invariants**
 
-- A bound class is public. Bindings come from `TsonBindings.of(map)`, `of(map, profile)` or `bySchema(maps)`, never a
-  hand-rolled `DataBindContext.builder()`.
+- A bound class is public. Bindings come from `TsonBindings.of(map)`, `of(map, profile)` or `bySchema(maps)` (in
+  `io.ltr8.tson.service`, the `tson-service` module), never a hand-rolled `DataBindContext.builder()`.
 - A reader asks the binder for a type by the canonical identity of the schema declaring it and its name there, and for
   an extern the entry it lands on, never the extern's local name; a TSON read of a root type that is a plain alias asks
   for the entry the alias reaches. A name-only map answers every schema alike;
   `bySchema` keys a map per schema, for two schemas declaring one name. A class bound by an extern's local name is
-  refused at startup by `TsonApiDescription`.
+  refused at startup by `TsonServiceDescription`.
 - One bind context per `Tson` binds a schema's value entries and a data document's values alike, so a vocabulary's
-  records go in the application's map: `TsonBindings.of(TsonApiSchema.bindingsWith(application))`. The map binds
+  records go in the application's map: `TsonBindings.of(TsonServiceSchema.bindingsWith(application))`. The map binds
   application names only; `Tson.of` answers the kernel's vocabulary ahead of it.
 - Binding is strict and a mismatch is a startup failure if `prepareToRead(schemaId)` runs at startup; there is no
   lenient mode. `prepareToWrite` is a warm-up, not a correctness measure.
@@ -55,24 +55,24 @@ are the server's own. Current form only.
   gives that name, and a field typed by a namespace type binds to a `Namespace` whose values bind the same way, keeping
   the keys' order and annotations where a `Map` component loses both. An entry no class binds is held as
   a tree: the schema loads, and the bind registry refuses it with `BIND_MISMATCH` at the entry. So a vocabulary a
-  schema imports belongs in the same map as the application's: `TsonApiSchema.bindings()` is `service.tn`'s
+  schema imports belongs in the same map as the application's: `TsonServiceSchema.bindings()` is `service.tn`'s
   records as an explicit map, and `bindingsWith(application)` merges the two, refusing a name both bind, since within
   one closure a name means one thing. The demos build their one context as
-  `TsonBindings.of(TsonApiSchema.bindingsWith(bindings))`.
+  `TsonBindings.of(TsonServiceSchema.bindingsWith(bindings))`.
 - **The binder is asked the declaring schema and the entry's own name.** The library asks `DataNameBinder.resolve(
   namespace, name)` with the canonical identity of the schema declaring the type, and a name-only binder, which
   `TsonBindings.of` builds, answers by the name and ignores the schema. An extern ([TSON-SCHEMA] §5.13) is asked as the
   entry it lands on: a description's `order_v1 => !meta.extern { schema: "…/order-1.tn"  type: order }` is asked as
   `order` of `order-1.tn`, so a map keyed `order_v1` prepares clean and answers every read a 500 naming `order`
-  (`ExternProbeTest.aNameOnlyBinderIsAskedTheTargetsNameNotTheExterns`). `TsonApiDescription` refuses that binding at
+  (`ExternProbeTest.aNameOnlyBinderIsAskedTheTargetsNameNotTheExterns`). `TsonServiceDescription` refuses that binding at
   startup, where the description names the extern, naming the entry to bind instead
-  (`TsonApiDescriptionExternTest.aBindingByAnExternsLocalNameIsRefusedAtStartup`); the codec alone cannot, since it
+  (`TsonServiceDescriptionExternTest.aBindingByAnExternsLocalNameIsRefusedAtStartup`); the codec alone cannot, since it
   has no description to name the extern. The refusal reaches an extern the description declares itself and a route
   names as a payload type, and is skipped where a schema of the closure declares that name as its own entry, which the
   binding may be for. Two schemas each declaring `order`, two versions of one, bind to two classes
   through `TsonBindings.bySchema(Map.of(order1Id, Map.of("order", OrderV1.class), …))`, `DataNameBinder.byNamespace`
   over a map per schema; every schema whose types bind is keyed there, `service.tn`'s vocabulary under
-  `TsonApiSchema.ID` among them, and a name asked within a schema no map holds is refused listing those it does.
+  `TsonServiceSchema.ID` among them, and a name asked within a schema no map holds is refused listing those it does.
 - **A type nothing binds is a 500, not a 501.** It is a `MissingBindingException` naming the map, deferred
   to the first read of that specific type (a schema legitimately declares types a consumer never binds). A 501
   would report a missing line of this server's configuration as "this library cannot do that". Pinned by

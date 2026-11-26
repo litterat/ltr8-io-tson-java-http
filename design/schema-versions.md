@@ -27,7 +27,7 @@ serves both. `TsonSchemaVersions` is that, and `TsonDocumentPeek` is what lets i
 type within the canonical identity of the schema declaring it, `DataNameBinder.resolve(namespace, name)`, so
 `order-1.tn`'s `order` and `order-2.tn`'s are two questions. `TsonBindings.bySchema`, `DataNameBinder.byNamespace` over
 a map per schema, binds them to two classes through one `Tson`, the same whether a body imports a version or a
-description names both by extern (`TsonApiDescriptionExternTest.twoVersionsBindToTwoClassesThroughOneContext`,
+description names both by extern (`TsonServiceDescriptionExternTest.twoVersionsBindToTwoClassesThroughOneContext`,
 `ExternProbeTest.oneContextBindsTwoVersionsByTheDeclaringSchema`). A name-only map, `TsonBindings.of`, answers every
 schema alike, so it maps `order` to one class for both, and reading the other version is loud: *"the schema's root type
 `order` binds to OrderV1, which is not assignable to the requested OrderV2"*

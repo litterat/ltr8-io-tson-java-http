@@ -1,11 +1,15 @@
-# Describing a service (`service.tn`, `io.ltr8.tson.http.api`)
+# Describing a service (`service.tn`, `io.ltr8.tson.service.protocol`)
+
+The protocol records (`Protocol`, `Exchange`, `Signature`) and `ExchangeName` are in `io.ltr8.tson.service.protocol`,
+which imports nothing from `http`; the schema class that binds the whole of `service.tn` is in `io.ltr8.tson.service.http`.
 
 Why a service description is a schema, and what the layer declares at the protocol level. What the reader checks, how
 a server's bindings, catalog and warm-up derive from the description, coverage and business errors are
-`design/service-reader.md`. Everything HTTP, the http projection, its endpoints, placement, statuses, media
-types, security schemes, response headers, the verb checks and `Route`, is `design/http-projection.md`. The orders
-examples under `tson-http/src/test/resources/io/ltr8/tson/http/api/orders/` are one real document per use of the layer,
-reached through `OrdersExamples`; `experiments/rpc/` and `experiments/agent/` read them there too.
+`design/service-reader.md`; the module holding both is `tson-service`. Everything HTTP, the http projection, its
+endpoints, placement, statuses, media types, security schemes, response headers, the verb checks and `Route`, is
+`design/http-projection.md`. The orders examples under `tson-http/src/test/resources/io/ltr8/tson/service/http/orders/`
+(in `tson-http`'s test tree, since they import `problem.tn`) are one real document per use of the layer, reached through
+`OrdersExamples`; `experiments/rpc/` and `experiments/agent/` read them there too.
 
 **What the layer is for.** This project builds service capabilities that a model, as a caller, integrates with better
 than today's conventions allow. The Model Context Protocol and RFC 9880 (SDF) are design input for those capabilities,
@@ -22,7 +26,7 @@ the protocol belongs to the projection.
 - A document that exports a namespace is a schema; a document with at most a local scope is data; any document may
   refer to a type or a value in the namespace it names. Anything others refer into is a schema.
 - The description is a schema importing `service.tn`, resolved at startup (`tson.resolve(API)` then
-  `TsonApiSchema.describedBy`); an unsound description fails startup.
+  `TsonServiceSchema.describedBy`); an unsound description fails startup.
 - Every entry of `service.tn`, its annotations included, is a member of the one schema map `service` at its root, so
   the layer reserves one root name in every importer. A description writes `!service.protocol`, `@service.safe`; the
   layer refers between its own entries by the same path; and the reader, the bindings and every `@Typename` use the
@@ -95,7 +99,7 @@ schema map `service => !schema { … }`, as the sibling's `policy.tn` nests `pol
 namespace, so an entry refers to another by its path from inside the map as from outside it (`value_type:
 service.exchange`); a bare `signature` there is unresolved. A qualified annotation is reported under the name written,
 so the reader asks `Annotations` for `service.safe`, an entry applying `service.protocol` reports that qualified name,
-and each bound record's `@Typename` is its qualified name (`service.binding`), as `TsonApiSchema.bindings()` keys it.
+and each bound record's `@Typename` is its qualified name (`service.binding`), as `TsonServiceSchema.bindings()` keys it.
 
 Exchanges are keys inside their protocol and endpoints are values under a path and a verb, so nothing needs an invented
 operationId. `demo/schemas/orders-api-1.tn` binds a protocol in an http projection; `validate-api-1.tn` is web-service
@@ -121,8 +125,8 @@ name splits at each dot ([TSON-SCHEMA] §4.2, §5.12;
 `AffordanceProbeTest.aConcretePathKeyIsAnIdentifierFamilyWidenedAsAPathTemplateIs`). A qualified name walks its keys, and a
 record value's field to reach one: `orders.exchanges.place_order` is the protocol's entry, its `exchanges` field and a key
 (`UpstreamGapsTest.aReferenceThroughARecordValuesFieldIsJudged`), so `orders.place_order` is refused at load naming the
-fields a protocol declares (`TsonApiDescriptionTest.aTwoSegmentExchangeNameIsRefusedNamingTheField`). A record's fields are
-no namespace, and no qualified name reaches a field declaration.
+fields a protocol declares (`TsonServiceDescriptionTest.aTwoSegmentExchangeNameIsRefusedNamingTheField`). A record's fields
+are no namespace, and no qualified name reaches a field declaration.
 
 **A protocol is a record holding a namespace.** A namespace type declares its facets and nothing else
 (`UpstreamGapsTest.aNamespaceTypeDeclaresOnlyItsFacets`), so a value of one is the map alone, with nowhere to write a
@@ -160,6 +164,7 @@ the second and concluding `@doc` is dropped looks exactly like a library bug
 
 ## What builds on the protocol, and is not built
 
-`experiments/rpc/` is its wire form, `call` and `return` as parametric records applied per exchange, outside `tson-http` once
-it lands. `experiments/agent/`, a plan of calls, is the draft of the LLM-facing projection (above): a consumer that is not
-HTTP, pressing on the protocol for what a model needs. A decision that is a projection's alone lands in the projection.
+`experiments/rpc/` is its wire form, `call` and `return` as parametric records applied per exchange, outside `tson-http`, in
+`tson-service`, once it lands. `experiments/agent/`, a plan of calls, is the draft of the LLM-facing projection (above): a
+consumer that is not HTTP, pressing on the protocol for what a model needs. A decision that is a projection's alone lands in
+the projection.

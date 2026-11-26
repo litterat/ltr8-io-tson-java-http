@@ -13,6 +13,7 @@ import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.json.Json;
 import io.ltr8.tson.json.tree.JsonNull;
 import io.ltr8.tson.json.tree.JsonValue;
+import io.ltr8.tson.service.TsonBindings;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;

@@ -1,16 +1,15 @@
 # The http projection (`service.http`, endpoints, `Route`)
 
-How a protocol is projected onto HTTP: the projection and its claims, endpoints and their kinds, placement, statuses,
-the verb checks, media types, security schemes, response headers, and the resolved `Route` a server is handed. The
-protocol layer and the one root map are `design/service-description.md`, whose example shows a protocol and a
-projection binding it; the resolver-versus-reader split, the wiring, `TsonApiCoverage` and business errors are
-`design/service-reader.md`.
+In `io.ltr8.tson.service.http`. How a protocol is projected onto HTTP: the projection and its claims, endpoints and their
+kinds, placement, statuses, the verb checks, media types, security schemes, response headers, and the `Route` a server is
+handed. The protocol layer and the one root map are `design/service-description.md`, whose example shows both; the resolver-
+versus-reader split, the wiring, `TsonServiceCoverage` and business errors are `design/service-reader.md`.
 
 **Invariants**
 
 - `service.http` is a record whose one required field is the plain map `resources`; its claims, `binds` and
   `not_bound`, are fields beside it, references the resolver judges at load and delivers their referents.
-  `TsonApiDescription` finds every projection by what the entry is, a value of `service.http` bound to `Http`, never by
+  `TsonServiceDescription` finds every projection by what the entry is, a value of `service.http` bound to `Http`, never by
   its name.
 - `service.resource`, `service.protocol` and `service.http` each have the positional form, one bare required field;
   adding a second withdraws it and breaks every document written in it. A document writes a protocol and a projection
@@ -69,7 +68,7 @@ Anything else, a bare `%`, `{` or `}` and every non-ASCII character included, is
 percent-encoding is the one way a path carries another character. No normalization is stated, so a key is held as
 written, and no name hygiene applies (`UpstreamGapsTest.anHttpPathKeyIsJudgedByItsPatternAlone`). An endpoint is
 reached by location.
-`TsonApiSchemaTest.aPathIsAUriTemplateCheckedAtSchemaLoad` lists what the pattern admits and refuses.
+`TsonServiceSchemaTest.aPathIsAUriTemplateCheckedAtSchemaLoad` lists what the pattern admits and refuses.
 
 **An endpoint is one of three kinds, and its tag says which.** `service.endpoint` is the `abstract` base, placement
 plus `status`, `media_types`, `security` and `response_headers`, bound to the sealed interface `Endpoint`. A value at an
@@ -85,7 +84,7 @@ anything else, and is the whole difference between the one-declaration and the t
 
 **A binding refers to an exchange rather than being one.** An exchange could be a type under plain `meta.tn`, with an
 operation refining it, but a schema fact stated as a field is per-instance: `verb: = POST` pins an unmarked field, which
-[TSON-SCHEMA] §5.2 makes a *marker* each value must write (`TsonApiDescriptionTest`, the comparison kept at its end).
+[TSON-SCHEMA] §5.2 makes a *marker* each value must write (`TsonServiceDescriptionTest`).
 
 **A path is a URI template**: RFC 6570 levels 1 and 2, absolute, checked at schema load. The demos declare
 `{+schemaPath}`, the reserved expansion an identity path with slashes needs, where `{schemaPath}` would percent-encode
@@ -112,10 +111,10 @@ protocol and the projection over it may look different. The reader checks it (`R
 **A request named through an extern is placed as the foreign record it lands on**: its fields are that record's, and
 each field's type is looked up where its declaration wrote it, so `id: span` in `keys-1.tn` is a record in the path
 though the description declares no `span`. At every hop, so an array declared in a third schema, or held by import, has
-its element type looked up there; a map is refused (`TsonApiDescriptionExternTest`).
+its element type looked up there; a map is refused (`TsonServiceDescriptionExternTest`).
 
 A plain alias is followed past its hops before a shape is judged: a request that is a plain alias of a record is placed
-as that record (`TsonApiDescriptionTest.aRequestThatIsAPlainAliasOfARecordIsPlacedAsTheRecord`), a field typed by an
+as that record (`TsonServiceDescriptionTest.aRequestThatIsAPlainAliasOfARecordIsPlacedAsTheRecord`), a field typed by an
 alias of a container is refused in the path, and an array of an alias is judged by what it reaches. A refusal names the
 type as written.
 
@@ -126,7 +125,7 @@ text }`) placed from the path. An endpoint with no request admits no placement, 
 
 `status` is the success response's status; there is no list of responses, since an exchange has one response type.
 The default 200 is for an endpoint with a response: an operation or binding with no response type writes a status that
-carries no body, 204, 205 or 304 (`TsonApiDescriptionTest.aResponselessEndpointCannotAnswer200`). Each business error
+carries no body, 204, 205 or 304 (`TsonServiceDescriptionTest.aResponselessEndpointCannotAnswer200`). Each business error
 fixes its own status (`design/service-reader.md`, "Business errors").
 
 ## Verb checks
@@ -149,10 +148,10 @@ directions, as the codec does; a split between what an endpoint accepts and what
 `Route.mediaTypes()` is the resolved set, folded to lower case: `application/tson` first for a non-document, then what
 is listed. `Route.speaksJson()` is membership of either JSON label, and a demo builds the route's codec from it
 (`codec.acceptingJson()`), keeping the description the one statement.
-`TsonApiConformanceTest.everyEndpointSpeaksTheMediaTypesItLists` holds the server to it, each listed JSON label sent
+`TsonServiceConformanceTest.everyEndpointSpeaksTheMediaTypesItLists` holds the server to it, each listed JSON label sent
 and asked for, and JSON refused where none is listed.
 
-**The closed world is checked at startup, the shape of `prepareToRead`** (`design/binding.md`): `TsonApiDescription`
+**The closed world is checked at startup, the shape of `prepareToRead`** (`design/binding.md`): `TsonServiceDescription`
 refuses a media type no codec it serves can speak, so a description naming an encoding the server lacks fails to start
 and never answers 500. "Can speak" is `application/tson`, `application/json` and `application/tson+json` for an endpoint
 writing a TSON value; a document's body is bytes, so any type labels it. And it refuses a `!service.document` listing
@@ -173,11 +172,11 @@ value tagged with the base is refused by the resolver naming the subtypes, as an
 names an RFC 9110 §11 scheme, a `service.auth_scheme` (`bearer`, folded); `api_key_in` is an enum whose Java constants
 are lower case, since an enum binds by name. An `api_key`'s `name` is `text`, a query parameter's name being no header
 name; one carried in a header is folded as a header name by `ApiKey`'s constructor (`x-api-key`) and refused at
-startup unless it is an RFC 9110 token (`TsonApiDescriptionTest.aHeaderBorneApiKeyIsHeldAsAHeaderName`).
+startup unless it is an RFC 9110 token (`TsonServiceDescriptionTest.aHeaderBorneApiKeyIsHeldAsAHeaderName`).
 
 `security?: [meta.ref<service.security_scheme>]` sits on `service.http`, the default, and on `service.endpoint`. The list
 is **alternatives**: a credential for any one scheme will do. The resolver judges every name at load, so a type or a
-protocol there is refused (`TsonApiDescriptionTest.aSecurityNamingNoSchemeIsRefusedAtLoad`), and each reference arrives
+protocol there is refused (`TsonServiceDescriptionTest.aSecurityNamingNoSchemeIsRefusedAtLoad`), and each reference arrives
 delivered its `HttpAuth` or `ApiKey`.
 
 **The override rule**: an endpoint's `security`, when written, replaces the projection's whole; `security: []` says the
@@ -197,8 +196,8 @@ exchange's.
 that is one scalar, the rule for a path segment; a form beyond level 1 is refused; and an endpoint with no response type,
 a document or one answering no body, declares literals only. A response named through an extern, or a plain alias of
 a record, is judged as the record it reaches; an array is refused whatever its element type, and so is a field typed by
-an alias of a container (`TsonApiDescriptionExternTest`,
-`TsonApiDescriptionTest.aResponseHeaderExpandsOverARecordReachedThroughAPlainAlias`). `Route.responseHeaders()` holds
+an alias of a container (`TsonServiceDescriptionExternTest`,
+`TsonServiceDescriptionTest.aResponseHeaderExpandsOverARecordReachedThroughAPlainAlias`). `Route.responseHeaders()` holds
 the templates, and `expandResponseHeaders(fields)` expands them through `HeaderTemplate` from a function of field name
 to text that the server writes from its own reply, since reading a field of an arbitrary bound record would need
 reflection or the tree reader.
@@ -237,10 +236,10 @@ the diagnostic naming the remedy, one value per instantiation (`UpstreamGapsTest
 `Route` is one endpoint resolved: its verb and path, the exchange a binding borrows, its request, response and
 business errors by status (`errorFor(status)`), its success status, the three exchange facts, whether it is a
 document, its media types, its placement, its documentation (`summary()`, `doc()`, the verb key's, else the
-exchange's), its security in force and its response headers. `TsonApiCoverage.serving` hands it to the handler
+exchange's), its security in force and its response headers. `TsonServiceCoverage.serving` hands it to the handler
 (`design/service-reader.md`, "Wiring").
 
-`TsonApiConformanceTest` resolves the description through a schema source fetching from the running server, proving
+`TsonServiceConformanceTest` resolves the description through a schema source fetching from the running server, proving
 that every referenced schema is published and every payload type exists, then holds the server to what no compiler can
 know: a reply at the success status carries the response type (a document, a media type it lists) and every literal
 response header the endpoint declares, with the value declared; one at a business error's fixed status that error; and

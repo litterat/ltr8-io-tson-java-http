@@ -8,6 +8,7 @@ import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonDocumentPeek;
+import io.ltr8.tson.service.TsonBindings;
 
 import java.io.InputStream;
 import java.util.ArrayList;

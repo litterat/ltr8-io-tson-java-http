@@ -6,6 +6,7 @@ import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonCompiledSchema;
+import io.ltr8.tson.service.TsonBindings;
 
 import java.io.IOException;
 import java.io.InputStream;

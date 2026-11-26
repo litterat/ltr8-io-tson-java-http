@@ -67,7 +67,7 @@ Phase 3 tool and is not built until a hypothesis calls for it.
   stimulus; what was stripped is the rubric for comprehension items and the target for the unknowns experiment.
 - **The item banks already exist.** The bundled schemas, `meta-kernel.tn`, `meta.tn`, `core.tn` and `net.tn` in the
   sibling's `spec/m/`, and this repo's `service.tn`, `deployment.tn`, `problem.tn` and the orders fixtures under
-  `tson-http/src/test/resources/io/ltr8/tson/http/api/orders/`. The pinned diagnostics in `UpstreamGapsTest` and
+  `tson-http/src/test/resources/io/ltr8/tson/service/http/orders/`. The pinned diagnostics in `UpstreamGapsTest` and
   `MediaTypeKindProbeTest` (`tson-http/src/test/java/io/ltr8/tson/http/`): each is a planted error with its exact
   message. Each item is tagged with the inventory features it exercises.
 - **Phase 3 variants are printed mechanically from one resolved form** (the sibling's `spec/m/*-resolved.tn` for the

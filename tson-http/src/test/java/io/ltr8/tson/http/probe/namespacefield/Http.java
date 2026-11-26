@@ -10,7 +10,8 @@ import java.util.Optional;
 
 /**
  * An http projection as a record: its claims are declared fields the resolver judges, and its resources a
- * namespace-typed field. An absent list arrives as {@code null}, so a reader normalises it as the api records do.
+ * namespace-typed field. An absent list arrives as {@code null}, so a reader normalises it as {@code tson-service}'s
+ * records do.
  */
 public record Http(List<ValueRef<?>> binds, @Field("not_bound") List<Exemption> notBound, Optional<Iri> base,
                    Namespace<Resource> resources) {

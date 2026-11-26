@@ -2,12 +2,12 @@ package io.ltr8.tson.http.experiment.rpc;
 
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.Diagnostic;
-import io.ltr8.tson.http.api.OrdersExamples;
-import io.ltr8.tson.http.api.Protocol;
 import io.ltr8.tson.schema.TsonSchema;
 import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.Top;
 import io.ltr8.tson.schema.meta.TypeRef;
+import io.ltr8.tson.service.http.OrdersExamples;
+import io.ltr8.tson.service.protocol.Protocol;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.Test;
 

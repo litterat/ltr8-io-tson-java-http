@@ -9,6 +9,7 @@ import io.ltr8.tson.base.policy.LimitsPolicy;
 import io.ltr8.tson.base.policy.ProcessorPolicy;
 import io.ltr8.tson.base.policy.TokenPolicy;
 import io.ltr8.tson.base.source.SchemaAccess;
+import io.ltr8.tson.service.TsonBindings;
 import io.ltr8.unicode.RestrictionLevel;
 
 import java.io.IOException;

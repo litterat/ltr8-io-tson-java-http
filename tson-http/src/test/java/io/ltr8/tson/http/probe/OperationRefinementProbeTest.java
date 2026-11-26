@@ -10,11 +10,6 @@ import io.ltr8.tson.base.ReadException;
 import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
-import io.ltr8.tson.http.TsonBindings;
-import io.ltr8.tson.http.api.HttpVerb;
-import io.ltr8.tson.http.api.OrdersExamples;
-import io.ltr8.tson.http.api.Route;
-import io.ltr8.tson.http.api.TsonApiSchema;
 import io.ltr8.tson.http.probe.operationrefinement.Binding;
 import io.ltr8.tson.http.probe.operationrefinement.Document;
 import io.ltr8.tson.http.probe.operationrefinement.Endpoint;
@@ -25,6 +20,11 @@ import io.ltr8.tson.http.probe.operationrefinement.Protocol;
 import io.ltr8.tson.http.probe.operationrefinement.Resource;
 import io.ltr8.tson.http.probe.operationrefinement.Wrapper;
 import io.ltr8.tson.schema.meta.ValueEntry;
+import io.ltr8.tson.service.TsonBindings;
+import io.ltr8.tson.service.http.HttpVerb;
+import io.ltr8.tson.service.http.OrdersExamples;
+import io.ltr8.tson.service.http.Route;
+import io.ltr8.tson.service.http.TsonServiceSchema;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.Test;
 
@@ -50,16 +50,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code status} or {@code request} load; {@code status: = 200} unmarked is refused as moving a default to required, and a
  * list cannot be pinned at all ([TSON-SCHEMA] §5.2). {@code ^} follows {@code !name} and takes values, so {@code operation ^
  * { … }} is a parse error and {@code !operation ^ { … }} a resolver error, each naming {@code operation & { … }}. A
- * composition adding a field loads, and a subtype adding one does not bind to the base's class. A parametric record
- * cannot fix an operation's response: a parameter is a type, so {@code response: T} restates the field's type and is
- * refused where it is applied, and {@code response?: = T} is refused at the declaration. The description's own subtype
- * is admitted, and binds to
- * the base's class once it is bound to it, wherever the slot is: at a record the description declares, at the layer's record
- * in the description's own value entry, and at the layer's record in a data document importing the description. The real
- * layer admits it the same way through {@code TsonApiSchema}, and {@code describedBy} reads the endpoint. The base is {@code
- * abstract}, as {@code service.endpoint} is, so a subtype bound to nothing leaves a value entry holding it a tree, which
- * {@code describedBy} refuses, and is a missing binding to the object reader in a data document. What paged lists share is a
- * response shape, and a parametric record over the response record says it too.
+ * composition adding a field loads, and a subtype adding one does not bind to the base's class. A parametric record cannot
+ * fix an operation's response: a parameter is a type, so {@code response: T} restates the field's type and is refused where
+ * it is applied, and {@code response?: = T} is refused at the declaration. The description's own subtype is admitted, and
+ * binds to the base's class once it is bound to it, wherever the slot is: at a record the description declares, at the
+ * layer's record in the description's own value entry, and at the layer's record in a data document importing the
+ * description. The real layer admits it the same way through {@code TsonServiceSchema}, and {@code describedBy} reads the
+ * endpoint. The base is {@code abstract}, as {@code service.endpoint} is, so a subtype bound to nothing leaves a value entry
+ * holding it a tree, which {@code describedBy} refuses, and is a missing binding to the object reader in a data document.
+ * What paged lists share is a response shape, and a parametric record over the response record says it too.
  */
 class OperationRefinementProbeTest {
 
@@ -478,14 +477,14 @@ class OperationRefinementProbeTest {
     }
 
     /**
-     * <b>Through {@code service.tn} and {@code TsonApiSchema} as they stand, a description's own operation loads once it is
-     * bound.</b> Bound as a server binds by default, {@link TsonApiSchema#bindings()}: the description loads, its projection
-     * held as a tree since {@code paged_get} binds to nothing, and {@code describedBy} refuses the projection rather than
-     * reading a description with its routes missing. Unbound: admitted, a tree tagged {@code paged_get} with the pinned
-     * status. With {@code paged_get} bound to {@code api.Operation} through {@link TsonApiSchema#bindingsWith}: the endpoint
-     * is an {@code api.Operation}, and {@code describedBy} reads its route with status 200 and the request and response it
-     * names. Written untagged, the endpoint is refused naming {@code paged_get} beside the layer's subtypes, the description
-     * declaring it first.
+     * <b>Through {@code service.tn} and {@code TsonServiceSchema} as they stand, a description's own operation loads once it
+     * is bound.</b> Bound as a server binds by default, {@link TsonServiceSchema#bindings()}: the description loads, its
+     * projection held as a tree since {@code paged_get} binds to nothing, and {@code describedBy} refuses the projection
+     * rather than reading a description with its routes missing. Unbound: admitted, a tree tagged {@code paged_get} with the
+     * pinned status. With {@code paged_get} bound to {@code http.Operation} through {@link TsonServiceSchema#bindingsWith}:
+     * the endpoint is an {@code http.Operation}, and {@code describedBy} reads its route with status 200 and the request and
+     * response it names. Written untagged, the endpoint is refused naming {@code paged_get} beside the layer's subtypes, the
+     * description declaring it first.
      */
     @Test
     void theRealLayerAdmitsADescriptionsOwnOperation() {
@@ -494,14 +493,14 @@ class OperationRefinementProbeTest {
         String at = "'orders_http': the body is no value of the type 'service.http' -- at "
                 + "/resources/~1orders~1{id}~1items/endpoints/GET: ";
 
-        Tson layerOnly = real(paged, TsonApiSchema.bindings());
+        Tson layerOnly = real(paged, TsonServiceSchema.bindings());
         assertEquals(List.of(), layerOnly.validateSchema(paged));
         assertInstanceOf(TsonValue.class, assertInstanceOf(ValueEntry.class, layerOnly.schemaRegistry().get(PAGED_ID)
                 .orElseThrow().schema().entries().get("orders_http")).value());
         assertEquals("'orders_http' applies service.http, and its value did not bind to "
-                + io.ltr8.tson.http.api.Http.class.getName() + " but is held as TsonRecord -- a type written in it "
-                + "binds to no class; bind a description's own endpoint subtype through TsonApiSchema.bindingsWith",
-                assertThrows(IllegalArgumentException.class, () -> TsonApiSchema.describedBy(layerOnly, PAGED_ID))
+                + io.ltr8.tson.service.http.Http.class.getName() + " but is held as TsonRecord -- a type written in it "
+                + "binds to no class; bind a description's own endpoint subtype through TsonServiceSchema.bindingsWith",
+                assertThrows(IllegalArgumentException.class, () -> TsonServiceSchema.describedBy(layerOnly, PAGED_ID))
                         .getMessage());
 
         Tson unbound = real(paged, null);
@@ -512,16 +511,16 @@ class OperationRefinementProbeTest {
         assertEquals(Optional.of("paged_get"), tree.typeRef());
         assertEquals(200, tree.get("status").asInt().orElseThrow());
 
-        Tson withPaged = real(paged, TsonApiSchema.bindingsWith(
-                Map.of("paged_get", io.ltr8.tson.http.api.Operation.class)));
+        Tson withPaged = real(paged, TsonServiceSchema.bindingsWith(
+                Map.of("paged_get", io.ltr8.tson.service.http.Operation.class)));
         assertEquals(List.of(), withPaged.validateSchema(paged));
-        io.ltr8.tson.http.api.Http http = assertInstanceOf(io.ltr8.tson.http.api.Http.class,
+        io.ltr8.tson.service.http.Http http = assertInstanceOf(io.ltr8.tson.service.http.Http.class,
                 assertInstanceOf(ValueEntry.class, withPaged.schemaRegistry().get(PAGED_ID).orElseThrow().schema()
                         .entries().get("orders_http")).value());
-        io.ltr8.tson.http.api.Operation op = assertInstanceOf(io.ltr8.tson.http.api.Operation.class,
+        io.ltr8.tson.service.http.Operation op = assertInstanceOf(io.ltr8.tson.service.http.Operation.class,
                 http.resources().get(path).endpoints().get("GET"));
         assertEquals(200, op.status());
-        Route route = TsonApiSchema.describedBy(withPaged, PAGED_ID).route(HttpVerb.GET, path).orElseThrow();
+        Route route = TsonServiceSchema.describedBy(withPaged, PAGED_ID).route(HttpVerb.GET, path).orElseThrow();
         assertEquals(200, route.status());
         assertEquals("order_ref", route.request().orElseThrow().name());
         assertEquals("order_page", route.response().orElseThrow().name());
@@ -529,7 +528,7 @@ class OperationRefinementProbeTest {
         String untagged = paged.replace("GET => !paged_get {", "GET => {");
         assertEquals(at + "'service.endpoint' is abstract and has no direct instances, so a value here must name its "
                 + "type -- one of (service.document | service.operation | service.binding | paged_get)",
-                only(real(untagged, TsonApiSchema.bindingsWith(Map.of("paged_get",
-                        io.ltr8.tson.http.api.Operation.class))).validateSchema(untagged)).message());
+                only(real(untagged, TsonServiceSchema.bindingsWith(Map.of("paged_get",
+                        io.ltr8.tson.service.http.Operation.class))).validateSchema(untagged)).message());
     }
 }

@@ -207,11 +207,11 @@ a field of a record value, and this schema was linked with no bind context to re
 
 ## What changes in Java, if the event kind is adopted
 
-A sketch. `Event` and `Stream` records in `io.ltr8.tson.http.api`, bound as `service.event` and `service.stream`;
-`Stream` joins `Endpoint`'s permits; `Protocol` gains `events`. `ExchangeName` generalises to `(protocol, field, key)`
-so `binds` holds per event. `TsonApiDescription` checks a stream's items or event and its media type; `TsonApiCoverage`
-is unchanged. Each adapter writes `text/event-stream` its own way (a chunked body under `com.sun.net.httpserver`,
-Javalin's and Helidon's SSE support).
+A sketch. `Event` and `Stream` records in `io.ltr8.tson.service.http`, bound as `service.event` and `service.stream`;
+`Stream` joins `Endpoint`'s permits; `Protocol` gains `events`. `ExchangeName` generalises to `(protocol, field, key)` so
+`binds` holds per event. `TsonServiceDescription` checks a stream's items or event and its media type; `TsonServiceCoverage`
+is unchanged. Each adapter writes `text/event-stream` its own way (a chunked body under `com.sun.net.httpserver`, Javalin's
+and Helidon's SSE support).
 
 ## Costs
 
@@ -243,9 +243,9 @@ Javalin's and Helidon's SSE support).
 ## Order of work, if the event kind is adopted
 
 1. `service.tn`: `service.event`, `service.events`, `events?`, `service.stream`, and their `@doc`s.
-2. The bound records, `TsonApiSchema.bindings()`, `ExchangeName` over the field.
-3. `TsonApiDescription`'s stream rules and `binds` over events, with `TsonApiDescriptionTest`.
-4. A stream in the JDK demo, read by `TsonApiConformanceTest`; then Javalin and Helidon.
+2. The bound records, `TsonServiceSchema.bindings()`, `ExchangeName` over the field.
+3. `TsonServiceDescription`'s stream rules and `binds` over events, with `TsonServiceDescriptionTest`.
+4. A stream in the JDK demo, read by `TsonServiceConformanceTest`; then Javalin and Helidon.
 5. `design/service-description.md` and `design/http-projection.md`; `AffordanceProbeTest` stays as the record of why.
 
 ## Open questions
@@ -256,8 +256,9 @@ Javalin's and Helidon's SSE support).
   and what `TSON-Schema` states for a stream, once or per item?
 - **Webhooks**: the server requests a URL the client supplied. Is that an exchange the client serves, so callbacks
   stay absent, or a subscription exchange plus an event?
-- **The join**: does `tson-invoke` give an event a Java form (a listener interface, a `Flow.Publisher`), or do events
-  stay outside it?
+- **The join**: bind's `DataProtocol` refuses a `Flow.Publisher` return, a promise-typed one of any kind, so what form
+  does an event take in Java: a listener interface whose method is an exchange the client serves, a `DataExchangeHandler`
+  of its own, or none, with events staying outside `DataProtocol`?
 - **The live namespace**: keyed by a namespace, which no path with a dot can key, or by a plain map? A document of its
   own at a well-known path, or a field of the acceptance profile? Entry points only, or every object with paging? Its
   vocabulary in `service.tn`, or its own once a several-import closure links with a bind context (`UPSTREAM.md`, the
