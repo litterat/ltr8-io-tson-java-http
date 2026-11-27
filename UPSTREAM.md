@@ -327,7 +327,14 @@ and would otherwise have to declare its vocabulary inside `service.tn`. Pinned b
 `AffordanceProbeTest.anInstanceImportingTwoSchemasThrowsAtAReferenceThroughAField`, which asserts the exception type
 and message from all three entry points and flips when the read reports or succeeds.
 
-**Priority:** medium.
+Splitting `service.tn` into a protocol schema and an http schema (`proposal/schema-split.md`) makes the shape ordinary:
+`SchemaSplitProbeTest.aDataDocumentImportingTheProtocolDescriptionAndTheHttpSchemaThrows` pins the same throw for a
+protocol description beside the http schema. A schema document is not affected, so a description importing both reads,
+and a data document importing that description alone reads.
+
+**Priority:** medium. The split does not raise it: every shape the project plans has a route that reads, a description
+importing both schemas or a data document importing one description, so the gap costs a workaround and blocks nothing.
+It is the entry to raise if a plan needs a data document importing a protocol description and the http schema as two.
 
 ---
 
@@ -434,6 +441,26 @@ library's own question and copies no rule.
 **Workaround in place:** `TsonServiceProtocol` copies the one name-keyed rule for `boolean`. Pinned by
 `UpstreamGapsTest.thePublicAtomRouteCannotProduceABooleanThatABindModeReadDelivers`, which flips when the public route
 answers as the read does; then the copy goes.
+
+**Priority:** low.
+
+---
+
+## 21. A local declaration colliding with an imported one names neither schema
+
+**Hit:** found measuring the split of `service.tn` (`proposal/schema-split.md`). A schema declaring `service.exchange`
+inside the open `service` map it imports, or a record `service`, is refused with *"'service.exchange' collides with an
+entry of the same name brought in by !!import"* and a diagnostic whose `schemaId` is empty. [TSON-SCHEMA] §2.2.3 says
+the diagnostic names both declaring schemas, and a collision between two imports does: *"'service.binding' is declared
+by two different schemas reached through !!import ('…/http-1.tn' and '…/domain-1.tn')"*. This is a library gap against
+the spec, not spec feedback.
+
+**The change:** the local-versus-import collision naming the importing schema and the one it collides with, as the
+two-import collision does.
+
+**Workaround in place:** none needed; the collision is refused either way and the message still names the member.
+Pinned by `SchemaSplitProbeTest.aMemberBothSchemasDeclareCollidesNamingNeitherSchema`, which flips when the message
+names the schemas.
 
 **Priority:** low.
 
