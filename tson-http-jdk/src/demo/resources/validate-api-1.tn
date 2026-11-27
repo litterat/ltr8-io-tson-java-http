@@ -1,5 +1,5 @@
 !!id:"https://schemas.example.com/2026/40/app/validate-api-1.tn"
-!!import:"https://tson.io/2026/40/io/ltr8/http/service.tn"
+!!import:"https://tson.io/2026/40/io/ltr8/http/http.tn"
 !!import:"https://schemas.example.com/2026/40/app/validate-1.tn"
 !!import:"https://tson.io/2026/40/io/ltr8/http/problem.tn"
 !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
@@ -8,7 +8,7 @@
   @doc:"Where a published schema is: the path component of its own !!id."
   schema_ref => { schemaPath: text }
 
-  validator => !service.http {
+  validator => !http.projection {
     resources: {
       "/validate" => {
         @service.summary:"Validate a document against a schema"
@@ -21,14 +21,14 @@
           -- and never about the document under test, which would otherwise make a client unable to tell
           "you asked badly" from "the thing you asked about is bad".
           """
-        POST => !service.operation { request: validation_request  response: validation_result }
+        POST => !http.operation { request: validation_request  response: validation_result }
       }
 
       "/" => {
         @service.safe
         @service.summary:"The validator page"
         @doc:"The page itself: two editors, the scenarios, and the diagnostics."
-        GET => !service.document { media_types: ["text/html"] }
+        GET => !http.document { media_types: ["text/html"] }
       }
 
       "/.well-known/tson-deployment" => {
@@ -46,7 +46,7 @@
           topology. And it is a hint -- it can be cached, and only the refusal a request actually receives says
           what applied to that request.
           """
-        GET => !service.operation { response: deployment.acceptance_profile }
+        GET => !http.operation { response: deployment.acceptance_profile }
       }
 
       "/{+schemaPath}" => {
@@ -56,8 +56,8 @@
           Every schema this service names is served at its own identity's path. A published schema never changes
           (§3.5), so a cache may keep it for good.
           """
-        GET => !service.document { request: schema_ref  media_types: ["application/tson"]
-                                   response_headers: { Cache-Control => "public, max-age=31536000, immutable" } }
+        GET => !http.document { request: schema_ref  media_types: ["application/tson"]
+                                response_headers: { Cache-Control => "public, max-age=31536000, immutable" } }
       }
     }
   }

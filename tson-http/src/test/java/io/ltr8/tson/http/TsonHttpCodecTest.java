@@ -13,6 +13,7 @@ import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.compiler.TsonDiagnostics;
 import io.ltr8.tson.compiler.config.SchemaModelNameBinder;
+import io.ltr8.tson.http.schema.problem.TsonProblem;
 import io.ltr8.tson.service.TsonBindings;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.BeforeEach;
@@ -403,13 +404,12 @@ class TsonHttpCodecTest {
     }
 
     /**
-     * <b>A type nothing binds is this server's misconfiguration, not a library gap.</b> It used to surface as
-     * {@code UnsupportedOperationException: no usable compiled reader}, which the status policy faithfully
-     * called 501 — telling a client the library could not do something, when a line of configuration was
-     * simply missing. It is now a {@code MissingBindingException}, and 500 is the honest answer.
+     * <b>A type nothing binds is this server's misconfiguration, not a library gap.</b> It surfaces as a
+     * {@code MissingBindingException}, and 500 is the honest answer: a 501 would tell a client the library could
+     * not do something, when a line of configuration is simply missing.
      *
      * <p>Deferred to the read of that specific type, deliberately: a schema legitimately declares types a
-     * given consumer never binds — core.tn's forty of them — so failing the compile would make bind mode
+     * given consumer never binds, as most of core.tn's are, so failing the compile would make bind mode
      * unusable.
      */
     @Test
@@ -578,10 +578,9 @@ class TsonHttpCodecTest {
     /**
      * <b>The code decides the status, and the collected channel answers exactly as the thrown one does.</b>
      * One failure reaches a consumer two ways -- thrown at startup, collected on every read through this codec
-     * -- and they must not diverge. The collected one used to lose the reason entirely and round the lot to
-     * 502, so {@code NOT_PERMITTED} was a 400 thrown and a 502 collected.
+     * -- and they must not diverge: {@code NOT_PERMITTED} is a 400 whichever channel carries it.
      *
-     * <p><b>Now there is one table and this pins that there is.</b> The two channels no longer speak the same
+     * <p><b>There is one table and this pins that there is.</b> The two channels do not speak the same
      * enum -- thrown carries a {@link SchemaFetchException.Reason}, collected carries a {@link
      * Diagnostic.Code} -- so the agreement rests on {@code from} mapping through {@link Diagnostic.Code#of}
      * into the same switch, rather than on two switches being kept in step.

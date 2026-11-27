@@ -3,7 +3,7 @@ package io.ltr8.tson.http.probe.operationrefinement;
 import java.util.List;
 
 /**
- * The endpoint base, abstract in the probe's layer as {@code service.endpoint} is, so an untagged endpoint is refused
+ * The endpoint base, abstract in the probe's layer as {@code http.endpoint} is, so an untagged endpoint is refused
  * naming the subtypes. A description's own subtype of {@code operation} has no class here: the question is which class
  * it reaches.
  */

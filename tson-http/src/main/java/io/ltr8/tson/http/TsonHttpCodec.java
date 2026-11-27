@@ -13,6 +13,8 @@ import io.ltr8.tson.compiler.TsonDocumentPeek;
 import io.ltr8.tson.compiler.TsonObjectWriter;
 import io.ltr8.tson.compiler.TsonTreeWriter;
 import io.ltr8.tson.compiler.config.SchemaModelNameBinder;
+import io.ltr8.tson.http.schema.problem.TsonProblem;
+import io.ltr8.tson.http.schema.problem.TsonProblemDiagnostic;
 import io.ltr8.tson.json.Json;
 import io.ltr8.tson.json.JsonObjectWriter;
 import io.ltr8.tson.json.tree.JsonValue;

@@ -12,21 +12,22 @@ import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonDocumentHeader;
 import io.ltr8.tson.compiler.TsonDocumentPeek;
-import io.ltr8.tson.http.TsonDeployment;
+import io.ltr8.tson.http.TsonRoute;
+import io.ltr8.tson.http.TsonDeploymentSchema;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
-import io.ltr8.tson.http.TsonProblemDiagnostic;
+import io.ltr8.tson.http.TsonHttpSchema;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaCatalog;
 import io.ltr8.tson.http.TsonSchemaHeader;
+import io.ltr8.tson.http.TsonServiceCoverage;
+import io.ltr8.tson.http.TsonServiceDescription;
 import io.ltr8.tson.http.jdk.TsonHandler;
 import io.ltr8.tson.http.jdk.TsonSchemaHandler;
+import io.ltr8.tson.http.schema.HttpVerb;
+import io.ltr8.tson.http.schema.deployment.TsonDeployment;
+import io.ltr8.tson.http.schema.problem.TsonProblemDiagnostic;
 import io.ltr8.tson.service.TsonBindings;
-import io.ltr8.tson.service.http.HttpVerb;
-import io.ltr8.tson.service.http.Route;
-import io.ltr8.tson.service.http.TsonServiceCoverage;
-import io.ltr8.tson.service.http.TsonServiceDescription;
-import io.ltr8.tson.service.http.TsonServiceSchema;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -218,7 +219,7 @@ public final class ValidatorServer {
      * {@link #verdict} builds hold the caller's schema and are never shared with anything.
      */
     public static HttpServer start(int port, TsonDeployment deployment) throws IOException {
-        Map<String, Class<?>> bindings = new HashMap<>(TsonDeployment.bindings());
+        Map<String, Class<?>> bindings = new HashMap<>(TsonDeploymentSchema.bindings());
         bindings.putAll(Map.of(
                 "validation_request", ValidationRequest.class,
                 "validation_result", ValidationResult.class,
@@ -229,11 +230,11 @@ public final class ValidatorServer {
         // descriptor itself with.
         Map<String, String> schemas = new HashMap<>(Map.of(VALIDATE_ID, VALIDATE, API_ID, API,
                 TsonProblemSchema.ID, TsonProblemSchema.source(),
-                TsonDeployment.ID, TsonDeployment.source()));
-        schemas.putAll(TsonServiceSchema.publishedById());
+                TsonDeploymentSchema.ID, TsonDeploymentSchema.source()));
+        schemas.putAll(TsonHttpSchema.publishedById());
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(schemas)))
-                .withDataBindContext(TsonBindings.of(TsonServiceSchema.bindingsWith(bindings))));
+                .withDataBindContext(TsonBindings.of(TsonHttpSchema.bindingsWith(bindings))));
         tson.resolve(VALIDATE);
         tson.resolve(API);
         TsonHttpCodec codec = new TsonHttpCodec(tson);
@@ -242,7 +243,7 @@ public final class ValidatorServer {
         // or a component no field fills, fails startup here rather than on the first request that reads one.
         codec.prepareToRead(VALIDATE_ID);
 
-        TsonServiceDescription described = TsonServiceSchema.describedBy(tson, API_ID);
+        TsonServiceDescription described = TsonHttpSchema.describedBy(tson, API_ID);
         codec.prepareToWrite(described.boundClasses(bindings).toArray(Class<?>[]::new));
 
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -250,7 +251,7 @@ public final class ValidatorServer {
 
         TsonServiceCoverage coverage = TsonServiceCoverage.of(described);
 
-        Route validate = coverage.serving(HttpVerb.POST, "/validate");
+        TsonRoute validate = coverage.serving(HttpVerb.POST, "/validate");
         server.createContext(validate.path(), TsonHandler.asHttpHandler(codec, exchange -> {
             exchange.requireMethod(validate.verb().name());
             requireBodyWithinCap(exchange.exchange());
@@ -271,13 +272,13 @@ public final class ValidatorServer {
         // page and every schema path alike, so the split is made here rather than by the framework. The page
         // deliberately does NOT go through TsonHandler -- that boundary checks Accept and every route behind
         // it produces TSON, so a browser asking for text/html would be answered 406 before it ever rendered.
-        Route page = coverage.serving(HttpVerb.GET, "/");
-        Route wellKnown = coverage.serving(HttpVerb.GET, "/.well-known/tson-deployment");
+        TsonRoute page = coverage.serving(HttpVerb.GET, "/");
+        TsonRoute wellKnown = coverage.serving(HttpVerb.GET, "/.well-known/tson-deployment");
         coverage.serving(HttpVerb.GET, "/{+schemaPath}");
         // The policy each per-request probe enforces, taken from the config verdict() builds it from rather
         // than from the descriptor: a profile of what is enforced cannot disagree with what refuses a request.
         byte[] profile = codec.write(deployment.profile(deployment.applyTo(ProcessorConfig.defaults())
-                .processorPolicy()), TsonDeployment.ID, "deployment.acceptance_profile");
+                .processorPolicy()), TsonDeploymentSchema.ID, "deployment.acceptance_profile");
         HttpHandler schemaHandler = TsonHandler.asHttpHandler(codec,
                 TsonSchemaHandler.of(catalog(described, schemas)));
         server.createContext("/", exchange -> {
@@ -364,13 +365,13 @@ public final class ValidatorServer {
     }
 
     /**
-     * The descriptor this demo runs under, named here rather than found. {@link TsonDeployment} has no
-     * search path on purpose: a descriptor is diffable where an environment variable is not, but a runtime
-     * that loads whatever is on its path still lets a container image change a security policy with no code
-     * diff. The call site says which file; the file says what is in it.
+     * The descriptor this demo runs under, named here rather than found. {@link TsonDeploymentSchema#read}
+     * takes text and there is no search path, on purpose: a descriptor is diffable where an environment variable
+     * is not, but a runtime that loads whatever is on its path still lets a container image change a security
+     * policy with no code diff. The call site says which file; the file says what is in it.
      */
     public static TsonDeployment deployment() {
-        return TsonDeployment.read(resource("validator-deployment.tn"));
+        return TsonDeploymentSchema.read(resource("validator-deployment.tn"));
     }
 
     public static void main(String[] args) throws IOException {

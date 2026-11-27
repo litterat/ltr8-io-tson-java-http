@@ -21,9 +21,11 @@ touches, and the schema-language rules that read like bugs when they bite. Curre
 - A vocabulary this project publishes declares its entries under one map named for itself, so it costs an importer one root
   name: every root name of a closure is reserved and a clash is unfixable by the importer ([TSON-SCHEMA] §2.2.3), though a
   schema map of the same name is open to every importer and only a member path two schemas declare collides
-  (`design/service-description.md`, "One root name"). `service.tn` declares everything, annotations included, under
-  `service`, `problem.tn` under `problem` and `deployment.tn` under `deployment`, and each names its own entries by the same
-  path from inside the map. A bound class's `@Typename` is the qualified name (`problem.details`, `deployment.descriptor`).
+  (`design/service-description.md`, "One root name per schema"). `service.tn` declares everything, annotations included,
+  under `service`, `http.tn` under `http`, `problem.tn` under `problem` and `deployment.tn` under `deployment`, each
+  reserved only against a root that is no schema map (measured for `service` and `http`, and the spec's rule for the
+  other two), and each names its own entries by the same path from inside the
+  map. A bound class's `@Typename` is the qualified name (`problem.details`, `deployment.descriptor`).
 - An optional field is `name?: T`; `name: T?` is a required field admitting `_`. A `text` field accepts any token.
   A `pattern` is I-Regexp and `^`/`$` are literal characters.
 - `^` follows `!name` and takes values; a record derives by `&` alone, which admits a new field, so a misspelt
@@ -31,7 +33,7 @@ touches, and the schema-language rules that read like bugs when they bite. Curre
 - A `pattern` judges the value after the type's `normalization` has folded it. An ASCII protocol's name (an HTTP
   header field name, an authentication scheme) folds with `ASCII_CASEFOLD`, never `NFKC_CASEFOLD`, which folds
   compatibility characters into ASCII and widens what an ASCII pattern admits.
-- A base record that has no values of its own is declared `abstract` (`service.endpoint`, `service.security_scheme`):
+- A base record that has no values of its own is declared `abstract` (`http.endpoint`, `http.security_scheme`):
   the resolver then refuses an untagged value, and one tagged with the base, naming the subtypes, in every mode.
 
 ## The header, and the bundled documents
@@ -73,13 +75,14 @@ message).
 `meta.identifier_ref`, `meta.ref<T>`, `!meta.namespace { key_type: K  value_type: V }`, `!unicode.text_type { … }`,
 `!numeric.integer_type { … }`, `numeric.count` and `net.media_type_type` by path. A path's first segment is a schema
 map nested in its document's root as an entry, `meta => !schema { … }`, which is how a library has a namespace of its
-own; `policy.tn` declares `policy => !schema { … }` the same way, and this project's `service.tn` declares
-`service => !schema { … }`. `meta.ref<T>` is the one reference spelling, sugar for the construction
-`!meta.ref { of: T }`: over a constructor it names the types built with it (`meta.ref<net.media_type_type>`), over any
-other type the values of it (`meta.ref<service.exchange>`), and `meta.type_ref` is the reference over `meta.type`.
+own; `policy.tn` declares `policy => !schema { … }` the same way, and this project's `service.tn` and `http.tn`
+declare `service => !schema { … }` and `http => !schema { … }`. `meta.ref<T>` is the one reference spelling, sugar for
+the construction `!meta.ref { of: T }`: over a constructor it names the types built with it
+(`meta.ref<net.media_type_type>`), over any other type the values of it (`meta.ref<service.exchange>`), and
+`meta.type_ref` is the reference over `meta.type`.
 `kind!` is no reference and no value: it is the schema grammar's sugar for a dependent type written in place,
 `{ of: !meta.dependent { on: kind } }`, and stands only at a record field's type. `media_type` and `uri_reference`
-come from `net.tn` through core, which is where `service.tn` and `problem.tn` take them.
+come from `net.tn` through core, which is where `http.tn` and `problem.tn` take them.
 
 ## Media type and file extension
 
@@ -114,11 +117,11 @@ upstream revision adding a code is otherwise invisible here until an error body 
 rejects. Keep it.
 
 **Project-owned schema `!!id`** follows tson-java's convention with this repo's own group:
-`https://tson.io/2026/40/io/ltr8/http/<name>.tn` — `/2026/40` the spec revision, `io/ltr8` the publisher, `http`
-the subsystem, `<name>` the schema, and **no version in the name**. That covers `problem.tn`, `deployment.tn`,
-`service.tn` and the experiments' schemas. The demos' example application (`schemas.example.com/…/app/`)
-is not project-owned and keeps its numbered names, deliberately: `order-1.tn` beside `order-2.tn` is what
-`TsonSchemaVersions` exists to route, an application that has published two versions.
+`https://tson.io/2026/40/io/ltr8/http/<name>.tn` — `/2026/40` the spec revision, `io/ltr8` the publisher, `http` the
+subsystem, `<name>` the schema, and **no version in the name**. That covers `problem.tn`, `deployment.tn`, `service.tn`
+(`tson-service`'s alone), `http.tn` (`tson-http`'s, importing it) and the experiments' schemas. The demos' example
+application (`schemas.example.com/…/app/`) is not project-owned and keeps its numbered names, deliberately: `order-1.tn`
+beside `order-2.tn` is what `TsonSchemaVersions` exists to route, an application that has published two versions.
 
 **A spec revision moves every identity in the repo**, this project's own and the bundled ones alike, and
 it is one substitution across everything — `.tn` sources, Java constants, test fixtures, `README.md`,
@@ -171,7 +174,7 @@ skills in use are the new revision's.
 - **A namespace's `key_type`, or a record's `name_type`, whose profile admits `.` is refused at load.** A reference
   splits at each dot and every segment is a name of the family it enters ([TSON-SCHEMA] §4.2, §5.12), so a family
   holding a dot could name a key no reference reaches. A concrete path (`/.well-known/tson-deployment`) cannot key a
-  namespace, which is why `service.resources` is a plain map (`design/http-projection.md`, "A path is not a name").
+  namespace, which is why `http.resources` is a plain map (`design/http-projection.md`, "A path is not a name").
 - **A `text` field accepts any token, including `42`, `true` and `2026-01-01`.** It rejects only what is
   not a token at all — an array, a record. Correct per spec, and it reliably reads as a bug: [TSON-DATA]
   §4 says base type resolution does not apply at a schema-typed position, and §7.1's "form is not meaning"
@@ -190,7 +193,7 @@ skills in use are the new revision's.
   one declares it — `non_empty_text => !text ^ { min_length: 1 }`, `identifier => !unicode.identifier_type {
   continue_add: "-" }` — or writes `meta.identifier`. A schema naming one it never declared fails as *"field 'sku' has
   an unresolved reference 'non_empty_text'"*, which reads like a typo in the schema and is a library upgrade. A
-  vocabulary this project publishes nests its entries under one map named for itself (`service`, `problem`,
+  vocabulary this project publishes nests its entries under one map named for itself (`service`, `http`, `problem`,
   `deployment`), so it costs an importer one root name (`design/service-description.md`, "The layer: a protocol, and
   projections of it").
 
@@ -199,7 +202,7 @@ skills in use are the new revision's.
   no anchors, and writing them adds two literal characters no token has. It fails in the worst way: the
   schema compiles, and every value is refused with *"'Latn' does not match the required pattern
   `^[A-Za-z][A-Za-z_]*$`"* — a message that reads like the value is wrong when the pattern is. Reflex from
-  JSON Schema, which is unanchored and needs them. `service.tn`'s `service.header_name` and `service.path_template`
+  JSON Schema, which is unanchored and needs them. `http.tn`'s `http.header_name` and `http.path_template`
   carry patterns here. RFC 9485's classes are stricter than a host engine's: inside `[...]` a `-` is literal only
   first or last and `[`, `]` and `\` are escaped, while `{` and `}` are literal there and are escaped outside one,
   written `\\{` in a TSON string. A class of ASCII ranges is how a pattern says ASCII-exact, as `path_template`'s is.
@@ -209,14 +212,14 @@ skills in use are the new revision's.
   (U+FF23) or a long s (U+017F) folds to a plain token and the RFC 9110 token pattern admits it: two names a reader
   takes for one header that no server does. `ASCII_CASEFOLD` maps `A` to `Z` and nothing else, the comparison HTTP field
   names, URI schemes and DNS names state for themselves, so the same spelling stays outside the pattern and is refused.
-  `service.header_name` and `service.auth_scheme` use it
+  `http.header_name` and `http.auth_scheme` use it
   (`TsonServiceDescriptionTest.aHeaderNameIsFoldedInAsciiAndOneACompatibilityFoldWouldAdmitIsRefused`).
-- **`abstract` is grammar, and it is what makes a base have no values of its own.** `endpoint => abstract service.placement &
+- **`abstract` is grammar, and it is what makes a base have no values of its own.** `endpoint => abstract http.placement &
   { … }` ([TSON-SCHEMA] §5.2, §12.1's `definition-mark`, as the kernel writes `type => abstract meta.top & { … }`) makes the
-  resolver refuse an untagged value at an `endpoint`-typed slot, and a value tagged `!service.endpoint`, naming the subtypes
+  resolver refuse an untagged value at an `endpoint`-typed slot, and a value tagged `!http.endpoint`, naming the subtypes
   — in every mode, bound or not. Binding the base to a sealed interface says the same fact on the Java side, beside the mark
   rather than in place of it. The mark is not inherited, so `operation`, `binding` and `document` stay open. A subtype
   nothing binds, at an abstract base's slot in a value entry, leaves the whole value a tree rather than being refused
   (`UPSTREAM.md`, "A subtype nothing binds, at an abstract base's slot in a value entry, leaves the value a tree"), which is
-  why `TsonServiceDescription` refuses a `service.http` entry that did not bind.
+  why `TsonServiceDescription` refuses an `http.projection` entry that did not bind.
 

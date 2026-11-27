@@ -6,6 +6,8 @@ import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonCompiledSchema;
+import io.ltr8.tson.http.schema.problem.TsonProblem;
+import io.ltr8.tson.http.schema.problem.TsonProblemDiagnostic;
 import io.ltr8.tson.service.TsonBindings;
 
 import java.io.IOException;
@@ -23,17 +25,18 @@ import java.util.Map;
  * declares {@code !!import:"…/problem.tn"}, and a client that wants to validate what it received needs that
  * document. Serving it from this constant is what makes the URL in the body true rather than decorative.
  *
- * <p><b>This is tson-http's own schema.</b> It began as a copy of {@code tson-cli}'s {@code diagnostics.tn} and
- * has diverged: a CLI reports on files and a server reports on requests, so {@code problem.details} follows RFC
- * 9457 while the CLI's envelope is built around file reports. Holding one shape across both would have meant
- * neither fitting.
+ * <p><b>This is tson-http's own schema</b>, not held to {@code tson-cli}'s {@code diagnostics.tn}: a CLI reports on
+ * files and a server reports on requests, so {@code problem.details} follows RFC 9457 while the CLI's envelope is
+ * built around file reports. One shape across both would fit neither.
  *
- * <p><b>One root name.</b> Every type the schema declares is a member of its one root map, {@code problem}, so a
- * schema importing it reserves that name alone: a body is {@code !problem.details { … }}, a diagnostic is a
- * {@code problem.diagnostic}, and a business error composes {@code problem.details}.
+ * <p><b>One root name.</b> Every type the schema declares is a member of its one root map, {@code problem}: a body is
+ * {@code !problem.details { … }}, a diagnostic is a {@code problem.diagnostic}, and a business error composes {@code
+ * problem.details}. In a schema importing it, {@code problem} is reserved only against a root that is no schema map:
+ * a nested schema map is open ([TSON-SCHEMA] §2.2.3), so another schema's {@code problem => !schema { … }} adds its
+ * members to the same map, and only a member path both declare collides.
  *
  * <p>{@link #tson} builds a fresh {@link Tson} of its own each call, with this schema resolved and bound to the
- * two wire records, so registering it never collides with an application's. It is the read path, not the write
+ * wire records, so registering it never collides with an application's. It is the read path, not the write
  * path: {@link TsonHttpCodec#writeProblem} emits a problem with a plain object writer, and reading that text back
  * through this is what demonstrates the emitted body is genuinely valid against a real schema rather than merely
  * shaped like it. A client that wants to validate the error bodies it receives uses the same thing.
@@ -44,7 +47,7 @@ public final class TsonProblemSchema {
     public static final String ID = "https://tson.io/2026/40/io/ltr8/http/problem.tn";
 
     /**
-     * Every version of this schema that is still published, current first -- one, today.
+     * Every version of this schema that is still published, current first.
      *
      * <p>§3.5 makes a <em>published</em> schema immutable: a shape change is a new name, and the superseded
      * document stays served because something may already name it. Nothing here is published, so there is one
@@ -68,7 +71,7 @@ public final class TsonProblemSchema {
         return Map.of(ID, SOURCE);
     }
 
-    /** The two wire records and the code enum -- everything this schema declares that a read binds. */
+    /** The wire records and the code enum -- everything this schema declares that a read binds. */
     private static final Map<String, Class<?>> BINDINGS = Map.of(
             "problem.details", TsonProblem.class,
             "problem.diagnostic", TsonProblemDiagnostic.class,

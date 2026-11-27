@@ -11,8 +11,11 @@
   its path from the root, from inside the map as from outside it: `problem.details`, `problem.diagnostic`,
   `problem.diagnostic_code`. Every root name of an import closure is reserved in each importer
   ([TSON-SCHEMA] §2.2.3), and a schema declaring a business error imports this one beside its own types, so
-  nested in one map it reserves `problem` alone. A problem body is `!problem.details { … }`, and a business
-  error composes it: `sku_not_found => problem.details & { status: = 404  sku: text }`.
+  a vocabulary declaring `details` or `diagnostic` at its root would forbid that schema those names. Nested
+  in one map, it reserves `problem` only against a root that is no schema map: a nested schema map is open,
+  so another schema's `problem => !schema { … }` adds its members to this one, and only a path both declare
+  collides. A problem body is `!problem.details { … }`, and a business error composes it:
+  `sku_not_found => problem.details & { status: = 404  sku: text }`.
 
   problem.details follows RFC 9457 (Problem Details for HTTP APIs, obsoleting 7807) so that ordinary HTTP
   tooling recognises the body: type, title, status, detail and instance are its five members, and

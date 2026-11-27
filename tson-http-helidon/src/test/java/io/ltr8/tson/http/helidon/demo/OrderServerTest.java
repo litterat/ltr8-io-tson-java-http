@@ -3,12 +3,13 @@ package io.ltr8.tson.http.helidon.demo;
 import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.TsonHttpCodec;
-import io.ltr8.tson.http.TsonProblem;
+import io.ltr8.tson.http.TsonHttpSchema;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaCatalog;
+import io.ltr8.tson.http.schema.problem.TsonProblem;
 import io.ltr8.tson.json.Json;
 import io.ltr8.tson.json.tree.JsonValue;
-import io.ltr8.tson.service.http.TsonServiceSchema;
+import io.ltr8.tson.service.TsonServiceSchema;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -135,6 +136,16 @@ class OrderServerTest {
     }
 
     /**
+     * The description imports {@code http.tn}, which imports {@code service.tn}, so a client resolving the description
+     * fetches both: each is published at its own identity path.
+     */
+    @Test
+    void publishesBothServiceLayersAtTheirIdentityPaths() throws Exception {
+        assertEquals(TsonHttpSchema.source(), get(URI.create(TsonHttpSchema.ID).getPath()).body());
+        assertEquals(TsonServiceSchema.source(), get(URI.create(TsonServiceSchema.ID).getPath()).body());
+    }
+
+    /**
      * The schema route carries the headers its description declares on a success, and a miss carries none of them,
      * so a cache keeps a published schema and never a 404.
      */
@@ -148,9 +159,8 @@ class OrderServerTest {
     }
     /**
      * <b>The schemas name their identities literally, so something has to hold them to the constants.</b>
-     * They were Java text blocks interpolating {@code TsonProblemSchema.ID}; as real {@code .tn} files they
-     * cannot, and a published document naming its imports literally is correct anyway. This is what the
-     * interpolation used to guarantee for free.
+     * A {@code .tn} file cannot interpolate {@code TsonProblemSchema.ID}, and a published document naming its
+     * imports literally is correct anyway; this holds each identity to its constant.
      */
     @Test
     void identitiesMatchTheConstants() {
@@ -161,8 +171,8 @@ class OrderServerTest {
 
         assertTrue(OrderServer.SCHEMA.contains("!!import:\"" + TsonProblemSchema.ID + "\""),
                 "the error schema composes the CURRENT problem schema");
-        assertTrue(OrderServer.API.contains("!!import:\"" + TsonServiceSchema.ID + "\""),
-                "the description imports the CURRENT service.tn");
+        assertTrue(OrderServer.API.contains("!!import:\"" + TsonHttpSchema.ID + "\""),
+                "the description imports the CURRENT http.tn");
     }
 
 

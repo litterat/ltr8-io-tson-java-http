@@ -99,8 +99,8 @@ the case the pin measures; the data-document case is not pinned here.
 
 **The change:** the judgement at schema link, which flips the pin's clean load. Work upstream's `BACKLOG.md` holds.
 
-**What this project does meanwhile:** nothing depends on the gap. `service.tn` carries an http projection's claims,
-`binds` and `not_bound`, as fields of `service.http`, so every name in them is judged at schema load and delivered its
+**What this project does meanwhile:** nothing depends on the gap. `http.tn` carries an http projection's claims,
+`binds` and `not_bound`, as fields of `http.projection`, so every name in them is judged at schema load and delivered its
 referent (`TsonServiceDescriptionTest.aBindsNamingNoProtocolIsRefusedAtLoad`).
 
 ---
@@ -174,7 +174,7 @@ naming the type, the class and the component, as a disagreeing class already is.
 ## 9. `RecordField` states one fact through several accessors, and one of them throws
 
 **Hit:** reading a schema this project did not write, at startup, to place a request's fields over HTTP
-(`RequestPlacement`) and to check what a dependent field's sender may name (`ChosenTypes`). A record field's type is
+(`TsonRequestPlacement`) and to check what a dependent field's sender may name (`ChosenTypes`). A record field's type is
 one fact, and `RecordField` answers it four ways: `type()` returns the `TypeExpr` (a `TypeRef`, or a `TypeInline` for
 a type written in place, the dependent type among them); `ownType()` returns an `Optional<TypeExpr>`, empty for a
 dependent field; `sibling()` the sibling's field name as an `Optional<String>`; and `typeExpr()` returns the
@@ -186,7 +186,7 @@ rather than a message, and on any path that walks a schema per request, a 500.
 **The change:** no accessor that throws on a schema that loaded: `type()` read with a `switch` as the one surface and
 `typeExpr()` gone, or `ownType()` the only accessor for the type a field holds.
 
-**Workaround in place:** `RequestPlacement` and `ChosenTypes` ask `sibling()` first and switch on `type()` (`TypeRef`,
+**Workaround in place:** `TsonRequestPlacement` and `ChosenTypes` ask `sibling()` first and switch on `type()` (`TypeRef`,
 `TypeInline`), never calling `typeExpr()`. Pinned by
 `UpstreamGapsTest.aDependentFieldsTypeExprThrowsWhereItsTypeIsADependentType`.
 
@@ -323,13 +323,13 @@ so the walk reads the field. And in any case report a diagnostic rather than thr
 document naming two schemas is ordinary, a description and the domain schema it describes being two already.
 
 **Workaround in place:** none needed; nothing here depends on it. The affordances proposal's instance namespace would,
-and would otherwise have to declare its vocabulary inside `service.tn`. Pinned by
+and would otherwise have to declare its vocabulary inside one of the layer's schemas. Pinned by
 `AffordanceProbeTest.anInstanceImportingTwoSchemasThrowsAtAReferenceThroughAField`, which asserts the exception type
 and message from all three entry points and flips when the read reports or succeeds.
 
-Splitting `service.tn` into a protocol schema and an http schema (`proposal/schema-split.md`) makes the shape ordinary:
-`SchemaSplitProbeTest.aDataDocumentImportingTheProtocolDescriptionAndTheHttpSchemaThrows` pins the same throw for a
-protocol description beside the http schema. A schema document is not affected, so a description importing both reads,
+That the layer is a protocol schema, `service.tn`, and an http schema, `http.tn` (`proposal/schema-split.md`), makes the
+shape ordinary: `SchemaSplitProbeTest.aDataDocumentImportingTheProtocolDescriptionAndTheHttpSchemaThrows` pins the same throw
+for a protocol description beside the http schema. A schema document is not affected, so a description importing both reads,
 and a data document importing that description alone reads.
 
 **Priority:** medium. The split does not raise it: every shape the project plans has a route that reads, a description
@@ -340,15 +340,15 @@ It is the entry to raise if a plan needs a data document importing a protocol de
 
 ## 16. An importer's subtype is left out of an untagged refusal at an imported record's slot
 
-**Hit:** a service description declaring its own endpoint shape, `paged_get => service.operation & { status?: = 200
-}`, beside an endpoint written untagged, `GET => { response: order_page }`, at a `service.resource` endpoint slot in
-its own value entry (`proposal/operation-refinement.md`). `service.endpoint` is `abstract`, so the resolver refuses
+**Hit:** a service description declaring its own endpoint shape, `paged_get => http.operation & { status?: = 200
+}`, beside an endpoint written untagged, `GET => { response: order_page }`, at an `http.resource` endpoint slot in
+its own value entry (`proposal/operation-refinement.md`). `http.endpoint` is `abstract`, so the resolver refuses
 the untagged value naming the subtypes it has indexed when it reads it, and in a value entry that depends on where
 the description declares `paged_get`. Declared after the records its pins name, as the probe's description does, the
 refusal names the layer's subtypes alone: *"'endpoint' is abstract and has no direct instances, so a value here must
 name its type -- one of (operation | binding | document)"*. Declared first, as the real-layer probe's is, it names
-`paged_get` beside them, and a data document importing the description always does: *"… one of (operation | binding |
-document | paged_get)"*. A tagged `!paged_get { … }` is admitted at that slot in every case.
+`paged_get` beside them, and a data document importing the description always does: *"… one of (http.document |
+http.operation | http.binding | paged_get)"*. A tagged `!paged_get { … }` is admitted at that slot in every case.
 
 **The change:** name the subtypes of the schema being resolved in that refusal whatever the declaration order, as
 [TSON-SCHEMA] §3.3.4 computes `subtypes` over its namespace, so the hint a value entry gives matches a data
@@ -357,7 +357,7 @@ document's.
 **Workaround in place:** none needed; the refusal is right and only its hint is short. Pinned by
 `OperationRefinementProbeTest.theDescriptionsSubtypeIsAdmittedAtTheLayersSlot`, whose last assertions state the
 message in both orders and flip when the first names `paged_get`; `theRealLayerAdmitsADescriptionsOwnOperation` pins
-the declared-first message through `service.tn`.
+the declared-first message through `http.tn`.
 
 **Priority:** low.
 
@@ -365,22 +365,21 @@ the declared-first message through `service.tn`.
 
 ## 17. A subtype nothing binds, at an abstract base's slot in a value entry, leaves the value a tree
 
-**Hit:** `service.endpoint` declared `abstract`, and a description writing an endpoint as its own subtype,
-`!paged_get { … }`, with `paged_get` bound to no class (`TsonServiceSchema.bindings()` as a server passes it). Under an open
-base the description is refused at load: *"'paged_get' is not a member of the union 'service.endpoint'
-binds against [Operation, Binding, Document]"*. Marked `abstract`, it loads clean and the entry's whole value is held
-as a tree rather than the bound `Http`, so a reader looking for the bound class finds no projection at all. In a data
-document the object reader throws `MissingBindingException` for the same value, where an open base gives a
-`TYPE_MISMATCH`.
+**Hit:** `http.endpoint` declared `abstract`, and a description writing an endpoint as its own subtype, `!paged_get { … }`,
+with `paged_get` bound to no class (`TsonHttpSchema.bindings()` as a server passes it). Under an open base the
+description is refused at load: *"'paged_get' is not a member of the union 'http.endpoint' binds against [Operation, Binding,
+Document]"*. Marked `abstract`, it loads clean and the entry's whole value is held as a tree rather than the bound
+`HttpProjection`, so a reader looking for the bound class finds no projection at all. In a data document the object reader
+throws `MissingBindingException` for the same value, where an open base gives a `TYPE_MISMATCH`.
 
 **The change:** refuse a subtype nothing binds at an abstract base's slot as the open base's is, so whether a value
 entry binds does not turn on a definition mark; or report it, rather than holding a value a bind context was given
 for as a tree.
 
-**Workaround in place:** `TsonServiceDescription` refuses a value entry applying `service.http` whose value did not bind,
-naming `TsonServiceSchema.bindingsWith` as the remedy, so the description is a startup failure rather than one served with
-its routes missing. Pinned by `UpstreamGapsTest.aSubtypeNothingBindsAtAnAbstractBasesSlotLeavesAValueEntryATree`,
-which flips when the abstract case is refused, and by `OperationRefinementProbeTest`.
+**Workaround in place:** `TsonServiceDescription` refuses a value entry applying `http.projection` whose value did not bind,
+naming `TsonHttpSchema.bindingsWith` as the remedy, so the description is a startup failure rather than one served
+with its routes missing. Pinned by `UpstreamGapsTest.aSubtypeNothingBindsAtAnAbstractBasesSlotLeavesAValueEntryATree`, which
+flips when the abstract case is refused, and by `OperationRefinementProbeTest`.
 
 **Priority:** medium.
 
@@ -391,7 +390,7 @@ which flips when the abstract case is refused, and by `OperationRefinementProbeT
 **Hit:** a JSON body read in bind mode under a service description, or under any schema importing `service.tn` with
 the layer's records bound. The JSON bind registry compiles the closure and checks `service.protocol` against
 `Protocol`, whose `exchanges` component is a `Namespace`, and refuses it: *"'service.protocol' and
-io.ltr8.tson.service.protocol.Protocol do not agree: field 'exchanges' is a map, and component 'exchanges' binds
+io.ltr8.tson.service.schema.Protocol do not agree: field 'exchanges' is a map, and component 'exchanges' binds
 io.ltr8.tson.schema.meta.Namespace"*, a `BIND_MISMATCH` for the whole read. The TSON registry binds the same field to
 the same class, so the same body reads in TSON and is a 500 in JSON. It surfaces where a payload type is named by
 extern: a route's `order_v1` reads under the description in TSON and not in JSON.
@@ -399,8 +398,8 @@ extern: a route's `order_v1` reads under the description in TSON and not in JSON
 **The change:** the JSON bind registry binding a field typed by a namespace type to a `Namespace` component, as the
 TSON registry does, or not judging a closure's records that the read never reaches.
 
-**Workaround in place:** a caller reads a payload type under the schema declaring it, `PayloadType.schemaId()` and
-`PayloadType.name()` from `TsonServiceDescription.payloadType`, whose closure holds no `service.tn`. Pinned by
+**Workaround in place:** a caller reads a payload type under the schema declaring it, `TsonPayloadType.schemaId()` and
+`TsonPayloadType.name()` from `TsonServiceDescription.payloadType`, whose closure holds no `service.tn`. Pinned by
 `UpstreamGapsTest.jsonBindingRefusesANamespaceComponentInTheClosure`, which flips when the JSON read binds.
 
 **Priority:** medium.
@@ -448,12 +447,12 @@ answers as the read does; then the copy goes.
 
 ## 21. A local declaration colliding with an imported one names neither schema
 
-**Hit:** found measuring the split of `service.tn` (`proposal/schema-split.md`). A schema declaring `service.exchange`
-inside the open `service` map it imports, or a record `service`, is refused with *"'service.exchange' collides with an
-entry of the same name brought in by !!import"* and a diagnostic whose `schemaId` is empty. [TSON-SCHEMA] §2.2.3 says
-the diagnostic names both declaring schemas, and a collision between two imports does: *"'service.binding' is declared
-by two different schemas reached through !!import ('…/http-1.tn' and '…/domain-1.tn')"*. This is a library gap against
-the spec, not spec feedback.
+**Hit:** found measuring the split of the layer into `service.tn` and `http.tn` (`proposal/schema-split.md`). A schema
+declaring `service.exchange` inside the open `service` map it imports, or a record `service`, is refused with
+*"'service.exchange' collides with an entry of the same name brought in by !!import"* and a diagnostic whose `schemaId` is
+empty. [TSON-SCHEMA] §2.2.3 says the diagnostic names both declaring schemas, and a collision between two imports does:
+*"'service.binding' is declared by two different schemas reached through !!import ('…/http-1.tn' and '…/domain-1.tn')"*. This
+is a library gap against the spec, not spec feedback.
 
 **The change:** the local-versus-import collision naming the importing schema and the one it collides with, as the
 two-import collision does.
@@ -539,7 +538,7 @@ day it lands.
 
 **Deliberately not proposed:** `status_code`, `http_verb`, `header_name` and a URI template as bundled types. They are
 HTTP vocabulary rather than formats, and exactly the names converted schemas declare for themselves, so they belong
-with what uses them: here, `service.tn` (below). A URI template in particular builds a URI rather than naming a
+with what uses them: here, `http.tn` (below). A URI template in particular builds a URI rather than naming a
 host, so it is not `net.tn`'s, and its uses outside describing an API — HAL links, OpenAPI and AsyncAPI paths, JSON
 Hyper-Schema — are all that same use. **Raise it again** if a consumer outside API description needs RFC 6570, or a
 description needs levels 3–4; the shape then is a constructor under `net.tn`'s `net` map beside `net.uri_type`, which
@@ -551,8 +550,8 @@ reserves no root name.
   RFC (§3.1.1, §3.1.5) and `TsonProblem.at` is typically handed a request path. Pinned by
   `TsonProblemSchemaTest.aRelativeTypeAndInstanceAreValid`.
 - `problem.diagnostic`'s `path` and `schema_pointer` stay `text` until 1 exists.
-- The HTTP vocabulary lives in `service.tn`, which uses it — `service.http_verb`, `service.status_code`,
-  `service.header_name` and `service.path_template` (RFC 6570 levels 1–2, so `{+var}` is expressible) — and `media_type` is
+- The HTTP vocabulary lives in `http.tn`, which uses it — `http.verb`, `http.status_code`,
+  `http.header_name` and `http.path_template` (RFC 6570 levels 1–2, so `{+var}` is expressible) — and `media_type` is
   `net.tn`'s. `TsonServiceDescription` places each endpoint's request record over its path, which no pattern can.
   `problem.details`'s `status` stays `int32`.
 

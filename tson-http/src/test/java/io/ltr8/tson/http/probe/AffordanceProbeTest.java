@@ -100,7 +100,7 @@ class AffordanceProbeTest {
 
     /**
      * The layer: exchanges, properties and events as three namespaces under one protocol record; the endpoint base
-     * with {@code binding} and {@code document} as {@code service.tn} has them, plus {@code stream}, {@code state} and
+     * with {@code binding} and {@code document} as {@code http.tn} has them, plus {@code stream}, {@code state} and
      * {@code interface}; and {@code extra} declarations at the end.
      */
     static String layer(String protocol, String extra) {

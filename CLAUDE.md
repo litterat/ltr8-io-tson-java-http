@@ -27,9 +27,9 @@ Each under ~20 KB and opening with its invariants. Pick by what you are about to
 | `acceptingJson`, `application/json` bodies, `respondDescribed`, `application/problem+json` | `json-encoding.md` |
 | `TsonSchemaVersions`, `TSON-Accept-Schema`, `@Profile`, two versions of one schema | `schema-versions.md` |
 | `allowHost`/`mapHost`, `SchemaSource.ofMap`, an `!!import` URL in a request body | `schema-sources.md` |
-| `service.tn`'s protocol side: exchanges, their facts, the one root map, the namespaces the layer borrows | `service-description.md` |
-| `TsonServiceDescription`, `TsonServiceCoverage`, `PayloadType`, an extern a description names, what a server publishes and warms, business errors | `service-reader.md` |
-| `service.http`, endpoints, placement, statuses, media types, security schemes, response headers, the verb checks, `Route` | `http-projection.md` |
+| `service.tn`'s protocol side: exchanges, their facts, the root maps of both layers, the namespaces the layer borrows | `service-description.md` |
+| `TsonServiceDescription`, `TsonHttpSchema`, `TsonServiceCoverage`, `TsonPayloadType`, an extern a description names, what a server publishes and warms, business errors | `service-reader.md` |
+| `http.tn`, `http.projection`, endpoints, placement, statuses, media types, security schemes, response headers, the verb checks, `TsonRoute` | `http-projection.md` |
 | The protocol layer, bind's `DataProtocol` and `DataExchange`, `TsonServiceProtocol` the join | `invoke.md` |
 | A `.tn` file this project owns, a `!!id`, `problem.tn`, a revision bump, a field spelling | `schema-authoring.md` |
 | `deployment.tn`, `TsonDeployment`, `/.well-known/tson-deployment`, `policy.tn` | `deployment-descriptor.md` |
@@ -56,8 +56,8 @@ without compatibility guarantees, so a `git pull` of the sibling can move the wh
 
 **Status.** The modules are built and tested, each adapter with a runnable demo server and a concurrency suite
 driving it under load. Responses are self-describing in both directions, every adapter proves the serve-then-fetch loop,
-and a service publishes a description of itself (`service.tn`) from which it derives what to publish and warm, naming a
-type of another schema by extern where one import of both cannot.
+and a service publishes a description of itself (`service.tn`, `http.tn`) from which it derives what to publish and warm,
+naming a type of another schema by extern where one import of both cannot.
 What remains is polish, the open questions in `UPSTREAM.md`, and the outstanding work in `BACKLOG.md`.
 
 **Aim.** The project builds service capabilities that LLMs integrate with better than today's conventions allow, taking
@@ -70,8 +70,8 @@ what it can do (`design/service-description.md`).
 - `tson-service`, `tson-http` and `tson-http-jdk` take **no external runtime dependencies**. tson-java's own modules
   (`io.ltr8:tson`, `io.ltr8:tson-json`, `io.ltr8:ltr8-bind`, `io.ltr8:ltr8-annotation`, `io.ltr8:tson-atom`) are not
   external. An adapter's framework dependency stops at that adapter and never leaks back into `tson-http`.
-- Every module has a real `module-info.java`; module names mirror each module's root exported package. All three
-  servers are genuine JPMS named modules, so nothing falls back to the classpath.
+- Every module has a real `module-info.java`; module names mirror each module's root exported package. Only the main
+  source sets are named modules; the `demo` and `test` source sets have no `module-info.java` and run on the class path.
 
 ## Modules and dependency direction
 
@@ -81,8 +81,8 @@ depends on neither, `tson-http` names no adapter type, and the adapters never de
 
 | Module | Holds |
 |---|---|
-| `tson-http` (`io.ltr8.tson.http`) | Server-agnostic core: media types, `TsonHttpCodec`, `TsonHttpException` (the whole status policy), `problem.tn`, the two schema headers, `TsonSchemaCatalog`, `TsonSchemaVersions`, `TsonDeployment`; depends on `tson-service` |
-| `tson-service` (`io.ltr8.tson.service`) | A service's description of itself, independent of HTTP: `service.tn`; `io.ltr8.tson.service.protocol` (`Protocol`, `ExchangeName`, the join `TsonServiceProtocol`) and `io.ltr8.tson.service.http` (the HTTP records, `TsonServiceSchema`, `TsonServiceDescription`, `Route`), with `protocol` never importing `http`; and `TsonBindings` |
+| `tson-http` (`io.ltr8.tson.http`) | Server-agnostic core: media types, `TsonHttpCodec`, `TsonHttpException` (the whole status policy), `problem.tn`, the two schema headers, `TsonSchemaCatalog`, `TsonSchemaVersions`, `TsonDeployment` (held by `TsonDeploymentSchema`); the HTTP half of the service description: `http.tn` (`TsonHttpSchema`, mirrors in `io.ltr8.tson.http.schema`), `TsonServiceDescription`, `TsonRoute`; depends on `tson-service` |
+| `tson-service` (`io.ltr8.tson.service`) | A service's protocol description, independent of HTTP: `service.tn` (`TsonServiceSchema`, mirrors in `io.ltr8.tson.service.schema`), `TsonExchangeName`, the join `TsonServiceProtocol`, and `TsonBindings` |
 | `tson-http-jdk` (`io.ltr8.tson.http.jdk`) | Adapter for `com.sun.net.httpserver`; zero dependencies; the reference the other two are read against |
 | `tson-http-javalin` (`io.ltr8.tson.http.javalin`) | Adapter for Javalin 6.7.0 (Jetty 11, `jakarta.*`) |
 | `tson-http-helidon` (`io.ltr8.tson.http.helidon`) | Adapter for Helidon 4.2.2 SE, plus `TsonMediaSupport` over Helidon's `MediaSupport` SPI |
@@ -105,8 +105,9 @@ tson-java publishes to **mavenLocal only**, so a checkout of the sibling is requ
   `git pull` there is picked up by a plain `./gradlew build`. A broken sibling breaks this build, and compile output
   naming files under `../ltr8-io-tson-java/…` is expected. Path is `tson.path`, overridable with `-Ptson.path=…`.
 - **Published artifacts, `-Ptson.published=true`.** Resolves `io.ltr8:tson:${tson.version}`, and `io.ltr8:ltr8-bind` and
-  `io.ltr8:ltr8-annotation` and `io.ltr8:tson-atom`, which `tson-service` names directly, from mavenLocal after `./gradlew
-  publishToMavenLocal` in the sibling. The only path that exercises the published POM and jars; CI runs it too.
+  `io.ltr8:ltr8-annotation` and `io.ltr8:tson-atom`, which `tson-service` names directly (`tson-http` names the
+  annotations too), from mavenLocal after `./gradlew publishToMavenLocal` in the sibling. The only path that
+  exercises the published POM and jars; CI runs it too.
 
 **Do not modify `../ltr8-io-tson-java`.** Changes wanted there go in `UPSTREAM.md` and land in that repo only on the
 user's say-so. Pulling it is fine when asked. Read its `CLAUDE.md` and `design/` before working on the codec.
@@ -209,13 +210,14 @@ One line each; the note carries the why. Read the note before touching the code 
   type is never named `int64`, `schema`, `host`, `date`, `uri`, `media_type` or `title`. (`schema-authoring.md`)
 - `problem.tn`'s `problem.diagnostic_code` is a hand-written copy of `Diagnostic.Code`; `TsonProblemSchemaTest` is the
   only check. (`schema-authoring.md`)
-- Every name `service.tn` declares sits in its one root map and is written by its path, `!service.binding`,
-  `@service.safe`, `meta.ref<service.exchange>`, inside the layer too: a bare name there is unresolved, and the reader
-  asks `Annotations` for `service.safe`. (`service-description.md`)
+- Every name `service.tn` declares sits in its root map `service` and every name `http.tn` declares in `http`, each
+  written by its path, `!http.binding`, `@service.safe`, `meta.ref<service.exchange>`, inside the layer too: a bare name
+  there is unresolved, and the reader asks `Annotations` for `service.safe`. Each root is reserved only against a root
+  that is no schema map. (`service-description.md`)
 - An entry has two annotation positions that land in different places; reading only one looks like a library bug. (same)
 - A protocol's one required field is the namespace `exchanges`, so an exchange is `orders.exchanges.place_order`; an
   http projection's is the plain map `resources`, since nothing references a path, which is text and no name. Each is
-  bare, so like `service.resource` both have the positional form: a second required field breaks every document
+  bare, so like `http.resource` both have the positional form: a second required field breaks every document
   written in it. A projection's claims, `binds` and `not_bound`, are fields. (`http-projection.md`)
 - An endpoint's `security: []` is open and an absent one inherits the projection's; never fold absent into empty. (same)
 - A descriptor states its policy whole; an absent policy is not a permissive one. (`deployment-descriptor.md`)

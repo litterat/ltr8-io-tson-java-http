@@ -58,7 +58,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * importing both. A data document importing the protocol description and the http schema separately throws, the gap
  * {@code AffordanceProbeTest} pins. The exchange facts read through, the positional form holds, and one bind context
  * binds both layers. The http schema may add its entries to {@code service}, so the split need rename nothing; a
- * member both declare collides, and so may any importer's member, since the map is open to every schema.
+ * member both declare collides, and so may any importer's member, since the map is open to every schema. A root of
+ * the http schema's own is open in the same way, being a nested schema map too.
  */
 class SchemaSplitProbeTest {
 
@@ -227,7 +228,7 @@ class SchemaSplitProbeTest {
     /** A description importing the http schema and the domain, and not the protocol schema. */
     static final String HTTP_ONLY = schema(header(HTTP_ONLY_ID, HTTP_ID, DOMAIN_ID), PROTOCOL_ENTRY, PROJECTION_ENTRY);
 
-    /** The name binder's map, keyed by qualified name as {@code TsonServiceSchema.bindings()} keys {@code service.tn}'s. */
+    /** The name binder's map, keyed by qualified name across both layers, as {@code TsonHttpSchema.bindings()} is. */
     static Map<String, Class<?>> bindings(String root) {
         Map<String, Class<?>> bound = new LinkedHashMap<>();
         bound.put("service.signature", Signature.class);
@@ -744,6 +745,36 @@ class SchemaSplitProbeTest {
                 + " -- distinct types cannot share one name in the flat namespace; import one of them, or a version of "
                 + "each that agrees on where 'service.binding' is declared",
                 refusal(tson(open, bindings("service")), open.get(DESCRIPTION_ID)));
+    }
+
+    /**
+     * <b>A root of the http schema's own is open to every importer, as {@code service} is</b>: it is a nested schema
+     * map, and [TSON-SCHEMA] §2.2.3 makes every nested schema map open. A domain schema declaring {@code tbd_http =>
+     * !schema { thing => … }} beside the http schema resolves, and a data document reads its {@code tbd_http.thing};
+     * so does one declaring {@code http => !schema { thing => … }} beside an http schema rooted at {@code http}. Only a
+     * member path both declare collides, naming both schemas, as {@code tbd_http.binding} does. So a root of its own
+     * reserves the name against what is no schema map ({@link
+     * #theHttpRootIsReservedInEveryDescriptionAndTheServiceMapIsOpenToAll}) and closes nothing against a schema map.
+     */
+    @Test
+    void aRootOfTheHttpSchemasOwnIsOpenToEveryImporter() {
+        String last = "health          => { up: boolean }";
+        Tson joined = tsonWith(DOMAIN_ID, DOMAIN.replace(last, last + "\n  tbd_http => !schema { thing => { a: text } }"));
+        assertEquals(List.of(), joined.validateSchema(DESCRIPTION));
+        assertEquals(List.of(), joined.validate(data(DESCRIPTION_ID, "!tbd_http.thing { a: \"x\" }")));
+
+        Map<String, String> http = documents("http");
+        http.put(DOMAIN_ID, DOMAIN.replace(last, last + "\n  http => !schema { thing => { a: text } }"));
+        Tson httpRoot = tson(http, bindings("http"));
+        assertEquals(List.of(), httpRoot.validateSchema(http.get(DESCRIPTION_ID)));
+        assertEquals(List.of(), httpRoot.validate(data(DESCRIPTION_ID, "!http.thing { a: \"x\" }")));
+
+        String collide = DOMAIN.replace(last, last + "\n  tbd_http => !schema { binding => { a: text } }");
+        assertEquals("'tbd_http.binding' is declared by two different schemas reached through !!import ('schemas."
+                + "example.com/2026/40/schemasplit/http-1.tn' and 'schemas.example.com/2026/40/schemasplit/domain-1.tn')"
+                + " -- distinct types cannot share one name in the flat namespace; import one of them, or a version of "
+                + "each that agrees on where 'tbd_http.binding' is declared",
+                refusal(tsonWith(DOMAIN_ID, collide), DESCRIPTION));
     }
 
     /**

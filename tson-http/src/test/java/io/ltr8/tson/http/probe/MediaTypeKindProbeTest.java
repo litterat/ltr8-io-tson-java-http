@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Whether a layer importing the kernel -- the shape of {@code service.tn} -- can type a record field as a media
+ * Whether a layer importing the kernel -- the shape of {@code http.tn} -- can type a record field as a media
  * type value. Every test pins Revision 40's measured outcome; one failing after a library change means the answer has
  * moved.
  *
@@ -47,7 +47,7 @@ class MediaTypeKindProbeTest {
     static final String LAYER_ID = "https://schemas.example.com/2026/40/media/layer-1.tn";
     static final String ID = "https://schemas.example.com/2026/40/media/s-1.tn";
 
-    /** RFC 9110's token, twice: the pattern {@code service.tn}'s own {@code media_type} used. */
+    /** RFC 9110's token, twice: the pattern a layer declaring a {@code media_type} of its own would carry. */
     static final String TOKEN = "[!#$%&'*+.^_`|~0-9A-Za-z-]+";
 
     /** The namespace type a schema importing the layer applies to hold {@code ep} values, as with {@code api}. */
@@ -149,7 +149,7 @@ class MediaTypeKindProbeTest {
     // ── case 2: the layer imports net.tn's media_type ───────────────────────────────────────────────────────────
 
     /**
-     * <b>A layer names {@code net.tn}'s {@code media_type} by importing it</b>, as {@code service.tn} does. The
+     * <b>A layer names {@code net.tn}'s {@code media_type} by importing it</b>, as {@code http.tn} does. The
      * value binds to a {@link String} or a {@link MediaType}, and the type's own facets judge it: a string with no
      * {@code /} is refused, and so is one carrying parameters.
      */

@@ -7,6 +7,7 @@ import io.ltr8.tson.base.SchemaFetchException;
 import io.ltr8.tson.base.SchemaRefusalException;
 import io.ltr8.tson.base.SchemaValidationException;
 import io.ltr8.tson.compiler.TsonDiagnostics;
+import io.ltr8.tson.http.schema.problem.TsonProblem;
 
 import java.util.List;
 import java.util.Locale;
@@ -101,8 +102,8 @@ public final class TsonHttpException extends RuntimeException {
     public static final int GATEWAY_TIMEOUT = 504;
 
     /**
-     * Where this project's problem-type identifiers live. They dereference to nothing yet; the point today is
-     * that they are stable and matchable where a title is prose.
+     * Where this project's problem-type identifiers live. They dereference to nothing; the point is that they
+     * are stable and matchable where a title is prose.
      *
      * <p>Under {@code ltr8.io}, not {@code tson.io}: a problem type is a fact about this implementation's
      * behaviour, where a schema identity under {@code tson.io} is a fact about the format. The two hosts keep
@@ -204,8 +205,8 @@ public final class TsonHttpException extends RuntimeException {
     }
 
     /**
-     * The diagnostics a client may see: everything except the three whose message describes this deployment
-     * rather than the request.
+     * The diagnostics a client may see: everything except those whose message describes this deployment rather
+     * than the request.
      *
      * <p>{@code BIND_MISMATCH} names a bound Java class. {@code SCHEMA_UNREACHABLE} and {@code SCHEMA_TIMEOUT}
      * name the host that failed. The other two fetch codes are <em>not</em> on this list and are disclosed:
@@ -216,9 +217,9 @@ public final class TsonHttpException extends RuntimeException {
      * right answer. That asks whether the document was judged; this asks who the message is about, and the two
      * cut differently in both directions -- {@code SCHEMA_NOT_FOUND} is not a verdict and is disclosed,
      * {@code NOT_IMPLEMENTED} is not a verdict and is disclosed. Keying on it would withhold exactly the
-     * message this change exists to deliver.
+     * messages a client acts on.
      *
-     * <p>Applied at every status, not only above 500. It is a no-op below that today -- a diagnostic on this
+     * <p>Applied at every status, not only above 500. It is a no-op below that -- a diagnostic on this
      * list forces a 5xx, so none can reach a 4xx body -- and it is written unconditionally so that stays true
      * by construction rather than by the ranking happening to hold.
      */

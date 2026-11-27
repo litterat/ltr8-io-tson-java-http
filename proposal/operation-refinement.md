@@ -1,22 +1,22 @@
-# A description's own refinement of `service.operation`
+# A description's own refinement of `http.operation`
 
 **Status:** a proposal for review; nothing is adopted. Measured by
 `tson-http/src/test/java/io/ltr8/tson/http/probe/OperationRefinementProbeTest.java`, with its records under
-`probe/operationrefinement/`. It concerns this project's vocabulary, `service.tn`, and the reader `TsonServiceDescription`;
+`probe/operationrefinement/`. It concerns this project's vocabulary, `http.tn`, and the reader `TsonServiceDescription`;
 tson-java admits the description's subtype at the layer's slot, and the one difference from a data document it
 surfaces, an untagged refusal naming the layer's subtypes only, is staged in `UPSTREAM.md`.
 
 ## Summary
 
-One spelling derives the shape, the composition: `paged_get => service.operation & { status?: = 200  request?: =
-order_query }` loads, and the empty composition. `^` follows `!name` and takes values, so `service.operation ^ { … }`
+One spelling derives the shape, the composition: `paged_get => http.operation & { status?: = 200  request?: =
+order_query }` loads, and the empty composition. `^` follows `!name` and takes values, so `http.operation ^ { … }`
 is a parse error naming the composition. The question's premise, that a description could then write its endpoints
 `!paged_get { … }`, holds. At the one place a description writes an endpoint, a slot of the layer's own
-`service.resource` read in the description's value entry, tson-java admits the description's subtype ([TSON-SCHEMA]
+`http.resource` read in the description's value entry, tson-java admits the description's subtype ([TSON-SCHEMA]
 §3.3.4 computes `subtypes` over the schema being resolved; §7.2 admits by the tag's chain), as it does at a record the
 description declares and in a data document importing it. It binds only once `paged_get` is bound to the base's
-class: bound as `TsonServiceSchema.bindings()` binds, naming the layer's records alone, it is no member of the union
-`service.endpoint` binds against, so a description declaring `paged_get` resolves through `TsonServiceSchema` only with
+class: bound as `TsonHttpSchema.bindings()` binds, naming the layer's records alone, it is no member of the union
+`http.endpoint` binds against, so a description declaring `paged_get` resolves through `TsonHttpSchema` only with
 `bindingsWith` naming it, a name the server must know before the description resolves.
 
 The derived shape buys little. A list cannot be pinned (§5.2), so `media_types` stays per
@@ -29,11 +29,11 @@ answer, sharing the facts in the document as a base value an endpoint completes 
 
 ## The question
 
-`BACKLOG.md`, "A description's own refinement of `service.operation`": should `service.tn` and `TsonServiceDescription`
+`BACKLOG.md`, "A description's own refinement of `http.operation`": should `http.tn` and `TsonServiceDescription`
 admit an endpoint shape declared in the description, so what every paged list shares is fixed once?
 
 ```
-paged_get => service.operation & { … }        # or a refinement, or a parametric record applied
+paged_get => http.operation & { … }        # or a refinement, or a parametric record applied
 "/orders" => { GET => !paged_get { response: order_page  request: order_query } }
 ```
 
@@ -43,7 +43,7 @@ Each point is a test of `OperationRefinementProbeTest`. All but the last run aga
 probe: `endpoint => { status?: integer ~ 200  media_types?: [media_type] }`, bound to a sealed interface so it has no
 bare form, with `operation => endpoint & signature`, `binding` and `document` composing it, `resource => { endpoints:
 {http_verb => endpoint} }` and `http => { resources: resources }`. The messages spell the probe's bare names, where the
-layer would write `service.operation`. A description imports that layer and core and declares `order`, `order_query`
+layer would write `http.operation`. A description imports that layer and core and declares `order`, `order_query`
 and `order_page`.
 
 **Which forms load** (`aCompositionOfOperationLoadsAndARefinementOfItIsRefused`). A record derives by `&` alone.
@@ -94,7 +94,7 @@ admitted in the description's value entry, according to what is bound:
 - nothing bound: a tree, the endpoint tagged `paged_get`, its fields `response`, then `status` 200 and `request`
   `order_query` filled from the pins;
 - the layer bound and `paged_get` bound to nothing: the description loads and the entry's value is a tree, the
-  layer's `endpoint` being `abstract` as `service.endpoint` is (an open base refuses the same value as no member of the
+  layer's `endpoint` being `abstract` as `http.endpoint` is (an open base refuses the same value as no member of the
   union its sealed interface closes; `UPSTREAM.md`, "A subtype nothing binds, at an abstract base's slot in a value
   entry, leaves the value a tree");
 - `paged_get` bound to `Operation` too: an `Operation` with status 200, request `order_query` and response
@@ -125,18 +125,18 @@ next_page?: int32 }`, `order_list => page<order>` and a plain `!operation { requ
 }` at the layer's slot load and bind in the description's value entry, with no change to the layer.
 
 **Through the real layer** (`theRealLayerAdmitsADescriptionsOwnOperation`). `orders-api-inline-1.tn` under a new
-identity, declaring `paged_get => service.operation & { status?: = 200 }` and writing `GET /orders/{id}/items` as
-`!paged_get`. Bound as a server binds by default (`TsonServiceSchema.bindings()`) it loads with the projection held as a
-tree, and `describedBy` refuses it: *'orders_http' applies service.http, and its value did not bind to …Http but is
-held as TsonRecord -- a type written in it binds to no class; bind a description's own endpoint subtype through
-TsonServiceSchema.bindingsWith*. Unbound it loads, the endpoint a tree tagged `paged_get` with status 200.
-With `bindingsWith(Map.of("paged_get", Operation.class))` it loads, the endpoint is an `api.Operation`, and
+identity, declaring `paged_get => http.operation & { status?: = 200 }` and writing `GET /orders/{id}/items` as
+`!paged_get`. Bound as a server binds by default (`TsonHttpSchema.bindings()`) it loads with the projection held
+as a tree, and `describedBy` refuses it: *'orders_http' applies http.projection, and its value did not bind to
+…HttpProjection but is held as TsonRecord -- a type written in it binds to no class; bind a description's own endpoint
+subtype through TsonHttpSchema.bindingsWith*. Unbound it loads, the endpoint a tree tagged `paged_get` with
+status 200. With `bindingsWith(Map.of("paged_get", Operation.class))` it loads, the endpoint is an `api.Operation`, and
 `describedBy` reads the route with status 200, request `order_ref` and response `order_page`.
 
 ## What it would change
 
-**In `service.tn`: nothing.** The layer need declare nothing for an importer to compose its records, and every form
-that loads composes `service.operation` as it stands.
+**In `http.tn`: nothing.** The layer need declare nothing for an importer to compose its records, and every form
+that loads composes `http.operation` as it stands.
 
 **In Java, if the proposal were taken up:**
 
@@ -146,23 +146,23 @@ that loads composes `service.operation` as it stands.
 - **Bindings must reach the description's own names**, and `TsonBindings.of` runs before the description resolves,
   when those names are unknown. Value entries bind at schema load, so the description needs its bindings while it is
   being resolved. A reader would have to resolve twice: once with a `Tson` binding nothing, read `chain.subtypes` of
-  `service.operation`, `service.binding` and `service.document` from the description's compiled schema, map each
+  `http.operation`, `http.binding` and `http.document` from the description's compiled schema, map each
   subtype to its nearest bound supertype's class (refusing one that adds a field, which would `BIND_MISMATCH`), then
   build a second `Tson` with `bindingsWith` those and resolve again. The alternative is a library feature: a binder
   falling back to the nearest bound supertype's class. That is a request upstream, not something this project writes.
-- **`TsonServiceSchema.bindings()`** stays the layer's map. The subtype entries are per description, so the
+- **`TsonHttpSchema.bindings()`** stays the layer's map. The subtype entries are per description, so the
   `describedBy` contract (a `Tson` already binding the vocabulary) would change to "a `Tson` whose bindings were
   derived from this description".
 
 ## Costs
 
 - **A second way to write an operation.** A reader of a description must find `paged_get`'s declaration to know which
-  fields an endpoint has, which pins hold, and that it is an operation at all. `!service.operation` says it at the tag.
+  fields an endpoint has, which pins hold, and that it is an operation at all. `!http.operation` says it at the tag.
 - **The reader's subtype logic**: two resolutions at startup, a nearest-supertype walk, and a refusal for a subtype
-  that adds a field. That is machinery in `TsonServiceDescription` or `TsonServiceSchema` serving one convenience.
-- **What a conformance client sees**: `!paged_get` in the published description. A client that knows `service.tn`'s
+  that adds a field. That is machinery in `TsonServiceDescription` or `TsonHttpSchema` serving one convenience.
+- **What a conformance client sees**: `!paged_get` in the published description. A client that knows `http.tn`'s
   vocabulary but reads the description as a tree must resolve the description's schema to learn that `paged_get`
-  IS-A `service.operation`. One that binds by name, as `TsonServiceSchema.bindings()` does, fails as the server does today.
+  IS-A `http.operation`. One that binds by name, as `TsonHttpSchema.bindings()` does, fails as the server does today.
 - **What it saves is small**: `status: 200` is already the default; `media_types` cannot be pinned; `request` can be
   pinned only where every paged list takes one query record; `response` differs per resource and cannot be
   parameterised; `@service.safe` is read from the verb key (`resource.endpoints().getAnnotations(verbKey)`), so every
@@ -211,4 +211,4 @@ that loads composes `service.operation` as it stands.
 3. **What a paged list does share is its payload**, and a response parametric record (`page<T>`) with a shared query record
    says it now, in the domain schema, with no change to the layer, the reader or the bindings.
 4. **It costs every reader.** The server and every conformance client would have to resolve a description's own
-   types before they can tell what an endpoint is, where `!service.operation` says so at the tag.
+   types before they can tell what an endpoint is, where `!http.operation` says so at the tag.

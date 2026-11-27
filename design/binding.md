@@ -13,8 +13,9 @@ are the server's own. Current form only.
   `bySchema` keys a map per schema, for two schemas declaring one name. A class bound by an extern's local name is
   refused at startup by `TsonServiceDescription`.
 - One bind context per `Tson` binds a schema's value entries and a data document's values alike, so a vocabulary's
-  records go in the application's map: `TsonBindings.of(TsonServiceSchema.bindingsWith(application))`. The map binds
-  application names only; `Tson.of` answers the kernel's vocabulary ahead of it.
+  records go in the application's map: `TsonBindings.of(TsonHttpSchema.bindingsWith(application))`, or
+  `TsonServiceSchema.bindingsWith` for a description of protocols alone. The map binds application names only; `Tson.of`
+  answers the kernel's vocabulary ahead of it.
 - Binding is strict and a mismatch is a startup failure if `prepareToRead(schemaId)` runs at startup; there is no
   lenient mode. `prepareToWrite` is a warm-up, not a correctness measure.
 - A type nothing binds is a 500 (`MissingBindingException`), not a 501. A compact constructor stricter than its schema
@@ -56,9 +57,9 @@ are the server's own. Current form only.
   the keys' order and annotations where a `Map` component loses both. An entry no class binds is held as
   a tree: the schema loads, and the bind registry refuses it with `BIND_MISMATCH` at the entry. So a vocabulary a
   schema imports belongs in the same map as the application's: `TsonServiceSchema.bindings()` is `service.tn`'s
-  records as an explicit map, and `bindingsWith(application)` merges the two, refusing a name both bind, since within
-  one closure a name means one thing. The demos build their one context as
-  `TsonBindings.of(TsonServiceSchema.bindingsWith(bindings))`.
+  records as an explicit map and `TsonHttpSchema.bindings()` both layers', and `bindingsWith(application)` merges
+  the application's, refusing a name both bind, since within one closure a name means one thing. The demos build their
+  one context as `TsonBindings.of(TsonHttpSchema.bindingsWith(bindings))`.
 - **The binder is asked the declaring schema and the entry's own name.** The library asks `DataNameBinder.resolve(
   namespace, name)` with the canonical identity of the schema declaring the type, and a name-only binder, which
   `TsonBindings.of` builds, answers by the name and ignores the schema. An extern ([TSON-SCHEMA] §5.13) is asked as the
@@ -71,8 +72,10 @@ are the server's own. Current form only.
   names as a payload type, and is skipped where a schema of the closure declares that name as its own entry, which the
   binding may be for. Two schemas each declaring `order`, two versions of one, bind to two classes
   through `TsonBindings.bySchema(Map.of(order1Id, Map.of("order", OrderV1.class), …))`, `DataNameBinder.byNamespace`
-  over a map per schema; every schema whose types bind is keyed there, `service.tn`'s vocabulary under
-  `TsonServiceSchema.ID` among them, and a name asked within a schema no map holds is refused listing those it does.
+  over a map per schema; every schema whose types bind is keyed there, each layer's vocabulary under
+  `TsonServiceSchema.ID` and `TsonHttpSchema.ID` among them, and a name asked within a schema no map holds is
+  refused listing those it does. A protocol an HTTP description binds is held as a tree where `service.tn`'s identity is
+  not keyed, and `TsonServiceDescription` refuses it naming the fix.
 - **A type nothing binds is a 500, not a 501.** It is a `MissingBindingException` naming the map, deferred
   to the first read of that specific type (a schema legitimately declares types a consumer never binds). A 501
   would report a missing line of this server's configuration as "this library cannot do that". Pinned by

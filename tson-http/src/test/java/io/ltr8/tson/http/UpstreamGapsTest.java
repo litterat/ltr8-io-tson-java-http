@@ -7,7 +7,6 @@ import io.ltr8.bind.DataClassUnion;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.bind.UnboundNameException;
 import io.ltr8.tson.Tson;
-import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.BindMismatchException;
 import io.ltr8.tson.base.CanonicalIdentity;
 import io.ltr8.tson.base.Diagnostic;
@@ -15,12 +14,14 @@ import io.ltr8.tson.base.DiagnosticsReceiver;
 import io.ltr8.tson.base.ParseException;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.SchemaFetchException;
+import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.policy.LimitsPolicy;
 import io.ltr8.tson.base.source.HttpSchemaSource;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonCompiledSchema;
 import io.ltr8.tson.compiler.config.SchemaModelNameBinder;
+import io.ltr8.tson.http.schema.problem.TsonProblemDiagnostic;
 import io.ltr8.tson.json.Json;
 import io.ltr8.tson.schema.TsonLinkedSchema;
 import io.ltr8.tson.schema.meta.Alias;
@@ -36,7 +37,7 @@ import io.ltr8.tson.schema.meta.TypeRef;
 import io.ltr8.tson.schema.meta.ValueEntry;
 import io.ltr8.tson.schema.meta.ValueRef;
 import io.ltr8.tson.service.TsonBindings;
-import io.ltr8.tson.service.http.TsonServiceSchema;
+import io.ltr8.tson.service.TsonServiceSchema;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -67,9 +68,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * only a number that can go stale is worth checking. Two rules learned the hard way and worth restating:
  *
  * <ul>
- *   <li><b>Pin the gap, not the way it is delivered.</b> The choice test below once asserted that resolution
- *       <em>throws</em>. It stopped throwing when gaps became diagnostics — indistinguishable from the
- *       feature landing, if the test is not looking at the code. It had not landed.</li>
+ *   <li><b>Pin the gap, not the way it is delivered.</b> A pin asserting that resolution <em>throws</em> passes
+ *       the day the gap is delivered as a diagnostic instead, which is indistinguishable from the feature landing
+ *       unless the test looks at the code; so a pin asserts the code.</li>
  *   <li><b>A fixed gap flips its test, it does not delete it.</b> The fixed-field tests assert the constraint
  *       now holds, which is what stops it silently regressing.</li>
  * </ul>
@@ -279,9 +280,9 @@ class UpstreamGapsTest {
                   y   => { a: text }
                   api => !ops { op => { method: "GET"  path: "/x"  responses: [ y ] } }""");
 
-        // io.ltr8.tson.service.http.Operation has `request`, `response`, `errors` and more; this meta declares none.
+        // io.ltr8.tson.http.schema.Operation has `request`, `response`, `errors` and more; this meta declares none.
         BindMismatchException thrown = assertThrows(BindMismatchException.class,
-                () -> tson(metaSource, doc, "io.ltr8.tson.service.http").resolve(doc));
+                () -> tson(metaSource, doc, "io.ltr8.tson.http.schema").resolve(doc));
 
         assertTrue(thrown.getMessage().contains("component 'request'") && thrown.getMessage().contains("'method'"),
                 thrown.getMessage());
@@ -291,11 +292,11 @@ class UpstreamGapsTest {
 
     /**
      * <b>A parametric record's body is a record body</b> ([TSON-SCHEMA] §5.10), so a parametric record over an http
-     * projection, {@code fetching => <T> !service.http { … }}, is refused at its declaration: a {@code !service.http {
-     * … }} is a value of the record type {@code service.http}, no type, and a parametric record over a value is no
+     * projection, {@code fetching => <T> !http.projection { … }}, is refused at its declaration: a {@code !http.projection {
+     * … }} is a value of the record type {@code http.projection}, no type, and a parametric record over a value is no
      * record. The remedy the refusal names is one value per instantiation, which for an API description is the
-     * projection written out, {@code orders => !service.http { … }}, and that describes to its route the way any
-     * projection does. Asserted through {@link io.ltr8.tson.service.http.TsonServiceDescription}, the consumer the
+     * projection written out, {@code orders => !http.projection { … }}, and that describes to its route the way any
+     * projection does. Asserted through {@link io.ltr8.tson.http.TsonServiceDescription}, the consumer the
      * projection is for.
      */
     @Test
@@ -305,8 +306,8 @@ class UpstreamGapsTest {
                   order_ref => { id: text }
                 """;
         String parametric = types + """
-                  fetching  => <T> !service.http { resources: { "/orders/{id}" => {
-                    @service.safe GET => !service.operation { request: order_ref  response: T } } } }
+                  fetching  => <T> !http.projection { resources: { "/orders/{id}" => {
+                    @service.safe GET => !http.operation { request: order_ref  response: T } } } }
                   orders    => fetching<order>""";
 
         String refused = assertThrows(io.ltr8.tson.base.SchemaValidationException.class,
@@ -315,18 +316,18 @@ class UpstreamGapsTest {
                 && refused.contains("Declare one value per instantiation"), refused);
 
         String written = types + """
-                  orders    => !service.http { resources: { "/orders/{id}" => {
-                    @service.safe GET => !service.operation { request: order_ref  response: order } } } }""";
-        var described = TsonServiceSchema.describedBy(resolveAgainstServiceMeta(written), API_ID);
+                  orders    => !http.projection { resources: { "/orders/{id}" => {
+                    @service.safe GET => !http.operation { request: order_ref  response: order } } } }""";
+        var described = TsonHttpSchema.describedBy(resolveAgainstServiceMeta(written), API_ID);
 
         assertEquals(List.of("GET /orders/{id}"),
-                described.routes().stream().map(io.ltr8.tson.service.http.Route::key).sorted().toList());
-        var get = described.route(io.ltr8.tson.service.http.HttpVerb.GET, "/orders/{id}").orElseThrow();
+                described.routes().stream().map(io.ltr8.tson.http.TsonRoute::key).sorted().toList());
+        var get = described.route(io.ltr8.tson.http.schema.HttpVerb.GET, "/orders/{id}").orElseThrow();
         assertEquals("order", get.response().orElseThrow().name());
     }
 
     /**
-     * <b>An http path key is text, judged by its pattern alone and held as written.</b> {@code service.resources} is
+     * <b>An http path key is text, judged by its pattern alone and held as written.</b> {@code http.resources} is
      * a plain map keyed by {@code path_template}, a text family with an ASCII-exact {@code pattern}, so a path key is
      * no name and [TSON-DATA] §8.2's name hygiene never reaches it: the root path, a single segment and a literal
      * segment each describe to a route, and so do {@code /l} and {@code /I} side by side, two keys a look-alike scope
@@ -337,30 +338,30 @@ class UpstreamGapsTest {
     void anHttpPathKeyIsJudgedByItsPatternAlone() {
         String body = """
                   order  => { sku: text }
-                  orders => !service.http {
-                    resources: { "%s" => { @service.safe GET => !service.operation { response: order } } }
+                  orders => !http.projection {
+                    resources: { "%s" => { @service.safe GET => !http.operation { response: order } } }
                   }""";
 
         for (String path : List.of("/", "/x", "/orders/42")) {
-            var described = assertDoesNotThrow(() -> TsonServiceSchema.describedBy(
+            var described = assertDoesNotThrow(() -> TsonHttpSchema.describedBy(
                     resolveAgainstServiceMeta(body.formatted(path)), API_ID), path);
-            assertTrue(described.route(io.ltr8.tson.service.http.HttpVerb.GET, path).isPresent(), path);
+            assertTrue(described.route(io.ltr8.tson.http.schema.HttpVerb.GET, path).isPresent(), path);
         }
         String alike = body.formatted("/l").replace("} } }", "} }\n      \"/I\" => { @service.safe GET => "
-                + "!service.operation { response: order } } }");
-        var both = assertDoesNotThrow(() -> TsonServiceSchema.describedBy(resolveAgainstServiceMeta(alike), API_ID));
+                + "!http.operation { response: order } } }");
+        var both = assertDoesNotThrow(() -> TsonHttpSchema.describedBy(resolveAgainstServiceMeta(alike), API_ID));
         assertEquals(List.of("GET /I", "GET /l"),
-                both.routes().stream().map(io.ltr8.tson.service.http.Route::key).sorted().toList());
+                both.routes().stream().map(io.ltr8.tson.http.TsonRoute::key).sorted().toList());
         for (String path : List.of("/путь", "/pаth")) {
             String refused = assertThrows(RuntimeException.class,
                     () -> resolveAgainstServiceMeta(body.formatted(path))).getMessage();
-            assertTrue(refused.contains("'service.path_template': '" + path + "' does not match the required "
+            assertTrue(refused.contains("'http.path_template': '" + path + "' does not match the required "
                     + "pattern") && !refused.contains("script"), refused);
         }
     }
 
     /**
-     * Resolves {@code declarations} as a schema governed by this project's own {@code service.tn}. The probe
+     * Resolves {@code declarations} as a schema governed by this project's own {@code http.tn}. The probe
      * meta the other tests use would do for the parse, but not past it: once these declarations resolve far enough
      * to bind, its minimal records disagree with this project's bound classes. The real meta is also the one whose
      * payoff this is.
@@ -372,10 +373,10 @@ class UpstreamGapsTest {
                 !!import:"https://tson.io/2026/40/m/core.tn"
                 !schema {
                 %s
-                }""".formatted(API_ID, TsonServiceSchema.ID, declarations);
+                }""".formatted(API_ID, TsonHttpSchema.ID, declarations);
         Tson tson = Tson.of(ProcessorConfig.defaults()
-                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(TsonServiceSchema.publishedById())))
-                .withDataBindContext(TsonBindings.of(TsonServiceSchema.bindings())));
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(TsonHttpSchema.publishedById())))
+                .withDataBindContext(TsonBindings.of(TsonHttpSchema.bindings())));
         tson.resolve(doc);
         return tson;
     }
@@ -453,9 +454,9 @@ class UpstreamGapsTest {
      * facets {@code meta.namespace} has as a composition of {@code meta.map} -- {@code key_type} and {@code value_type},
      * {@code ordered}, {@code min_items} and {@code max_items} among them -- has nowhere to be written, and {@code
      * meta.namespace}'s own record reader refuses it as an unknown field, listing the facets. That is why {@code
-     * service.tn}'s {@code service.protocol} and {@code service.http} are records holding one namespace-typed field,
-     * so that what a projection claims about the protocols behind it, {@code binds} and {@code not_bound}, are fields
-     * beside its {@code resources}.
+     * service.tn}'s {@code service.protocol} is a record holding one namespace-typed field, and {@code http.tn}'s
+     * {@code http.projection} a record too, so that what a projection claims about the protocols behind it, {@code
+     * binds} and {@code not_bound}, are fields beside its {@code resources}.
      */
     @Test
     void aNamespaceTypeDeclaresOnlyItsFacets() {
@@ -490,7 +491,7 @@ class UpstreamGapsTest {
      * document".
      *
      * <p>{@code service.tn} holds no reference inside an annotation's value: an http projection's claims are fields of
-     * {@code service.http}, judged at load and delivered, so nothing in this project depends on the gap. When it is
+     * {@code http.projection}, judged at load and delivered, so nothing in this project depends on the gap. When it is
      * fixed, the clean load below flips.
      */
     @Test
@@ -543,7 +544,7 @@ class UpstreamGapsTest {
      * admitted, and still carries a {@code pattern} that is enforced at the key.
      *
      * <p>{@code service.tn}'s {@code service.exchanges} is keyed this way, by {@code service.exchange_name}. Its
-     * {@code service.resources} is no namespace but a plain map, so its key, {@code service.path_template}, is a
+     * {@code http.resources} is no namespace but a plain map, so its key, {@code http.path_template}, is a
      * text family with a {@code pattern}: nothing references a path, so a path need not be a name.
      */
     @Test
@@ -592,8 +593,8 @@ class UpstreamGapsTest {
      * and {@code !op { request: no_such }} is refused naming the full path. The reader built from the slot's
      * declaration records its type beside the name, so the linker never walks declared types back to it.
      *
-     * <p>{@code service.tn} holds every {@code !service.operation} this way, in a {@code service.resource}'s map field
-     * under a path key of a {@code service.resources}. Pinned because a gap here stops a sound schema resolving.
+     * <p>{@code http.tn} holds every {@code !http.operation} this way, in an {@code http.resource}'s map field
+     * under a path key of an {@code http.resources}. Pinned because a gap here stops a sound schema resolving.
      */
     @Test
     void aKindSlotOnASubtypeBehindARecordFieldIsJudged() {
@@ -904,7 +905,7 @@ class UpstreamGapsTest {
     /**
      * <b>A field name is a value of its record's {@code name_type}, so only the schema a document names may judge
      * it.</b> A schemaless record's names are identifiers, and one that is not is {@code ATOM_FORM_INVALID} at its
-     * own pointer -- a verdict, so a 400 -- rather than the parse error it was. A document naming a schema this
+     * own pointer -- a verdict, so a 400 -- not a parse error. A document naming a schema this
      * deployment will not supply is not judged by the schemaless rule in its place: its root is skipped unjudged,
      * so the problem a client gets carries the unusable reference alone, not name refusals a schema that admits
      * {@code "first name"} would never have made.
@@ -1218,7 +1219,7 @@ class UpstreamGapsTest {
     /**
      * <b>A closure holding a record whose field is a namespace binds in TSON and is refused in JSON.</b> A schema
      * importing {@code service.tn}, read in bind mode with the layer's records bound, compiles {@code service.protocol}
-     * against {@link io.ltr8.tson.service.protocol.Protocol}, whose {@code exchanges} component is a {@code Namespace}: the
+     * against {@link io.ltr8.tson.service.schema.Protocol}, whose {@code exchanges} component is a {@code Namespace}: the
      * TSON registry binds it and the JSON registry refuses it as a map, so a JSON body read under a service
      * description, here its own {@code note}, is a {@code BIND_MISMATCH} the same TSON body is not. {@code UPSTREAM.md},
      * "The JSON bind registry refuses a namespace-typed component". Fails the day the JSON read binds.
@@ -1249,7 +1250,7 @@ class UpstreamGapsTest {
         assertEquals(List.of(Diagnostic.Code.BIND_MISMATCH), refused.diagnostics().stream().map(Diagnostic::code)
                 .toList(), () -> "" + refused.diagnostics());
         assertTrue(refused.diagnostics().getFirst().message().contains("'service.protocol' and "
-                + io.ltr8.tson.service.protocol.Protocol.class.getName() + " do not agree: field 'exchanges' is a map, and "
+                + io.ltr8.tson.service.schema.Protocol.class.getName() + " do not agree: field 'exchanges' is a map, and "
                 + "component 'exchanges' binds " + Namespace.class.getName()), refused::getMessage);
     }
 
@@ -1481,7 +1482,7 @@ class UpstreamGapsTest {
      * binding accepts an {@code int} component against an {@code int64} field: the bind registry prepares the
      * schema, a value in {@code int} range reads, and a valid document stating one past it fails at the read with
      * a bare {@link ArithmeticException}, no {@code ReadException} and no {@link Diagnostic.Code} to classify, so
-     * a server answers a document with nothing wrong with it with a 500. This project's exposure was {@code
+     * a server answers a document with nothing wrong with it with a 500. This project's exposure is {@code
      * TsonDeployment.Policy.Limits}, whose components are all {@code long} for this reason. Fails the day
      * preparing the schema refuses the component.
      */
@@ -1824,7 +1825,7 @@ class UpstreamGapsTest {
      * a consumer that reads a schema it did not write. {@code type()} answers every field, a dependent one with a
      * {@link TypeInline} over a {@code DependentBody} spelled {@code kind!}; {@code ownType()} answers with an {@code
      * Optional}, empty on a dependent field; and {@code sibling()} names the field whose value types it, which is what
-     * {@code RequestPlacement} and {@code ChosenTypes} ask. The contract wanted is no accessor that throws on a valid
+     * {@code TsonRequestPlacement} and {@code ChosenTypes} ask. The contract wanted is no accessor that throws on a valid
      * schema. Fails the day the call returns, or stops compiling when the accessor changes.
      */
     @Test
@@ -1916,8 +1917,9 @@ class UpstreamGapsTest {
      * <b>An optional list a document omits reaches a bound record's {@code List} component as {@code null}</b>: the
      * binder does not normalise it, and the convention upstream follows is that the record does, in its compact
      * constructor. {@code TsonProblem} relies on it for {@code problem.details}'s optional {@code errors}, which a
-     * business error omits, as {@code TsonDeployment} and {@code tson-service}'s records do for theirs. Fails the day the
-     * binder delivers an empty list, or refuses a {@code List} component for an optional field.
+     * business error omits, as {@code TsonDeployment} and the records bound to {@code service.tn} and {@code http.tn}
+     * do for theirs. Fails the day the binder delivers an empty list, or refuses a {@code List} component for an
+     * optional field.
      */
     @Test
     void anOmittedOptionalListReachesTheConstructorAsNull() {
@@ -2032,8 +2034,8 @@ class UpstreamGapsTest {
      * sealed interface and {@code two} bound to nothing, is refused as no member of the union the interface closes.
      * Mark the base {@code abstract} and the same schema loads clean, the entry's value held as a tree rather than
      * the bound {@code Holder}, so a reader looking for the bound class finds nothing to read. {@code
-     * TsonServiceDescription} refuses a {@code service.http} entry whose value did not bind for that reason. Fails the
-     * day the abstract case is refused as the open one is. {@code UPSTREAM.md}'s entry "A subtype nothing binds, at
+     * TsonServiceDescription} refuses an {@code http.projection} entry whose value did not bind for that reason. Fails
+     * the day the abstract case is refused as the open one is. {@code UPSTREAM.md}'s entry "A subtype nothing binds, at
      * an abstract base's slot in a value entry, leaves the value a tree" stages it.
      */
     @Test

@@ -5,8 +5,8 @@ publishes at `/.well-known/tson-deployment`. Current form only.
 
 **Invariants**
 
-- `TsonDeployment.read` takes source text; there is no search path. No document may name a descriptor, nothing registers
-  one with a schema source, and the catalog never serves one. `deployment.tn` itself is published.
+- `TsonDeploymentSchema.read` takes source text; there is no search path. No document may name a descriptor, nothing
+  registers one with a schema source, and the catalog never serves one. `deployment.tn` itself is published.
 - A descriptor states its policy whole and it is applied exactly as written. There are no partial overrides.
 - An absent policy is not a permissive one: `applyTo` leaves the config alone.
 - `limits` sits beside the two policies, not inside them. `TsonDeployment.Policy.Limits` carries every member of
@@ -14,7 +14,9 @@ publishes at `/.well-known/tson-deployment`. Current form only.
 - The profile is the policy in force (`profile(inForce)`), not what the descriptor says, and it is a hint.
 - Hosts are `net.tn`'s `host`; `schema_hosts` is a `set<host>` compared by the type's equality.
 - `deployment.tn` declares one root, the schema map `deployment`: a descriptor is a `deployment.descriptor`, the
-  profile a `deployment.acceptance_profile`, and each bound record's `@Typename` is that qualified name.
+  profile a `deployment.acceptance_profile`, and each bound record's `@Typename` is that qualified name. The root is
+  reserved only against a root that is no schema map: a nested schema map is open ([TSON-SCHEMA] §2.2.3), so another
+  schema's `deployment => !schema { … }` adds its members, and only a path both declare collides.
 
 ## Deployment descriptors (`deployment.tn`, `TsonDeployment`)
 
@@ -41,7 +43,7 @@ document that imports `deployment.tn` and whose root is `!deployment.descriptor 
   *into* the API, a `meta.ref<service.exchange>` for what this instance serves or `TsonServiceCoverage.notServedHere`
   exemptions as configuration, is data referring into a namespace it imports: possible, and not done.
 
-**Two rules, enforced by shape rather than by documentation.** `TsonDeployment.read` takes source text — there
+**Two rules, enforced by shape rather than by documentation.** `TsonDeploymentSchema.read` takes source text — there
 is no search path and there must not be one, because a runtime that loads whatever it finds lets a container
 image change a security policy with no code diff. And no document may name a descriptor: nothing registers one
 with a schema source, and the catalog never serves one. `deployment.tn` itself *is* published, because a

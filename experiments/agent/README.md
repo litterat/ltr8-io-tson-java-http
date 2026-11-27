@@ -82,7 +82,7 @@ is a name judged against the closure the document imports ([TSON-SCHEMA] §3.3.4
 error ([TSON-DATA] §7.2.5): at `m: meta.ref<service.exchange>`, `orders.exchanges.place_order` reads and
 `orders.exchanges.no_such` is refused ("'orders.exchanges' has no key 'no_such'"), and at `m: meta.ref<order>` a value entry
 `o1` reads while `order`, a type, is refused (`UpstreamGapsTest.aValueReferenceInADataDocumentIsJudged`). A URL path does
-not raise it: a resource key in `service.tn` is a flat template in a plain map, no name, and nothing references a
+not raise it: a resource key in `http.tn` is a flat template in a plain map, no name, and nothing references a
 resource, so `/orders/{id}/items` sitting under `/orders/{id}` is the server's matching and never a question of scope.
 
 **The pool's `type` and `method` entries are typed `name`** in `agent-vm.tn`, and want to be `meta.type_ref` and

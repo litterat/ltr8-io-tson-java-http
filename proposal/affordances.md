@@ -2,8 +2,8 @@
 
 **Status:** a proposal for review; nothing adopted. The probe measures an event kind, a property kind and an instance
 namespace in a layer of its own (`tson-http/src/test/java/io/ltr8/tson/http/probe/AffordanceProbeTest.java`), not in
-`service.tn`. Verdicts: **an event kind, adopt later**; **a property kind, not proposed**; **a live namespace of objects
-at a deployment, a sketch kept as an open question**. It asks nothing of the spec, and reports one library gap.
+`service.tn` or `http.tn`. Verdicts: **an event kind, adopt later**; **a property kind, not proposed**; **a live namespace of
+objects at a deployment, a sketch kept as an open question**. It asks nothing of the spec, and reports one library gap.
 
 ## Summary
 
@@ -13,8 +13,8 @@ at a deployment, a sketch kept as an open question**. It asks nothing of the spe
 - **A property kind is not proposed.** In HTTP, state read and written is a resource with a safe `GET` and an idempotent
   `PUT`, which the layer states today as two exchanges and two bindings; a kind would add a grouping, not a capability.
 - **An event kind is adopted later**, because server-initiated output is a gap for HTTP services in general, with
-  OpenAPI 3.2.0's `itemSchema` over sequential media types as the HTTP-native witness: a `!service.stream` endpoint kind
-  composing `service.endpoint`, and `events?: service.events` beside `exchanges`, measured to break no document.
+  OpenAPI 3.2.0's `itemSchema` over sequential media types as the HTTP-native witness: a `!http.stream` endpoint kind
+  composing `http.endpoint`, and `events?: service.events` beside `exchanges`, measured to break no document.
 - **A live namespace of objects** (a data document keyed by concrete path, each object referring back into the
   description) is sketched as a discovery and conformance surface, with W3C WoT's Thing Description and CoRE's
   `/.well-known/core` as prior art. Its key family and back-references are measured; so is a library gap it would hit.
@@ -79,21 +79,21 @@ stream stays one response and its item is typed. The layer cannot state any of i
 absent. Its counterpart is an endpoint kind, in the layer's two forms:
 
 ```
-stream => service.endpoint & { items?: meta.type_ref  event?: meta.ref<service.event> }
+stream => http.endpoint & { items?: meta.type_ref  event?: meta.ref<service.event> }
 event  => { payload: meta.type_ref }
 events => !meta.namespace { key_type: service.exchange_name  value_type: service.event }
 
 lamp => !service.protocol { exchanges: { … }  events: { overheated => { payload: heat } } }
-"/lamp/events" => { GET => !service.stream { event: lamp.events.overheated  media_types: ["text/event-stream"] } }
+"/lamp/events" => { GET => !http.stream { event: lamp.events.overheated  media_types: ["text/event-stream"] } }
 ```
 
 Inline, `items` types each item as an operation carries its signature; bound, `event` names a protocol's event as a
-binding names an exchange, and the reader requires exactly one. `service.stream` composes the base as
-`service.document` does for a body that is no TSON value, so the one-record rule is untouched: a stream takes a request
+binding names an exchange, and the reader requires exactly one. `http.stream` composes the base as
+`http.document` does for a body that is no TSON value, so the one-record rule is untouched: a stream takes a request
 record placed as any endpoint's, and answers a sequence. The reader's rules extend the existing ones: a bound event
 belongs to a protocol its projection binds, `binds` covers events as it covers exchanges, and a stream lists a
 sequential media type. The probe measures the bound form; the inline form is a `meta.type_ref` field, as
-`service.document`'s `request` is. A webhook, where the server requests a URL the client supplied, is no stream and is
+`http.document`'s `request` is. A webhook, where the server requests a URL the client supplied, is no stream and is
 an open question.
 
 ## Idea 2: a live namespace of objects at a deployment
@@ -120,12 +120,12 @@ values are a tagged family of object kinds.
 } }
 ```
 
-- **The key** is a concrete path, not a `service.path_template`, and a namespace key must be an identifier family.
+- **The key** is a concrete path, not an `http.path_template`, and a namespace key must be an identifier family.
   `path_template`'s character set without the braces and without `.` does it, and admits `/` and `/orders/42`; a
   template variable, a relative path, a query and a path holding a dot are refused, and §8.2 judges the key as it
   judges a name. A family admitting `.` is refused as a key type, so neither the well-known path nor a schema's
   identity path can be a key.
-  `service.path_template` has since become a text family keying a plain map, a path being no name, and the probe's
+  `http.path_template` has since become a text family keying a plain map, a path being no name, and the probe's
   layer keeps the shape measured; nothing references a concrete path either, so whether the instance needs a
   namespace at all, or a plain map keyed by an ASCII-exact text family, is part of the open question.
 - **The back-reference** names what the model declares by its qualified name: an exchange, an event, a protocol. It
@@ -137,7 +137,7 @@ values are a tagged family of object kinds.
   path. Both readers deliver every reference.
 - **Where its vocabulary lives** is decided by a measured gap: a data document importing the description and a
   separate instance vocabulary throws at the first reference walking a protocol's field, so the vocabulary would be
-  members of `service.tn` until upstream links a several-import closure with a bind context.
+  members of `service.tn` and `http.tn` until upstream links a several-import closure with a bind context.
 
 What it is for: an agent discovering which objects exist rather than which could; a conformance client checking each
 listed path answers its kind; cache invalidation keyed on a path's schema identity; a reverse proxy composing
@@ -207,8 +207,9 @@ a field of a record value, and this schema was linked with no bind context to re
 
 ## What changes in Java, if the event kind is adopted
 
-A sketch. `Event` and `Stream` records in `io.ltr8.tson.service.http`, bound as `service.event` and `service.stream`;
-`Stream` joins `Endpoint`'s permits; `Protocol` gains `events`. `ExchangeName` generalises to `(protocol, field, key)` so
+A sketch. `Event` in `io.ltr8.tson.service.schema` and `Stream` in `io.ltr8.tson.http.schema`, bound as
+`service.event` and `http.stream`;
+`Stream` joins `Endpoint`'s permits; `Protocol` gains `events`. `TsonExchangeName` generalises to `(protocol, field, key)` so
 `binds` holds per event. `TsonServiceDescription` checks a stream's items or event and its media type; `TsonServiceCoverage`
 is unchanged. Each adapter writes `text/event-stream` its own way (a chunked body under `com.sun.net.httpserver`, Javalin's
 and Helidon's SSE support).
@@ -237,13 +238,13 @@ and Helidon's SSE support).
 - **Extension by registry string** (§2.3.3): an annotation is declared in a schema and typed, so a misspelt one is
   refused (measured above), where an unregistered prefix is merely unknown.
 - **WebSocket in the http projection**: no RFC describes a WebSocket service, and a connection's one HTTP-level fact
-  is its subprotocol name (RFC 6455 §11.5, RFC 7936), so it is a projection peer of `service.http`, as `BACKLOG.md`'s
+  is its subprotocol name (RFC 6455 §11.5, RFC 7936), so it is a projection peer of `http.projection`, as `BACKLOG.md`'s
   gRPC one is, carrying a protocol's call, return and event documents.
 
 ## Order of work, if the event kind is adopted
 
-1. `service.tn`: `service.event`, `service.events`, `events?`, `service.stream`, and their `@doc`s.
-2. The bound records, `TsonServiceSchema.bindings()`, `ExchangeName` over the field.
+1. `service.tn`: `service.event`, `service.events`, `events?`; `http.tn`: `http.stream`; and their `@doc`s.
+2. The bound records, `TsonServiceSchema.bindings()` and `TsonHttpSchema.bindings()`, `TsonExchangeName` over the field.
 3. `TsonServiceDescription`'s stream rules and `binds` over events, with `TsonServiceDescriptionTest`.
 4. A stream in the JDK demo, read by `TsonServiceConformanceTest`; then Javalin and Helidon.
 5. `design/service-description.md` and `design/http-projection.md`; `AffordanceProbeTest` stays as the record of why.

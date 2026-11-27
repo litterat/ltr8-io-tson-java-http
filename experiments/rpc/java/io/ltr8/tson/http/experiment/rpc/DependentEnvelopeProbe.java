@@ -2,7 +2,7 @@ package io.ltr8.tson.http.experiment.rpc;
 
 import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.Diagnostic;
-import io.ltr8.tson.service.http.OrdersExamples;
+import io.ltr8.tson.http.OrdersExamples;
 import io.ltr8.tson.tree.TsonValue;
 import org.junit.jupiter.api.Test;
 

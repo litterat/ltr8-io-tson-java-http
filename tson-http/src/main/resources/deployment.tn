@@ -50,8 +50,11 @@
   ONE ROOT NAME. Every entry is a member of the schema map `deployment` nested in the root, and is named by
   its path from the root, from inside the map as from outside it: `deployment.descriptor`,
   `deployment.listener`, `deployment.acceptance_profile`. Every root name of an import closure is reserved in
-  each importer ([TSON-SCHEMA] §2.2.3), so nested in one map this vocabulary reserves `deployment` alone. A
-  descriptor is a data document importing this schema whose root is `!deployment.descriptor { … }`.
+  each importer ([TSON-SCHEMA] §2.2.3), so a vocabulary declaring `descriptor` or `listener` at its root would
+  forbid an importer those names. Nested in one map, it reserves `deployment` only against a root that is no
+  schema map: a nested schema map is open, so another schema's `deployment => !schema { … }` adds its members
+  to this one, and only a path both declare collides. A descriptor is a data document importing this schema
+  whose root is `!deployment.descriptor { … }`.
   """
 !schema {
   deployment => !schema {

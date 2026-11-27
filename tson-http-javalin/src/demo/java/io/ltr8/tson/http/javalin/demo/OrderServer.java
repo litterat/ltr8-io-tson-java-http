@@ -6,24 +6,24 @@ import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
+import io.ltr8.tson.http.TsonRoute;
 import io.ltr8.tson.http.TsonHttpCodec;
-import io.ltr8.tson.http.TsonMediaType;
 import io.ltr8.tson.http.TsonHttpException;
-import io.ltr8.tson.http.TsonProblemDiagnostic;
+import io.ltr8.tson.http.TsonHttpSchema;
+import io.ltr8.tson.http.TsonMediaType;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaCatalog;
-import io.ltr8.tson.service.TsonBindings;
-import io.ltr8.tson.service.http.HttpVerb;
-import io.ltr8.tson.service.http.Route;
-import io.ltr8.tson.service.http.TsonServiceCoverage;
-import io.ltr8.tson.service.http.TsonServiceDescription;
-import io.ltr8.tson.service.http.TsonServiceSchema;
+import io.ltr8.tson.http.TsonServiceCoverage;
+import io.ltr8.tson.http.TsonServiceDescription;
 import io.ltr8.tson.http.javalin.TsonHandler;
 import io.ltr8.tson.http.javalin.TsonSchemaHandler;
+import io.ltr8.tson.http.schema.HttpVerb;
+import io.ltr8.tson.http.schema.problem.TsonProblemDiagnostic;
+import io.ltr8.tson.service.TsonBindings;
 
 import java.util.ArrayList;
-import java.util.List;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
@@ -55,8 +55,8 @@ public final class OrderServer {
     public static final String SCHEMA = schema("order-1.tn");
 
     /**
-     * A description of this service, as a schema importing {@code service.tn} -- published, resolved at
-     * startup, and checked by a conformance test.
+     * A description of this service, as a schema importing {@code http.tn}, which brings {@code service.tn} with
+     * it -- published, resolved at startup, and checked by a conformance test.
      *
      * <p><b>The payload types and the exchange a binding names are references, not strings.</b> {@code request:
      * order} and {@code orders.exchanges.place_order} are resolved when this schema loads, so a description
@@ -124,12 +124,12 @@ public final class OrderServer {
         Map<String, Class<?>> bindings = Map.of("order", Order.class, "sku_not_found", SkuNotFound.class);
         Map<String, String> schemas = new HashMap<>(Map.of(SCHEMA_ID, SCHEMA,
                 TsonProblemSchema.ID, TsonProblemSchema.source(), API_ID, API));
-        schemas.putAll(TsonServiceSchema.publishedById());
-        // One bind context for the data and the description: without service.tn's records in it, the API
-        // schema below holds its endpoints as trees and nothing can read them.
+        schemas.putAll(TsonHttpSchema.publishedById());
+        // One bind context for the data and the description: without the records of http.tn and service.tn in
+        // it, the API schema below holds its endpoints as trees and nothing can read them.
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(schemas)))
-                .withDataBindContext(TsonBindings.of(TsonServiceSchema.bindingsWith(bindings))));
+                .withDataBindContext(TsonBindings.of(TsonHttpSchema.bindingsWith(bindings))));
         tson.resolve(SCHEMA);
         // Resolving the description is what checks it: a payload type nothing declares fails startup here,
         // rather than being published as a contract no client can act on.
@@ -137,7 +137,7 @@ public final class OrderServer {
         TsonHttpCodec codec = new TsonHttpCodec(tson);
 
         // From here on the description is the source of truth for what this server publishes and warms.
-        TsonServiceDescription described = TsonServiceSchema.describedBy(tson, API_ID);
+        TsonServiceDescription described = TsonHttpSchema.describedBy(tson, API_ID);
 
         // Every type this server writes, warmed now rather than on a request thread -- derived from the
         // description's payload types rather than listed, so a response type added there cannot be missed.
@@ -158,7 +158,7 @@ public final class OrderServer {
         // one the description does not declare, so a moved endpoint fails at the handler that outlived it.
         TsonServiceCoverage coverage = TsonServiceCoverage.of(described);
 
-        Route create = coverage.serving(HttpVerb.POST, "/orders");
+        TsonRoute create = coverage.serving(HttpVerb.POST, "/orders");
         // The description says whether the endpoint speaks JSON, so the route's codec follows it rather than a
         // second statement here disagreeing with it.
         TsonHttpCodec createCodec = create.speaksJson() ? codec.acceptingJson() : codec;
@@ -187,7 +187,7 @@ public final class OrderServer {
         // angle form matches across them -- which is exactly why a claim names the declared template rather than
         // comparing paths. Publishing at the identity path is what makes an !!import URL dereferenceable, and
         // the API description is a schema too, so the catalog serves it like everything else.
-        Route getSchema = coverage.serving(HttpVerb.GET, "/{+schemaPath}");
+        TsonRoute getSchema = coverage.serving(HttpVerb.GET, "/{+schemaPath}");
         app.get("/<path>", TsonHandler.asHandler(codec,
                 schemaRoute(getSchema, catalog(described, schemas))));
 
@@ -206,7 +206,7 @@ public final class OrderServer {
      * document's headers are literals, checked at startup, and a miss or a refused method is the error boundary's,
      * carrying none of them.
      */
-    private static TsonHandler schemaRoute(Route route, TsonSchemaCatalog catalog) {
+    private static TsonHandler schemaRoute(TsonRoute route, TsonSchemaCatalog catalog) {
         TsonSchemaHandler served = TsonSchemaHandler.of(catalog);
         return context -> {
             if ((context.method().equals("GET") || context.method().equals("HEAD"))
