@@ -1,34 +1,32 @@
 /**
- * A service's description of itself: {@code service.tn}, the records it reads to, the reader that checks a
- * description against what resolves, the join that holds a protocol against a Java interface, and the bind context
- * that maps schema types to classes with startup semantics. The root package holds that bind context, {@code
- * TsonBindings}; {@code protocol} the transport-neutral exchanges a protocol declares and the join; {@code http} the
- * {@code !service.http} projection, and with it the schema and the reader, since {@code service.tn} is one schema
- * holding both sides; {@code internal}, which is not exported, the type resolution {@code protocol} and {@code http}
- * share. {@code protocol} names nothing in {@code http}, {@code internal} names neither, and the root names none of
- * the three. {@code tson-http} serves what this module describes.
+ * A service's description of itself, independent of any transport: {@code service.tn}, the schema that declares
+ * protocols of exchanges, the records it reads to, the join that holds a protocol against a Java interface, and the
+ * bind context that maps schema types to classes with startup semantics. The root package is the API: {@code
+ * TsonBindings}, {@code TsonServiceSchema}, the holder of {@code service.tn}, the join {@code TsonServiceProtocol} and
+ * {@code ExchangeName}. {@code schema} holds the records that mirror {@code service.tn}'s types and nothing else, and
+ * names nothing of the root. {@code internal} is the type resolution the join shares with {@code io.ltr8.tson.http},
+ * which projects a protocol onto HTTP and is the one module it is exported to.
  */
 module io.ltr8.tson.service {
     exports io.ltr8.tson.service;
-    exports io.ltr8.tson.service.protocol;
-    exports io.ltr8.tson.service.http;
-    // io.ltr8.tson.service.internal is deliberately not exported: it is shared by protocol and http, not offered.
+    // Unqualified: bind's public lookup constructs a bound record only in a package exported to every module.
+    exports io.ltr8.tson.service.schema;
+    // Qualified: shared with the HTTP projection's reader, not offered.
+    exports io.ltr8.tson.service.internal to io.ltr8.tson.http;
 
-    // transitive: Tson is in this module's own signatures (TsonServiceSchema.describedBy).
+    // transitive: Tson is in this module's own signatures (TsonServiceProtocol.join).
     requires transitive io.ltr8.tson;
-    // transitive: TsonBindings hands back a DataBindContext.
+    // transitive: TsonBindings hands back a DataBindContext, and the join a DataProtocol and DataExchange.
     requires transitive io.ltr8.bind;
-    // transitive: the bound records carry @Typename and @Field, and Http and Resource hold an AnnotatedMap in
-    // their components. It resolves through io.ltr8.bind either way; naming it says a consumer needs it.
+    // transitive: the bound records carry @Typename. It resolves through io.ltr8.bind either way; naming it says a
+    // consumer needs it.
     requires transitive io.ltr8.annotation;
-    // transitive: the meta records (TypeRef, ValueRef, Namespace) are in this module's signatures. It resolves
-    // through io.ltr8.tson either way; naming it says a consumer needs it.
+    // transitive: the meta records (TypeRef, Namespace) are in this module's signatures. It resolves through
+    // io.ltr8.tson either way; naming it says a consumer needs it.
     requires transitive io.ltr8.tson.schema;
     // CanonicalIdentity and the atom registrations TsonBindings applies; in no signature here.
     requires io.ltr8.tson.base;
-    // SchemaModelNameBinder, asked whether a name is the kernel's vocabulary; in no signature here.
     // AtomParsers and AtomType, asked whether an atom at an exchange's position produces the method's class, as the
     // library asks of an atom field; in no signature here.
     requires io.ltr8.tson.atom;
-    requires io.ltr8.tson.compiler;
 }

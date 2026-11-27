@@ -39,8 +39,8 @@ import java.util.Set;
  * redefinition of a name it brings, so the landing needs no registry lookup of the declaring schema.
  * {@link #identity()} names the declaring schema where a reader needs it.
  *
- * <p>This package is not exported: it holds what the {@code protocol} and {@code http} packages share, and imports
- * neither.
+ * <p>This package is exported only to {@code io.ltr8.tson.http}: it holds what the join, {@code TsonServiceProtocol},
+ * shares with the reader of an http projection there, and imports nothing of either module's API.
  *
  * @param in   the linked schema whose namespace holds the entry
  * @param name the entry's name there

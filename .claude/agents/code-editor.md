@@ -23,8 +23,8 @@ Rules for every change:
 - Wrap code and comments at 125 characters, counted in characters: `scripts/check-line-length.sh` reports what the
   working tree adds; it must exit 0 before you finish.
 - A project-owned schema's `!!id` is `https://tson.io/2026/40/io/ltr8/http/<name>.tn`; `.tn`, never `.tn1`; edited in
-  place since nothing is published yet. Every entry sits under the schema's one root map (`service`, `problem`,
-  `deployment`), named by its path inside the map too.
+  place since nothing is published yet. Every entry sits under the schema's one root map (`service`, `http`,
+  `problem`, `deployment`), named by its path inside the map too.
 - Build the `Tson` and resolve every schema at startup on one thread; never resolve from a request handler.
 - Keep the area's `design/` note current in the same change when the contract it states moves.
 

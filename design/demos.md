@@ -12,7 +12,7 @@ validator demo. Current form only. The adapter contract is `design/adapters.md`.
 - The validator takes the schema from the request, so it builds a fresh `Tson` per request, fetches nothing, answers a
   non-conforming document 200, and applies its descriptor's policy to the probe and not to the envelope.
 - The validator is JDK-only on purpose: it tests the library, not the adapters.
-- Each server builds one bind context, `TsonBindings.of(TsonServiceSchema.bindingsWith(bindings))`: its description's
+- Each server builds one bind context, `TsonBindings.of(TsonHttpSchema.bindingsWith(bindings))`: its description's
   value entries and its orders bind through the same map.
 
 ## Demo servers
@@ -22,10 +22,12 @@ the same `curl` commands work against each. Starting one prints what to try. The
 second demo, on the JDK adapter only.
 
 **One bind context, the description's and the application's.** A server publishes a description of itself
-(`orders-api-1.tn`, importing `service.tn`), and the `Tson` that resolves it binds the description's value
+(`orders-api-1.tn`, importing `http.tn`), and the `Tson` that resolves it binds the description's value
 entries with the same context it binds an order with (`design/binding.md`). So each demo merges its own bindings
-with the vocabulary's, `TsonBindings.of(TsonServiceSchema.bindingsWith(bindings))`, and hands that one context to
-`ProcessorConfig.withDataBindContext`; the validator does the same for `validate-api-1.tn`.
+with the vocabulary's, `TsonBindings.of(TsonHttpSchema.bindingsWith(bindings))`, and hands that one context to
+`ProcessorConfig.withDataBindContext`; the validator does the same for `validate-api-1.tn`. Each also publishes both
+layers at their identity paths, since a client fetching `http.tn` fetches the `service.tn` it imports next
+(`OrderServerTest.publishesBothServiceLayersAtTheirIdentityPaths`, `ValidatorServerTest` the same).
 
 ```
 ./gradlew :tson-http-jdk:runDemo

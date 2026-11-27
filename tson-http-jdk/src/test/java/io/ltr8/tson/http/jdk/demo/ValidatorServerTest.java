@@ -5,11 +5,13 @@ import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.http.TsonDeployment;
+import io.ltr8.tson.http.TsonHttpSchema;
 import io.ltr8.tson.http.TsonProblemDiagnostic;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.jdk.demo.ValidatorServer.Outcome;
 import io.ltr8.tson.http.jdk.demo.ValidatorServer.ValidationResult;
 import io.ltr8.tson.service.TsonBindings;
+import io.ltr8.tson.service.TsonServiceSchema;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -382,6 +384,22 @@ class ValidatorServerTest {
         assertTrue(response.body().contains("!deployment.acceptance_profile"), response.body());
         assertFalse(response.body().contains("schema_hosts"), response.body());
         assertFalse(response.body().contains("listener"), response.body());
+    }
+
+    /**
+     * The validator's description imports {@code http.tn}, which imports {@code service.tn}, so a client resolving it
+     * fetches both: each is published at its own identity path.
+     */
+    @Test
+    void publishesBothServiceLayersAtTheirIdentityPaths() throws Exception {
+        for (Map.Entry<String, String> layer : TsonHttpSchema.publishedById().entrySet()) {
+            HttpResponse<String> schema = client.send(HttpRequest.newBuilder(
+                            URI.create(base + URI.create(layer.getKey()).getPath())).GET().build(),
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            assertEquals(200, schema.statusCode(), layer.getKey());
+            assertEquals(layer.getValue(), schema.body(), layer.getKey());
+        }
+        assertEquals(Set.of(TsonHttpSchema.ID, TsonServiceSchema.ID), TsonHttpSchema.publishedById().keySet());
     }
 
     /** The descriptor governs the demo but is not itself served -- deployment.tn's rule 2. */

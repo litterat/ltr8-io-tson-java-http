@@ -1,9 +1,9 @@
 # `rpc.tn` -- the wire form of a protocol
 
 **Status: not landed, and first in the order of work after the descriptor.** `service.tn` describes a
-protocol, a web service over it, and the endpoints of both; this is what calling an exchange of that protocol looks
+protocol, `http.tn` a web service over it, and the endpoints of both; this is what calling an exchange of that protocol looks
 like on a wire. The protocol it is measured against is the orders example that ships as `tson-http`'s test fixture
-(`OrdersExamples`, under `tson-http/src/test/resources/io/ltr8/tson/service/http/orders/`), so this directory holds only
+(`OrdersExamples`, under `tson-http/src/test/resources/io/ltr8/tson/http/orders/`), so this directory holds only
 what is its own: the packet schema, the wire schema a generator would emit for that protocol, and the probe.
 
 **Where it lives when it lands: not `tson-http`.** The packet, dispatch and the processor are transport-neutral. A

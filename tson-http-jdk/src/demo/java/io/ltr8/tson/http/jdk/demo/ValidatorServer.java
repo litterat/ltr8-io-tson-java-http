@@ -12,21 +12,21 @@ import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonDocumentHeader;
 import io.ltr8.tson.compiler.TsonDocumentPeek;
+import io.ltr8.tson.http.Route;
 import io.ltr8.tson.http.TsonDeployment;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
+import io.ltr8.tson.http.TsonHttpSchema;
 import io.ltr8.tson.http.TsonProblemDiagnostic;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaCatalog;
 import io.ltr8.tson.http.TsonSchemaHeader;
+import io.ltr8.tson.http.TsonServiceCoverage;
+import io.ltr8.tson.http.TsonServiceDescription;
 import io.ltr8.tson.http.jdk.TsonHandler;
 import io.ltr8.tson.http.jdk.TsonSchemaHandler;
+import io.ltr8.tson.http.schema.HttpVerb;
 import io.ltr8.tson.service.TsonBindings;
-import io.ltr8.tson.service.http.HttpVerb;
-import io.ltr8.tson.service.http.Route;
-import io.ltr8.tson.service.http.TsonServiceCoverage;
-import io.ltr8.tson.service.http.TsonServiceDescription;
-import io.ltr8.tson.service.http.TsonServiceSchema;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -230,10 +230,10 @@ public final class ValidatorServer {
         Map<String, String> schemas = new HashMap<>(Map.of(VALIDATE_ID, VALIDATE, API_ID, API,
                 TsonProblemSchema.ID, TsonProblemSchema.source(),
                 TsonDeployment.ID, TsonDeployment.source()));
-        schemas.putAll(TsonServiceSchema.publishedById());
+        schemas.putAll(TsonHttpSchema.publishedById());
         Tson tson = Tson.of(ProcessorConfig.defaults()
                 .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(schemas)))
-                .withDataBindContext(TsonBindings.of(TsonServiceSchema.bindingsWith(bindings))));
+                .withDataBindContext(TsonBindings.of(TsonHttpSchema.bindingsWith(bindings))));
         tson.resolve(VALIDATE);
         tson.resolve(API);
         TsonHttpCodec codec = new TsonHttpCodec(tson);
@@ -242,7 +242,7 @@ public final class ValidatorServer {
         // or a component no field fills, fails startup here rather than on the first request that reads one.
         codec.prepareToRead(VALIDATE_ID);
 
-        TsonServiceDescription described = TsonServiceSchema.describedBy(tson, API_ID);
+        TsonServiceDescription described = TsonHttpSchema.describedBy(tson, API_ID);
         codec.prepareToWrite(described.boundClasses(bindings).toArray(Class<?>[]::new));
 
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);

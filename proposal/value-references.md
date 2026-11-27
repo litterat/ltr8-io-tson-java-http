@@ -2,13 +2,13 @@
 
 **Status:** a proposal for review, aimed at upstream's Revision 41; nothing is adopted. Measured by
 `tson-http/src/test/java/io/ltr8/tson/http/probe/ValueReferenceProbeTest.java`, with its records under
-`probe/valuereference/`. It asks the spec for one change, open construction over a record; this project's `service.tn`
+`probe/valuereference/`. It asks the spec for one change, open construction over a record; this project's `http.tn`
 changes wait on it. It supersedes `proposal/operation-refinement.md`, which answered the same need through types.
 
 ## Summary
 
 Half of value references exists. A value entry declared once and reached by `meta.ref<T>` is YAML's anchor and alias:
-`bearer => !service.http_auth { scheme: Bearer }`, named from every `security` list that wants it, is exactly that. What
+`bearer => !http.auth { scheme: Bearer }`, named from every `security` list that wants it, is exactly that. What
 is missing is the other half, a value written as another value with fields added.
 
 Revision 40's open construction is that mechanism, one restriction away. `!integer ^ { min: 100 }` is "the value
@@ -18,15 +18,15 @@ refuses a record. The proposal: extend open construction from constructors of ty
 completing an incomplete entry.
 
 ```
-paged => !service.operation ^ { status: 200  request: order_query }
+paged => !http.operation ^ { status: 200  request: order_query }
 
-orders_http => !service.http { resources: {
+orders_http => !http.projection { resources: {
   "/orders"    => { GET => !paged ^ { response: order_page } }
   "/customers" => { GET => !paged ^ { response: customer_page } }
 } }
 ```
 
-The resolved form writes each endpoint flat, `!service.operation { status: 200  request: order_query  response:
+The resolved form writes each endpoint flat, `!http.operation { status: 200  request: order_query  response:
 order_page }`, and `paged` not at all. Over an incomplete entry nothing is replaced (Revision 40 changelog items
 107–108), so this is OpenAPI's `components` and not YAML's merge key: no override, so no question of which side wins,
 how deep a merge goes, or what a pin means.
@@ -37,33 +37,33 @@ Endpoints share facts. Every paged list in a description answers 200, takes the 
 media types, sits behind the same security and sends the same cache headers. Today each endpoint writes them out, or
 the layer grows a rule that shares one of them.
 
-`service.tn` has grown such rules by hand (`design/http-projection.md`). A projection's `security` is inherited by every
+`http.tn` has grown such rules by hand (`design/http-projection.md`). A projection's `security` is inherited by every
 endpoint that writes none: an endpoint's `security`, when written, replaces the projection's, `security: []` says the
 endpoint is open, and absent inherits ("Security schemes", the override rule). The binder must keep absent apart from
 empty (`Optional<List<ValueRef<SecurityScheme>>>`), `Route.security()` is a resolved list the reader computes, and
 `CLAUDE.md` carries the sharp edge as a trap. The default status 200 is a record default that the reader then
 qualifies: it holds for an endpoint with a response, and an operation with none must write 204, 205 or 304 ("Status").
 Each is a rule of this vocabulary alone, implemented in `TsonServiceDescription`, with its own paragraph explaining where it
-cuts. A mechanism at the document level lets `service.tn` drop the one that is sharing, the inherited `security`, and
+cuts. A mechanism at the document level lets `http.tn` drop the one that is sharing, the inherited `security`, and
 leave the other as what it properly is, a record's own default.
 
 ## Why the type-system answer failed
 
 `proposal/operation-refinement.md` measured the alternative: a description declares its own subtype, `paged_get =>
-service.operation & { status?: = 200  request?: = order_query }`, and writes `!paged_get { … }`. The subtype is admitted
+http.operation & { status?: = 200  request?: = order_query }`, and writes `!paged_get { … }`. The subtype is admitted
 at the layer's slot since upstream's imported-head read, but:
 
 - **a server must bind it by name before resolving the description that declares it.** Bound as
-  `TsonServiceSchema.bindings()` binds, it is no member of the union `service.endpoint` binds against, so supporting it in
+  `TsonHttpSchema.bindings()` binds, it is no member of the union `http.endpoint` binds against, so supporting it in
   general means two resolutions or a nearest-supertype binder the library does not have;
 - **the pins fix little.** A composition pins `status` and `request` only: no list is pinned (§5.2), so `media_types`
   stays per endpoint, and a parameter is a type, so no parametric record fixes `response` (§5.10);
 - **every reader pays.** The server and every conformance client must resolve a description's own types before they can
-  tell what an endpoint is, where `!service.operation` says so at the tag.
+  tell what an endpoint is, where `!http.operation` says so at the tag.
 
 Sharing facts through types costs every reader. Sharing them in the document costs only the resolver: a value entry's
 value is read at schema load, a completion is gone from the resolved form, and the reader, the bindings and a client
-reading the resolved description see `!service.operation` exactly as if it had been written out.
+reading the resolved description see `!http.operation` exactly as if it had been written out.
 
 ## The proposal
 
@@ -71,7 +71,7 @@ reading the resolved description see `!service.operation` exactly as if it had b
 an incomplete entry: no type and no value, named only before `^` and as the head of a completion (§5.5). Today it is a
 resolver error naming `R & { … }` (`openConstructionOverARecordIsRefused`). Item 107 decides incompleteness by a
 required field left absent, refusing a body that writes them all as `!C { … }`. That test does not fit a record:
-`service.operation` and `service.document` declare no required field, so `paged` above writes every one, vacuously. Over
+`http.operation` and `http.document` declare no required field, so `paged` above writes every one, vacuously. Over
 a record the `^` itself declares the entry open, a record's optional fields being as much for a completion to write as
 its required ones; `!R { … }` stays the spelling of a value. Over a constructor of types item 107's test stands, since
 there completeness decides whether a type exists.
@@ -90,7 +90,7 @@ another base, or writes the operation out.
 
 **(d) Admission.** §7.2 admits a value by its tag's chain; a completion's tag names an incomplete entry, which names no
 type. The completion's type is `R`, so `!paged ^ { … }` is admitted exactly where `!R` is, through the construction's
-type rather than a chain of its own: at `service.endpoint`'s slot it is a `service.operation`, IS-A the abstract base.
+type rather than a chain of its own: at `http.endpoint`'s slot it is an `http.operation`, IS-A the abstract base.
 §7.2 needs one sentence saying so.
 
 **(e) The resolved form is flat.** Resolver output writes the completed value as the plain construction, as it writes
@@ -121,23 +121,23 @@ JSON spelling of a base and its completion, and needing one was the sign of a la
 
 ## What this project would do with it
 
-**`service.tn` drops the projection's `security`.** `service.http` loses `security?`, and an endpoint's `security`
+**`http.tn` drops the projection's `security`.** `http.projection` loses `security?`, and an endpoint's `security`
 becomes a plain field: absent is open, `[]` the same, and no rule relates an endpoint to its projection. A description
 secured throughout declares its base once:
 
 ```
-secured => !service.operation ^ { security: [bearer] }
+secured => !http.operation ^ { security: [bearer] }
 paged   => !secured ^ { status: 200  request: order_query }    # an incomplete entry written onto another (item 107)
 ```
 
 The bound records type `security` as a `List`, `Route.security()` is the endpoint's own list, and the override paragraph
 of `design/http-projection.md` goes with its invariant.
 
-**The default status stays.** `status?: service.status_code ~ 200` is the record's own default, not a sharing rule; a
+**The default status stays.** `status?: http.status_code ~ 200` is the record's own default, not a sharing rule; a
 base can still write `status: 200` explicitly for endpoints that must not drift.
 
 **Paged endpoints and cache headers become bases.** A description's paged lists complete `paged`, and its cacheable
-documents complete `cacheable => !service.document ^ { media_types: ["application/tson"]  response_headers: {
+documents complete `cacheable => !http.document ^ { media_types: ["application/tson"]  response_headers: {
 Cache-Control => "max-age=3600" } }`. A map is written whole, by the base or by the slot, so an endpoint wanting one more
 header beside the base's declares another base.
 
@@ -229,5 +229,5 @@ sharing.
 
 **Propose to upstream for Revision 41** as the resolution of the shared-facts problem: open construction over a record,
 completion at a value slot, write-once as items 107–108 already rule, admission by the construction's type, the resolved
-form flat. This project's `service.tn` changes, dropping the projection's `security` and the trap with it, wait on it.
+form flat. This project's `http.tn` changes, dropping the projection's `security` and the trap with it, wait on it.
 `proposal/operation-refinement.md`'s question is answered here rather than through types, and it is superseded.

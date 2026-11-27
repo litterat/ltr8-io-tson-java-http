@@ -1,14 +1,17 @@
 # A protocol and an http projection as records with a namespace field
 
-**Status:** adopted. `service.tn` declares `service.protocol` and `service.http` as records with a namespace field, read
-by `TsonServiceDescription` through `Protocol` and `Http` (`design/service-description.md`, `design/http-projection.md`),
-without `version` and `base` and with every document in the full form. Measured by
+**Status:** adopted. `service.tn` declares `service.protocol` and `http.tn` declares `http.projection` as records, the
+protocol's field a namespace and the projection's a plain map, read by `TsonServiceDescription` through `Protocol` and
+`HttpProjection` (`design/service-description.md`, `design/http-projection.md`), without `version` and `base` and with
+every document in the full form. Measured by
 `tson-http/src/test/java/io/ltr8/tson/http/probe/NamespaceFieldProbeTest.java`; what follows is the record of the
-measurement. It concerns this project's own vocabulary, `service.tn`, and asks nothing of tson-java or the spec.
+measurement, which spells the HTTP half under the `service` root as the probe's one layer wrote it. That half is
+`http.tn` under the root `http` (`proposal/schema-split.md`). It concerns this project's own vocabulary and asks nothing
+of tson-java or the spec.
 
-**Since adopted:** `service.resources` is a plain map keyed by a text family, `{service.path_template =>
-service.resource}`, rather than a namespace, since nothing references a path (`design/http-projection.md`);
-`service.exchanges` stays a namespace. Below, `resources` as a namespace is the shape measured.
+**Since adopted:** `http.resources` is a plain map keyed by a text family, `{http.path_template => http.resource}`,
+rather than a namespace, since nothing references a path (`design/http-projection.md`); `service.exchanges` stays a
+namespace. Below, `resources` as a namespace is the shape measured.
 
 ## Summary
 
@@ -51,7 +54,7 @@ which the layer already imports. `version` and `base` are new facts with no read
 shown because a record is the shape that can hold them, and a namespace value cannot
 (`UpstreamGapsTest.aNamespaceTypeDeclaresOnlyItsFacets`).
 
-`orders-1.tn` (`tson-http/src/test/resources/io/ltr8/tson/service/http/orders/`), written in full:
+`orders-1.tn` (`tson-http/src/test/resources/io/ltr8/tson/http/orders/`), written in full:
 
 ```
 !schema {
@@ -217,7 +220,7 @@ an `io.ltr8.net.Iri`.
   unchanged: a binding's or an exemption's exchange belonging to a protocol *this* projection binds, and the claim held
   per `ExchangeName`.
 - **`TsonServiceSchema.bindings()`** gains `"service.protocol" -> Protocol.class` and `"service.http" -> Http.class`, two new
-  records in `io.ltr8.tson.service.protocol` and `io.ltr8.tson.service.http`, each `@Typename` its qualified name; its
+  records in `io.ltr8.tson.service.schema` and `io.ltr8.tson.http.schema`, each `@Typename` its qualified name; its
   Javadoc's "`service.protocol` and `service.http` need no class: a value of a namespace type is a `Namespace`" goes.
   `service.exemption` stays bound. `Exchange`'s Javadoc ("read from the entry's `Namespace`") and `Exemption`'s (held in an
   annotation's value, checked by the reader) are rewritten.
@@ -273,7 +276,7 @@ Nothing measured fails: every shape the proposal needs resolves, binds and is ju
 ## Order of work, if adopted
 
 1. `service.tn`: the four declarations, the two annotation declarations deleted, its `@doc` rewritten.
-2. `Protocol` and `Http` records in `io.ltr8.tson.service.protocol` and `io.ltr8.tson.service.http`, bound in
+2. `Protocol` and `Http` records in `io.ltr8.tson.service.schema` and `io.ltr8.tson.http.schema`, bound in
    `TsonServiceSchema.bindings()`.
 3. `ExchangeName.of` over segments; `TsonServiceDescription` reading the records and their fields.
 4. The description documents and their `@doc`s; `OrdersExamples`; `ProtocolMapTest` and `TsonServiceDescriptionTest`.

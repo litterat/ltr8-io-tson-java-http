@@ -4,8 +4,8 @@ How a call is described below the HTTP projection, and why the description takes
 language's. The description is `ltr8-bind`'s and is built: `DataBindContext.getProtocol` reads a Java interface as a
 `DataProtocol` of `DataExchange`s, all in `io.ltr8.bind`, and `DataExchangeHandler` is the seam a call is answered
 through. The join, which holds a resolved `!service.protocol` against a `DataProtocol`, is built: `TsonServiceProtocol` in
-`io.ltr8.tson.service.protocol` (`tson-service`), tested by `TsonServiceProtocolTest`. This note fixes the paradigm they
-are built to. `BACKLOG.md`, "The module split", says what is still to build. `proposal/bind-invoke.md` is this
+`io.ltr8.tson.service` (`tson-service`), tested by `TsonServiceProtocolTest`. This note fixes the paradigm they are
+built to. `BACKLOG.md`, "The module split", says what is still to build. `proposal/bind-invoke.md` is this
 project's superseded proposal for the same descriptor.
 
 **Invariants**
@@ -115,9 +115,11 @@ the descriptor's class, the question the library asks at a record's atom field, 
 with `String`. A choice agrees with a closed union, one whose members are all known at startup, when each variant is a
 record bound to a member and each member is the class of a variant. A request and an error are records on both sides.
 
-**What it does not judge.** A tuple, a namespace type, a record written in place, a reference, `void`, a dependent type
-and an application are refused as shapes the join does not judge, with what to write instead; so a protocol answering a
-namespace type cannot be joined. A choice against an open union is not judged either.
+**What it does not judge.** A tuple, a namespace type, a record written in place, a reference, `void`, a dependent type and
+an application are refused as shapes the join does not judge, with what to write instead; so a protocol answering a namespace
+type cannot be joined. A choice against an open union is not judged either. Nor are an exchange's facts: one marked both safe
+and destructive is refused only when an http projection binding its protocol is read, and a protocol no projection binds is
+not judged on them.
 
 **What it does not check.** A record's fields: the join compares the class a record binds to and relies on the schema
 having been prepared for reading (`design/binding.md`), where a field with no component, or a component no field fills,
@@ -158,7 +160,7 @@ the data name is the join's to own, since bind maps no Java name to a data name.
 
 ## The same paradigm one layer up: the HTTP projection
 
-The projection is the data view of HTTP, as a `DataProtocol` is the data view of a call. `service.tn` takes its
+The projection is the data view of HTTP, as a `DataProtocol` is the data view of a call. `http.tn` takes its
 vocabulary from the protocol's own registries and nothing else: RFC 9110's verbs, a header name as an RFC 9110 token
 held folded as HTTP/2 and HTTP/3 put it on the wire, a media type per RFC 9110 §8.3.1, a path as an RFC 6570 template,
 a status code. It describes an HTTP exchange in HTTP's terms, never in a framework's or a language's.
@@ -175,11 +177,11 @@ RFC 8470 admits only a safe or idempotent request in it, answering 425 (Too Earl
 a client needs to decide on early data and a server needs to refuse it: a projection-level fact derived from a
 call-level one, which is the layering doing its job. Priorities (RFC 9218) and trailers are the other constructs of that
 era a projection could name. A streaming endpoint, over a long-lived stream or WebTransport, would be a new record
-composing `service.endpoint`, the way the layer's own doc says a new kind of endpoint arrives.
+composing `http.endpoint`, the way the layer's own doc says a new kind of endpoint arrives.
 
 The constructor's name follows the same paradigm: a projection is named for the transport it projects a protocol onto,
-so `tson-http` implements `!service.http` as a gRPC projection of the same protocol would be `!grpc`, one projection among
-several and not the description of the service.
+so `tson-http` implements `!http.projection` as a gRPC projection of the same protocol would be `!grpc`, one projection
+among several and not the description of the service.
 
 ## What this layer is not
 

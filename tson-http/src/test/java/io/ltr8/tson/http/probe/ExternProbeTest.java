@@ -13,10 +13,15 @@ import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.source.HttpSchemaSource;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
+import io.ltr8.tson.http.ExternExamples;
+import io.ltr8.tson.http.OrdersExamples;
+import io.ltr8.tson.http.PayloadType;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
+import io.ltr8.tson.http.TsonHttpSchema;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaHeader;
+import io.ltr8.tson.http.TsonServiceDescription;
 import io.ltr8.tson.http.probe.extern.Envelope;
 import io.ltr8.tson.http.probe.extern.OrderV1;
 import io.ltr8.tson.http.probe.extern.OrderV2;
@@ -29,11 +34,7 @@ import io.ltr8.tson.schema.meta.RecordBody;
 import io.ltr8.tson.schema.meta.RecordField;
 import io.ltr8.tson.schema.meta.TypeRef;
 import io.ltr8.tson.service.TsonBindings;
-import io.ltr8.tson.service.http.ExternExamples;
-import io.ltr8.tson.service.http.OrdersExamples;
-import io.ltr8.tson.service.http.PayloadType;
-import io.ltr8.tson.service.http.TsonServiceDescription;
-import io.ltr8.tson.service.http.TsonServiceSchema;
+import io.ltr8.tson.service.TsonServiceSchema;
 import io.ltr8.tson.tree.TsonRecord;
 import org.junit.jupiter.api.Test;
 
@@ -45,18 +46,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static io.ltr8.tson.service.http.ExternExamples.API;
-import static io.ltr8.tson.service.http.ExternExamples.BASE;
-import static io.ltr8.tson.service.http.ExternExamples.CORE;
-import static io.ltr8.tson.service.http.ExternExamples.DESCRIPTION;
-import static io.ltr8.tson.service.http.ExternExamples.ERRORS;
-import static io.ltr8.tson.service.http.ExternExamples.KEYS;
-import static io.ltr8.tson.service.http.ExternExamples.ORDER_1;
-import static io.ltr8.tson.service.http.ExternExamples.ORDER_1_SOURCE;
-import static io.ltr8.tson.service.http.ExternExamples.ORDER_2;
-import static io.ltr8.tson.service.http.ExternExamples.ORDER_2_SOURCE;
-import static io.ltr8.tson.service.http.ExternExamples.description;
-import static io.ltr8.tson.service.http.ExternExamples.described;
+import static io.ltr8.tson.http.ExternExamples.API;
+import static io.ltr8.tson.http.ExternExamples.BASE;
+import static io.ltr8.tson.http.ExternExamples.CORE;
+import static io.ltr8.tson.http.ExternExamples.DESCRIPTION;
+import static io.ltr8.tson.http.ExternExamples.ERRORS;
+import static io.ltr8.tson.http.ExternExamples.KEYS;
+import static io.ltr8.tson.http.ExternExamples.ORDER_1;
+import static io.ltr8.tson.http.ExternExamples.ORDER_1_SOURCE;
+import static io.ltr8.tson.http.ExternExamples.ORDER_2;
+import static io.ltr8.tson.http.ExternExamples.ORDER_2_SOURCE;
+import static io.ltr8.tson.http.ExternExamples.description;
+import static io.ltr8.tson.http.ExternExamples.described;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -146,7 +147,7 @@ class ExternProbeTest {
 
         TsonLinkedSchema linked = tson.loader().resolveLinked(API);
         assertEquals(new Extern(ORDER_1, "order"), linked.schema().entries().get("order_v1"));
-        assertEquals(List.of(CanonicalIdentity.canonicalize(TsonServiceSchema.ID), CanonicalIdentity.canonicalize(CORE),
+        assertEquals(List.of(CanonicalIdentity.canonicalize(TsonHttpSchema.ID), CanonicalIdentity.canonicalize(CORE),
                 CanonicalIdentity.canonicalize(ORDER_1), CanonicalIdentity.canonicalize(ORDER_2),
                 CanonicalIdentity.canonicalize(ERRORS), CanonicalIdentity.canonicalize(KEYS)), linked.dependencies());
         ExternTarget.Landing v2 = linked.landing("order_v2").orElseThrow();
@@ -188,7 +189,7 @@ class ExternProbeTest {
         assertEquals(List.of("order_v1", "order_v2"), choice.variants().stream()
                 .map(variant -> assertInstanceOf(TypeRef.class, variant).name()).toList());
         assertEquals("order_any",
-                TsonServiceSchema.describedBy(tson, API).routes().get(1).response().orElseThrow().name());
+                TsonHttpSchema.describedBy(tson, API).routes().get(1).response().orElseThrow().name());
     }
 
     /**
@@ -200,13 +201,14 @@ class ExternProbeTest {
      */
     @Test
     void theReaderNamesAnExternTypedResponseByWhereItLands() {
-        TsonServiceDescription described = TsonServiceSchema.describedBy(described(DESCRIPTION), API);
+        TsonServiceDescription described = TsonHttpSchema.describedBy(described(DESCRIPTION), API);
 
         assertEquals(List.of("order_v1", "order_v2"),
                 described.routes().stream().map(route -> route.response().orElseThrow().name()).toList());
         assertEquals(List.of(new PayloadType(API, "order_ref"), new PayloadType(ORDER_1, "order"),
                 new PayloadType(ORDER_2, "order")), List.copyOf(described.payloadTypes()));
-        assertEquals(List.of(API, TsonServiceSchema.ID, ORDER_1, ORDER_2, ERRORS, TsonProblemSchema.ID, KEYS),
+        assertEquals(List.of(API, TsonHttpSchema.ID, TsonServiceSchema.ID, ORDER_1, ORDER_2, ERRORS,
+                        TsonProblemSchema.ID, KEYS),
                 List.copyOf(described.referencedSchemas()));
     }
 
@@ -218,7 +220,7 @@ class ExternProbeTest {
     @Test
     void aHeaderTemplateOverAnExternTypedResponseExpandsOverTheForeignRecord() {
         String headed = description("", "  response_headers: { ETag => \"{sku}\" }");
-        TsonServiceDescription described = TsonServiceSchema.describedBy(described(headed), API);
+        TsonServiceDescription described = TsonHttpSchema.describedBy(described(headed), API);
 
         assertEquals(Map.of("etag", "A-1"), described.routes().get(1)
                 .expandResponseHeaders(field -> field.equals("sku") ? "A-1" : null));
@@ -235,7 +237,7 @@ class ExternProbeTest {
     void aBusinessErrorThroughAnExternFixesItsStatusForTheReader() {
         String erring = description("  errors: [not_found_v1]", "");
         Tson tson = described(erring);
-        TsonServiceDescription described = TsonServiceSchema.describedBy(tson, API);
+        TsonServiceDescription described = TsonHttpSchema.describedBy(tson, API);
 
         assertEquals("not_found_v1", described.routes().getFirst().errorFor(404).orElseThrow().name());
         RecordBody target = assertInstanceOf(RecordBody.class,

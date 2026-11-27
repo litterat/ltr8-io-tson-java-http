@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Whether a construction can stand for a reference to data instead of its repetition: a value entry declared once and
  * reached by name, and a value written as another value with fields added. Measured against a minimal layer written
- * here, mirroring {@code service.endpoint}'s pattern with a {@code security} list of references; {@code
+ * here, mirroring {@code http.endpoint}'s pattern with a {@code security} list of references; {@code
  * proposal/value-references.md} is the proposal it measures, for upstream's Revision 41. Every test pins Revision 40's
  * outcome, and one failing after a library change means the spec has moved.
  *
@@ -52,7 +52,7 @@ class ValueReferenceProbeTest {
     static final String ID = "https://schemas.example.com/2026/40/valueref/s-1.tn";
 
     /**
-     * The layer: {@code service.tn}'s endpoint pattern at the root, trimmed to what the measurements touch. A scheme
+     * The layer: {@code http.tn}'s endpoint pattern at the root, trimmed to what the measurements touch. A scheme
      * record, an {@code abstract} base {@code endpoint} with a {@code security} list of references to schemes, an
      * {@code operation} composing it with a signature, a resource holding {@code {http_verb => endpoint}}, and a
      * projection whose resources are a map keyed by path.

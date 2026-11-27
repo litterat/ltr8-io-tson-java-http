@@ -6,17 +6,17 @@ import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.compiler.TsonDocumentHeader;
 import io.ltr8.tson.compiler.TsonDocumentPeek;
+import io.ltr8.tson.http.RequestPlacement;
+import io.ltr8.tson.http.Route;
+import io.ltr8.tson.http.TsonHttpSchema;
 import io.ltr8.tson.http.TsonMediaType;
 import io.ltr8.tson.http.TsonSchemaCatalog;
 import io.ltr8.tson.http.TsonSchemaHeader;
+import io.ltr8.tson.http.TsonServiceDescription;
+import io.ltr8.tson.http.schema.HttpVerb;
 import io.ltr8.tson.json.Json;
+import io.ltr8.tson.service.ExchangeName;
 import io.ltr8.tson.service.TsonBindings;
-import io.ltr8.tson.service.http.HttpVerb;
-import io.ltr8.tson.service.http.RequestPlacement;
-import io.ltr8.tson.service.http.Route;
-import io.ltr8.tson.service.http.TsonServiceDescription;
-import io.ltr8.tson.service.http.TsonServiceSchema;
-import io.ltr8.tson.service.protocol.ExchangeName;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,7 +59,7 @@ class TsonServiceConformanceTest {
         server = OrderServer.start(0);
         base = "http://127.0.0.1:" + server.getAddress().getPort();
         client = HttpClient.newHttpClient();
-        api = TsonServiceSchema.describedBy(serverResolved(), OrderServer.API_ID);
+        api = TsonHttpSchema.describedBy(serverResolved(), OrderServer.API_ID);
     }
 
     /**
@@ -70,9 +70,9 @@ class TsonServiceConformanceTest {
     private Tson serverResolved() throws Exception {
         String description = get(URI.create(OrderServer.API_ID).getPath()).body();
         Tson tson = Tson.of(ProcessorConfig.defaults()
-                .withDataBindContext(TsonBindings.of(TsonServiceSchema.bindings()))
+                .withDataBindContext(TsonBindings.of(TsonHttpSchema.bindings()))
                 .withSchemaAccess(SchemaAccess.of(uri -> {
-                    String metaLayer = TsonServiceSchema.publishedById().get(uri);
+                    String metaLayer = TsonHttpSchema.publishedById().get(uri);
                     if (metaLayer != null) {
                         return metaLayer;
                     }
