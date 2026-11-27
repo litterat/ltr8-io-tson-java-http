@@ -2,9 +2,11 @@ package io.ltr8.tson.http;
 
 import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.ProcessorConfig;
+import io.ltr8.tson.base.ReadException;
 import io.ltr8.tson.base.policy.IdentifierPolicy;
 import io.ltr8.tson.base.policy.ProcessorPolicy;
 import io.ltr8.tson.base.policy.TokenPolicy;
+import io.ltr8.tson.http.schema.deployment.TsonDeployment;
 import io.ltr8.unicode.RestrictionLevel;
 import org.junit.jupiter.api.Test;
 
@@ -45,7 +47,7 @@ class TsonDeploymentTest {
 
     @Test
     void aDescriptorReadsAsWritten() {
-        TsonDeployment deployment = TsonDeployment.read(FULL);
+        TsonDeployment deployment = TsonDeploymentSchema.read(FULL);
 
         assertEquals("production", deployment.name());
         assertEquals(8080, deployment.listener().orElseThrow().port().orElseThrow());
@@ -62,7 +64,7 @@ class TsonDeploymentTest {
      */
     @Test
     void everyPartReachesTheLibraryPolicy() {
-        ProcessorPolicy policy = TsonDeployment.read(FULL).processorPolicy().orElseThrow();
+        ProcessorPolicy policy = TsonDeploymentSchema.read(FULL).processorPolicy().orElseThrow();
 
         IdentifierPolicy identifiers = policy.identifierPolicy();
         assertTrue(identifiers.isPerSegment(), "per_segment should reach perSegment()");
@@ -86,7 +88,7 @@ class TsonDeploymentTest {
      */
     @Test
     void aStatedPolicyIsAppliedExactlyAsWritten() {
-        TsonDeployment deployment = TsonDeployment.read(FULL);
+        TsonDeployment deployment = TsonDeploymentSchema.read(FULL);
         TsonDeployment.Policy stated = deployment.policy().orElseThrow();
         ProcessorPolicy inForce = deployment.applyTo(ProcessorConfig.defaults()).processorPolicy();
 
@@ -108,7 +110,7 @@ class TsonDeploymentTest {
      */
     @Test
     void aSizeLimitPastIntRangeReachesTheLibraryUnchanged() {
-        TsonDeployment deployment = TsonDeployment.read(withLimits("{ max_document_size: 3000000000 }"));
+        TsonDeployment deployment = TsonDeploymentSchema.read(withLimits("{ max_document_size: 3000000000 }"));
 
         assertEquals(3_000_000_000L, deployment.policy().orElseThrow().limits().maxDocumentSize());
         assertEquals(3_000_000_000L, deployment.processorPolicy().orElseThrow().limits().maxDocumentSize());
@@ -121,7 +123,7 @@ class TsonDeploymentTest {
      */
     @Test
     void aCountLimitPastIntRangeIsCappedAtTheWidestTheLibraryCounts() {
-        TsonDeployment deployment = TsonDeployment.read(withLimits("{ max_elements: 9223372036854775807 }"));
+        TsonDeployment deployment = TsonDeploymentSchema.read(withLimits("{ max_elements: 9223372036854775807 }"));
 
         assertEquals(Long.MAX_VALUE, deployment.policy().orElseThrow().limits().maxElements());
         assertEquals(Integer.MAX_VALUE, deployment.processorPolicy().orElseThrow().limits().maxElements());
@@ -130,10 +132,23 @@ class TsonDeploymentTest {
     /** <b>A limit below 1 admits nothing</b>, and {@code policy.limit} refuses it where it is written. */
     @Test
     void aLimitBelowOneIsRefusedWhereItIsWritten() {
-        List<Diagnostic> problems = TsonDeployment.tson().validate(withLimits("{ max_elements: 0 }"));
+        List<Diagnostic> problems = TsonDeploymentSchema.tson().validate(withLimits("{ max_elements: 0 }"));
 
         assertEquals(List.of(Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION),
                 problems.stream().map(Diagnostic::code).toList(), problems::toString);
+    }
+
+    /**
+     * <b>A descriptor the schema refuses stops the read</b>, with the diagnostic {@code validate} reports, so no
+     * record is built from a policy the schema does not admit.
+     */
+    @Test
+    void aSchemaInvalidDescriptorStopsTheRead() {
+        Diagnostic refused = assertThrows(ReadException.class,
+                () -> TsonDeploymentSchema.read(withLimits("{ max_elements: 0 }"))).diagnostic();
+
+        assertEquals(Diagnostic.Code.ATOM_CONSTRAINT_VIOLATION, refused.code(), refused::toString);
+        assertEquals(Optional.of("/policy/limits/max_elements"), refused.path(), refused::toString);
     }
 
     /** A descriptor with this {@code schema_hosts} and, where given, this {@code listener.host}. */
@@ -155,7 +170,7 @@ class TsonDeploymentTest {
         assertEquals(List.of("example.com", "bücher.example", "bücher.example", "10.0.0.1", "::1", "::1"),
                 List.of("\"Example.COM\"", "\"bücher.example\"", "\"xn--bcher-kva.example\"", "\"10.0.0.1\"",
                         "\"[::1]\"", "\"0:0:0:0:0:0:0:1\"").stream()
-                        .map(host -> TsonDeployment.read(withHosts(host, null)).schemaHosts().getFirst()).toList());
+                        .map(host -> TsonDeploymentSchema.read(withHosts(host, null)).schemaHosts().getFirst()).toList());
     }
 
     /**
@@ -167,12 +182,12 @@ class TsonDeploymentTest {
     void oneHostTwiceIsRefusedWhicheverSpellingsAreUsed() {
         for (String twice : List.of("\"bücher.example\" \"xn--bcher-kva.example\"", "\"Example.COM\" \"example.com\"",
                 "\"::1\" \"[::1]\"", "\"::1\" \"0:0:0:0:0:0:0:1\"")) {
-            List<Diagnostic> problems = TsonDeployment.tson().validate(withHosts(twice, null));
+            List<Diagnostic> problems = TsonDeploymentSchema.tson().validate(withHosts(twice, null));
             assertEquals(1, problems.size(), () -> twice + ": " + problems);
             assertTrue(problems.getFirst().message().contains("unique"), problems::toString);
         }
         assertEquals(List.of("127.0.0.1", "::ffff:127.0.0.1"),
-                TsonDeployment.read(withHosts("\"127.0.0.1\" \"::ffff:127.0.0.1\"", null)).schemaHosts());
+                TsonDeploymentSchema.read(withHosts("\"127.0.0.1\" \"::ffff:127.0.0.1\"", null)).schemaHosts());
     }
 
     /**
@@ -184,11 +199,11 @@ class TsonDeploymentTest {
     void whatIsNotAHostIsRefusedWithItsFix() {
         for (String notAHost : List.of("example.com:443", "https://example.com", "b%C3%BCcher.example",
                 "example.com.", "BÜCHER.example", "fe80::1%eth0")) {
-            List<Diagnostic> problems = TsonDeployment.tson().validate(withHosts("\"" + notAHost + "\"", null));
+            List<Diagnostic> problems = TsonDeploymentSchema.tson().validate(withHosts("\"" + notAHost + "\"", null));
             assertEquals(List.of(Diagnostic.Code.ATOM_FORM_INVALID), problems.stream().map(Diagnostic::code).toList(),
                     () -> notAHost + ": " + problems);
         }
-        assertTrue(TsonDeployment.tson().validate(withHosts("\"BÜCHER.example\"", null)).getFirst().message()
+        assertTrue(TsonDeploymentSchema.tson().validate(withHosts("\"BÜCHER.example\"", null)).getFirst().message()
                 .contains("write 'bücher.example'"));
     }
 
@@ -201,7 +216,7 @@ class TsonDeploymentTest {
     void aListenerHostIsANameOrAnAddressUntagged() {
         assertEquals(List.of("localhost", "127.0.0.1", "::1"),
                 List.of("localhost", "\"127.0.0.1\"", "\"[::1]\"").stream()
-                        .map(host -> TsonDeployment.read(withHosts("", host)).listener().orElseThrow().host()
+                        .map(host -> TsonDeploymentSchema.read(withHosts("", host)).listener().orElseThrow().host()
                                 .orElseThrow()).toList());
     }
 
@@ -212,7 +227,7 @@ class TsonDeploymentTest {
      */
     @Test
     void anAbsentPolicyIsNotAPermissiveOne() {
-        TsonDeployment deployment = TsonDeployment.read("""
+        TsonDeployment deployment = TsonDeploymentSchema.read("""
                 !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
                 !deployment.descriptor { name: "minimal" }""");
 
@@ -229,7 +244,7 @@ class TsonDeploymentTest {
      */
     @Test
     void aPolicyStatesEveryPart() {
-        List<Diagnostic> problems = TsonDeployment.tson().validate(
+        List<Diagnostic> problems = TsonDeploymentSchema.tson().validate(
                 withPolicy("{ token_policy: { level: SINGLE_SCRIPT  permitting: [] } }"));
 
         assertEquals(List.of(Diagnostic.Code.FIELD_REQUIRED, Diagnostic.Code.FIELD_REQUIRED),
@@ -244,7 +259,7 @@ class TsonDeploymentTest {
      */
     @Test
     void aTokenPolicyCannotBeGivenAUnit() {
-        List<Diagnostic> problems = TsonDeployment.tson().validate(withPolicy("""
+        List<Diagnostic> problems = TsonDeploymentSchema.tson().validate(withPolicy("""
                 { identifier_policy: %s
                   token_policy: { level: HIGHLY_RESTRICTIVE  per_segment: true  permitting: [] }
                   limits: { max_depth: 64 } }""".formatted(DEFAULT_IDENTIFIERS)));
@@ -267,11 +282,11 @@ class TsonDeploymentTest {
                   unicode_data_version: "%s"
                   limits: { max_depth: 64 } }""";
 
-        String message = assertThrows(RuntimeException.class, () -> TsonDeployment.read(
+        String message = assertThrows(RuntimeException.class, () -> TsonDeploymentSchema.read(
                 withPolicy(policy.formatted(DEFAULT_IDENTIFIERS, "1.1")))).getMessage();
         assertTrue(message.contains("1.1"), message);
 
-        assertTrue(TsonDeployment.read(withPolicy(policy.formatted(DEFAULT_IDENTIFIERS,
+        assertTrue(TsonDeploymentSchema.read(withPolicy(policy.formatted(DEFAULT_IDENTIFIERS,
                 ProcessorPolicy.dataVersion()))).policy().isPresent());
     }
 
@@ -282,14 +297,14 @@ class TsonDeploymentTest {
      */
     @Test
     void theProfileCarriesThePolicyAndNotTheTrustConfiguration() {
-        TsonDeployment.AcceptanceProfile profile = profileOf(TsonDeployment.read(FULL));
+        TsonDeployment.AcceptanceProfile profile = profileOf(TsonDeploymentSchema.read(FULL));
 
         assertEquals("production", profile.name());
         assertEquals(RestrictionLevel.MODERATELY_RESTRICTIVE, profile.policy().tokenPolicy().level());
 
         // Nothing about what this deployment trusts, and nothing about where it listens.
-        String written = TsonDeployment.tson().objectWriter()
-                .describing(TsonDeployment.ID, "deployment.acceptance_profile").toTson(profile);
+        String written = TsonDeploymentSchema.tson().objectWriter()
+                .describing(TsonDeploymentSchema.ID, "deployment.acceptance_profile").toTson(profile);
         assertFalse(written.contains("schemas.example.com"), written);
         assertFalse(written.contains("127.0.0.1"), written);
         assertFalse(written.contains("8080"), written);
@@ -307,7 +322,7 @@ class TsonDeploymentTest {
      */
     @Test
     void aDescriptorWithNoPolicyPublishesTheDefaults() {
-        TsonDeployment.Policy policy = profileOf(TsonDeployment.read("""
+        TsonDeployment.Policy policy = profileOf(TsonDeploymentSchema.read("""
                 !!import:"https://tson.io/2026/40/io/ltr8/http/deployment.tn"
                 !deployment.descriptor { name: "minimal" }""")).policy();
 
@@ -324,10 +339,11 @@ class TsonDeploymentTest {
      */
     @Test
     void theProfileIsWrittenInPolicyTnsShape() {
-        String written = TsonDeployment.tson().objectWriter()
-                .describing(TsonDeployment.ID, "deployment.acceptance_profile").toTson(profileOf(TsonDeployment.read(FULL)));
+        String written = TsonDeploymentSchema.tson().objectWriter()
+                .describing(TsonDeploymentSchema.ID, "deployment.acceptance_profile")
+                .toTson(profileOf(TsonDeploymentSchema.read(FULL)));
 
-        assertEquals(List.of(), TsonDeployment.tson().validate(written), written);
+        assertEquals(List.of(), TsonDeploymentSchema.tson().validate(written), written);
         assertTrue(written.contains("!deployment.acceptance_profile"), written);
         assertTrue(written.contains("identifier_policy") && written.contains("token_policy"), written);
     }
@@ -341,7 +357,7 @@ class TsonDeploymentTest {
     @Test
     void theProfileStatesTheUnicodeDataVersion() {
         assertEquals(Optional.of(ProcessorPolicy.dataVersion()),
-                profileOf(TsonDeployment.read(FULL)).policy().unicodeDataVersion());
+                profileOf(TsonDeploymentSchema.read(FULL)).policy().unicodeDataVersion());
         assertFalse(ProcessorPolicy.dataVersion().isBlank());
     }
 
@@ -354,7 +370,7 @@ class TsonDeploymentTest {
      */
     @Test
     void scriptNamesAreCanonicalisedWhicheverAliasIsWritten() {
-        TsonDeployment deployment = TsonDeployment.read(FULL);
+        TsonDeployment deployment = TsonDeploymentSchema.read(FULL);
 
         assertEquals(List.of(List.of("Cyrillic", "Latin")),
                 deployment.policy().orElseThrow().tokenPolicy().permitting());
@@ -370,7 +386,7 @@ class TsonDeploymentTest {
     @Test
     void anUnknownScriptNameStopsTheRead() {
         for (String name : List.of("\"Cyrrilic\"", "42")) {
-            String message = assertThrows(RuntimeException.class, () -> TsonDeployment.read(withPolicy("""
+            String message = assertThrows(RuntimeException.class, () -> TsonDeploymentSchema.read(withPolicy("""
                     { identifier_policy: %s
                       token_policy: { level: SINGLE_SCRIPT  permitting: [[%s]] }
                       limits: { max_depth: 64 } }""".formatted(DEFAULT_IDENTIFIERS, name)))).getMessage();

@@ -1,8 +1,7 @@
-package io.ltr8.tson.http;
+package io.ltr8.tson.http.schema.problem;
 
 import io.ltr8.annotation.Field;
 import io.ltr8.annotation.Typename;
-import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.SourcePosition;
 
@@ -34,9 +33,9 @@ import java.util.Optional;
  * deployment's acceptance profile at {@code /.well-known/tson-deployment} over the wire -- because a sender
  * needs them before it writes, not after it is refused.
  *
- * <p>Not held to {@code tson-cli}'s {@code CliDiagnostic}, which it began as a copy of: a CLI reports on files
- * and a server reports on requests, so the two are free to diverge. What it must stay in step with is
- * {@link Diagnostic} itself, and {@code TsonProblemSchemaTest} is what checks that.
+ * <p>Not held to {@code tson-cli}'s {@code CliDiagnostic}: a CLI reports on files and a server reports on requests,
+ * so the two are free to diverge. What it must stay in step with is {@link Diagnostic} itself, and {@code
+ * TsonProblemSchemaTest} is what checks that.
  */
 @Typename(name = "problem.diagnostic")
 public record TsonProblemDiagnostic(Optional<String> path, @Field("schema_pointer") Optional<String> schemaPointer,

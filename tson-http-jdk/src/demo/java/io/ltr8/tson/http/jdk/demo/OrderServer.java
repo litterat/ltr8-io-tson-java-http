@@ -11,7 +11,6 @@ import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonHttpSchema;
 import io.ltr8.tson.http.TsonMediaType;
-import io.ltr8.tson.http.TsonProblemDiagnostic;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaCatalog;
 import io.ltr8.tson.http.TsonServiceCoverage;
@@ -19,6 +18,7 @@ import io.ltr8.tson.http.TsonServiceDescription;
 import io.ltr8.tson.http.jdk.TsonHandler;
 import io.ltr8.tson.http.jdk.TsonSchemaHandler;
 import io.ltr8.tson.http.schema.HttpVerb;
+import io.ltr8.tson.http.schema.problem.TsonProblemDiagnostic;
 import io.ltr8.tson.service.TsonBindings;
 
 import java.io.IOException;

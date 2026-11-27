@@ -75,15 +75,16 @@ alias reaches (`TsonServiceDescriptionTest.aPayloadTypeThatIsAPlainAliasIsNamedA
 (`TsonHttpSchema.publishedById()` holds both), and `TsonHttpSchema.bindings()`, both layers' classes, in
 the config's one bind context beside the application's own, merged by `TsonHttpSchema.bindingsWith`. A context
 keyed per schema (`TsonBindings.bySchema`) keys both identities, `TsonServiceSchema.bindings()` under `service.tn`'s and
-`TsonHttpSchema.bindings()` under `http.tn`'s; a description of protocols alone wires `TsonServiceSchema` the same
-way. The map is explicit: a class of either `schema` package binds only by being named there, and a name both maps bind is
-refused, since within one closure a name means one thing. Map keys bind as `String` whatever the key type, so
-`{http.verb => endpoint}` is `Map<String, Endpoint>`. A slot typed by an abstract record needs a Java type of that
-name, a sealed interface (`Endpoint`, `SecurityScheme`). A subtype nothing binds, written at that slot in a value entry,
-leaves the entry's whole value a tree rather than being refused (`UPSTREAM.md`, "A subtype nothing binds, at an abstract
-base's slot in a value entry, leaves the value a tree"), so `TsonServiceDescription` refuses an `http.projection` entry
-whose value is not an `HttpProjection`, naming `bindingsWith`, through which a description's own endpoint subtype binds;
-skipping it would serve the description with that projection's routes missing.
+`TsonHttpSchema.bindings()` under `http.tn`'s, where its `service.*` entries are inert, since a reader asks for a name
+within the schema declaring it; a description of protocols alone wires `TsonServiceSchema` the same way. The map is explicit:
+a class of either `schema` package binds only by being named there, and a name both maps bind is refused, since within one
+closure a name means one thing. Map keys bind as `String` whatever the key type, so `{http.verb => endpoint}` is `Map<String,
+Endpoint>`. A slot typed by an abstract record needs a Java type of that name, a sealed interface (`Endpoint`,
+`SecurityScheme`). A subtype nothing binds, written at that slot in a value entry, leaves the entry's whole value a tree
+rather than being refused (`UPSTREAM.md`, "A subtype nothing binds, at an abstract base's slot in a value entry, leaves the
+value a tree"), so `TsonServiceDescription` refuses an `http.projection` entry whose value is not an `HttpProjection`, naming
+`bindingsWith`, through which a description's own endpoint subtype binds; skipping it would serve the description with that
+projection's routes missing.
 
 **What a server publishes and warms comes from the description**, not a document beside it:
 

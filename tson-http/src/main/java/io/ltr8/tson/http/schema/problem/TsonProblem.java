@@ -1,4 +1,4 @@
-package io.ltr8.tson.http;
+package io.ltr8.tson.http.schema.problem;
 
 import io.ltr8.annotation.Typename;
 import io.ltr8.tson.base.Diagnostic;

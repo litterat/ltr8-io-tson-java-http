@@ -2,15 +2,17 @@
 
 Everything that is about *TSON over HTTP* rather than about a particular server, and the HTTP half of the service
 description. The layout rule, shared with `tson-service`: **the root package is the API; `schema` holds only the classes
-that mirror the module's `.tn` types, each carrying `@Typename`; `internal` is unexported machinery.** The schemas
-(`src/main/resources`) are `problem.tn`, `deployment.tn` and `http.tn`. The root `io.ltr8.tson.http` holds the codec and
-the rest of the core, `TsonHttpSchema` (the holder of `http.tn`), `TsonServiceDescription`, `TsonServiceCoverage`,
-`Route`, `PayloadType` and `RequestPlacement`, with the package-private `ChosenTypes` and `HeaderTemplate`.
-`io.ltr8.tson.http.schema` is exported and holds the classes mirroring `http.tn` (`HttpProjection`, `Endpoint`,
-`Operation`, `Binding`, `Resource`, `SecurityScheme` and the rest). `TsonBindings` and the protocol description are
-`tson-service`, which this module depends on and re-exports (`requires transitive`); `io.ltr8.tson.http.schema` imports
-`io.ltr8.tson.service.schema` for `Exchange` and `Protocol`, as `http.tn` imports `service.tn`, and imports nothing of
-this module's other packages. Start with the note for the type you are touching:
+that mirror a `.tn` type, each carrying `@Typename`; `internal` is unexported machinery.** The schemas
+(`src/main/resources`) are `problem.tn`, `deployment.tn` and `http.tn`. The root `io.ltr8.tson.http` holds the codec,
+the rest of the core, the holder of each schema (`TsonHttpSchema`, `TsonProblemSchema`, `TsonDeploymentSchema`),
+`TsonServiceDescription`, `TsonServiceCoverage`, `Route`, `PayloadType` and `RequestPlacement`, with the package-private
+`ChosenTypes` and `HeaderTemplate`. The mirrors of `http.tn`, whose root map is the module's own, sit in
+`io.ltr8.tson.http.schema` (`HttpProjection`, `Endpoint`, `Operation`, `Binding`, `Resource`, `SecurityScheme` and the
+rest); those of each other schema the module owns sit in `schema.<root map>`: `schema.problem` (`TsonProblem`,
+`TsonProblemDiagnostic`) and `schema.deployment` (`TsonDeployment`). A `schema` package names nothing of the root, and all
+three are exported. `TsonBindings` and the protocol description are `tson-service`, which this module depends on and
+re-exports (`requires transitive`); `io.ltr8.tson.http.schema` imports `io.ltr8.tson.service.schema` for `Exchange` and
+`Protocol`, as `http.tn` imports `service.tn`. Start with the note for the type you are touching:
 
 | Working in | Read (`design/…`) |
 |---|---|
@@ -19,7 +21,7 @@ this module's other packages. Start with the note for the type you are touching:
 | `TsonSchemaVersions`, `TsonDocumentPeek` use | `schema-versions.md` |
 | `TsonServiceDescription`, `TsonServiceCoverage`, `PayloadType`, `TsonHttpSchema` | `service-reader.md` |
 | `http.tn`'s records, endpoints, placement, `Route`, security schemes | `http-projection.md` |
-| `TsonDeployment`, `deployment.tn` | `deployment-descriptor.md` |
+| `TsonDeployment`, `TsonDeploymentSchema`, `deployment.tn` | `deployment-descriptor.md` |
 | `probe/` (a proposal's probe, its bound records in a sub-package named for it), `UpstreamGapsTest` | `tson-api-surface.md` and the proposal under `proposal/`; `experiments/CLAUDE.md` for the probes that live there |
 
 Rules that bite here:
@@ -36,8 +38,9 @@ Rules that bite here:
   `deployment` (a descriptor is `deployment.descriptor`); a bound class's `@Typename` is the qualified name.
 - `HttpSchemaSource` is upstream's. What stays here is the mapping of its failures to statuses and
   `TsonHttpSchemaSourceIntegrationTest`; do not retest upstream's policy.
-- A class in `schema` binds only by being named in `TsonHttpSchema.bindings()`, an explicit map keyed by qualified name;
-  `TsonHttpSchema.bindingsWith` merges an application's map and refuses a name both bind.
+- A class in `schema` binds only by being named in its schema's holder (`TsonHttpSchema`, `TsonProblemSchema` or
+  `TsonDeploymentSchema`), an explicit map keyed by qualified name; `TsonHttpSchema.bindingsWith` merges an application's
+  map and refuses a name both bind.
 - The description's tests and fixtures are in this module's own package: `OrdersExamples`, `ExternExamples`,
   `TsonServiceDescriptionTest`, `TsonServiceDescriptionExternTest`, `TsonHttpSchemaTest` and the rest, with fixtures under
   `src/test/resources/io/ltr8/tson/http/orders/`. The fixtures import `problem.tn` and one test uses `TsonHttpCodec`.

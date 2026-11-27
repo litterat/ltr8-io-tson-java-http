@@ -60,16 +60,11 @@ Prose inside a live entry follows the same rule: say what is left to do and what
 
 The entries are in build order.
 
-- [ ] **`tson-http`: the mirrors of `problem.tn` and `deployment.tn`** — Both modules follow one layout: the root package
-  is the API, `schema` holds the classes mirroring the module's `.tn` types, `internal` is unexported. `tson-http`'s
-  `TsonProblem`, `TsonProblemDiagnostic` and `TsonDeployment` mirror two other schemas and still sit in the root. The rule
-  is that mirrors of a module's own root map sit in `…schema` and mirrors of another schema the module owns in
-  `…schema.<root>`, as the library's `io.ltr8.tson.schema.meta` does: they move to `io.ltr8.tson.http.schema.problem` and
-  `io.ltr8.tson.http.schema.deployment`, and `TsonDeployment`'s schema-holder statics split off into a root-package
-  holder. Constraint: the description layer resembles the sibling's `tson-schema`, a meta layer plus a reader over what
-  resolves, and may one day move there in part or whole; so `tson-service` takes no dependency on `tson-http` and keeps
-  its vocabulary free of anything HTTP. One HTTP fact stays in the reader on purpose: a business error's pinned `status`,
-  read by field name from the error type, is the `http.projection` rule and needs no import of `problem.tn`.
+- [ ] **Keep the description layer free of HTTP** — The description layer resembles the sibling's `tson-schema`, a meta layer
+  plus a reader over what resolves, and may one day move there in part or whole; so `tson-service` takes no dependency on
+  `tson-http` and keeps its vocabulary free of anything HTTP. One HTTP fact stays in the reader on purpose: a business
+  error's pinned `status`, read by field name from the error type, is the `http.projection` rule and needs no import of
+  `problem.tn`.
 - [ ] **After the join, in `tson-service`** — The join is built (`TsonServiceProtocol`, `design/invoke.md`, "The join").
   What remains of the protocol layer: the code taking a call document to an invocation and the outcome to a return, the
   rpc wire form (`call` and `return` documents addressed by `ExchangeName`), a capability of the service and not a module

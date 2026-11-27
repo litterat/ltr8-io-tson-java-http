@@ -139,8 +139,11 @@ public final class TsonHttpSchema {
      * http.placement}, folded into each endpoint -- is not listed.
      *
      * <p>A description will not read without them: an entry no class binds is held as a tree, and {@link
-     * #describedBy} reads bound records. Bound per schema instead ({@code TsonBindings.bySchema}), this map may stand
-     * under this schema's identity and {@link TsonServiceSchema#bindings()} under {@code service.tn}'s.
+     * #describedBy} reads bound records. Bound per schema instead ({@code TsonBindings.bySchema}), this map stands
+     * under this schema's identity and {@link TsonServiceSchema#bindings()} under {@code service.tn}'s. The {@code
+     * service.*} entries this map carries are inert under {@code http.tn}'s key: a reader asks for a name within the
+     * schema declaring it, so {@code service.tn}'s names are asked under its own key and bind only through the map
+     * keyed there.
      */
     public static Map<String, Class<?>> bindings() {
         return BINDINGS;

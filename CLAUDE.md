@@ -70,8 +70,8 @@ what it can do (`design/service-description.md`).
 - `tson-service`, `tson-http` and `tson-http-jdk` take **no external runtime dependencies**. tson-java's own modules
   (`io.ltr8:tson`, `io.ltr8:tson-json`, `io.ltr8:ltr8-bind`, `io.ltr8:ltr8-annotation`, `io.ltr8:tson-atom`) are not
   external. An adapter's framework dependency stops at that adapter and never leaks back into `tson-http`.
-- Every module has a real `module-info.java`; module names mirror each module's root exported package. All three
-  servers are genuine JPMS named modules, so nothing falls back to the classpath.
+- Every module has a real `module-info.java`; module names mirror each module's root exported package. Only the main
+  source sets are named modules; the `demo` and `test` source sets have no `module-info.java` and run on the class path.
 
 ## Modules and dependency direction
 
@@ -81,7 +81,7 @@ depends on neither, `tson-http` names no adapter type, and the adapters never de
 
 | Module | Holds |
 |---|---|
-| `tson-http` (`io.ltr8.tson.http`) | Server-agnostic core: media types, `TsonHttpCodec`, `TsonHttpException` (the whole status policy), `problem.tn`, the two schema headers, `TsonSchemaCatalog`, `TsonSchemaVersions`, `TsonDeployment`; the HTTP half of the service description: `http.tn` (`TsonHttpSchema`, mirrors in `io.ltr8.tson.http.schema`), `TsonServiceDescription`, `Route`; depends on `tson-service` |
+| `tson-http` (`io.ltr8.tson.http`) | Server-agnostic core: media types, `TsonHttpCodec`, `TsonHttpException` (the whole status policy), `problem.tn`, the two schema headers, `TsonSchemaCatalog`, `TsonSchemaVersions`, `TsonDeployment` (held by `TsonDeploymentSchema`); the HTTP half of the service description: `http.tn` (`TsonHttpSchema`, mirrors in `io.ltr8.tson.http.schema`), `TsonServiceDescription`, `Route`; depends on `tson-service` |
 | `tson-service` (`io.ltr8.tson.service`) | A service's protocol description, independent of HTTP: `service.tn` (`TsonServiceSchema`, mirrors in `io.ltr8.tson.service.schema`), `ExchangeName`, the join `TsonServiceProtocol`, and `TsonBindings` |
 | `tson-http-jdk` (`io.ltr8.tson.http.jdk`) | Adapter for `com.sun.net.httpserver`; zero dependencies; the reference the other two are read against |
 | `tson-http-javalin` (`io.ltr8.tson.http.javalin`) | Adapter for Javalin 6.7.0 (Jetty 11, `jakarta.*`) |

@@ -11,7 +11,6 @@ import io.ltr8.tson.http.Route;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonHttpSchema;
-import io.ltr8.tson.http.TsonProblemDiagnostic;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaCatalog;
 import io.ltr8.tson.http.TsonSchemaHeader;
@@ -21,6 +20,7 @@ import io.ltr8.tson.http.helidon.TsonHandler;
 import io.ltr8.tson.http.helidon.TsonMediaSupport;
 import io.ltr8.tson.http.helidon.TsonSchemaHandler;
 import io.ltr8.tson.http.schema.HttpVerb;
+import io.ltr8.tson.http.schema.problem.TsonProblemDiagnostic;
 import io.ltr8.tson.service.TsonBindings;
 
 import java.util.ArrayList;

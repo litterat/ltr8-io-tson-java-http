@@ -4,9 +4,9 @@ import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpSchema;
-import io.ltr8.tson.http.TsonProblem;
 import io.ltr8.tson.http.TsonProblemSchema;
 import io.ltr8.tson.http.TsonSchemaCatalog;
+import io.ltr8.tson.http.schema.problem.TsonProblem;
 import io.ltr8.tson.json.Json;
 import io.ltr8.tson.json.tree.JsonValue;
 import io.ltr8.tson.service.TsonServiceSchema;
@@ -159,9 +159,8 @@ class OrderServerTest {
     }
     /**
      * <b>The schemas name their identities literally, so something has to hold them to the constants.</b>
-     * They were Java text blocks interpolating {@code TsonProblemSchema.ID}; as real {@code .tn} files they
-     * cannot, and a published document naming its imports literally is correct anyway. This is what the
-     * interpolation used to guarantee for free.
+     * A {@code .tn} file cannot interpolate {@code TsonProblemSchema.ID}, and a published document naming its
+     * imports literally is correct anyway; this holds each identity to its constant.
      */
     @Test
     void identitiesMatchTheConstants() {

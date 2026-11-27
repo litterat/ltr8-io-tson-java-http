@@ -1,30 +1,23 @@
-package io.ltr8.tson.http;
+package io.ltr8.tson.http.schema.deployment;
 
 import io.ltr8.annotation.Field;
 import io.ltr8.annotation.Typename;
-import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.policy.IdentifierPolicy;
 import io.ltr8.tson.base.policy.LimitsPolicy;
 import io.ltr8.tson.base.policy.ProcessorPolicy;
 import io.ltr8.tson.base.policy.TokenPolicy;
-import io.ltr8.tson.base.source.SchemaAccess;
-import io.ltr8.tson.service.TsonBindings;
 import io.ltr8.unicode.RestrictionLevel;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.lang.Character.UnicodeScript;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
 /**
- * How one instance is configured, read from a {@code deployment.tn} document.
+ * How one instance is configured: {@code deployment.tn}'s {@code deployment.descriptor}, which {@code
+ * TsonDeploymentSchema.read} reads from source text the caller hands it.
  *
  * <p>The third artifact kind, beside a schema (what a document must be) and an API description (what an
  * endpoint offers). {@code deployment.tn} carries the argument for why the [TSON-DATA] §8.2 policies can
@@ -34,17 +27,8 @@ import java.util.Set;
  * descriptor's root is {@code !deployment.descriptor { … }} and the profile is a {@code
  * deployment.acceptance_profile}.
  *
- * <p><b>Two rules this class exists to enforce by shape rather than by documentation.</b>
- *
- * <ul>
- *   <li><b>A processor is handed a descriptor.</b> There is no {@code load()} that searches a path, a
- *       classpath or an environment variable, and there will not be one: a descriptor is diffable where an
- *       environment variable is not, but a runtime that loads whatever it finds still lets a container image
- *       change a security policy with no code diff. {@link #read} takes the source text and the caller says
- *       where it came from.</li>
- *   <li><b>No document may name one.</b> Nothing here registers a descriptor with a schema source, and a
- *       server must not publish one. {@link #profile} is what a counterparty gets, and it is derived.</li>
- * </ul>
+ * <p><b>No document may name a descriptor, and a server never publishes one.</b> {@link #profile} is what a
+ * counterparty gets, and it is derived.
  *
  * <p><b>A stated policy is applied exactly as written; an absent one is not a permissive one.</b> There are no
  * partial overrides falling back to the library's defaults: a default is the library's to move, and a security
@@ -55,21 +39,6 @@ import java.util.Set;
 @Typename(name = "deployment.descriptor")
 public record TsonDeployment(String name, Optional<Listener> listener, Optional<Policy> policy,
                              @Field("schema_hosts") List<String> schemaHosts) {
-
-    /** The schema a descriptor names. Published like any other, unlike the descriptors it governs. */
-    public static final String ID = "https://tson.io/2026/40/io/ltr8/http/deployment.tn";
-
-    private static final String SOURCE = readResource("/deployment.tn");
-
-    private static final Map<String, Class<?>> BINDINGS = Map.of(
-            "deployment.descriptor", TsonDeployment.class,
-            "deployment.acceptance_profile", AcceptanceProfile.class,
-            "deployment.listener", Listener.class,
-            "policy.restriction_level", RestrictionLevel.class,
-            "policy.processor", Policy.class,
-            "policy.identifier_policy", Policy.Identifiers.class,
-            "policy.token_policy", Policy.Tokens.class,
-            "policy.limits", Policy.Limits.class);
 
     /**
      * An optional list a document omits arrives as {@code null}, and the binder does not normalise it — the
@@ -227,7 +196,7 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
          * script a long alias and an ISO 15924 short alias and matching is case-insensitive, so {@code Latin},
          * {@code LATIN}, {@code latin} and {@code Latn} are four spellings of one script; each is written back
          * as its long alias, a combination sorted, so two policies naming one set compare equal. {@code
-         * policy.tn} types a name as {@code text}, since a set of 171 values that grows with the UCD has no
+         * policy.tn} types a name as {@code text}, since a set of values that grows with the UCD has no
          * place in a published schema, so this is where a name becomes a script.
          *
          * <p>A name that is not a script <b>stops the read</b>, which is deliberate: a descriptor is loaded at
@@ -291,39 +260,6 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
     public record AcceptanceProfile(String name, Policy policy) {
     }
 
-    /** This schema's own source text, for a server that publishes it. */
-    public static String source() {
-        return SOURCE;
-    }
-
-    /**
-     * The bindings for every type {@code deployment.tn} declares, for a server whose own {@link Tson} reads
-     * or writes a descriptor or a profile and should not restate this schema's vocabulary.
-     */
-    public static Map<String, Class<?>> bindings() {
-        return BINDINGS;
-    }
-
-    /**
-     * A descriptor, read from {@code source}.
-     *
-     * <p>Takes text rather than a path, a name or a key, which is the whole of rule 1: the caller decides
-     * where a descriptor comes from and that decision is visible at the call site.
-     */
-    public static TsonDeployment read(String source) {
-        Tson tson = tson();
-        return tson.objectReader().read(source, TsonDeployment.class);
-    }
-
-    /** A {@link Tson} with this schema resolved and bound — what {@link #read} reads through. */
-    public static Tson tson() {
-        Tson tson = Tson.of(ProcessorConfig.defaults()
-                .withSchemaAccess(SchemaAccess.of(uri -> SOURCE))
-                .withDataBindContext(TsonBindings.of(BINDINGS)));
-        tson.resolve(SOURCE);
-        return tson;
-    }
-
     /** The processor policy this descriptor states, or empty to leave the library's defaults alone. */
     public Optional<ProcessorPolicy> processorPolicy() {
         return policy.map(Policy::toProcessorPolicy);
@@ -353,16 +289,5 @@ public record TsonDeployment(String name, Optional<Listener> listener, Optional<
      */
     public AcceptanceProfile profile(ProcessorPolicy inForce) {
         return new AcceptanceProfile(name, Policy.of(inForce));
-    }
-
-    private static String readResource(String path) {
-        try (InputStream in = TsonDeployment.class.getResourceAsStream(path)) {
-            if (in == null) {
-                throw new IOException(path + " not found on the classpath");
-            }
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
     }
 }

@@ -68,11 +68,11 @@ field on a response through `TsonSchemaHeader.format`, a List of one.
   put nothing status-shaped anywhere else. Problem `type` URIs live under `https://ltr8.io/2026/40/http/problems/`
   — `ltr8.io` is the implementation resource, kept apart from the specification's `tson.io`, where schema
   identities live. The revision rides in it too, so a spec bump moves it with everything else.
-- `TsonProblem` / `TsonProblemDiagnostic` / `TsonProblemSchema` / `problem.tn` — the error body, its schema,
-  and the reader that proves the two agree. **This project's own schema, maintained here**, kept apart from `tson-cli`'s
-  `diagnostics.tn` because a CLI reports on files and a server reports on requests, so the two are not shared. Its one root
-  is the schema map `problem`: `problem.details` follows **RFC 9457**; `problem.diagnostic` stays close to what a TSON read
-  produces, because that is what it reports.
+- `TsonProblem` / `TsonProblemDiagnostic` (in `io.ltr8.tson.http.schema.problem`) / `TsonProblemSchema` / `problem.tn` —
+  the error body, its schema, and the reader that proves the two agree. **This project's own schema, maintained here**,
+  kept apart from `tson-cli`'s `diagnostics.tn` because a CLI reports on files and a server reports on requests, so the
+  two are not shared. Its one root is the schema map `problem`: `problem.details` follows **RFC 9457**;
+  `problem.diagnostic` stays close to what a TSON read produces, because that is what it reports.
 - `io.ltr8.tson.base.source.HttpSchemaSource` / `SchemaFetchException` — **upstream's, not this module's** (see
   above). What stays here is the half upstream cannot know: `TsonHttpException.from` maps a fetch `Reason`
   through `Diagnostic.Code.of` into the one fetch status table, and `TsonHttpSchemaSourceIntegrationTest` pins
