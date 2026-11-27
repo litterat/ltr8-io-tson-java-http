@@ -11,8 +11,10 @@
   `service.binding`, `@service.summary`. Every root name of an import closure is reserved in each importer
   ([TSON-SCHEMA] §2.2.3), and a description imports this layer beside the domain schemas it describes,
   so a layer declaring `document` or `resource` at its root would forbid a domain those names. Nested in
-  one map, it reserves `service` alone. An entry refers to another by the same path, from inside the map
-  as from outside it, since a name resolves in the schema's one namespace.
+  one map, it reserves `service` only against a root that is no schema map: a nested schema map is open,
+  so another schema's `service => !schema { ... }` adds its members to this one, and only a path both
+  declare collides. An entry refers to another by the same path, from inside the map as from outside it,
+  since a name resolves in the schema's one namespace.
 
   The layer describes a service from the protocol's side, not the host language's. A protocol is a named
   set of exchanges, each one request-and-reply: a request record, a response record and error records. An

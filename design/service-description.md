@@ -27,10 +27,10 @@ the protocol belongs to the projection.
   refer to a type or a value in the namespace it names. Anything others refer into is a schema.
 - The description is a schema importing `service.tn`, resolved at startup (`tson.resolve(API)` then
   `TsonServiceSchema.describedBy`); an unsound description fails startup.
-- Every entry of `service.tn`, its annotations included, is a member of the one schema map `service` at its root, so
-  the layer reserves one root name in every importer. A description writes `!service.protocol`, `@service.safe`; the
-  layer refers between its own entries by the same path; and the reader, the bindings and every `@Typename` use the
-  qualified names. Nothing else is declared at the root.
+- Every entry of `service.tn`, its annotations included, is a member of the one schema map `service` at its root, so the
+  layer costs an importer one root name, against anything that is no schema map. A description writes `!service.protocol`,
+  `@service.safe`; the layer refers between its own entries by the same path; and the reader, the bindings and every
+  `@Typename` use the qualified names. Nothing else is declared at the root.
 - `service.protocol` is a record whose one required field is the namespace `exchanges`, so a qualified name walks the
   field: `orders.exchanges.place_order`. A namespace's `key_type` is required and an identifier family.
 - `@service.safe`, `@service.idempotent` and `@service.destructive` are facts of an exchange, written before its key in
@@ -93,7 +93,10 @@ its values would read back as signatures. `operation` names the inline endpoint,
 map and its module. Each is written by its path from that map.
 
 **One root name.** Every root name of an import closure is reserved in each importer, and a clash is unfixable by the
-importer ([TSON-SCHEMA] §2.2.3). A layer declaring `document`, `resource` or `operation` at its root would forbid the
+importer ([TSON-SCHEMA] §2.2.3), unless both declare a schema map of that name: a nested schema map is open, so
+`service => !schema { … }` in another schema adds its members to the layer's, and only a path both declare collides
+(`SchemaSplitProbeTest.theHttpRootIsReservedInEveryDescriptionAndTheServiceMapIsOpenToAll`). A record or type named
+`service` collides. A layer declaring `document`, `resource` or `operation` at its root would forbid the
 domain schemas beside it those names, so every entry of `service.tn`, the annotations included, is a member of the
 schema map `service => !schema { … }`, as the sibling's `policy.tn` nests `policy`. A name resolves in the schema's one
 namespace, so an entry refers to another by its path from inside the map as from outside it (`value_type:

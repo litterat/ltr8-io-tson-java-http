@@ -4,6 +4,7 @@ import io.ltr8.annotation.Annotations;
 import io.ltr8.bind.DataBindContext;
 import io.ltr8.bind.DataBindException;
 import io.ltr8.bind.DataNameBinder;
+import io.ltr8.tson.service.internal.Landed;
 import io.ltr8.tson.service.protocol.Exchange;
 import io.ltr8.tson.service.protocol.ExchangeName;
 import io.ltr8.tson.service.protocol.Protocol;
@@ -84,7 +85,7 @@ import java.util.regex.Pattern;
  * <p><b>A payload type named through an extern</b> ([TSON-SCHEMA] §5.13) is judged as the foreign entry it lands on:
  * an error's status pin, a response header's field, a request's placement and its chosen types read the foreign
  * record, and the names its declaration writes are looked up in the foreign schema's namespace, never the
- * description's ({@link Landed}). A route names the type as the description wrote it; {@link #payloadTypes()} names
+ * description's ({@code Landed}). A route names the type as the description wrote it; {@link #payloadTypes()} names
  * it where it is declared, the declaring schema and the entry's own name, which is what the binder is asked ({@link
  * PayloadType}).
  *
@@ -334,7 +335,7 @@ public final class TsonServiceDescription {
      * type, and that field is one scalar, as a path segment's is. An endpoint with no response type -- a document, or
      * one answering no body -- has nothing to expand a variable from, so its headers are literals. A response type
      * named through an extern or a plain alias is the record it lands on, and each field's type is judged as what it
-     * lands on from that record's landing, past any further extern or plain alias ({@link Landed}).
+     * lands on from that record's landing, past any further extern or plain alias ({@code Landed}).
      */
     private static void requireTemplatesExpand(String label, Map<String, String> headers, Optional<TypeRef> response,
                                                TsonLinkedSchema scope) {

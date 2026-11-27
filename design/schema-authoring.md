@@ -18,11 +18,12 @@ touches, and the schema-language rules that read like bugs when they bite. Curre
   only thing that catches it going stale. Keep it.
 - A schema importing core reserves every root name of the bundled documents, so an application type is never named
   `int64`, `schema`, `host`, `date`, `uri`, `media_type`, `title` or the like.
-- A vocabulary this project publishes declares its entries under one map named for itself, so it reserves one root name
-  in every importer: every root name of a closure is reserved and a clash is unfixable by the importer
-  ([TSON-SCHEMA] §2.2.3). `service.tn` declares everything, annotations included, under `service`, `problem.tn` under
-  `problem` and `deployment.tn` under `deployment`, and each names its own entries by the same path from inside the
-  map. A bound class's `@Typename` is the qualified name (`problem.details`, `deployment.descriptor`).
+- A vocabulary this project publishes declares its entries under one map named for itself, so it costs an importer one root
+  name: every root name of a closure is reserved and a clash is unfixable by the importer ([TSON-SCHEMA] §2.2.3), though a
+  schema map of the same name is open to every importer and only a member path two schemas declare collides
+  (`design/service-description.md`, "One root name"). `service.tn` declares everything, annotations included, under
+  `service`, `problem.tn` under `problem` and `deployment.tn` under `deployment`, and each names its own entries by the same
+  path from inside the map. A bound class's `@Typename` is the qualified name (`problem.details`, `deployment.descriptor`).
 - An optional field is `name?: T`; `name: T?` is a required field admitting `_`. A `text` field accepts any token.
   A `pattern` is I-Regexp and `^`/`$` are literal characters.
 - `^` follows `!name` and takes values; a record derives by `&` alone, which admits a new field, so a misspelt

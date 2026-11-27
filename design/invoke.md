@@ -1,11 +1,12 @@
-# The protocol layer: the data view of a call (bind's `DataProtocol`, the join in tson-service)
+# The protocol layer: the data view of a call (bind's `DataProtocol`, the join in `tson-service`)
 
 How a call is described below the HTTP projection, and why the description takes the data's side rather than the
 language's. The description is `ltr8-bind`'s and is built: `DataBindContext.getProtocol` reads a Java interface as a
 `DataProtocol` of `DataExchange`s, all in `io.ltr8.bind`, and `DataExchangeHandler` is the seam a call is answered
-through. The join, which holds a resolved `!service.protocol` against a `DataProtocol`, is `tson-service`'s and is
-backlog. This note fixes the paradigm they are built to. `BACKLOG.md`, "The module split", says what each piece holds
-and in what order they land. `proposal/bind-invoke.md` is this project's superseded proposal for the same descriptor.
+through. The join, which holds a resolved `!service.protocol` against a `DataProtocol`, is built: `TsonServiceProtocol` in
+`io.ltr8.tson.service.protocol` (`tson-service`), tested by `TsonServiceProtocolTest`. This note fixes the paradigm they
+are built to. `BACKLOG.md`, "The module split", says what is still to build. `proposal/bind-invoke.md` is this
+project's superseded proposal for the same descriptor.
 
 **Invariants**
 
@@ -90,13 +91,50 @@ through the one handler, and a client-side stub in any of them is one handler.
 
 ## The join
 
-The join lives in `tson-service`, the layer that knows both sides, and is backlog; the bind half is built. It holds a
-resolved `!service.protocol` against a `DataProtocol` at startup, finding each exchange with `DataProtocol.exchange(name)`,
-and fails startup on a mismatch in either direction: a Java exchange no schema exchange names, a schema exchange with no
-Java method, a request or response described as a class bound to a type other than the exchange's, a declared error that
-is not one of the exchange's errors and the reverse, and two exchange names of one protocol that land on one
-`DataExchange` (`place_order` and `placeOrder`), which the name rule makes possible. It is the exchange-level counterpart
-of `prepareToRead` (`design/binding.md`): a mismatch is a startup failure, never a 500.
+`TsonServiceProtocol.join(tson, schemaId, protocol, type)` holds a resolved `!service.protocol` entry against the
+`DataProtocol` that `DataBindContext.getProtocol` reads from an interface, finding each exchange with
+`DataProtocol.exchange(name)`. It is the exchange-level counterpart of `prepareToRead` (`design/binding.md`): a
+disagreement is an `IllegalArgumentException` at startup naming the schema, the exchange and the Java method, never a
+500. The result holds each exchange by its `ExchangeName`, in the order the schema writes them, with the `DataExchange`
+serving it, and the `DataProtocol` an invoker or a handler comes from. It lives in `tson-service`, the layer that knows
+both sides.
+
+**What it refuses.** A schema exchange with no Java method; two exchange keys that find one method (`place_order` and
+`placeOrder`), which the name rule makes possible; a Java exchange no schema exchange names; a request or a response one
+side declares and the other does not; a request, a response or an error whose type and descriptor disagree; a declared
+error the method does not declare and the reverse; and one error named twice, two names of the schema that bind to one
+class. It refuses too a schema that is not resolved, an entry that is no `service.protocol` or whose value did not bind,
+and an interface bind refuses, naming the protocol.
+
+**How types agree.** A type the schema writes is landed as a reader lands it (`internal.Landed`): past an extern to the
+foreign entry, past every plain alias hop, each name looked up in the namespace of the entry that writes it. Then a
+record agrees by the class its landed entry binds to, asked of the `Tson`'s bind context by the declaring schema and
+the entry's name, compared with the descriptor's `dataClass()`, and a record nothing binds is refused. An array agrees
+by kind and element, a map by kind, key and value. An atom or an enum agrees when the atom family a read uses produces
+the descriptor's class, the question the library asks at a record's atom field, so `int32` agrees with `int` and not
+with `String`. A choice agrees with a closed union, one whose members are all known at startup, when each variant is a
+record bound to a member and each member is the class of a variant. A request and an error are records on both sides.
+
+**What it does not judge.** A tuple, a namespace type, a record written in place, a reference, `void`, a dependent type
+and an application are refused as shapes the join does not judge, with what to write instead; so a protocol answering a
+namespace type cannot be joined. A choice against an open union is not judged either.
+
+**What it does not check.** A record's fields: the join compares the class a record binds to and relies on the schema
+having been prepared for reading (`design/binding.md`), where a field with no component, or a component no field fills,
+is refused. Facets: an array's item bounds, a map's, an atom's `min`, `max` or `pattern`, since the family is asked
+whether it produces the class and never whether every value of the class is one the type admits. A bridge's conversion:
+the invoker takes the bridged class and returns it, so a caller converts a bridged request with the bridge's `toObject`
+before invoking and a response with its `toData` before writing it.
+
+**It asks past every alias hop; the HTTP reader asks as written.** The join asks the bind context for the entry a type lands
+on past every plain alias hop, which is what a TSON read asks. The HTTP reader (`ChosenTypes`, `PayloadType`) asks a plain
+alias as written (`design/service-reader.md`), so a payload type that is an alias of a record is the alias's name to a route
+and the record to the join. `BACKLOG.md`, "A plain-alias payload type is named as what a read asks", holds the question.
+
+**What is built and what is not.** Dispatch from a call document, the rpc wire form, a `!service.protocol` document
+written from a `DataProtocol` and the proxy over a handler are not built; a lookup from a `DataExchange` back to its
+`ExchangeName` is not either. The join's atom check copies one rule from the compiler for the kernel's `boolean`, and
+its closure test for a union is its own; both are pinned upstream (`UpstreamGapsTest`).
 
 `getProtocol` analyses an interface whole on its first call and caches the result per context, so every call for one
 interface returns the same `DataProtocol`, which is immutable; a refusal is a `DataBindException` at that call. The join

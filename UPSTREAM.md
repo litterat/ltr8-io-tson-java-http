@@ -327,7 +327,14 @@ and would otherwise have to declare its vocabulary inside `service.tn`. Pinned b
 `AffordanceProbeTest.anInstanceImportingTwoSchemasThrowsAtAReferenceThroughAField`, which asserts the exception type
 and message from all three entry points and flips when the read reports or succeeds.
 
-**Priority:** medium.
+Splitting `service.tn` into a protocol schema and an http schema (`proposal/schema-split.md`) makes the shape ordinary:
+`SchemaSplitProbeTest.aDataDocumentImportingTheProtocolDescriptionAndTheHttpSchemaThrows` pins the same throw for a
+protocol description beside the http schema. A schema document is not affected, so a description importing both reads,
+and a data document importing that description alone reads.
+
+**Priority:** medium. The split does not raise it: every shape the project plans has a route that reads, a description
+importing both schemas or a data document importing one description, so the gap costs a workaround and blocks nothing.
+It is the entry to raise if a plan needs a data document importing a protocol description and the http schema as two.
 
 ---
 
@@ -397,6 +404,65 @@ TSON registry does, or not judging a closure's records that the read never reach
 `UpstreamGapsTest.jsonBindingRefusesANamespaceComponentInTheClosure`, which flips when the JSON read binds.
 
 **Priority:** medium.
+
+---
+
+## 19. A union read from a sealed hierarchy is not reported closed
+
+**Hit:** `TsonServiceProtocol.join` must know that a choice's members are all known at startup before it agrees the
+choice with a union descriptor. `DataClassUnion.isSealed()` cannot say so: it means "refuses `addMemberType`", and bind
+builds the union of every sealed hierarchy with it false, an all-final one included, since a non-sealed member stands
+for implementations loaded later. For an all-final hierarchy the flag changes no read, but it cannot tell such a union
+closed, and `addMemberType` admits any class into it, `String` included.
+
+**The change:** closure as a fact of its own on a union, true for a sealed hierarchy whose members are all final, and
+`addMemberType` refusing a class outside such a hierarchy.
+
+**Workaround in place:** `TsonServiceProtocol` judges closure from the Java class, sealed with every member final.
+Pinned by `UpstreamGapsTest.aUnionReadFromASealedHierarchyWithFinalLeavesIsNotReportedSealed`, worded as a constraint
+because the flag's meaning is deliberate; it flips when bind reports such a hierarchy sealed.
+
+**Priority:** low.
+
+---
+
+## 20. The atom family a bind-mode read uses for an entry is not one public call
+
+**Hit:** to ask at an exchange position the question the library asks at a record's field, whether the entry's atom
+family produces the Java class, `TsonServiceProtocol` calls `AtomParsers.forRead`. For the kernel's `boolean`, an enum
+of `true` and `false`, that hands back the enum's parser, which produces the member's text, so `boundTo(boolean.class)`
+says no; yet a bind-mode read of a `boolean` field into a `boolean` component succeeds, because the compiler's enum
+reader keys on the name `boolean` and reads it with `BuiltinTypeVocabulary.lookup("boolean")`, a rule in a
+package-private part of the compiler.
+
+**The change:** one public method giving the atom type a bind-mode read uses for an entry, so a consumer asks the
+library's own question and copies no rule.
+
+**Workaround in place:** `TsonServiceProtocol` copies the one name-keyed rule for `boolean`. Pinned by
+`UpstreamGapsTest.thePublicAtomRouteCannotProduceABooleanThatABindModeReadDelivers`, which flips when the public route
+answers as the read does; then the copy goes.
+
+**Priority:** low.
+
+---
+
+## 21. A local declaration colliding with an imported one names neither schema
+
+**Hit:** found measuring the split of `service.tn` (`proposal/schema-split.md`). A schema declaring `service.exchange`
+inside the open `service` map it imports, or a record `service`, is refused with *"'service.exchange' collides with an
+entry of the same name brought in by !!import"* and a diagnostic whose `schemaId` is empty. [TSON-SCHEMA] §2.2.3 says
+the diagnostic names both declaring schemas, and a collision between two imports does: *"'service.binding' is declared
+by two different schemas reached through !!import ('…/http-1.tn' and '…/domain-1.tn')"*. This is a library gap against
+the spec, not spec feedback.
+
+**The change:** the local-versus-import collision naming the importing schema and the one it collides with, as the
+two-import collision does.
+
+**Workaround in place:** none needed; the collision is refused either way and the message still names the member.
+Pinned by `SchemaSplitProbeTest.aMemberBothSchemasDeclareCollidesNamingNeitherSchema`, which flips when the message
+names the schemas.
+
+**Priority:** low.
 
 ---
 

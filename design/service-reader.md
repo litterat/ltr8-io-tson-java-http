@@ -49,21 +49,21 @@ rather than a published contract no client can act on:
   exchange's facts, a responseless endpoint's status, the media types, no two endpoints sharing a verb and a path, and
   each response header's template, is `design/http-projection.md`.
 
-**The reader follows an extern** ([TSON-SCHEMA] §5.13), the way one description names two versions of one schema
-(`order_v1`, `order_v2`), which an import of both cannot. An extern entry's body is an `Extern`, so every check that
-looks inside a payload type reads its landing (`Landed`): the error's pin, a response header's field, a request's
-placement and chosen types are the foreign record's. Each type expression is resolved from the landing of the entry that
-writes it, hop by hop, so an array of a third schema has its element type looked up where the array is declared. The
+**The reader follows an extern** ([TSON-SCHEMA] §5.13), the way one description names two versions of one schema (`order_v1`,
+`order_v2`), which an import of both cannot. An extern entry's body is an `Extern`, so every check that looks inside a
+payload type reads its landing (`io.ltr8.tson.service.internal.Landed`): the error's pin, a response header's field, a
+request's placement and chosen types are the foreign record's. Each type expression is resolved from the landing of the entry
+that writes it, hop by hop, so an array of a third schema has its element type looked up where the array is declared. The
 landing's namespace is enough even where its schema holds the entry by import: an import merges the declarer's whole
 namespace transitively and refuses a redefinition ([TSON-SCHEMA] §2.2.3), so no lookup of the declaring schema is made
-(`TsonServiceDescriptionExternTest`). A plain alias hop within a schema is followed the same way for the checks that judge
-a shape (`Landed.pastAliases()`): a request, response or error that is a plain alias of a record is that record, and a
-field typed by an alias of a record or array is no scalar (`TsonServiceDescriptionTest`). A route keeps the name written;
-`payloadTypes()` and `payloadType(ref)` give the `PayloadType`, the declaring schema's `!!id` and the entry's own
-name, which for an extern's landing and a plainly named entry is what the binder is asked (by `identity()`) and what
-the codec reads the type under in either encoding. So a context binding `order_v1` binds nothing a read asks for, and
-is refused at startup (`design/binding.md`). For a plain alias the name is the alias as written, and a TSON read asks
-for the entry the alias reaches (`TsonServiceDescriptionTest.aPayloadTypeThatIsAPlainAliasIsNamedAsWritten`).
+(`TsonServiceDescriptionExternTest`). A plain alias hop within a schema is followed the same way for the checks that judge a
+shape (`Landed.pastAliases()`): a request, response or error that is a plain alias of a record is that record, and a field
+typed by an alias of a record or array is no scalar (`TsonServiceDescriptionTest`). A route keeps the name written;
+`payloadTypes()` and `payloadType(ref)` give the `PayloadType`, the declaring schema's `!!id` and the entry's own name, which
+for an extern's landing and a plainly named entry is what the binder is asked (by `identity()`) and what the codec reads the
+type under in either encoding. So a context binding `order_v1` binds nothing a read asks for, and is refused at startup
+(`design/binding.md`). For a plain alias the name is the alias as written, and a TSON read asks for the entry the alias
+reaches (`TsonServiceDescriptionTest.aPayloadTypeThatIsAPlainAliasIsNamedAsWritten`).
 
 ## Wiring, and what a server derives
 

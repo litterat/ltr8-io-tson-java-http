@@ -60,60 +60,43 @@ Prose inside a live entry follows the same rule: say what is left to do and what
 
 The entries are in build order.
 
-- [ ] **`tson-service`: the description's tests, the protocol reader and the schema split** — The module exists and holds the
-  main sources: `service.tn`, `io.ltr8.tson.service.protocol`, `io.ltr8.tson.service.http` and `TsonBindings`. It depends on
-  tson-java and on `ltr8-bind` directly, not on `tson-http`. Constraint: this layer resembles the sibling's `tson-schema`, a
-  meta layer plus a reader over what resolves, and may one day move there in part or whole; so it takes no dependency on
-  `tson-http`, mirrors `tson-schema`'s shapes where one fits, and keeps its vocabulary free of anything HTTP beyond the
-  `!service.http` projection itself. One HTTP fact stays in the reader on purpose: a business error's pinned `status`, read
-  by field name from the error type, is the `!service.http` projection's rule and needs no import of `problem.tn`. What
-  remains:
+- [ ] **`tson-service`: the description's tests and the schema split** — The module holds `service.tn`, the protocol
+  records and the join (`io.ltr8.tson.service.protocol`), the HTTP projection and its reader (`io.ltr8.tson.service.http`),
+  and `TsonBindings`; its tests so far are the join's. It depends on tson-java and on `ltr8-bind` directly, not on
+  `tson-http`. Constraint: this layer resembles the sibling's `tson-schema`, a meta layer plus a reader over what
+  resolves, and may one day move there in part or whole; so it takes no dependency on `tson-http`, mirrors
+  `tson-schema`'s shapes where one fits, and keeps its vocabulary free of anything HTTP beyond the `!service.http`
+  projection itself. One HTTP fact stays in the reader on purpose: a business error's pinned `status`, read by field name
+  from the error type, is the `!service.http` projection's rule and needs no import of `problem.tn`. What remains:
   1. **The description's tests and fixtures are still in `tson-http`'s test tree** (`OrdersExamples`, `ExternExamples`,
      `TsonServiceDescriptionTest` and the rest, in package `io.ltr8.tson.service.http`), because the fixtures import
-     `problem.tn` and one test uses `TsonHttpCodec`. They sort to their homes when the HTTP half separates from the
-     protocol half (next); until then `tson-service` has no tests of its own.
-  2. **The protocol side has no reader of its own, and the schema is not split.** The Java separation is in place:
-     `io.ltr8.tson.service.protocol` imports nothing from `http`. The schema class (`TsonServiceSchema`), the description
-     reader (`TsonServiceDescription`) and the type-resolution helpers `Landed`, `ChosenTypes` and `PayloadType` sit in
-     `http`, since `service.tn` is one schema, its bindings map names records of both sides, the reader's body is the
-     `!service.http` reader and every current user of the helpers is there. The join will need `Landed`, `ChosenTypes`
-     and `PayloadType`, or what they do, reachable from `protocol`; where they move is decided when the join is built. In
-     the schema, and only after a probe: `service.tn` already references one way (the HTTP side reaches the protocol side
-     through `service.operation` composing `service.signature`,
-     `service.binding.exchange` and `service.http.binds`; nothing on the protocol side names anything HTTP), so it could
-     become a protocol schema and an HTTP schema importing it. Not yet measured: a description importing both, where a
-     binding's reference walks `orders.exchanges.get_order` (the open `UPSTREAM.md` entry "A data document importing two
-     schemas throws at a reference through a record value's field" is about the same walk in a data document). It also
-     renames every HTTP-side name under a new root, which is cheap only while nothing is published, and the root name is
-     the user's to choose. The gRPC projection needs the two-import case to work regardless.
-  3. **The published-artifacts path is unrun with `tson-service`.** It needs `io.ltr8:ltr8-bind` and
-     `io.ltr8:ltr8-annotation` as direct coordinates, and the sibling's mavenLocal artifacts predate its current `main`; run
-     `-Ptson.published=true` after the sibling republishes.
-- [ ] **The join, in `tson-service`** — A resolved `!service.protocol` held against `ltr8-bind`'s
-  `DataProtocol` at startup, finding each exchange with `DataProtocol.exchange(name)`, which reads a data name
-  (`place_order`) as the Java method it spells (`placeOrder`). Startup fails on a Java exchange no schema exchange names,
-  a schema exchange with no Java method, a request or response described as a class bound to a type other than the
-  exchange's, a declared error that is not one of the exchange's errors and the reverse, and two exchange names of one
-  protocol that land on one `DataExchange`, as `prepareToRead` fails a bound-class mismatch. Bind already refuses what
-  is wrong with the interface (overloads, a request that is no record, a promise-typed return, a thrown type that does
-  not bridge, a class outside a package exported to every module), so the join does not re-check it. The invoker
-  returns the response and throws a declared error; `DataExchange.error(thrown)` and the error's bridge give its record,
-  and whether a projection writes that record or rethrows is the projection's. The other direction lives here too: a
-  `!service.protocol` document written from a `DataProtocol`, so a `!service.http` can be built over a Java interface that
-  already exists. Bind maps a data name to a Java name and never the reverse, so the Java-to-data name mapping is this
-  layer's to own; `@service.safe`, `@service.idempotent` and `@service.destructive` have no Java counterpart and must
-  come from somewhere the writer reads. Bind ships no proxy, so a client-side stub is a `DataExchangeHandler` and the
-  proxy over it is this layer's. The rpc wire form (`call` and `return` documents addressed by `ExchangeName`, and the
-  code taking a call to an invocation and the outcome to a return) is a capability of the service, not a module of its
-  own; `experiments/rpc/` is its draft. The paradigm is `design/invoke.md`.
-- [ ] **`tson-http` becomes the HTTP projection** — `tson-http` depends on `tson-service`. What it
-  still holds is the codec, the media types and headers, `TsonHttpException`, `problem.tn`, the catalog, the deployment
-  descriptor, and the code taking an HTTP call to a route and through the service to an invocation; the three adapters
-  are unchanged above it. That code waits on the join, as does one new endpoint kind in `service.tn`: a record composing
+     `problem.tn` and one test uses `TsonHttpCodec`. They sort to their homes when the schema splits (next).
+  2. **The schema split is measured and works, and awaits the user's verdict** on `proposal/schema-split.md`: no rename
+     is needed if the HTTP schema adds to the open `service` map, and a description in one document or two reads. The
+     open questions are which half keeps `service.tn`'s `!!id`, the new schema's name and `!!id`, whether the HTTP side
+     takes a root of its own instead, and whether the open upstream gap about a data document importing two schemas
+     blocks a plan. The protocol side has the join as its reader of protocol entries; the schema class and the
+     description reader sit in `http` until the schema splits, since `service.tn` is one schema and its bindings map
+     names records of both sides.
+- [ ] **After the join, in `tson-service`** — The join is built (`TsonServiceProtocol`, `design/invoke.md`, "The join").
+  What remains of the protocol layer: the code taking a call document to an invocation and the outcome to a return, the
+  rpc wire form (`call` and `return` documents addressed by `ExchangeName`), a capability of the service and not a module
+  of its own, of which `experiments/rpc/` is the draft; a `!service.protocol` document written from a `DataProtocol`, so a
+  `!service.http` can be built over a Java interface that already exists, where the Java-to-data name mapping is this
+  layer's to own, since bind maps a data name to a Java name and never the reverse, and `@service.safe`,
+  `@service.idempotent` and `@service.destructive` have no Java counterpart and must come from somewhere the writer
+  reads; the proxy over a `DataExchangeHandler`, since bind ships none; and a lookup from a `DataExchange` back to its
+  `ExchangeName`. The join asks the bind context for an entry past every alias hop, as a TSON read does, where the HTTP
+  reader asks a plain alias as written (the plain-alias item under "The description"); one of the two moves when that
+  item is done.
+- [ ] **`tson-http` becomes the HTTP projection** — `tson-http` depends on `tson-service`. What it still holds is the codec,
+  the media types and headers, `TsonHttpException`, `problem.tn`, the catalog, the deployment descriptor, and the code taking
+  an HTTP call to a route and through the service to an invocation; the three adapters are unchanged above it. That code is
+  written over the built join. One new endpoint kind is wanted in `service.tn`: a record composing
   `service.endpoint` that names a protocol rather than an exchange, so one POST route accepts call documents for a whole
-  protocol. It is the simplest agent-facing surface beside REST, since an LLM tool call is a name and arguments and
-  nothing else. `UpstreamGapsTest` pins gaps for both layers; it stays in `tson-http`, which sees everything, until a pin
-  concerns `tson-service` alone.
+  protocol. It is the simplest agent-facing surface beside REST, since an LLM tool call is a name and arguments and nothing
+  else. `UpstreamGapsTest` pins gaps for both layers; it stays in `tson-http`, which sees everything, until a pin concerns
+  `tson-service` alone.
 - [ ] **A gRPC projection as a peer of `tson-http`** — Its own module depending on `tson-service` alone, so neither
   projection knows the other exists. gRPC's marshaller is pluggable per method, so a `ServerServiceDefinition` is built at
   startup from the `!service.protocol` with no protobuf: one `MethodDescriptor` per `ExchangeName`, its full name in gRPC's
@@ -134,8 +117,8 @@ The entries are in build order.
   `!service.stream` endpoint kind `proposal/affordances.md` proposes lands. Go beyond it where TSON does: a tool's request
   and response are the description's own TSON types, self-describing on the wire and judged, with no JSON Schema rendering;
   a declared business error is an outcome a model can act on, typed and composing `problem.details`, rather than text; a
-  reference is a judged name; and a security scheme is declared in the description, not negotiated. Constraints: depends on
-  the module split's join (`tson-service`) and on the interface endpoint kind; `experiments/agent/` is its draft, and this
+  reference is a judged name; and a security scheme is declared in the description, not negotiated. Constraints: builds on
+  the join (`tson-service`) and depends on the interface endpoint kind; `experiments/agent/` is its draft, and this
   item is what those experiments are built toward.
 
 ## Adapters
@@ -192,7 +175,8 @@ The entries are in build order.
   `requireNoBindingByExternName` skips an alias of an extern a route names, since the entry is not an `Extern`. To do:
   `payloadType`, `payloadTypes()`, `boundClasses` and `ChosenTypes` land past plain alias hops, naming the entry the
   alias reaches in the schema declaring it, as an extern's landing already is; a class bound by the alias's own name
-  serves no TSON read and is refused at startup as a binding by an extern's local name is; measure the alias-of-an-extern
+  serves no TSON read and is refused at startup as a binding by an extern's local name is; the join
+  (`design/invoke.md`) already asks past every alias hop; measure the alias-of-an-extern
   case in `requireNoBindingByExternName`; flip `TsonServiceDescriptionTest.aPayloadTypeThatIsAPlainAliasIsNamedAsWritten`.
 
 ## Documentation

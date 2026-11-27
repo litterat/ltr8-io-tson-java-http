@@ -13,6 +13,7 @@ import io.ltr8.tson.http.probe.extern.OrderV2;
 import io.ltr8.tson.schema.meta.TypeRef;
 import io.ltr8.tson.service.TsonBindings;
 import io.ltr8.tson.service.http.RequestPlacement.Location;
+import io.ltr8.tson.service.internal.Landed;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
