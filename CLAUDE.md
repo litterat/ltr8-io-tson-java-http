@@ -28,9 +28,9 @@ Each under ~20 KB and opening with its invariants. Pick by what you are about to
 | `TsonSchemaVersions`, `TSON-Accept-Schema`, `@Profile`, two versions of one schema | `schema-versions.md` |
 | `allowHost`/`mapHost`, `SchemaSource.ofMap`, an `!!import` URL in a request body | `schema-sources.md` |
 | `service.tn`'s protocol side: exchanges, their facts, the one root map, the namespaces the layer borrows | `service-description.md` |
-| `TsonServiceDescription`, `TsonServiceCoverage`, `Landed`, `PayloadType`, an extern a description names, what a server publishes and warms, business errors | `service-reader.md` |
+| `TsonServiceDescription`, `TsonServiceCoverage`, `PayloadType`, an extern a description names, what a server publishes and warms, business errors | `service-reader.md` |
 | `service.http`, endpoints, placement, statuses, media types, security schemes, response headers, the verb checks, `Route` | `http-projection.md` |
-| The protocol layer, bind's `DataProtocol` and `DataExchange`, the join (backlog) | `invoke.md` |
+| The protocol layer, bind's `DataProtocol` and `DataExchange`, `TsonServiceProtocol` the join | `invoke.md` |
 | A `.tn` file this project owns, a `!!id`, `problem.tn`, a revision bump, a field spelling | `schema-authoring.md` |
 | `deployment.tn`, `TsonDeployment`, `/.well-known/tson-deployment`, `policy.tn` | `deployment-descriptor.md` |
 | `OrderServer`, `demo/schemas/`, `ValidatorServer`, the throughput harnesses | `demos.md` |
@@ -68,8 +68,8 @@ what it can do (`design/service-description.md`).
 **Hard constraints:**
 - Java 25 only (matches tson-java).
 - `tson-service`, `tson-http` and `tson-http-jdk` take **no external runtime dependencies**. tson-java's own modules
-  (`io.ltr8:tson`, `io.ltr8:tson-json`, `io.ltr8:ltr8-bind`, `io.ltr8:ltr8-annotation`) are not external. An adapter's
-  framework dependency stops at that adapter and never leaks back into `tson-http`.
+  (`io.ltr8:tson`, `io.ltr8:tson-json`, `io.ltr8:ltr8-bind`, `io.ltr8:ltr8-annotation`, `io.ltr8:tson-atom`) are not
+  external. An adapter's framework dependency stops at that adapter and never leaks back into `tson-http`.
 - Every module has a real `module-info.java`; module names mirror each module's root exported package. All three
   servers are genuine JPMS named modules, so nothing falls back to the classpath.
 
@@ -82,7 +82,7 @@ depends on neither, `tson-http` names no adapter type, and the adapters never de
 | Module | Holds |
 |---|---|
 | `tson-http` (`io.ltr8.tson.http`) | Server-agnostic core: media types, `TsonHttpCodec`, `TsonHttpException` (the whole status policy), `problem.tn`, the two schema headers, `TsonSchemaCatalog`, `TsonSchemaVersions`, `TsonDeployment`; depends on `tson-service` |
-| `tson-service` (`io.ltr8.tson.service`) | A service's description of itself, independent of HTTP: `service.tn`; `io.ltr8.tson.service.protocol` (`Protocol`, `ExchangeName`) and `io.ltr8.tson.service.http` (the HTTP records, `TsonServiceSchema`, `TsonServiceDescription`, `Route`), with `protocol` never importing `http`; and `TsonBindings` |
+| `tson-service` (`io.ltr8.tson.service`) | A service's description of itself, independent of HTTP: `service.tn`; `io.ltr8.tson.service.protocol` (`Protocol`, `ExchangeName`, the join `TsonServiceProtocol`) and `io.ltr8.tson.service.http` (the HTTP records, `TsonServiceSchema`, `TsonServiceDescription`, `Route`), with `protocol` never importing `http`; and `TsonBindings` |
 | `tson-http-jdk` (`io.ltr8.tson.http.jdk`) | Adapter for `com.sun.net.httpserver`; zero dependencies; the reference the other two are read against |
 | `tson-http-javalin` (`io.ltr8.tson.http.javalin`) | Adapter for Javalin 6.7.0 (Jetty 11, `jakarta.*`) |
 | `tson-http-helidon` (`io.ltr8.tson.http.helidon`) | Adapter for Helidon 4.2.2 SE, plus `TsonMediaSupport` over Helidon's `MediaSupport` SPI |
@@ -105,8 +105,8 @@ tson-java publishes to **mavenLocal only**, so a checkout of the sibling is requ
   `git pull` there is picked up by a plain `./gradlew build`. A broken sibling breaks this build, and compile output
   naming files under `../ltr8-io-tson-java/…` is expected. Path is `tson.path`, overridable with `-Ptson.path=…`.
 - **Published artifacts, `-Ptson.published=true`.** Resolves `io.ltr8:tson:${tson.version}`, and `io.ltr8:ltr8-bind` and
-  `io.ltr8:ltr8-annotation`, which `tson-service` names directly, from mavenLocal after `./gradlew publishToMavenLocal`
-  in the sibling. The only path that exercises the published POM and jars; CI runs it too.
+  `io.ltr8:ltr8-annotation` and `io.ltr8:tson-atom`, which `tson-service` names directly, from mavenLocal after `./gradlew
+  publishToMavenLocal` in the sibling. The only path that exercises the published POM and jars; CI runs it too.
 
 **Do not modify `../ltr8-io-tson-java`.** Changes wanted there go in `UPSTREAM.md` and land in that repo only on the
 user's say-so. Pulling it is fine when asked. Read its `CLAUDE.md` and `design/` before working on the codec.

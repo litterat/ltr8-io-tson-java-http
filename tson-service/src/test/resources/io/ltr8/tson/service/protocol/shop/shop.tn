@@ -1,0 +1,56 @@
+!!id:"https://schemas.example.com/2026/40/shop/shop.tn"
+!!import:"https://tson.io/2026/40/io/ltr8/http/service.tn"
+!!import:"https://schemas.example.com/2026/40/shop/shop-types.tn"
+@doc:"""
+  Protocol only: nothing HTTP in the document. `shop` is the protocol a whole interface serves; each protocol after
+  it isolates one exchange, so a join can be held to one agreement or one refusal at a time.
+  """
+!schema {
+  shelf  => { name: text }
+  front  => !shelf { name: front }
+  gadget => !meta.extern { schema: "https://schemas.example.com/2026/40/shop/catalog.tn"  type: widget }
+
+  shop => !service.protocol {
+    exchanges: {
+      add_item    => { request: new_item     response: item        errors: [out_of_stock] }
+      get_item    => { request: item_ref     response: item_alias  errors: [item_missing] }
+      list_items  => { request: stock_query  response: item_list }
+      stock       => { request: stock_query  response: stock_levels }
+      remove_item => { request: item_ref     errors: [item_missing] }
+      count_items => { response: int32 }
+    }
+  }
+
+  lookup  => !service.protocol { exchanges: { get_item => { request: item_ref  response: item  errors: [item_missing] } } }
+  twice   => !service.protocol {
+    exchanges: {
+      get_item => { request: item_ref  response: item  errors: [item_missing] }
+      getItem  => { request: item_ref  response: item  errors: [item_missing] }
+    }
+  }
+  counter => !service.protocol { exchanges: { count_items => { response: int32 } } }
+  remover => !service.protocol { exchanges: { remove_item => { request: item_ref  errors: [item_missing] } } }
+  by_sku  => !service.protocol { exchanges: { find => { request: sku_text  response: item } } }
+  lister  => !service.protocol { exchanges: { list_items => { request: stock_query  response: item_list } } }
+  book    => !service.protocol { exchanges: { items_by_sku => { response: item_book } } }
+  finder  => !service.protocol { exchanges: { find_any => { request: item_ref  response: found } } }
+  gadgets => !service.protocol { exchanges: { get_gadget => { request: item_ref  response: gadget } } }
+  stocks  => !service.protocol { exchanges: { levels => { response: int_list } } }
+  stock_only => !service.protocol { exchanges: { stock => { request: stock_query  response: stock_levels } } }
+  statuses => !service.protocol {
+    exchanges: {
+      status_of => { request: item_ref  response: item_status }
+      in_stock  => { request: item_ref  response: boolean }
+    }
+  }
+  inline_finder => !service.protocol { exchanges: { find_any => { request: item_ref  response: found_inline } } }
+  text_finder   => !service.protocol { exchanges: { find_any => { request: item_ref  response: found_text } } }
+  pinger  => !service.protocol { exchanges: { ping => { response: void } } }
+  linker  => !service.protocol { exchanges: { link => { response: meta.type_ref } } }
+  doubled => !service.protocol {
+    exchanges: { get_item => { request: item_ref  response: item  errors: [item_missing, missing_alias] } }
+  }
+  bad_error => !service.protocol {
+    exchanges: { get_item => { request: item_ref  response: item  errors: [sku_text] } }
+  }
+}

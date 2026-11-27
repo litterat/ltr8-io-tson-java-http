@@ -17,4 +17,14 @@ dependencies {
     // hold an AnnotatedMap in their components. ltr8-bind declares it `implementation`, so naming bind does not
     // bring it.
     api("io.ltr8:ltr8-annotation:${property("tson.version")}")
+    // The atom families, named directly: the join asks AtomParsers for an atom's family and AtomType.boundTo whether
+    // it produces a method's class. In no signature here, so implementation; tson-java's own module.
+    implementation("io.ltr8:tson-atom:${property("tson.version")}")
+}
+
+// io.ltr8.tson.service.internal is not exported, so it is not documented: what protocol and http share is no API.
+// Its sources stay on the source path, so the documented packages that import it still resolve.
+tasks.javadoc {
+    exclude("io/ltr8/tson/service/internal/**")
+    (options as StandardJavadocDocletOptions).addStringOption("-source-path", file("src/main/java").path)
 }

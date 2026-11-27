@@ -3,6 +3,7 @@ package io.ltr8.tson.http;
 import io.ltr8.bind.DataBindContext;
 import io.ltr8.bind.DataBindException;
 import io.ltr8.bind.DataClass;
+import io.ltr8.bind.DataClassUnion;
 import io.ltr8.bind.DataNameBinder;
 import io.ltr8.bind.UnboundNameException;
 import io.ltr8.tson.Tson;
@@ -1939,6 +1940,88 @@ class UpstreamGapsTest {
 
     /** Bound by {@link #anOmittedOptionalListReachesTheConstructorAsNull}, its list left unguarded. */
     public record Tagged(String name, List<String> tags) {
+    }
+
+    // ── open: the atom family a bind-mode read uses for the kernel's boolean is not the public route's ──────────
+
+    /**
+     * <b>The public route to an atom's family gives the wrong answer for the kernel's {@code boolean}</b>: {@code
+     * AtomParsers.forRead} on its body, the enum {@code [true false]}, hands back the enum's parser, which produces the
+     * member's text, so asked {@code boundTo(boolean.class)} it says no; yet a bind-mode read of a {@code boolean}
+     * field into a {@code boolean} component succeeds, because the library's enum reader keys on the name {@code
+     * boolean} and reads it with {@code BuiltinTypeVocabulary.lookup("boolean")}, a package-private rule of the
+     * compiler's {@code AtomTypeReader}. {@code TsonServiceProtocol}'s atom check copies that rule, so that an exchange
+     * answering {@code boolean} agrees with a method returning one. Fails the day the public route answers as the read
+     * does; then drop the copy. {@code UPSTREAM.md}'s entry "The atom family a bind-mode read uses for an entry is not
+     * one public call" stages it.
+     */
+    @Test
+    void thePublicAtomRouteCannotProduceABooleanThatABindModeReadDelivers() {
+        String id = "https://s.example.com/2026/40/boolean-field-1.tn";
+        String schema = """
+                !!id:"https://s.example.com/2026/40/boolean-field-1.tn"
+                !!import:"https://tson.io/2026/40/m/core.tn"
+                !schema {
+                    flagged => { on: boolean }
+                }""";
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(Map.of(id, schema))))
+                .withDataBindContext(TsonBindings.of(Map.of("flagged", Flagged.class))));
+        tson.resolve(schema);
+        TsonLinkedSchema linked = tson.loader().resolveLinked(id);
+        Top body = linked.schema().entries().get("boolean");
+        assertInstanceOf(io.ltr8.tson.schema.meta.EnumBody.class, body, "the kernel's boolean is an enum");
+
+        Optional<io.ltr8.tson.atom.AtomType<?>> family = io.ltr8.tson.atom.AtomParsers.forRead(body,
+                linked.enumForm("boolean"));
+        assertTrue(family.isPresent());
+        assertTrue(family.get().boundTo(boolean.class).isEmpty(), "the public route produces a boolean now -- drop "
+                + "the copied boolean rule in TsonServiceProtocol.agreeAtom and flip this");
+        assertTrue(io.ltr8.tson.atom.BuiltinTypeVocabulary.lookup("boolean").orElseThrow().boundTo(boolean.class)
+                .isPresent(), "the vocabulary's own boolean, which the copy asks");
+        assertEquals(new Flagged(true), tson.objectReader().withSchema(id).readAs("{ on: true }", "flagged",
+                Flagged.class), "a bind-mode read delivers the boolean the public route says it cannot produce");
+    }
+
+    /** Bound by {@link #thePublicAtomRouteCannotProduceABooleanThatABindModeReadDelivers}. */
+    public record Flagged(boolean on) {
+    }
+
+    // ── constraint: a union read from a sealed hierarchy is not reported sealed ───────────────────────────────────
+
+    /**
+     * <b>{@code DataClassUnion.isSealed()} says whether a union refuses {@code addMemberType}, not whether its Java
+     * class is sealed</b>: bind builds the union of every sealed hierarchy with it false, a hierarchy whose leaves are
+     * all final included, since a non-sealed member stands for implementations loaded later and the flag would refuse
+     * them. For an all-final hierarchy the flag changes no read, since {@code isMemberType} admits an implementation
+     * only under an open member, but it cannot tell such a union closed, and {@code addMemberType} admits any class
+     * into it. {@code TsonServiceProtocol} judges a union closed from its class for that reason: sealed, and every
+     * member final. Fails the day bind reports such a hierarchy sealed; then the join asks the flag alone. {@code
+     * UPSTREAM.md}'s entry "A union read from a sealed hierarchy is not reported closed" stages it.
+     */
+    @Test
+    void aUnionReadFromASealedHierarchyWithFinalLeavesIsNotReportedSealed() throws DataBindException {
+        DataClassUnion union = assertInstanceOf(DataClassUnion.class,
+                TsonBindings.of(Map.of()).getDescriptor(SealedShape.class));
+        assertEquals(Set.of(SealedSquare.class, SealedCircle.class), Set.of(union.memberTypes()));
+        assertFalse(union.isSealed(), "bind reports an all-final sealed hierarchy sealed now -- drop the class-side "
+                + "test in TsonServiceProtocol's closed() and flip this");
+        assertFalse(union.isMemberType(String.class), "no open member, so nothing outside the hierarchy is admitted");
+        assertDoesNotThrow(() -> union.addMemberType(String.class),
+                "addMemberType refuses a class outside an all-final sealed hierarchy now");
+        assertTrue(Set.of(union.memberTypes()).contains(String.class));
+    }
+
+    /** A sealed hierarchy whose members are all final, as records are. */
+    public sealed interface SealedShape permits SealedSquare, SealedCircle {
+    }
+
+    /** One final member. */
+    public record SealedSquare(int side) implements SealedShape {
+    }
+
+    /** The other. */
+    public record SealedCircle(int radius) implements SealedShape {
     }
 
     // ── open: a subtype nothing binds, at an abstract base's slot in a value entry, leaves the value a tree ──────

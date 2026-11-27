@@ -1,0 +1,27 @@
+!!id:"https://schemas.example.com/2026/40/shop/shop-types.tn"
+!!import:"https://tson.io/2026/40/m/meta.tn"
+!!import:"https://tson.io/2026/40/m/core.tn"
+@doc:"""
+  The types the shop protocols take and answer: one request record per exchange, records answered alone, in an
+  array and through an alias, atoms alone and in an array and a map, an enum, a namespace type, choices of two
+  records and of shapes the join does not judge, and error records, one of them aliased.
+  """
+!schema {
+  item          => { sku: text  quantity: int32 }
+  item_ref      => { sku: text }
+  new_item      => { sku: text  quantity: int32 }
+  stock_query   => { prefix?: text }
+  item_alias    => item
+  item_list     => [item]
+  stock_levels  => {text => int32}
+  item_book     => !meta.namespace { key_type: meta.identifier  value_type: item }
+  sku_text      => text
+  int_list      => [int32]
+  item_status   => !enum [open closed]
+  found         => (item | item_missing)
+  found_inline  => (item | [text])
+  found_text    => (item | text)
+  item_missing  => { sku: text }
+  missing_alias => item_missing
+  out_of_stock  => { sku: text }
+}

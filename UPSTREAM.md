@@ -400,6 +400,45 @@ TSON registry does, or not judging a closure's records that the read never reach
 
 ---
 
+## 19. A union read from a sealed hierarchy is not reported closed
+
+**Hit:** `TsonServiceProtocol.join` must know that a choice's members are all known at startup before it agrees the
+choice with a union descriptor. `DataClassUnion.isSealed()` cannot say so: it means "refuses `addMemberType`", and bind
+builds the union of every sealed hierarchy with it false, an all-final one included, since a non-sealed member stands
+for implementations loaded later. For an all-final hierarchy the flag changes no read, but it cannot tell such a union
+closed, and `addMemberType` admits any class into it, `String` included.
+
+**The change:** closure as a fact of its own on a union, true for a sealed hierarchy whose members are all final, and
+`addMemberType` refusing a class outside such a hierarchy.
+
+**Workaround in place:** `TsonServiceProtocol` judges closure from the Java class, sealed with every member final.
+Pinned by `UpstreamGapsTest.aUnionReadFromASealedHierarchyWithFinalLeavesIsNotReportedSealed`, worded as a constraint
+because the flag's meaning is deliberate; it flips when bind reports such a hierarchy sealed.
+
+**Priority:** low.
+
+---
+
+## 20. The atom family a bind-mode read uses for an entry is not one public call
+
+**Hit:** to ask at an exchange position the question the library asks at a record's field, whether the entry's atom
+family produces the Java class, `TsonServiceProtocol` calls `AtomParsers.forRead`. For the kernel's `boolean`, an enum
+of `true` and `false`, that hands back the enum's parser, which produces the member's text, so `boundTo(boolean.class)`
+says no; yet a bind-mode read of a `boolean` field into a `boolean` component succeeds, because the compiler's enum
+reader keys on the name `boolean` and reads it with `BuiltinTypeVocabulary.lookup("boolean")`, a rule in a
+package-private part of the compiler.
+
+**The change:** one public method giving the atom type a bind-mode read uses for an entry, so a consumer asks the
+library's own question and copies no rule.
+
+**Workaround in place:** `TsonServiceProtocol` copies the one name-keyed rule for `boolean`. Pinned by
+`UpstreamGapsTest.thePublicAtomRouteCannotProduceABooleanThatABindModeReadDelivers`, which flips when the public route
+answers as the read does; then the copy goes.
+
+**Priority:** low.
+
+---
+
 ## Spec feedback to file
 
 Staged here, for tson-java's `SPEC-FEEDBACK.md`, since that file is hands-off. That register renumbers each time a

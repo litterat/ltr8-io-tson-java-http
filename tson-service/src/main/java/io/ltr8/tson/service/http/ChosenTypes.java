@@ -18,6 +18,7 @@ import io.ltr8.tson.schema.meta.TupleElement;
 import io.ltr8.tson.schema.meta.TypeExpr;
 import io.ltr8.tson.schema.meta.TypeInline;
 import io.ltr8.tson.schema.meta.TypeRef;
+import io.ltr8.tson.service.internal.Landed;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -49,7 +50,7 @@ import java.util.TreeMap;
  * tuple written in place has no name and binds to the class its enclosing component declares, so only the types it
  * reaches are checked. Each such type must bind through the {@code Tson}'s own context, asked as a reader asks it,
  * by the schema declaring the type and its name there ({@link DataBindContext#getDescriptor(String, String)}, which
- * also analyses the class); a type reached through an extern is the foreign entry it lands on ({@link Landed}), looked
+ * also analyses the class); a type reached through an extern is the foreign entry it lands on ({@code Landed}), looked
  * up in the foreign schema with every name its declaration writes. It must not be the kernel's vocabulary: a
  * kernel record binds to the schema model over TSON and to nothing over JSON, so a body naming one is a schema-model
  * value in an application's request, or a 500. {@code meta.type_ref} admits the kernel's records, so a free sibling
@@ -68,7 +69,7 @@ final class ChosenTypes {
     /**
      * Refuses {@code request} at {@code label} if it is bound and a dependent field of it lets a sender choose a
      * type this server cannot bind. A request reached through an extern is judged as the foreign record it lands on,
-     * and every name its declaration writes is looked up in the foreign schema ({@link Landed}).
+     * and every name its declaration writes is looked up in the foreign schema ({@code Landed}).
      *
      * @param scope   the description, in whose namespace {@code request} is written
      * @param context the bind context the {@code Tson} reads with
@@ -110,12 +111,7 @@ final class ChosenTypes {
      * asked as a reader asks it, within the schema declaring the type.
      */
     private static boolean binds(DataBindContext context, Landed type) {
-        try {
-            context.nameBinder().resolve(type.identity(), type.name());
-            return true;
-        } catch (DataBindException unbound) {
-            return false;
-        }
+        return type.boundClass(context).isPresent();
     }
 
     /** The type names a sender may write in {@code sibling} of {@code record}, which {@code landed} declares. */

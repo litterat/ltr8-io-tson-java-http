@@ -10,6 +10,7 @@ import io.ltr8.tson.schema.meta.Top;
 import io.ltr8.tson.schema.meta.TypeExpr;
 import io.ltr8.tson.schema.meta.TypeInline;
 import io.ltr8.tson.schema.meta.TypeRef;
+import io.ltr8.tson.service.internal.Landed;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -48,11 +49,11 @@ import java.util.regex.Pattern;
  * its fields are that record's, and each field's type is looked up in the foreign schema's namespace, where its
  * declaration wrote it, so a field typed by a record that schema declares is no scalar in the path. A field typed by
  * an extern is judged as what the extern lands on, in a request of either kind, and every type expression is resolved
- * in the schema declaring the entry holding it ({@link Landed}): an array's element type where the array is declared,
+ * in the schema declaring the entry holding it ({@code Landed}): an array's element type where the array is declared,
  * so a field typed by an extern of an array of records declared in a third schema is refused in the query, whatever
  * the request record's own schema declares under the element's name.
  *
- * <p>A plain alias is judged as the entry it reaches past every hop ({@link Landed#pastAliases()}): a request that
+ * <p>A plain alias is judged as the entry it reaches past every hop ({@code Landed.pastAliases()}): a request that
  * aliases a record is placed as that record, a field typed by an alias of a record or an array is no scalar in the
  * path, and an array of an alias of a record has no query spelling. A refusal names the type as it was written.
  */
@@ -67,7 +68,7 @@ public record RequestPlacement(Map<String, Location> fields) {
     /**
      * The placement of {@code request}'s fields at the endpoint {@code name}. A request reached through an extern or a
      * plain alias is the record it lands on; its fields' types are judged in the schema declaring that record, and
-     * each name such a type's definition writes in the schema declaring that definition ({@link Landed}).
+     * each name such a type's definition writes in the schema declaring that definition ({@code Landed}).
      *
      * @param scope the description, in whose namespace {@code request} is written
      */

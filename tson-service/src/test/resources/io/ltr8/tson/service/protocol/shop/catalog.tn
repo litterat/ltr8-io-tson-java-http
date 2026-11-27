@@ -1,0 +1,6 @@
+!!id:"https://schemas.example.com/2026/40/shop/catalog.tn"
+!!import:"https://tson.io/2026/40/m/core.tn"
+@doc:"A schema the shop names one type of by extern, and does not import."
+!schema {
+  widget => { code: text }
+}
