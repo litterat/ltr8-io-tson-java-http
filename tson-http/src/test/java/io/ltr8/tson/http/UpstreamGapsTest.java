@@ -20,9 +20,12 @@ import io.ltr8.tson.base.source.HttpSchemaSource;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonCompiledSchema;
+import io.ltr8.tson.compiler.TsonCompiledSchemaRegistry;
+import io.ltr8.tson.compiler.TsonTypeReader;
 import io.ltr8.tson.compiler.config.SchemaModelNameBinder;
 import io.ltr8.tson.http.schema.problem.TsonProblemDiagnostic;
 import io.ltr8.tson.json.Json;
+import io.ltr8.tson.schema.ExternTarget;
 import io.ltr8.tson.schema.TsonLinkedSchema;
 import io.ltr8.tson.schema.meta.Alias;
 import io.ltr8.tson.schema.meta.ChoiceBody;
@@ -38,6 +41,7 @@ import io.ltr8.tson.schema.meta.ValueEntry;
 import io.ltr8.tson.schema.meta.ValueRef;
 import io.ltr8.tson.service.TsonBindings;
 import io.ltr8.tson.service.TsonServiceSchema;
+import io.ltr8.tson.service.internal.Landed;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -1815,6 +1819,167 @@ class UpstreamGapsTest {
         return parameters.length >= 1 && Collection.class.isAssignableFrom(method.getReturnType())
                 && Arrays.stream(parameters).allMatch(type -> type == String.class || type == RecordField.class
                         || type == RecordBody.class || type == io.ltr8.tson.schema.meta.TypeExpr.class);
+    }
+
+    // ── open: the entry and class a bind-mode read uses for a type are not a public question ─────────────────
+
+    private static final String LANDING_ID = "https://schemas.example.com/2026/40/app/landing-1.tn";
+    private static final String WARE_ID = "https://schemas.example.com/2026/40/app/ware-1.tn";
+
+    /** The foreign schema an extern of {@link #LANDING} names. */
+    private static final String WARE = """
+            !!id:"https://schemas.example.com/2026/40/app/ware-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
+            !schema {
+                ware => { sku: text }
+            }""";
+
+    /** A record reached by a plain alias and by an alias of it, and a foreign record by an extern and an alias of it. */
+    private static final String LANDING = """
+            !!id:"https://schemas.example.com/2026/40/app/landing-1.tn"
+            !!import:"https://tson.io/2026/40/m/core.tn"
+            !schema {
+                item        => { sku: text  quantity: int32 }
+                item_alias  => item
+                item_alias2 => item_alias
+                ware_v1     => !meta.extern { schema: "https://schemas.example.com/2026/40/app/ware-1.tn"  type: ware }
+                ware_alias  => ware_v1
+            }""";
+
+    /**
+     * One way a document names a type: the name it writes as the tag, the entry a bind-mode read asks the binder for
+     * ({@code identity} and {@code entry}), the class bound there, the body written and the value read.
+     */
+    private record WrittenName(String written, String identity, String entry, Class<?> bound, String body,
+                               Object read) {
+    }
+
+    /** A plain alias of a record, an alias of an alias, an extern of a foreign record, and an alias of an extern. */
+    private static final List<WrittenName> WRITTEN_NAMES = List.of(
+            new WrittenName("item_alias", LANDING_ID, "item", LandedItem.class, "{ sku: A  quantity: 2 }",
+                    new LandedItem("A", 2)),
+            new WrittenName("item_alias2", LANDING_ID, "item", LandedItem.class, "{ sku: A  quantity: 2 }",
+                    new LandedItem("A", 2)),
+            new WrittenName("ware_v1", WARE_ID, "ware", LandedWare.class, "{ sku: B }", new LandedWare("B")),
+            new WrittenName("ware_alias", WARE_ID, "ware", LandedWare.class, "{ sku: B }", new LandedWare("B")));
+
+    /** {@link #LANDING} resolved under {@code bindings}, keyed per schema so the binder is held to the identity too. */
+    private static Tson landing(String identity, String name, Class<?> bound) {
+        Map<String, Map<String, Class<?>>> bindings = new LinkedHashMap<>();
+        bindings.put(LANDING_ID, Map.of());
+        bindings.put(WARE_ID, Map.of());
+        bindings.put(identity, Map.of(name, bound));
+        Tson tson = Tson.of(ProcessorConfig.defaults()
+                .withSchemaAccess(SchemaAccess.of(SchemaSource.ofMap(Map.of(LANDING_ID, LANDING, WARE_ID, WARE))))
+                .withDataBindContext(TsonBindings.bySchema(bindings)));
+        tson.resolve(LANDING);
+        return tson;
+    }
+
+    /** A bind-mode read of {@code shape}'s body tagged with the name it writes, into {@code Object}. */
+    private static Object readTagged(Tson tson, WrittenName shape) {
+        return tson.objectReader().read("!!import:\"" + LANDING_ID + "\"\n!" + shape.written() + " " + shape.body(),
+                Object.class);
+    }
+
+    /**
+     * <b>What {@code Landed} rebuilds agrees with what a bind-mode read does</b>: a read of a document tagged with a
+     * plain alias, an alias of an alias, an extern or an alias of an extern asks the binder for the entry the name
+     * reaches, by the canonical identity of the schema declaring it and its name there -- the terminal of the alias
+     * hops, or the foreign entry the extern lands on -- and {@code Landed.of(scope, written).pastAliases()} names that
+     * same entry, and {@code boundClass} gives the class bound there. With only that entry bound, each read delivers
+     * its class. The library computes the relationship while it compiles readers and answers it through no public
+     * call, so {@code Landed}, {@code TsonServiceProtocol} and {@code ChosenTypes} rebuild it from the alias walk, the
+     * extern landing, {@code declaringIdentity} and the name binder. {@code UPSTREAM.md}'s entry "The entry and class a
+     * bind-mode read uses for a type are not a public question". Fails the day a read asks another entry; then {@code
+     * Landed} follows it.
+     */
+    @Test
+    void aBindReadAsksTheBinderForTheEntryAnAliasOrAnExternReaches() {
+        for (WrittenName shape : WRITTEN_NAMES) {
+            Tson tson = landing(shape.identity(), shape.entry(), shape.bound());
+
+            assertEquals(shape.read(), readTagged(tson, shape), () -> "'" + shape.written() + "' read as another "
+                    + "entry now -- move Landed.pastAliases to the entry the read asks");
+
+            Landed landed = Landed.of(tson.loader().resolveLinked(LANDING_ID), shape.written()).pastAliases();
+            assertEquals(CanonicalIdentity.canonicalize(shape.identity()), landed.identity(), shape.written());
+            assertEquals(shape.entry(), landed.name(), shape.written());
+            assertEquals(Optional.of(shape.bound()), landed.boundClass(tson.dataBindContext()), shape.written());
+        }
+    }
+
+    /**
+     * And the converse the rule implies: a class bound by the name a document writes, an alias's or an extern's own,
+     * binds nothing a read of it asks, so each read is a {@code MissingBindingException} naming the entry reached, and
+     * {@code Landed}'s entry finds no class either. {@code UPSTREAM.md}'s entry "The entry and class a bind-mode read
+     * uses for a type are not a public question". Fails the day a read asks the written name; then {@code Landed}
+     * follows it.
+     */
+    @Test
+    void aBindReadDoesNotAskTheBinderForTheNameAnAliasOrAnExternWrites() {
+        for (WrittenName shape : WRITTEN_NAMES) {
+            Tson tson = landing(LANDING_ID, shape.written(), shape.bound());
+
+            RuntimeException thrown = assertThrows(RuntimeException.class, () -> readTagged(tson, shape),
+                    () -> "'" + shape.written() + "' binds by its own name now -- move Landed.pastAliases to it");
+            assertInstanceOf(io.ltr8.tson.base.MissingBindingException.class, thrown, shape.written());
+            assertTrue(thrown.getMessage().startsWith("no bound Java class for '" + shape.entry() + "'"),
+                    thrown.getMessage());
+
+            Landed landed = Landed.of(tson.loader().resolveLinked(LANDING_ID), shape.written()).pastAliases();
+            assertEquals(Optional.empty(), landed.boundClass(tson.dataBindContext()), shape.written());
+        }
+    }
+
+    /**
+     * <b>No public call answers the entry or the class a bind-mode read uses for a type</b>: nothing on {@link
+     * TsonCompiledSchema}, its readers ({@link TsonTypeReader}), {@link TsonCompiledSchemaRegistry}, {@link
+     * TsonLinkedSchema} or an extern's {@link ExternTarget.Landing} takes a name and answers a class, or walks an alias
+     * to the entry it reaches. The compiled schema's linked schema is package-private, the alias walk sits in an
+     * unexported package, and a reader answers only {@code read}. {@code Landed} assembles the answer, which {@link
+     * #aBindReadAsksTheBinderForTheEntryAnAliasOrAnExternReaches} holds to the read. {@code UPSTREAM.md}'s entry "The
+     * entry and class a bind-mode read uses for a type are not a public question". Fails the day one answers; then
+     * ask it in place of {@code Landed.pastAliases} and {@code Landed.boundClass}.
+     */
+    @Test
+    void noPublicCallAnswersTheEntryOrClassABindReadUsesForAType() {
+        for (Class<?> holder : List.of(TsonCompiledSchema.class, TsonTypeReader.class, TsonCompiledSchemaRegistry.class,
+                TsonLinkedSchema.class, ExternTarget.Landing.class)) {
+            assertTrue(Arrays.stream(holder.getMethods()).noneMatch(UpstreamGapsTest::answersTheBoundEntryOrClass),
+                    holder.getSimpleName() + " answers the entry or class a bind-mode read uses now -- ask it in "
+                            + "place of Landed.pastAliases and Landed.boundClass, update UPSTREAM.md's entry and flip "
+                            + "this");
+        }
+
+        WrittenName aliasOfExtern = WRITTEN_NAMES.getLast();
+        Tson tson = landing(aliasOfExtern.identity(), aliasOfExtern.entry(), aliasOfExtern.bound());
+        Landed landed = Landed.of(tson.loader().resolveLinked(LANDING_ID), aliasOfExtern.written()).pastAliases();
+        assertEquals(Optional.of(LandedWare.class), landed.boundClass(tson.dataBindContext()));
+    }
+
+    /**
+     * A public method answering the class bound to a name, or the entry an alias reaches: one taking an argument and
+     * answering a {@link Class} or a {@link DataClass}, alone or in an {@code Optional}, or one whose name says it
+     * walks an alias or names a binding.
+     */
+    private static boolean answersTheBoundEntryOrClass(Method method) {
+        String name = method.getName().toLowerCase(java.util.Locale.ROOT);
+        if (name.contains("terminal") || name.contains("alias") || name.contains("boundclass")
+                || name.contains("binding") || name.contains("classfor")) {
+            return true;
+        }
+        String returned = method.getGenericReturnType().getTypeName();
+        return method.getParameterCount() >= 1
+                && (returned.contains(Class.class.getName()) || returned.contains(DataClass.class.getName()));
+    }
+
+    /** Bound to {@link #LANDING}'s {@code item}, or by the name an alias of it writes. */
+    public record LandedItem(String sku, int quantity) {
+    }
+
+    /** Bound to {@link #WARE}'s {@code ware}, or by the name an extern of it writes. */
+    public record LandedWare(String sku) {
     }
 
     // ── open: a record field's type through an accessor that throws on a dependent field ────────────────

@@ -107,13 +107,16 @@ class. It refuses too a schema that is not resolved, an entry that is no `servic
 and an interface bind refuses, naming the protocol.
 
 **How types agree.** A type the schema writes is landed as a reader lands it (`internal.Landed`): past an extern to the
-foreign entry, past every plain alias hop, each name looked up in the namespace of the entry that writes it. Then a
-record agrees by the class its landed entry binds to, asked of the `Tson`'s bind context by the declaring schema and
-the entry's name, compared with the descriptor's `dataClass()`, and a record nothing binds is refused. An array agrees
-by kind and element, a map by kind, key and value. An atom or an enum agrees when the atom family a read uses produces
-the descriptor's class, the question the library asks at a record's atom field, so `int32` agrees with `int` and not
-with `String`. A choice agrees with a closed union, one whose members are all known at startup, when each variant is a
-record bound to a member and each member is the class of a variant. A request and an error are records on both sides.
+foreign entry, past every plain alias hop, each name looked up in the namespace of the entry that writes it. Then a record
+agrees by the class its landed entry binds to, asked of the `Tson`'s bind context by the declaring schema and the entry's
+name, compared with the descriptor's `dataClass()`, and a record nothing binds is refused. The landing, the class lookup and
+the agreement rules are copies of what the library computes privately while it compiles readers, held by pins in
+`UpstreamGapsTest`; `UPSTREAM.md`'s "The entry and class a bind-mode read uses for a type are not a public question" asks for
+the library's own. An array agrees by kind and element, a map by kind, key and value. An atom or an enum agrees when the atom
+family a read uses produces the descriptor's class, the question the library asks at a record's atom field, so `int32` agrees
+with `int` and not with `String`. A choice agrees with a closed union, one whose members are all known at startup, when each
+variant is a record bound to a member and each member is the class of a variant. A request and an error are records on both
+sides.
 
 **What it does not judge.** A tuple, a namespace type, a record written in place, a reference, `void`, a dependent type and
 an application are refused as shapes the join does not judge, with what to write instead; so a protocol answering a namespace

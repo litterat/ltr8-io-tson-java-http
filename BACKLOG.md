@@ -163,7 +163,9 @@ The entries are in build order.
   `request: typed_note` is refused and `note_alias => typed_note` loads. Not measured, from reading the code:
   `requireNoBindingByExternName` skips an alias of an extern a route names, since the entry is not an `Extern`. To do:
   `payloadType`, `payloadTypes()`, `boundClasses` and `ChosenTypes` land past plain alias hops, naming the entry the
-  alias reaches in the schema declaring it, as an extern's landing already is; a class bound by the alias's own name
+  alias reaches in the schema declaring it, as an extern's landing already is (the two call sites answering differently
+  is evidence for `UPSTREAM.md`'s "The entry and class a bind-mode read uses for a type are not a public question", but
+  the fix here is this project's); a class bound by the alias's own name
   serves no TSON read and is refused at startup as a binding by an extern's local name is; the join
   (`design/invoke.md`) already asks past every alias hop; measure the alias-of-an-extern
   case in `requireNoBindingByExternName`; flip `TsonServiceDescriptionTest.aPayloadTypeThatIsAPlainAliasIsNamedAsWritten`.

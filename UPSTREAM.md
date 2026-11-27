@@ -213,6 +213,7 @@ exception type.
 `SchemaModelNameBinder` that is true for every name the vocabulary holds, and a `DataBindContext` query answering with
 the descriptor or the reason as a value), and an accessor on the compiled schema for the types a
 dependent field admits, with a pin and a discriminator already applied: the set the reader judges a sibling against.
+The change in "The entry and class a bind-mode read uses for a type are not a public question" would answer this too.
 
 **Workaround in place:** `ChosenTypes` does the alias walk, the cast and both catches, and
 `TsonHttpCodec.isKernelVocabulary` repeats the vocabulary catch to keep the kernel's names out of the JSON reader's bind
@@ -415,7 +416,8 @@ for implementations loaded later. For an all-final hierarchy the flag changes no
 closed, and `addMemberType` admits any class into it, `String` included.
 
 **The change:** closure as a fact of its own on a union, true for a sealed hierarchy whose members are all final, and
-`addMemberType` refusing a class outside such a hierarchy.
+`addMemberType` refusing a class outside such a hierarchy. The change in "The entry and class a bind-mode read uses for
+a type are not a public question" would answer this too.
 
 **Workaround in place:** `TsonServiceProtocol` judges closure from the Java class, sealed with every member final.
 Pinned by `UpstreamGapsTest.aUnionReadFromASealedHierarchyWithFinalLeavesIsNotReportedSealed`, worded as a constraint
@@ -435,7 +437,8 @@ reader keys on the name `boolean` and reads it with `BuiltinTypeVocabulary.looku
 package-private part of the compiler.
 
 **The change:** one public method giving the atom type a bind-mode read uses for an entry, so a consumer asks the
-library's own question and copies no rule.
+library's own question and copies no rule. The change in "The entry and class a bind-mode read uses for a type are not a
+public question" would answer this too.
 
 **Workaround in place:** `TsonServiceProtocol` copies the one name-keyed rule for `boolean`. Pinned by
 `UpstreamGapsTest.thePublicAtomRouteCannotProduceABooleanThatABindModeReadDelivers`, which flips when the public route
@@ -462,6 +465,42 @@ Pinned by `SchemaSplitProbeTest.aMemberBothSchemasDeclareCollidesNamingNeitherSc
 names the schemas.
 
 **Priority:** low.
+
+---
+
+## 22. The entry and class a bind-mode read uses for a type are not a public question
+
+**Hit:** at startup this project needs three answers the library computes while it compiles readers: which entry the
+binder is asked for a written type name (past plain alias hops, and past an extern to the foreign entry), which class
+binds it, and whether a schema type and a `DataClass` agree. They sit in a private nested class and unexported packages
+of `tson-compiler`, and no public call asks them. This project rebuilds all three, so each copy can drift from the read
+silently: a rule the library changes is a startup check here that passes while the read fails. Two of this project's own
+call sites answer the first question differently for a plain alias, the join asking past every alias hop as a read does
+and the HTTP reader naming a plain alias as written (`BACKLOG.md`, "A plain-alias payload type is named as what a read
+asks"), which could only happen with no authority to defer to. The library itself asks the binder differently at several
+sites (the compile path, the root pre-check, the host of an array or map element, the JSON candidates), read from its
+code and not measured here.
+
+**The change:** a public binding view of a resolved schema, in the compiler module, with the reader factories built on
+it so its answers are the read's by construction: the entry a read asks for a written name; the descriptor the context
+binds it to, as a value; the compiler's agreement verdict at a typed position, as a value. The sketch is
+`proposal/issue-binding-view.md`, written as the issue text. It would close "What a dependent field's sender may name,
+and whether a name binds, are reached through casts and catches", "A union read from a sealed hierarchy is not reported
+closed" and "The atom family a bind-mode read uses for an entry is not one public call", each of which stays its own
+entry because each could land alone.
+
+**Workaround in place:** `Landed` (the alias walk, the extern landing, `declaringIdentity`, and `nameBinder().resolve`
+with a catch), the join's agreement check in `TsonServiceProtocol`, which follows the compiler's rules position by
+position, and `ChosenTypes`. Pinned by `UpstreamGapsTest.aBindReadAsksTheBinderForTheEntryAnAliasOrAnExternReaches`: for
+a plain alias, an alias of an alias, an extern and an alias of an extern, a bind-mode read and
+`Landed.of(...).pastAliases()` name the same entry and class. Its converse is
+`UpstreamGapsTest.aBindReadDoesNotAskTheBinderForTheNameAnAliasOrAnExternWrites`: with only the written name bound the
+read is a `MissingBindingException`. The absence is
+`UpstreamGapsTest.noPublicCallAnswersTheEntryOrClassABindReadUsesForAType`. The pins do not cover an extern whose
+foreign entry is itself an alias, or a constructor composed over its parent.
+
+**Priority:** medium. It blocks nothing, but it is the one change that would retire the three entries above and this
+project's copies.
 
 ---
 

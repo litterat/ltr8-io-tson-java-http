@@ -39,7 +39,8 @@ Other root documents: `BACKLOG.md` (outstanding work), `UPSTREAM.md` (changes wa
 staged for its `SPEC-FEEDBACK.md`; holds only what is open), `SCHEMA-HEADER.md` (the design record behind [TSON-JSON]
 §3.5; cite §3.5 for the rules), `experiments/README.md` (design explorations kept compiling), and the consumer-facing
 `README.md`, which `ReadmeTest` executes against the real demo. `proposal/` holds proposals for this project's own
-vocabulary and layer, each measured by a probe and adopted or dropped by the user.
+vocabulary and layer, each measured by a probe and adopted or dropped by the user, and the text of an issue
+drafted for tson-java, which an `UPSTREAM.md` entry cites and which is filed, not adopted.
 
 ## Project
 
