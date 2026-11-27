@@ -134,10 +134,10 @@ public final class TsonServiceProtocol<T> {
     private final String schemaId;
     private final String name;
     private final DataProtocol<T> dataProtocol;
-    private final Map<ExchangeName, DataExchange> exchanges;
+    private final Map<TsonExchangeName, DataExchange> exchanges;
 
     private TsonServiceProtocol(String schemaId, String name, DataProtocol<T> dataProtocol,
-                                Map<ExchangeName, DataExchange> exchanges) {
+                                Map<TsonExchangeName, DataExchange> exchanges) {
         this.schemaId = schemaId;
         this.name = name;
         this.dataProtocol = dataProtocol;
@@ -176,7 +176,7 @@ public final class TsonServiceProtocol<T> {
                     + type.getName() + ", which the bind context refuses as a protocol: " + refused.getMessage()
                     + " -- change the interface as that says, so bind reads it as a protocol", refused);
         }
-        Map<ExchangeName, DataExchange> joined = byName(schemaId, protocol, declared, data);
+        Map<TsonExchangeName, DataExchange> joined = byName(schemaId, protocol, declared, data);
         joined.forEach((exchange, java) -> new Agreement(schemaId, exchange, java, type, linked, context)
                 .require(declared.exchanges().get(exchange.name())));
         return new TsonServiceProtocol<>(schemaId, protocol, data, joined);
@@ -223,18 +223,18 @@ public final class TsonServiceProtocol<T> {
      * Each schema exchange with the Java exchange its key finds, in the order the schema writes them, refusing a key
      * that finds none, two keys that find one, and a Java exchange no key finds.
      */
-    private static Map<ExchangeName, DataExchange> byName(String schemaId, String protocol, Protocol declared,
-                                                          DataProtocol<?> data) {
+    private static Map<TsonExchangeName, DataExchange> byName(String schemaId, String protocol, Protocol declared,
+                                                              DataProtocol<?> data) {
         Class<?> type = data.typeClass();
-        Map<ExchangeName, DataExchange> joined = new LinkedHashMap<>();
-        Map<DataExchange, ExchangeName> foundBy = new HashMap<>();
+        Map<TsonExchangeName, DataExchange> joined = new LinkedHashMap<>();
+        Map<DataExchange, TsonExchangeName> foundBy = new HashMap<>();
         for (String key : declared.exchanges().keySet()) {
-            ExchangeName exchange = new ExchangeName(protocol, key);
+            TsonExchangeName exchange = new TsonExchangeName(protocol, key);
             DataExchange java = data.exchange(key).orElseThrow(() -> new IllegalArgumentException("'" + exchange
                     + "' of '" + schemaId + "' has no method in " + type.getName() + " -- an exchange is found by its "
                     + "name with each _ removed and the character after it upper-cased, and " + type.getName()
                     + " declares " + javaNames(data)));
-            ExchangeName earlier = foundBy.putIfAbsent(java, exchange);
+            TsonExchangeName earlier = foundBy.putIfAbsent(java, exchange);
             if (earlier != null) {
                 throw new IllegalArgumentException("'" + earlier + "' and '" + exchange + "' of '" + schemaId
                         + "' both find " + method(type, java) + ": with each _ removed and the character after it "
@@ -277,12 +277,12 @@ public final class TsonServiceProtocol<T> {
     }
 
     /** Each exchange by its name in the protocol, with the Java exchange serving it, in the order the schema writes them. */
-    public Map<ExchangeName, DataExchange> exchanges() {
+    public Map<TsonExchangeName, DataExchange> exchanges() {
         return exchanges;
     }
 
     /** The Java exchange serving {@code name}, or empty where {@code name} is no exchange of this protocol. */
-    public Optional<DataExchange> exchange(ExchangeName name) {
+    public Optional<DataExchange> exchange(TsonExchangeName name) {
         return Optional.ofNullable(exchanges.get(name));
     }
 
@@ -290,13 +290,13 @@ public final class TsonServiceProtocol<T> {
     private static final class Agreement {
 
         private final String schemaId;
-        private final ExchangeName exchange;
+        private final TsonExchangeName exchange;
         private final DataExchange java;
         private final String method;
         private final TsonLinkedSchema linked;
         private final DataBindContext context;
 
-        Agreement(String schemaId, ExchangeName exchange, DataExchange java, Class<?> type, TsonLinkedSchema linked,
+        Agreement(String schemaId, TsonExchangeName exchange, DataExchange java, Class<?> type, TsonLinkedSchema linked,
                   DataBindContext context) {
             this.schemaId = schemaId;
             this.exchange = exchange;

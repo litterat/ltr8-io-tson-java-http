@@ -6,7 +6,7 @@ import io.ltr8.tson.http.schema.HttpVerb;
 import io.ltr8.tson.http.schema.Operation;
 import io.ltr8.tson.http.schema.SecurityScheme;
 import io.ltr8.tson.schema.meta.TypeRef;
-import io.ltr8.tson.service.ExchangeName;
+import io.ltr8.tson.service.TsonExchangeName;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -43,13 +43,13 @@ import java.util.function.Function;
  *                    6570 level-1 template whose every variable is a scalar field of {@link #response()}, or a
  *                    literal; {@link #expandResponseHeaders} expands them
  */
-public record Route(HttpVerb verb, String path, Optional<ExchangeName> exchange, Optional<TypeRef> request,
-                    Optional<TypeRef> response, Map<Integer, TypeRef> errors, int status, boolean safe,
-                    boolean idempotent, boolean destructive, boolean document, Set<String> mediaTypes,
-                    RequestPlacement placement, Optional<String> summary, Optional<String> doc,
-                    List<SecurityScheme> security, Map<String, String> responseHeaders) {
+public record TsonRoute(HttpVerb verb, String path, Optional<TsonExchangeName> exchange, Optional<TypeRef> request,
+                        Optional<TypeRef> response, Map<Integer, TypeRef> errors, int status, boolean safe,
+                        boolean idempotent, boolean destructive, boolean document, Set<String> mediaTypes,
+                        TsonRequestPlacement placement, Optional<String> summary, Optional<String> doc,
+                        List<SecurityScheme> security, Map<String, String> responseHeaders) {
 
-    public Route {
+    public TsonRoute {
         errors = Collections.unmodifiableMap(new LinkedHashMap<>(errors));
         mediaTypes = Collections.unmodifiableSet(new LinkedHashSet<>(mediaTypes));
         security = List.copyOf(security);

@@ -321,7 +321,7 @@ class UpstreamGapsTest {
         var described = TsonHttpSchema.describedBy(resolveAgainstServiceMeta(written), API_ID);
 
         assertEquals(List.of("GET /orders/{id}"),
-                described.routes().stream().map(io.ltr8.tson.http.Route::key).sorted().toList());
+                described.routes().stream().map(io.ltr8.tson.http.TsonRoute::key).sorted().toList());
         var get = described.route(io.ltr8.tson.http.schema.HttpVerb.GET, "/orders/{id}").orElseThrow();
         assertEquals("order", get.response().orElseThrow().name());
     }
@@ -351,7 +351,7 @@ class UpstreamGapsTest {
                 + "!http.operation { response: order } } }");
         var both = assertDoesNotThrow(() -> TsonHttpSchema.describedBy(resolveAgainstServiceMeta(alike), API_ID));
         assertEquals(List.of("GET /I", "GET /l"),
-                both.routes().stream().map(io.ltr8.tson.http.Route::key).sorted().toList());
+                both.routes().stream().map(io.ltr8.tson.http.TsonRoute::key).sorted().toList());
         for (String path : List.of("/путь", "/pаth")) {
             String refused = assertThrows(RuntimeException.class,
                     () -> resolveAgainstServiceMeta(body.formatted(path))).getMessage();
@@ -1825,7 +1825,7 @@ class UpstreamGapsTest {
      * a consumer that reads a schema it did not write. {@code type()} answers every field, a dependent one with a
      * {@link TypeInline} over a {@code DependentBody} spelled {@code kind!}; {@code ownType()} answers with an {@code
      * Optional}, empty on a dependent field; and {@code sibling()} names the field whose value types it, which is what
-     * {@code RequestPlacement} and {@code ChosenTypes} ask. The contract wanted is no accessor that throws on a valid
+     * {@code TsonRequestPlacement} and {@code ChosenTypes} ask. The contract wanted is no accessor that throws on a valid
      * schema. Fails the day the call returns, or stops compiling when the accessor changes.
      */
     @Test

@@ -38,11 +38,11 @@ fetched like any other; `RpcProbe.theWireSchemaIsWhatTheProtocolDetermines` deri
 holds the hand-written file to it, which is the check a generator makes unnecessary.
 
 **Both gateways translate into this.** An http projection describes a translator, not a server: `TsonServiceDescription` is
-its table, and `RequestPlacement` run in reverse -- `id` from the path segment, `order_query` from the query string, `order`
-from the body beside `Idempotency-Key` -- is its request path, producing a `call`. Which is why a generic gateway process can
-read an http projection and an RPC address and need no code per service. An agent processor (`experiments/agent/`) does the
-same for several calls in one request. In-process Java dispatch is the first transport: an `Orders` implementation wires to
-the protocol once, and everything else translates into a call.
+its table, and `TsonRequestPlacement` run in reverse -- `id` from the path segment, `order_query` from the query string,
+`order` from the body beside `Idempotency-Key` -- is its request path, producing a `call`. Which is why a generic gateway
+process can read an http projection and an RPC address and need no code per service. An agent processor
+(`experiments/agent/`) does the same for several calls in one request. In-process Java dispatch is the first
+transport: an `Orders` implementation wires to the protocol once, and everything else translates into a call.
 
 **The exchange's address is a content-addressed identity**: the protocol schema's `!!id` and the exchange's key,
 unambiguous across every service a gateway fronts, versioned by the identity, with no registry and no numeric ids --

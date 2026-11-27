@@ -4,7 +4,7 @@ What a service says about its exchanges, naming no transport: `service.tn` (in `
 schema) and the packages below. The layout rule, shared with `tson-http`: **the root package is the API; `schema` holds
 only the classes that mirror the module's `.tn` types, each carrying `@Typename`; `internal` is unexported machinery.**
 The root `io.ltr8.tson.service` holds `TsonBindings`, `TsonServiceSchema` (the holder of `service.tn`),
-`TsonServiceProtocol` (the join) and `ExchangeName`. `io.ltr8.tson.service.schema` holds `Protocol`, `Exchange` and
+`TsonServiceProtocol` (the join) and `TsonExchangeName`. `io.ltr8.tson.service.schema` holds `Protocol`, `Exchange` and
 `Signature`. `io.ltr8.tson.service.internal` holds `Landed`, exported only to `io.ltr8.tson.http` and kept out of the
 generated Javadoc. The HTTP projection, its reader and `http.tn` are `tson-http`'s; this module depends on tson-java,
 `ltr8-bind`, `ltr8-annotation` and `tson-atom` directly and on nothing of this repo. Start with the note for the type you
@@ -13,7 +13,7 @@ are touching:
 | Working in | Read (`design/…`) |
 |---|---|
 | `TsonBindings` (`of`, `bySchema`) | `binding.md` |
-| `service.tn`, `ExchangeName`, the bound records, `TsonServiceSchema` | `service-description.md` |
+| `service.tn`, `TsonExchangeName`, the bound records, `TsonServiceSchema` | `service-description.md` |
 | `TsonServiceProtocol`, the join, the protocol layer | `invoke.md` |
 | `Landed` (`internal`), which the reader in `tson-http` uses | `service-reader.md` |
 

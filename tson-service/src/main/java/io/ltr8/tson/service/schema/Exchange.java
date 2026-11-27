@@ -10,7 +10,7 @@ import java.util.Optional;
  * An exchange: one request-and-reply, a signature held under its name in a {@link Protocol}'s {@code exchanges}. Its
  * documentation and the facts it states about itself ({@code @service.safe}, {@code @service.idempotent} and {@code
  * @service.destructive}) are annotations on that key, read from {@link Protocol#exchanges} and resolved onto each
- * {@code Route} that binds it.
+ * {@code TsonRoute} that binds it.
  */
 @Typename(name = "service.exchange")
 public record Exchange(Optional<TypeRef> request, Optional<TypeRef> response, List<TypeRef> errors) {

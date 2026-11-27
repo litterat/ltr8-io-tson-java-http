@@ -29,9 +29,11 @@ import java.util.Map;
  * files and a server reports on requests, so {@code problem.details} follows RFC 9457 while the CLI's envelope is
  * built around file reports. One shape across both would fit neither.
  *
- * <p><b>One root name.</b> Every type the schema declares is a member of its one root map, {@code problem}, so a
- * schema importing it reserves that name alone: a body is {@code !problem.details { … }}, a diagnostic is a
- * {@code problem.diagnostic}, and a business error composes {@code problem.details}.
+ * <p><b>One root name.</b> Every type the schema declares is a member of its one root map, {@code problem}: a body is
+ * {@code !problem.details { … }}, a diagnostic is a {@code problem.diagnostic}, and a business error composes {@code
+ * problem.details}. In a schema importing it, {@code problem} is reserved only against a root that is no schema map:
+ * a nested schema map is open ([TSON-SCHEMA] §2.2.3), so another schema's {@code problem => !schema { … }} adds its
+ * members to the same map, and only a member path both declare collides.
  *
  * <p>{@link #tson} builds a fresh {@link Tson} of its own each call, with this schema resolved and bound to the
  * wire records, so registering it never collides with an application's. It is the read path, not the write

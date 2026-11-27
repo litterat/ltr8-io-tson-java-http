@@ -36,7 +36,7 @@ import java.util.TreeSet;
  * <pre>{@code
  * TsonServiceCoverage coverage = TsonServiceCoverage.of(described);
  *
- * Route create = coverage.serving(HttpVerb.POST, "/orders");
+ * TsonRoute create = coverage.serving(HttpVerb.POST, "/orders");
  * server.createContext(create.path(), handler);          // the description's own path, where it fits
  *
  * coverage.serving(HttpVerb.GET, "/{+schemaPath}");
@@ -80,8 +80,8 @@ public final class TsonServiceCoverage {
      * @throws IllegalStateException    if it has already been claimed, which means two handlers answer for
      *                                  one endpoint and only one of them can be reached
      */
-    public Route serving(HttpVerb verb, String path) {
-        Route route = requireDeclared(verb, path);
+    public TsonRoute serving(HttpVerb verb, String path) {
+        TsonRoute route = requireDeclared(verb, path);
         String key = route.key();
         if (exempt.containsKey(key)) {
             throw new IllegalStateException("'" + key + "' was declared not served here (" + exempt.get(key)
@@ -94,9 +94,9 @@ public final class TsonServiceCoverage {
         return route;
     }
 
-    private Route requireDeclared(HttpVerb verb, String path) {
+    private TsonRoute requireDeclared(HttpVerb verb, String path) {
         return description.route(verb, path).orElseThrow(() -> new IllegalArgumentException("'"
-                + Route.key(verb, path) + "' is not an endpoint " + description.schemaId() + " declares; it "
+                + TsonRoute.key(verb, path) + "' is not an endpoint " + description.schemaId() + " declares; it "
                 + "declares " + declared()));
     }
 

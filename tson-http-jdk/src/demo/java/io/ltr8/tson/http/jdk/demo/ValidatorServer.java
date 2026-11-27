@@ -12,7 +12,7 @@ import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.compiler.TsonDocumentHeader;
 import io.ltr8.tson.compiler.TsonDocumentPeek;
-import io.ltr8.tson.http.Route;
+import io.ltr8.tson.http.TsonRoute;
 import io.ltr8.tson.http.TsonDeploymentSchema;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
@@ -251,7 +251,7 @@ public final class ValidatorServer {
 
         TsonServiceCoverage coverage = TsonServiceCoverage.of(described);
 
-        Route validate = coverage.serving(HttpVerb.POST, "/validate");
+        TsonRoute validate = coverage.serving(HttpVerb.POST, "/validate");
         server.createContext(validate.path(), TsonHandler.asHttpHandler(codec, exchange -> {
             exchange.requireMethod(validate.verb().name());
             requireBodyWithinCap(exchange.exchange());
@@ -272,8 +272,8 @@ public final class ValidatorServer {
         // page and every schema path alike, so the split is made here rather than by the framework. The page
         // deliberately does NOT go through TsonHandler -- that boundary checks Accept and every route behind
         // it produces TSON, so a browser asking for text/html would be answered 406 before it ever rendered.
-        Route page = coverage.serving(HttpVerb.GET, "/");
-        Route wellKnown = coverage.serving(HttpVerb.GET, "/.well-known/tson-deployment");
+        TsonRoute page = coverage.serving(HttpVerb.GET, "/");
+        TsonRoute wellKnown = coverage.serving(HttpVerb.GET, "/.well-known/tson-deployment");
         coverage.serving(HttpVerb.GET, "/{+schemaPath}");
         // The policy each per-request probe enforces, taken from the config verdict() builds it from rather
         // than from the descriptor: a profile of what is enforced cannot disagree with what refuses a request.

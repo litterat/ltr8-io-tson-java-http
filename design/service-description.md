@@ -1,6 +1,6 @@
 # Describing a service (`service.tn`, `io.ltr8.tson.service`)
 
-The protocol records (`Protocol`, `Exchange`, `Signature`) are in `io.ltr8.tson.service.schema`; `ExchangeName` and
+The protocol records (`Protocol`, `Exchange`, `Signature`) are in `io.ltr8.tson.service.schema`; `TsonExchangeName` and
 `TsonServiceSchema`, the holder of `service.tn`, are in the root `io.ltr8.tson.service`, and the module, `tson-service`,
 names nothing of HTTP. The layer is two schemas: `service.tn`, the protocol side and the exchange facts, naming no
 transport, and `http.tn`, the HTTP projection, which imports it (`TsonHttpSchema` in `io.ltr8.tson.http`, in
@@ -9,7 +9,7 @@ transport, and `http.tn`, the HTTP projection, which imports it (`TsonHttpSchema
 Why a service description is a schema, and what `service.tn` declares at the protocol level. What the reader checks, how
 a server's bindings, catalog and warm-up derive from the description, coverage and business errors are
 `design/service-reader.md`; the reader is `tson-http`'s. Everything HTTP, the http projection, its
-endpoints, placement, statuses, media types, security schemes, response headers, the verb checks and `Route`, is
+endpoints, placement, statuses, media types, security schemes, response headers, the verb checks and `TsonRoute`, is
 `design/http-projection.md`. The orders examples under `tson-http/src/test/resources/io/ltr8/tson/http/orders/`
 (in `tson-http`'s test tree, since they import `problem.tn`) are one real document per use of the layer, reached through
 `OrdersExamples`; `experiments/rpc/` and `experiments/agent/` read them there too.
@@ -126,7 +126,7 @@ exchange name is a name; nothing references a path or a header, so a projection'
 headers are plain maps, and a path is where the schema stops and HTTP begins. A role names itself in its refusal
 (`NameRoleTest`), and §8.2's hygiene refuses a mixed-script or confusable name, a namespace key's and never a text key's. So
 an exchange's identity is `(schema identity, qualified name)`, `…/orders-1.tn` and `orders.exchanges.place_order`, held as
-`ExchangeName`. The HTTP roles and their `ASCII_CASEFOLD` are `design/http-projection.md`.
+`TsonExchangeName`. The HTTP roles and their `ASCII_CASEFOLD` are `design/http-projection.md`.
 
 **A namespace is a map composed to name keys**: `meta.map & { key_type: meta.identifier_ref  voidable?: = false }`, a
 composition restating `key_type` under a narrower type and pinning `voidable`, so its `key_type` is required and an
@@ -166,7 +166,7 @@ A projection checks its verb against these facts and never derives them (`design
 ## Documentation, and the two annotation positions
 
 **Documentation is annotation on a key.** `@service.summary` and `@doc` before a verb key document that endpoint; an
-exchange's sit before its key in the protocol, and a binding falls back to them (`Route.summary()`, `Route.doc()`).
+exchange's sit before its key in the protocol, and a binding falls back to them (`TsonRoute.summary()`, `TsonRoute.doc()`).
 **A schema entry has two annotation positions and they land in different places**: `@doc:"…" op => …` annotates the
 **entry**, read from `entries.getAnnotations(name)`; `op => @doc:"…" { … }` annotates the **definition**. Reading only
 the second and concluding `@doc` is dropped looks exactly like a library bug

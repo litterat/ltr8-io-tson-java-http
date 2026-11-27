@@ -209,7 +209,7 @@ a field of a record value, and this schema was linked with no bind context to re
 
 A sketch. `Event` in `io.ltr8.tson.service.schema` and `Stream` in `io.ltr8.tson.http.schema`, bound as
 `service.event` and `http.stream`;
-`Stream` joins `Endpoint`'s permits; `Protocol` gains `events`. `ExchangeName` generalises to `(protocol, field, key)` so
+`Stream` joins `Endpoint`'s permits; `Protocol` gains `events`. `TsonExchangeName` generalises to `(protocol, field, key)` so
 `binds` holds per event. `TsonServiceDescription` checks a stream's items or event and its media type; `TsonServiceCoverage`
 is unchanged. Each adapter writes `text/event-stream` its own way (a chunked body under `com.sun.net.httpserver`, Javalin's
 and Helidon's SSE support).
@@ -244,7 +244,7 @@ and Helidon's SSE support).
 ## Order of work, if the event kind is adopted
 
 1. `service.tn`: `service.event`, `service.events`, `events?`; `http.tn`: `http.stream`; and their `@doc`s.
-2. The bound records, `TsonServiceSchema.bindings()` and `TsonHttpSchema.bindings()`, `ExchangeName` over the field.
+2. The bound records, `TsonServiceSchema.bindings()` and `TsonHttpSchema.bindings()`, `TsonExchangeName` over the field.
 3. `TsonServiceDescription`'s stream rules and `binds` over events, with `TsonServiceDescriptionTest`.
 4. A stream in the JDK demo, read by `TsonServiceConformanceTest`; then Javalin and Helidon.
 5. `design/service-description.md` and `design/http-projection.md`; `AffordanceProbeTest` stays as the record of why.

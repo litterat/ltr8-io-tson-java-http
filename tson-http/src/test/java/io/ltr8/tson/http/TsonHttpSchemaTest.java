@@ -5,7 +5,7 @@ import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
-import io.ltr8.tson.http.RequestPlacement.Location;
+import io.ltr8.tson.http.TsonRequestPlacement.Location;
 import io.ltr8.tson.http.schema.ApiKey;
 import io.ltr8.tson.http.schema.ApiKeyIn;
 import io.ltr8.tson.http.schema.Endpoint;
@@ -13,7 +13,7 @@ import io.ltr8.tson.http.schema.HttpAuth;
 import io.ltr8.tson.http.schema.HttpProjection;
 import io.ltr8.tson.http.schema.HttpVerb;
 import io.ltr8.tson.http.schema.SecurityScheme;
-import io.ltr8.tson.service.ExchangeName;
+import io.ltr8.tson.service.TsonExchangeName;
 import io.ltr8.tson.service.TsonBindings;
 import io.ltr8.tson.service.TsonServiceSchema;
 import org.junit.jupiter.api.Test;
@@ -126,8 +126,8 @@ class TsonHttpSchemaTest {
         TsonServiceDescription api = described(API);
         assertEquals(Set.of("GET /{+schemaPath}", "POST /orders"), keys(api), "an endpoint is its verb and path");
 
-        Route create = api.route(HttpVerb.POST, "/orders").orElseThrow();
-        assertEquals(Optional.of(new ExchangeName("orders", "place_order")), create.exchange());
+        TsonRoute create = api.route(HttpVerb.POST, "/orders").orElseThrow();
+        assertEquals(Optional.of(new TsonExchangeName("orders", "place_order")), create.exchange());
         assertEquals("order", create.request().orElseThrow().name(), "borrowed from the exchange");
         assertEquals("order", create.response().orElseThrow().name());
         assertEquals(201, create.status());
@@ -137,7 +137,7 @@ class TsonHttpSchemaTest {
                 "the exchange's @doc, since the verb key carries none");
         assertEquals(List.of("sku", "quantity"), create.placement().at(Location.BODY), "a POST's remainder");
 
-        Route schema = api.route(HttpVerb.GET, "/{+schemaPath}").orElseThrow();
+        TsonRoute schema = api.route(HttpVerb.GET, "/{+schemaPath}").orElseThrow();
         assertTrue(schema.document());
         assertEquals(Set.of("application/tson"), schema.mediaTypes());
         assertEquals(Optional.empty(), schema.response(), "a document's body is labelled, not typed");
@@ -322,20 +322,20 @@ class TsonHttpSchemaTest {
     @Test
     void anEndpointListsTheMediaTypesItSpeaks() {
         TsonServiceDescription plain = described(API);
-        Route tsonOnly = plain.route(HttpVerb.POST, "/orders").orElseThrow();
+        TsonRoute tsonOnly = plain.route(HttpVerb.POST, "/orders").orElseThrow();
         assertEquals(Set.of("application/tson"), tsonOnly.mediaTypes(), "absent is application/tson alone");
         assertFalse(tsonOnly.speaksJson());
 
         for (String label : List.of("application/json", "application/tson+json", "Application/JSON")) {
             TsonServiceDescription api = described(API.replace("status: 201 }",
                     "status: 201  media_types: [\"" + label + "\"] }"));
-            Route create = api.route(HttpVerb.POST, "/orders").orElseThrow();
+            TsonRoute create = api.route(HttpVerb.POST, "/orders").orElseThrow();
             assertTrue(create.speaksJson(), label);
             assertEquals(List.of("application/tson", label.toLowerCase(Locale.ROOT)),
                     List.copyOf(create.mediaTypes()), "application/tson first, then what is listed, folded");
         }
 
-        Route schema = plain.route(HttpVerb.GET, "/{+schemaPath}").orElseThrow();
+        TsonRoute schema = plain.route(HttpVerb.GET, "/{+schemaPath}").orElseThrow();
         assertFalse(schema.speaksJson());
     }
 
@@ -352,7 +352,7 @@ class TsonHttpSchemaTest {
                 + "holds can speak -- an endpoint answering a TSON value speaks [application/json, application/tson, "
                 + "application/tson+json]; an endpoint answering bytes is a !http.document", refused);
 
-        Route page = described(API.replace("media_types: [\"application/tson\"]", "media_types: [\"text/html\"]"))
+        TsonRoute page = described(API.replace("media_types: [\"application/tson\"]", "media_types: [\"text/html\"]"))
                 .route(HttpVerb.GET, "/{+schemaPath}").orElseThrow();
         assertEquals(Set.of("text/html"), page.mediaTypes(), "a document implies no application/tson");
     }
@@ -443,7 +443,7 @@ class TsonHttpSchemaTest {
     @Test
     void anEndpointReferencesAnApplication() {
         Tson tson = resolved(PAGED.formatted("order_page"));
-        Route list = TsonHttpSchema.describedBy(tson, API_ID).route(HttpVerb.GET, "/orders").orElseThrow();
+        TsonRoute list = TsonHttpSchema.describedBy(tson, API_ID).route(HttpVerb.GET, "/orders").orElseThrow();
         assertEquals("order_page", list.response().orElseThrow().name());
 
         // A declaration naming an application is that application's entry (§8.2): no hop onto a minted name.
@@ -513,8 +513,8 @@ class TsonHttpSchemaTest {
     void aDescriptionKnowsWhichClassesToWarm() {
         TsonServiceDescription api = described(API);
 
-        assertEquals(Set.of(new PayloadType(ORDER_ID, "order"), new PayloadType(ORDER_ID, "sku_not_found"),
-                new PayloadType(API_ID, "schema_ref")), api.payloadTypes());
+        assertEquals(Set.of(new TsonPayloadType(ORDER_ID, "order"), new TsonPayloadType(ORDER_ID, "sku_not_found"),
+                new TsonPayloadType(API_ID, "schema_ref")), api.payloadTypes());
         assertEquals(List.of(String.class), api.boundClasses(Map.of("order", String.class)),
                 "only what the bindings map names");
     }

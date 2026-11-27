@@ -9,7 +9,7 @@ import io.ltr8.tson.schema.meta.ValueRef;
  * is the qualified name that references the exchange ({@code orders.exchanges.get_order}), so a message naming one
  * can be pasted back into a document.
  */
-public record ExchangeName(String owner, String name) {
+public record TsonExchangeName(String owner, String name) {
 
     /** The field of {@code service.protocol} a qualified name walks to reach an exchange. */
     private static final String FIELD = "exchanges";
@@ -24,14 +24,14 @@ public record ExchangeName(String owner, String name) {
      * @throws IllegalArgumentException if the name is not three non-empty segments whose middle one is {@code
      *                                  exchanges}: no reference to an exchange of this layer
      */
-    public static ExchangeName of(ValueRef<?> reference) {
+    public static TsonExchangeName of(ValueRef<?> reference) {
         String written = reference.name();
         String[] segments = written.split("\\.", -1);
         if (segments.length != 3 || !segments[1].equals(FIELD) || segments[0].isEmpty() || segments[2].isEmpty()) {
             throw new IllegalArgumentException("'" + written + "' is not an exchange's qualified name -- write the "
                     + "protocol's entry, its exchanges field and the exchange's key, as orders.exchanges.place_order");
         }
-        return new ExchangeName(segments[0], segments[2]);
+        return new TsonExchangeName(segments[0], segments[2]);
     }
 
     @Override

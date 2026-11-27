@@ -67,13 +67,13 @@ The entries are in build order.
   `problem.tn`.
 - [ ] **After the join, in `tson-service`** — The join is built (`TsonServiceProtocol`, `design/invoke.md`, "The join").
   What remains of the protocol layer: the code taking a call document to an invocation and the outcome to a return, the
-  rpc wire form (`call` and `return` documents addressed by `ExchangeName`), a capability of the service and not a module
+  rpc wire form (`call` and `return` documents addressed by `TsonExchangeName`), a capability of the service and not a module
   of its own, of which `experiments/rpc/` is the draft; a `!service.protocol` document written from a `DataProtocol`, so a
   `!http.projection` can be built over a Java interface that already exists, where the Java-to-data name mapping is this
   layer's to own, since bind maps a data name to a Java name and never the reverse, and `@service.safe`,
   `@service.idempotent` and `@service.destructive` have no Java counterpart and must come from somewhere the writer
   reads; the proxy over a `DataExchangeHandler`, since bind ships none; and a lookup from a `DataExchange` back to its
-  `ExchangeName`. The join asks the bind context for an entry past every alias hop, as a TSON read does, where the HTTP
+  `TsonExchangeName`. The join asks the bind context for an entry past every alias hop, as a TSON read does, where the HTTP
   reader asks a plain alias as written (the plain-alias item under "The description"); one of the two moves when that
   item is done. The join judges no exchange facts: one marked both safe and destructive is refused only when an http
   projection binding its protocol is read, so a protocol no projection binds is not checked on them.
@@ -87,8 +87,8 @@ The entries are in build order.
   `tson-service` alone.
 - [ ] **A gRPC projection as a peer of `tson-http`** — Its own module depending on `tson-service` alone, so neither
   projection knows the other exists. gRPC's marshaller is pluggable per method, so a `ServerServiceDefinition` is built at
-  startup from the `!service.protocol` with no protobuf: one `MethodDescriptor` per `ExchangeName`, its full name in gRPC's
-  `package.Service/Method` form, and the service's wire serialisation for the request and outcome. The first external
+  startup from the `!service.protocol` with no protobuf: one `MethodDescriptor` per `TsonExchangeName`, its full name in
+  gRPC's `package.Service/Method` form, and the service's wire serialisation for the request and outcome. The first external
   dependency on the service side, stopping at that module.
 
 ## Projections
@@ -121,7 +121,7 @@ The entries are in build order.
   Constraint: the framework dependency stops at the adapter and the module is a real JPMS module.
 - [ ] **A JAX-RS adapter** — `MessageBodyReader`/`MessageBodyWriter` and an `ExceptionMapper`, for Quarkus, Helidon MP
   and Jersey. Same constraints as the Spring adapter.
-- [ ] **Enforce declared security at the error boundary** — `Route.security()` reads the schemes a description declares
+- [ ] **Enforce declared security at the error boundary** — `TsonRoute.security()` reads the schemes a description declares
   and nothing enforces them. Answer a route with a scheme and no credential for any of them with a `problem.details` at
   401 (and `WWW-Authenticate` for an `http.auth` scheme, RFC 9110 §11.6.1). Needs a problem type under the problems
   prefix and a place for the credential check, given the route, in each adapter's boundary; verifying a credential stays
@@ -133,7 +133,8 @@ The entries are in build order.
 - [ ] **A client built from the description** — For a caller that is not a model the client surface is REST, which is the
   published description, the self-describing responses and the deployment descriptor (a model has its own projection,
   "Projections" above); a Java client built from the description is therefore a conformance and testing tool. It reads a
-  description, reverses `RequestPlacement` to build a request from a record (path variables, query, headers, body), sends it
+  description, reverses `TsonRequestPlacement` to build a request from a record (path variables, query, headers, body),
+  sends it
   with the right `Content-Type` and `TSON-Accept-Schema`, and validates the reply by the schema it names, which is the other
   half of the contract, proven from the server side only. `TsonServiceConformanceTest` holds that logic against the demo;
   extract it into a reusable client and make the conformance test its consumer.
@@ -153,7 +154,7 @@ The entries are in build order.
   gains a [TSON-SCHEMA] §11 paragraph and §5.2 is unchanged), make that the rule here and delete `ChosenTypes` with its
   closure walk and the remainder-body rule, rather than keep a narrower copy refusing the kernel's and the layer's own
   records. A family declares the admitted set in the published description, where a client can read it.
-- [ ] **A plain-alias payload type is named as what a read asks** — `PayloadType`, `payloadTypes()` and both
+- [ ] **A plain-alias payload type is named as what a read asks** — `TsonPayloadType`, `payloadTypes()` and both
   `boundClasses` forms, and `ChosenTypes`, name a plain alias as written. A TSON read of a root type that is a plain
   alias, or an alias of an alias, asks the bind context for the entry the alias reaches. Measured: with the target bound
   the read succeeds, and with only the alias name bound it is a 500 (`MissingBindingException: no bound Java class for

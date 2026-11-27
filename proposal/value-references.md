@@ -40,7 +40,7 @@ the layer grows a rule that shares one of them.
 `http.tn` has grown such rules by hand (`design/http-projection.md`). A projection's `security` is inherited by every
 endpoint that writes none: an endpoint's `security`, when written, replaces the projection's, `security: []` says the
 endpoint is open, and absent inherits ("Security schemes", the override rule). The binder must keep absent apart from
-empty (`Optional<List<ValueRef<SecurityScheme>>>`), `Route.security()` is a resolved list the reader computes, and
+empty (`Optional<List<ValueRef<SecurityScheme>>>`), `TsonRoute.security()` is a resolved list the reader computes, and
 `CLAUDE.md` carries the sharp edge as a trap. The default status 200 is a record default that the reader then
 qualifies: it holds for an endpoint with a response, and an operation with none must write 204, 205 or 304 ("Status").
 Each is a rule of this vocabulary alone, implemented in `TsonServiceDescription`, with its own paragraph explaining where it
@@ -130,7 +130,7 @@ secured => !http.operation ^ { security: [bearer] }
 paged   => !secured ^ { status: 200  request: order_query }    # an incomplete entry written onto another (item 107)
 ```
 
-The bound records type `security` as a `List`, `Route.security()` is the endpoint's own list, and the override paragraph
+The bound records type `security` as a `List`, `TsonRoute.security()` is the endpoint's own list, and the override paragraph
 of `design/http-projection.md` goes with its invariant.
 
 **The default status stays.** `status?: http.status_code ~ 200` is the record's own default, not a sharing rule; a

@@ -22,7 +22,9 @@ import java.util.Map;
  * Nothing in it names a transport: how HTTP exposes a protocol is {@code http.tn}, which imports this schema and
  * whose holder is {@code tson-http}'s {@code TsonHttpSchema}, so a description using HTTP is wired through that class
  * rather than this one. Every name this layer declares sits under its one root map, {@code service}, so it reserves
- * that one root name in every importer and a description writes each tag and annotation qualified:
+ * that one root name only against a root that is no schema map: a nested schema map is open, so another schema's
+ * {@code service => !schema { ... }} adds its members to this one, and only a path both declare collides. A
+ * description writes each tag and annotation qualified:
  *
  * <pre>{@code
  * !!import:"https://tson.io/2026/40/io/ltr8/http/service.tn"

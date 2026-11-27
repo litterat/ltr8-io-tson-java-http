@@ -6,8 +6,8 @@ import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.compiler.TsonDocumentHeader;
 import io.ltr8.tson.compiler.TsonDocumentPeek;
-import io.ltr8.tson.http.RequestPlacement;
-import io.ltr8.tson.http.Route;
+import io.ltr8.tson.http.TsonRequestPlacement;
+import io.ltr8.tson.http.TsonRoute;
 import io.ltr8.tson.http.TsonHttpSchema;
 import io.ltr8.tson.http.TsonMediaType;
 import io.ltr8.tson.http.TsonSchemaCatalog;
@@ -15,7 +15,7 @@ import io.ltr8.tson.http.TsonSchemaHeader;
 import io.ltr8.tson.http.TsonServiceDescription;
 import io.ltr8.tson.http.schema.HttpVerb;
 import io.ltr8.tson.json.Json;
-import io.ltr8.tson.service.ExchangeName;
+import io.ltr8.tson.service.TsonExchangeName;
 import io.ltr8.tson.service.TsonBindings;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -116,8 +116,8 @@ class TsonServiceConformanceTest {
         api.routes().forEach(route -> keys.add(route.key()));
         assertEquals(Set.of("POST /orders", "GET /{+schemaPath}"), keys);
 
-        Route post = api.route(HttpVerb.POST, "/orders").orElseThrow();
-        assertEquals(Optional.of(new ExchangeName("orders", "place_order")), post.exchange());
+        TsonRoute post = api.route(HttpVerb.POST, "/orders").orElseThrow();
+        assertEquals(Optional.of(new TsonExchangeName("orders", "place_order")), post.exchange());
         assertEquals("order", post.request().orElseThrow().name(), "a resolved reference, borrowed from the exchange");
         assertEquals(Optional.of("Place an order"), post.summary());
         assertEquals(Optional.of("Accept an order and confirm it with the quantity doubled."), post.doc(),
@@ -130,7 +130,7 @@ class TsonServiceConformanceTest {
      */
     @Test
     void everyResponseMatchesWhatTheDescriptionDeclares() throws Exception {
-        Route post = api.route(HttpVerb.POST, "/orders").orElseThrow();
+        TsonRoute post = api.route(HttpVerb.POST, "/orders").orElseThrow();
 
         assertResponseMatches(post, postOrder(order("ABC-1", 3)), 201);
         assertResponseMatches(post, postOrder("""
@@ -145,11 +145,11 @@ class TsonServiceConformanceTest {
      */
     @Test
     void theSchemaRouteIsADocumentOfItsMediaType() throws Exception {
-        Route getSchema = api.route(HttpVerb.GET, "/{+schemaPath}").orElseThrow();
+        TsonRoute getSchema = api.route(HttpVerb.GET, "/{+schemaPath}").orElseThrow();
         assertTrue(getSchema.document());
         assertEquals(Set.of("application/tson"), getSchema.mediaTypes());
         assertEquals("schema_ref", getSchema.request().orElseThrow().name());
-        assertEquals(Map.of("schemaPath", RequestPlacement.Location.PATH), getSchema.placement().fields());
+        assertEquals(Map.of("schemaPath", TsonRequestPlacement.Location.PATH), getSchema.placement().fields());
 
         assertEquals(Map.of("cache-control", TsonSchemaCatalog.IMMUTABLE), getSchema.responseHeaders(),
                 "a published schema never changes (§3.5), and the description says so to a cache");
@@ -180,7 +180,7 @@ class TsonServiceConformanceTest {
         Tson published = serverResolved();
         Json json = Json.of(ProcessorConfig.defaults().withDataBindContext(published.dataBindContext()))
                 .withSchemas(published.schemaRegistry());
-        for (Route route : api.routes()) {
+        for (TsonRoute route : api.routes()) {
             if (route.document() || route.verb() != HttpVerb.POST) {
                 continue;   // no body to send in either encoding
             }
@@ -216,7 +216,7 @@ class TsonServiceConformanceTest {
      * because every endpoint has them -- the error boundary's {@code problem.details}. Any other success status is one the
      * description does not declare, a contract violation however good the body.
      */
-    private static String declaredType(Route route, int status) {
+    private static String declaredType(TsonRoute route, int status) {
         if (status == route.status()) {
             return route.response().orElseThrow(() -> new AssertionError(route.key() + " declares no response "
                     + "type for " + status)).name();
@@ -235,7 +235,7 @@ class TsonServiceConformanceTest {
      * {@link #assertResponseMatches} for JSON: a success under the label asked for, any reply in JSON, the schema
      * from the header, the type from the description.
      */
-    private void assertJsonResponseMatches(Json json, Route route, String label, HttpResponse<String> response,
+    private void assertJsonResponseMatches(Json json, TsonRoute route, String label, HttpResponse<String> response,
                                            int expectedStatus) throws Exception {
         assertEquals(expectedStatus, response.statusCode(), response.body());
         String mediaType = response.headers().firstValue("Content-Type").orElseThrow();
@@ -264,7 +264,7 @@ class TsonServiceConformanceTest {
      * with a variable expands from the response value, which a client checks against the body it got; the demos
      * declare none.
      */
-    private static void assertDeclaredHeaders(Route route, HttpResponse<String> response) {
+    private static void assertDeclaredHeaders(TsonRoute route, HttpResponse<String> response) {
         route.responseHeaders().forEach((name, value) -> {
             if (!value.contains("{")) {
                 assertEquals(Optional.of(value), response.headers().firstValue(name),
@@ -278,7 +278,7 @@ class TsonServiceConformanceTest {
      * reply must be self-describing -- its own {@code !!import} and type-ref the ones the description gives that status.
      * Responses being self-describing is what makes this checkable without the description carrying examples.
      */
-    private void assertResponseMatches(Route route, HttpResponse<String> response, int expectedStatus)
+    private void assertResponseMatches(TsonRoute route, HttpResponse<String> response, int expectedStatus)
             throws Exception {
         assertEquals(expectedStatus, response.statusCode(), response.body());
         if (response.statusCode() == route.status()) {

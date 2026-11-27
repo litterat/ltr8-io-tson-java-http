@@ -5,7 +5,8 @@ description. The layout rule, shared with `tson-service`: **the root package is 
 that mirror a `.tn` type, each carrying `@Typename`; `internal` is unexported machinery.** The schemas
 (`src/main/resources`) are `problem.tn`, `deployment.tn` and `http.tn`. The root `io.ltr8.tson.http` holds the codec,
 the rest of the core, the holder of each schema (`TsonHttpSchema`, `TsonProblemSchema`, `TsonDeploymentSchema`),
-`TsonServiceDescription`, `TsonServiceCoverage`, `Route`, `PayloadType` and `RequestPlacement`, with the package-private
+`TsonServiceDescription`, `TsonServiceCoverage`, `TsonRoute`, `TsonPayloadType` and `TsonRequestPlacement`, with the
+package-private
 `ChosenTypes` and `HeaderTemplate`. The mirrors of `http.tn`, whose root map is the module's own, sit in
 `io.ltr8.tson.http.schema` (`HttpProjection`, `Endpoint`, `Operation`, `Binding`, `Resource`, `SecurityScheme` and the
 rest); those of each other schema the module owns sit in `schema.<root map>`: `schema.problem` (`TsonProblem`,
@@ -19,8 +20,8 @@ re-exports (`requires transitive`); `io.ltr8.tson.http.schema` imports `io.ltr8.
 | `TsonHttpCodec`, `TsonMediaType`, `TsonAcceptHeader`, `TsonSchemaHeader`, `TsonAcceptSchemaHeader`, `TsonSchemaCatalog` | `codec.md`, then `json-encoding.md` for the `acceptingJson` side |
 | `TsonHttpException`, `TsonProblem*`, `problem.tn` | `status-classification.md`, `name-policy.md`, `schema-authoring.md` |
 | `TsonSchemaVersions`, `TsonDocumentPeek` use | `schema-versions.md` |
-| `TsonServiceDescription`, `TsonServiceCoverage`, `PayloadType`, `TsonHttpSchema` | `service-reader.md` |
-| `http.tn`'s records, endpoints, placement, `Route`, security schemes | `http-projection.md` |
+| `TsonServiceDescription`, `TsonServiceCoverage`, `TsonPayloadType`, `TsonHttpSchema` | `service-reader.md` |
+| `http.tn`'s records, endpoints, placement, `TsonRoute`, security schemes | `http-projection.md` |
 | `TsonDeployment`, `TsonDeploymentSchema`, `deployment.tn` | `deployment-descriptor.md` |
 | `probe/` (a proposal's probe, its bound records in a sub-package named for it), `UpstreamGapsTest` | `tson-api-surface.md` and the proposal under `proposal/`; `experiments/CLAUDE.md` for the probes that live there |
 
@@ -35,7 +36,8 @@ Rules that bite here:
 - `problem.tn` is this project's own schema and diverges from tson-cli's `diagnostics.tn` on purpose. Its
   `problem.diagnostic_code` is a hand copy of `Diagnostic.Code`; `TsonProblemSchemaTest` keeps it current. Every type
   it declares sits under its one root map, `problem` (a body is `problem.details`), as `deployment.tn`'s sit under
-  `deployment` (a descriptor is `deployment.descriptor`); a bound class's `@Typename` is the qualified name.
+  `deployment` (a descriptor is `deployment.descriptor`); a bound class's `@Typename` is the qualified name. Each root
+  is reserved only against a root that is no schema map; another schema's `problem => !schema { … }` is open to it.
 - `HttpSchemaSource` is upstream's. What stays here is the mapping of its failures to statuses and
   `TsonHttpSchemaSourceIntegrationTest`; do not retest upstream's policy.
 - A class in `schema` binds only by being named in its schema's holder (`TsonHttpSchema`, `TsonProblemSchema` or

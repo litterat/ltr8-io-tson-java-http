@@ -7,7 +7,7 @@ import io.ltr8.tson.base.CanonicalIdentity;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
-import io.ltr8.tson.http.RequestPlacement.Location;
+import io.ltr8.tson.http.TsonRequestPlacement.Location;
 import io.ltr8.tson.http.probe.extern.OrderV1;
 import io.ltr8.tson.http.probe.extern.OrderV2;
 import io.ltr8.tson.http.schema.HttpProjection;
@@ -58,7 +58,7 @@ class TsonServiceDescriptionExternTest {
      */
     @Test
     void anErrorThroughAnExternFixesTheStatusItsTargetPins() {
-        Route route = read(description("  errors: [not_found_v1]", "")).routes().getFirst();
+        TsonRoute route = read(description("  errors: [not_found_v1]", "")).routes().getFirst();
 
         assertEquals("not_found_v1", route.errorFor(404).orElseThrow().name());
     }
@@ -69,7 +69,7 @@ class TsonServiceDescriptionExternTest {
      */
     @Test
     void aResponseHeaderExpandsOverTheForeignRecordsScalarField() {
-        Route route = read(description("", "  response_headers: { ETag => \"{sku}\" }")).routes().get(1);
+        TsonRoute route = read(description("", "  response_headers: { ETag => \"{sku}\" }")).routes().get(1);
 
         assertEquals(Map.of("etag", "A-1"), route.expandResponseHeaders(field -> field.equals("sku") ? "A-1" : null));
     }
@@ -98,7 +98,7 @@ class TsonServiceDescriptionExternTest {
     void anExternTypedRequestPlacesTheForeignRecordsFields() {
         String placed = KEYED.replace("exchange: orders.exchanges.get_order_v1 }",
                 "exchange: orders.exchanges.get_order_v1  query: [region] }");
-        Route route = read(placed).routes().getFirst();
+        TsonRoute route = read(placed).routes().getFirst();
 
         assertEquals(Map.of("id", Location.PATH, "region", Location.QUERY), route.placement().fields());
         assertEquals(List.of("id", "region"), List.copyOf(route.placement().fields().keySet()));
@@ -138,7 +138,7 @@ class TsonServiceDescriptionExternTest {
      */
     @Test
     void aForeignArrayOfScalarsFromAThirdSchemaIsAdmittedInTheQuery() {
-        Route route = keyed("coded", TAGGED_KEYS, "  query: [codes]").routes().getFirst();
+        TsonRoute route = keyed("coded", TAGGED_KEYS, "  query: [codes]").routes().getFirst();
 
         assertEquals(Map.of("id", Location.PATH, "codes", Location.QUERY), route.placement().fields());
     }
@@ -178,7 +178,7 @@ class TsonServiceDescriptionExternTest {
      */
     @Test
     void aResponseHeaderJudgesAFieldTypedByAnExternWhereItLands() {
-        Route route = headed("badged", "{code}").routes().get(1);
+        TsonRoute route = headed("badged", "{code}").routes().get(1);
         assertEquals(Map.of("etag", "C-1"), route.expandResponseHeaders(field -> field.equals("code") ? "C-1" : null));
 
         String declared = "'orders_http GET /v2/orders/{id}' declares the response header ";
@@ -298,9 +298,9 @@ class TsonServiceDescriptionExternTest {
         tson.resolve(DESCRIPTION);
         TsonServiceDescription described = TsonHttpSchema.describedBy(tson, API);
 
-        List<Route> routes = described.routes();
-        assertEquals(new PayloadType(ORDER_1, "order"), described.payloadType(routes.get(0).response().orElseThrow()));
-        assertEquals(new PayloadType(ORDER_2, "order"), described.payloadType(routes.get(1).response().orElseThrow()));
+        List<TsonRoute> routes = described.routes();
+        assertEquals(new TsonPayloadType(ORDER_1, "order"), described.payloadType(routes.get(0).response().orElseThrow()));
+        assertEquals(new TsonPayloadType(ORDER_2, "order"), described.payloadType(routes.get(1).response().orElseThrow()));
         assertEquals(CanonicalIdentity.canonicalize(ORDER_2),
                 described.payloadType(routes.get(1).response().orElseThrow()).identity());
         assertEquals(List.of(OrderV1.class, OrderV2.class), described.boundClasses());
@@ -317,7 +317,7 @@ class TsonServiceDescriptionExternTest {
             byte[] written = codec.write(value, API, root);
             assertEquals(value, codec.readObject(new ByteArrayInputStream(written), "application/tson",
                     value.getClass()), () -> new String(written, StandardCharsets.UTF_8));
-            PayloadType asked = described.payloadType(routes.get(i).response().orElseThrow());
+            TsonPayloadType asked = described.payloadType(routes.get(i).response().orElseThrow());
             assertEquals(value, codec.readObjectAs(new ByteArrayInputStream(values.get(value)
                     .getBytes(StandardCharsets.UTF_8)), "application/json", asked.schemaId(), asked.name(),
                     value.getClass()));

@@ -14,7 +14,9 @@ publishes at `/.well-known/tson-deployment`. Current form only.
 - The profile is the policy in force (`profile(inForce)`), not what the descriptor says, and it is a hint.
 - Hosts are `net.tn`'s `host`; `schema_hosts` is a `set<host>` compared by the type's equality.
 - `deployment.tn` declares one root, the schema map `deployment`: a descriptor is a `deployment.descriptor`, the
-  profile a `deployment.acceptance_profile`, and each bound record's `@Typename` is that qualified name.
+  profile a `deployment.acceptance_profile`, and each bound record's `@Typename` is that qualified name. The root is
+  reserved only against a root that is no schema map: a nested schema map is open ([TSON-SCHEMA] §2.2.3), so another
+  schema's `deployment => !schema { … }` adds its members, and only a path both declare collides.
 
 ## Deployment descriptors (`deployment.tn`, `TsonDeployment`)
 

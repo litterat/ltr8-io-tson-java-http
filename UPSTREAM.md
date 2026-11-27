@@ -174,7 +174,7 @@ naming the type, the class and the component, as a disagreeing class already is.
 ## 9. `RecordField` states one fact through several accessors, and one of them throws
 
 **Hit:** reading a schema this project did not write, at startup, to place a request's fields over HTTP
-(`RequestPlacement`) and to check what a dependent field's sender may name (`ChosenTypes`). A record field's type is
+(`TsonRequestPlacement`) and to check what a dependent field's sender may name (`ChosenTypes`). A record field's type is
 one fact, and `RecordField` answers it four ways: `type()` returns the `TypeExpr` (a `TypeRef`, or a `TypeInline` for
 a type written in place, the dependent type among them); `ownType()` returns an `Optional<TypeExpr>`, empty for a
 dependent field; `sibling()` the sibling's field name as an `Optional<String>`; and `typeExpr()` returns the
@@ -186,7 +186,7 @@ rather than a message, and on any path that walks a schema per request, a 500.
 **The change:** no accessor that throws on a schema that loaded: `type()` read with a `switch` as the one surface and
 `typeExpr()` gone, or `ownType()` the only accessor for the type a field holds.
 
-**Workaround in place:** `RequestPlacement` and `ChosenTypes` ask `sibling()` first and switch on `type()` (`TypeRef`,
+**Workaround in place:** `TsonRequestPlacement` and `ChosenTypes` ask `sibling()` first and switch on `type()` (`TypeRef`,
 `TypeInline`), never calling `typeExpr()`. Pinned by
 `UpstreamGapsTest.aDependentFieldsTypeExprThrowsWhereItsTypeIsADependentType`.
 
@@ -398,8 +398,8 @@ extern: a route's `order_v1` reads under the description in TSON and not in JSON
 **The change:** the JSON bind registry binding a field typed by a namespace type to a `Namespace` component, as the
 TSON registry does, or not judging a closure's records that the read never reaches.
 
-**Workaround in place:** a caller reads a payload type under the schema declaring it, `PayloadType.schemaId()` and
-`PayloadType.name()` from `TsonServiceDescription.payloadType`, whose closure holds no `service.tn`. Pinned by
+**Workaround in place:** a caller reads a payload type under the schema declaring it, `TsonPayloadType.schemaId()` and
+`TsonPayloadType.name()` from `TsonServiceDescription.payloadType`, whose closure holds no `service.tn`. Pinned by
 `UpstreamGapsTest.jsonBindingRefusesANamespaceComponentInTheClosure`, which flips when the JSON read binds.
 
 **Priority:** medium.

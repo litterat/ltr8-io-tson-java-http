@@ -1,8 +1,8 @@
-# The http projection (`http.projection`, endpoints, `Route`)
+# The http projection (`http.projection`, endpoints, `TsonRoute`)
 
 In `tson-http`, declared by `http.tn` (one root map, `http`), which imports `service.tn`. How a protocol
 is projected onto HTTP: the projection and its claims, endpoints and their kinds, placement, statuses, the verb checks,
-media types, security schemes, response headers, and the `Route` a server is handed. The protocol layer is
+media types, security schemes, response headers, and the `TsonRoute` a server is handed. The protocol layer is
 `design/service-description.md`, whose example shows both schemas; the resolver-versus-reader split, the wiring,
 `TsonServiceCoverage` and business errors are `design/service-reader.md`.
 
@@ -32,7 +32,7 @@ media types, security schemes, response headers, and the `Route` a server is han
 - A media type is listed, never implied, except `application/tson` on every endpoint but a `!http.document`; a
   document listing none, and a non-document listing a type no codec here speaks, are startup failures.
 - An endpoint's `security`, when written, replaces its projection's, and `security: []` is open; absent inherits, and
-  both absent is open. The bound records keep absent (`Optional.empty()`) apart from empty, and `Route.security()` is
+  both absent is open. The bound records keep absent (`Optional.empty()`) apart from empty, and `TsonRoute.security()` is
   the resolved list. Nothing enforces a scheme.
 - A response header's template variable names a scalar field of the endpoint's response type, checked at startup; an
   endpoint with no response type, a document among them, declares literals only.
@@ -94,7 +94,7 @@ from the path.
 ## Placement
 
 `http.placement` is the bridge from HTTP's constructs to the exchange's request record, and the place where a
-protocol and the projection over it may look different. The reader checks it (`RequestPlacement`):
+protocol and the projection over it may look different. The reader checks it (`TsonRequestPlacement`):
 
 - each request record's fields are placed exactly once over the path, the query, the headers and the body: a
   `{segment}` binds the field of that name, `query` and `headers` name fields, `body` names one field carried
@@ -131,7 +131,7 @@ fixes its own status (`design/service-reader.md`, "Business errors").
 
 The verb agrees with what the exchange says about itself, the markers on its key (`design/service-description.md`,
 "An exchange's facts"): GET is safe, PUT and DELETE idempotent, and nothing `@service.destructive` sits at GET or
-HEAD, as nothing unsafe does. The check runs one way: no verb implies a fact. `Route.safe()`, `idempotent()` (safe
+HEAD, as nothing unsafe does. The check runs one way: no verb implies a fact. `TsonRoute.safe()`, `idempotent()` (safe
 implies it) and `destructive()` carry the three resolved, from the exchange's key for a binding and the verb key for
 an operation or a document.
 
@@ -144,8 +144,8 @@ an operation or a document.
 HTTP already negotiates them, so a new encoding is a registered name and never an edit to the layer. One set serves both
 directions, as the codec does; a split between what an endpoint accepts and what it produces is a later field.
 
-`Route.mediaTypes()` is the resolved set, folded to lower case: `application/tson` first for a non-document, then what
-is listed. `Route.speaksJson()` is membership of either JSON label, and a demo builds the route's codec from it
+`TsonRoute.mediaTypes()` is the resolved set, folded to lower case: `application/tson` first for a non-document, then what
+is listed. `TsonRoute.speaksJson()` is membership of either JSON label, and a demo builds the route's codec from it
 (`codec.acceptingJson()`), keeping the description the one statement.
 `TsonServiceConformanceTest.everyEndpointSpeaksTheMediaTypesItLists` holds the server to it, each listed JSON label sent
 and asked for, and JSON refused where none is listed.
@@ -181,7 +181,7 @@ delivered its `HttpAuth` or `ApiKey`.
 **The override rule**: an endpoint's `security`, when written, replaces the projection's whole; `security: []` says the
 endpoint is open; absent inherits; both absent is open. So an endpoint record types the field `Optional<List<ValueRef<
 SecurityScheme>>>`, which the binder delivers `Optional.empty()` when absent and a present empty list for `[]`
-(`anAbsentSecurityAndAnEmptyOneArriveApart`). `Route.security()` is the resolved list. **Stated, not enforced**: nothing
+(`anAbsentSecurityAndAnEmptyOneArriveApart`). `TsonRoute.security()` is the resolved list. **Stated, not enforced**: nothing
 here checks a credential; enforcement at the error boundary is backlog, its status `TsonHttpException.from`'s.
 
 ## Response headers
@@ -196,7 +196,7 @@ that is one scalar, the rule for a path segment; a form beyond level 1 is refuse
 a document or one answering no body, declares literals only. A response named through an extern, or a plain alias of
 a record, is judged as the record it reaches; an array is refused whatever its element type, and so is a field typed by
 an alias of a container (`TsonServiceDescriptionExternTest`,
-`TsonServiceDescriptionTest.aResponseHeaderExpandsOverARecordReachedThroughAPlainAlias`). `Route.responseHeaders()` holds
+`TsonServiceDescriptionTest.aResponseHeaderExpandsOverARecordReachedThroughAPlainAlias`). `TsonRoute.responseHeaders()` holds
 the templates, and `expandResponseHeaders(fields)` expands them through `HeaderTemplate` from a function of field name
 to text that the server writes from its own reply, since reading a field of an arbitrary bound record would need
 reflection or the tree reader.
@@ -230,9 +230,9 @@ thing a parametric record could hold is a whole `!http.projection` value, and it
 `fetching => <T> !http.projection { resources: { "/orders/{id}" => { … response: T … } } }` is refused at its declaration,
 the diagnostic naming the remedy, one value per instantiation (`UpstreamGapsTest.aParametricRecordOverAnHttpValueIsRefused`).
 
-## `Route`, and the conformance test
+## `TsonRoute`, and the conformance test
 
-`Route` is one endpoint resolved: its verb and path, the exchange a binding borrows, its request, response and
+`TsonRoute` is one endpoint resolved: its verb and path, the exchange a binding borrows, its request, response and
 business errors by status (`errorFor(status)`), its success status, the three exchange facts, whether it is a
 document, its media types, its placement, its documentation (`summary()`, `doc()`, the verb key's, else the
 exchange's), its security in force and its response headers. `TsonServiceCoverage.serving` hands it to the handler

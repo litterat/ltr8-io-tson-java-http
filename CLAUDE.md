@@ -28,8 +28,8 @@ Each under ~20 KB and opening with its invariants. Pick by what you are about to
 | `TsonSchemaVersions`, `TSON-Accept-Schema`, `@Profile`, two versions of one schema | `schema-versions.md` |
 | `allowHost`/`mapHost`, `SchemaSource.ofMap`, an `!!import` URL in a request body | `schema-sources.md` |
 | `service.tn`'s protocol side: exchanges, their facts, the root maps of both layers, the namespaces the layer borrows | `service-description.md` |
-| `TsonServiceDescription`, `TsonHttpSchema`, `TsonServiceCoverage`, `PayloadType`, an extern a description names, what a server publishes and warms, business errors | `service-reader.md` |
-| `http.tn`, `http.projection`, endpoints, placement, statuses, media types, security schemes, response headers, the verb checks, `Route` | `http-projection.md` |
+| `TsonServiceDescription`, `TsonHttpSchema`, `TsonServiceCoverage`, `TsonPayloadType`, an extern a description names, what a server publishes and warms, business errors | `service-reader.md` |
+| `http.tn`, `http.projection`, endpoints, placement, statuses, media types, security schemes, response headers, the verb checks, `TsonRoute` | `http-projection.md` |
 | The protocol layer, bind's `DataProtocol` and `DataExchange`, `TsonServiceProtocol` the join | `invoke.md` |
 | A `.tn` file this project owns, a `!!id`, `problem.tn`, a revision bump, a field spelling | `schema-authoring.md` |
 | `deployment.tn`, `TsonDeployment`, `/.well-known/tson-deployment`, `policy.tn` | `deployment-descriptor.md` |
@@ -81,8 +81,8 @@ depends on neither, `tson-http` names no adapter type, and the adapters never de
 
 | Module | Holds |
 |---|---|
-| `tson-http` (`io.ltr8.tson.http`) | Server-agnostic core: media types, `TsonHttpCodec`, `TsonHttpException` (the whole status policy), `problem.tn`, the two schema headers, `TsonSchemaCatalog`, `TsonSchemaVersions`, `TsonDeployment` (held by `TsonDeploymentSchema`); the HTTP half of the service description: `http.tn` (`TsonHttpSchema`, mirrors in `io.ltr8.tson.http.schema`), `TsonServiceDescription`, `Route`; depends on `tson-service` |
-| `tson-service` (`io.ltr8.tson.service`) | A service's protocol description, independent of HTTP: `service.tn` (`TsonServiceSchema`, mirrors in `io.ltr8.tson.service.schema`), `ExchangeName`, the join `TsonServiceProtocol`, and `TsonBindings` |
+| `tson-http` (`io.ltr8.tson.http`) | Server-agnostic core: media types, `TsonHttpCodec`, `TsonHttpException` (the whole status policy), `problem.tn`, the two schema headers, `TsonSchemaCatalog`, `TsonSchemaVersions`, `TsonDeployment` (held by `TsonDeploymentSchema`); the HTTP half of the service description: `http.tn` (`TsonHttpSchema`, mirrors in `io.ltr8.tson.http.schema`), `TsonServiceDescription`, `TsonRoute`; depends on `tson-service` |
+| `tson-service` (`io.ltr8.tson.service`) | A service's protocol description, independent of HTTP: `service.tn` (`TsonServiceSchema`, mirrors in `io.ltr8.tson.service.schema`), `TsonExchangeName`, the join `TsonServiceProtocol`, and `TsonBindings` |
 | `tson-http-jdk` (`io.ltr8.tson.http.jdk`) | Adapter for `com.sun.net.httpserver`; zero dependencies; the reference the other two are read against |
 | `tson-http-javalin` (`io.ltr8.tson.http.javalin`) | Adapter for Javalin 6.7.0 (Jetty 11, `jakarta.*`) |
 | `tson-http-helidon` (`io.ltr8.tson.http.helidon`) | Adapter for Helidon 4.2.2 SE, plus `TsonMediaSupport` over Helidon's `MediaSupport` SPI |

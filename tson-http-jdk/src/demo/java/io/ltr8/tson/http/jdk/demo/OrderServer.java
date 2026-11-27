@@ -6,7 +6,7 @@ import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
-import io.ltr8.tson.http.Route;
+import io.ltr8.tson.http.TsonRoute;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonHttpSchema;
@@ -166,7 +166,7 @@ public final class OrderServer {
 
         // The handler never mentions validation. Reading is what validates: a body that breaks the schema
         // never reaches this code, and the client gets a 400 carrying every diagnostic at once.
-        Route create = coverage.serving(HttpVerb.POST, "/orders");
+        TsonRoute create = coverage.serving(HttpVerb.POST, "/orders");
         // The description says whether the endpoint speaks JSON, so the route's codec follows it rather than a
         // second statement here disagreeing with it.
         TsonHttpCodec createCodec = create.speaksJson() ? codec.acceptingJson() : codec;
@@ -199,7 +199,7 @@ public final class OrderServer {
         // a prefix rather than a pattern. A claim names the declared template rather than the registered path
         // for exactly this reason -- checking the paths were equal would need a translation table per
         // framework, and a wrong entry there is a route that silently never matches.
-        Route getSchema = coverage.serving(HttpVerb.GET, "/{+schemaPath}");
+        TsonRoute getSchema = coverage.serving(HttpVerb.GET, "/{+schemaPath}");
         server.createContext("/", TsonHandler.asHttpHandler(codec,
                 schemaRoute(getSchema, catalog(described, schemas))));
 
@@ -219,7 +219,7 @@ public final class OrderServer {
      * document's headers are literals, checked at startup, and a miss or a refused method is the error boundary's,
      * carrying none of them.
      */
-    private static TsonHandler schemaRoute(Route route, TsonSchemaCatalog catalog) {
+    private static TsonHandler schemaRoute(TsonRoute route, TsonSchemaCatalog catalog) {
         TsonSchemaHandler served = TsonSchemaHandler.of(catalog);
         return exchange -> {
             if ((exchange.method().equals("GET") || exchange.method().equals("HEAD"))

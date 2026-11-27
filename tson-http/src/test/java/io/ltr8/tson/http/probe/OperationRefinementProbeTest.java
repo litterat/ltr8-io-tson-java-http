@@ -11,7 +11,7 @@ import io.ltr8.tson.base.bind.AtomContext;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.OrdersExamples;
-import io.ltr8.tson.http.Route;
+import io.ltr8.tson.http.TsonRoute;
 import io.ltr8.tson.http.TsonHttpSchema;
 import io.ltr8.tson.http.probe.operationrefinement.Binding;
 import io.ltr8.tson.http.probe.operationrefinement.Document;
@@ -523,7 +523,7 @@ class OperationRefinementProbeTest {
         io.ltr8.tson.http.schema.Operation op = assertInstanceOf(io.ltr8.tson.http.schema.Operation.class,
                 http.resources().get(path).endpoints().get("GET"));
         assertEquals(200, op.status());
-        Route route = TsonHttpSchema.describedBy(withPaged, PAGED_ID).route(HttpVerb.GET, path).orElseThrow();
+        TsonRoute route = TsonHttpSchema.describedBy(withPaged, PAGED_ID).route(HttpVerb.GET, path).orElseThrow();
         assertEquals(200, route.status());
         assertEquals("order_ref", route.request().orElseThrow().name());
         assertEquals("order_page", route.response().orElseThrow().name());

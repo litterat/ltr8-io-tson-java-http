@@ -30,6 +30,6 @@ module io.ltr8.tson.http {
     // in their components. It resolves through io.ltr8.tson.service either way; naming it says a consumer needs it.
     requires transitive io.ltr8.annotation;
     // transitive: http.tn imports service.tn, so its records name service.tn's (Protocol, Exchange), the description
-    // names ExchangeName, and TsonHttpSchema's bindings include TsonServiceSchema's.
+    // names TsonExchangeName, and TsonHttpSchema's bindings include TsonServiceSchema's.
     requires transitive io.ltr8.tson.service;
 }

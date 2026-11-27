@@ -40,8 +40,8 @@ class TsonServiceProtocolTest {
 
     private static final Tson TSON = ShopExamples.tson();
 
-    private static ExchangeName exchange(String protocol, String name) {
-        return new ExchangeName(protocol, name);
+    private static TsonExchangeName exchange(String protocol, String name) {
+        return new TsonExchangeName(protocol, name);
     }
 
     private static DataExchange joined(String protocol, String name, Class<?> type) {
@@ -72,7 +72,7 @@ class TsonServiceProtocolTest {
         assertEquals("shop", shop.name());
         assertSame(ShopApi.class, shop.dataProtocol().typeClass());
         assertEquals(List.of("add_item", "get_item", "list_items", "stock", "remove_item", "count_items"),
-                shop.exchanges().keySet().stream().map(ExchangeName::name).toList());
+                shop.exchanges().keySet().stream().map(TsonExchangeName::name).toList());
         assertEquals(List.of("addItem", "getItem", "listItems", "stock", "removeItem", "countItems"),
                 shop.exchanges().values().stream().map(DataExchange::name).toList());
         assertEquals(Optional.empty(), shop.exchange(exchange("lookup", "get_item")), "another protocol's exchange");

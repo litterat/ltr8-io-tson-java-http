@@ -5,7 +5,7 @@ import io.ltr8.tson.base.Diagnostic;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
-import io.ltr8.tson.http.RequestPlacement.Location;
+import io.ltr8.tson.http.TsonRequestPlacement.Location;
 import io.ltr8.tson.http.schema.ApiKey;
 import io.ltr8.tson.http.schema.ApiKeyIn;
 import io.ltr8.tson.http.schema.Binding;
@@ -20,7 +20,7 @@ import io.ltr8.tson.schema.meta.TypeChain;
 import io.ltr8.tson.schema.meta.TypeRef;
 import io.ltr8.tson.schema.meta.ValueEntry;
 import io.ltr8.tson.schema.meta.ValueRef;
-import io.ltr8.tson.service.ExchangeName;
+import io.ltr8.tson.service.TsonExchangeName;
 import io.ltr8.tson.service.TsonBindings;
 import io.ltr8.tson.service.TsonServiceSchema;
 import io.ltr8.tson.service.schema.Exchange;
@@ -238,21 +238,21 @@ class TsonServiceDescriptionTest {
         TsonServiceDescription routes = routes(API);
         assertEquals(4, routes.routes().size());
 
-        Route create = routes.route(HttpVerb.POST, "/orders").orElseThrow();
-        assertEquals(Optional.of(new ExchangeName("orders", "place_order")), create.exchange());
+        TsonRoute create = routes.route(HttpVerb.POST, "/orders").orElseThrow();
+        assertEquals(Optional.of(new TsonExchangeName("orders", "place_order")), create.exchange());
         assertEquals("orders.exchanges.place_order", create.exchange().orElseThrow().toString());
         assertEquals("new_order", create.request().orElseThrow().name());   // borrowed from the exchange
         assertEquals(201, create.status());
         assertEquals(List.of("order"), create.placement().at(Location.BODY));
         assertEquals(List.of("idempotency_key"), create.placement().at(Location.HEADER));
 
-        Route fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
+        TsonRoute fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
         assertEquals(Map.of("id", Location.PATH), fetch.placement().fields());
 
-        Route search = routes.route(HttpVerb.GET, "/orders").orElseThrow();
+        TsonRoute search = routes.route(HttpVerb.GET, "/orders").orElseThrow();
         assertEquals(List.of("status", "page", "page_size"), search.placement().at(Location.QUERY));
 
-        Route cancel = routes.route(HttpVerb.DELETE, "/orders/{id}").orElseThrow();
+        TsonRoute cancel = routes.route(HttpVerb.DELETE, "/orders/{id}").orElseThrow();
         assertEquals(Map.of("id", Location.PATH), cancel.placement().fields());
         assertEquals("order_not_found", cancel.errorFor(404).orElseThrow().name());
     }
@@ -299,7 +299,7 @@ class TsonServiceDescriptionTest {
               }
             """));
 
-        Route fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
+        TsonRoute fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
         assertEquals(Optional.empty(), fetch.exchange());
         assertEquals(Map.of("id", Location.PATH), fetch.placement().fields());
     }
@@ -429,8 +429,8 @@ class TsonServiceDescriptionTest {
                 List.of("orders.exchanges.place_order", "orders.exchanges.get_order", "orders.exchanges.list_orders",
                         "orders.exchanges.cancel_order"),
                 "\"/orders/{id}\" => { GET => !http.binding { exchange: billing.exchanges.get_order } }"));
-        Route fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
-        assertEquals(Optional.of(new ExchangeName("billing", "get_order")), fetch.exchange());
+        TsonRoute fetch = routes.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
+        assertEquals(Optional.of(new TsonExchangeName("billing", "get_order")), fetch.exchange());
         assertEquals("order_ref", fetch.request().orElseThrow().name());
     }
 
@@ -468,7 +468,7 @@ class TsonServiceDescriptionTest {
         List<String> exempt = List.of("notes.exchanges.find_notes");
         TsonServiceDescription routes = routes(projection("notes", exempt,
                 "\"/notes/{note_id}\" => { POST => !http.binding { exchange: notes.exchanges.put_note } }"));
-        RequestPlacement placement = routes.route(HttpVerb.POST, "/notes/{note_id}").orElseThrow().placement();
+        TsonRequestPlacement placement = routes.route(HttpVerb.POST, "/notes/{note_id}").orElseThrow().placement();
         assertEquals(List.of("kind", "payload"), placement.at(Location.BODY));
         assertEquals(List.of("note_id"), placement.at(Location.PATH));
 
@@ -609,20 +609,20 @@ class TsonServiceDescriptionTest {
     @Test
     void anExchangesFactsArriveOnItsRoute() {
         TsonServiceDescription orders = routes(API);
-        Route fetch = orders.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
+        TsonRoute fetch = orders.route(HttpVerb.GET, "/orders/{id}").orElseThrow();
         assertTrue(fetch.safe() && fetch.idempotent() && !fetch.destructive(), "safe implies idempotent");
-        Route cancel = orders.route(HttpVerb.DELETE, "/orders/{id}").orElseThrow();
+        TsonRoute cancel = orders.route(HttpVerb.DELETE, "/orders/{id}").orElseThrow();
         assertTrue(!cancel.safe() && cancel.idempotent() && !cancel.destructive());
-        Route place = orders.route(HttpVerb.POST, "/orders").orElseThrow();
+        TsonRoute place = orders.route(HttpVerb.POST, "/orders").orElseThrow();
         assertTrue(!place.safe() && !place.idempotent() && !place.destructive());
 
-        Route purge = routes(projection("purge", List.of(),
+        TsonRoute purge = routes(projection("purge", List.of(),
                 "\"/purge\" => { POST => !http.binding { exchange: purge.exchanges.purge_orders } }"))
                 .route(HttpVerb.POST, "/purge").orElseThrow();
         assertTrue(purge.destructive() && !purge.safe() && !purge.idempotent());
 
         // On an inline operation the marker sits before the verb key, and arrives the same way.
-        Route inline = routes(api("""
+        TsonRoute inline = routes(api("""
               standalone => !http.projection { resources: { "/purge" => {
                 @service.destructive POST => !http.operation { request: order_query  response: order_page } } } }
             """)).route(HttpVerb.POST, "/purge").orElseThrow();
@@ -766,7 +766,7 @@ class TsonServiceDescriptionTest {
      */
     @Test
     void aHeaderNameIsFoldedInAsciiAndOneACompatibilityFoldWouldAdmitIsRefused() {
-        Route create = routes(api("""
+        TsonRoute create = routes(api("""
               a => !http.projection { resources: { "/orders" => {
                 POST => !http.operation { request: order  response: order  status: 201
                         response_headers: { Content-Type => "application/tson" } } } } }
@@ -926,7 +926,7 @@ class TsonServiceDescriptionTest {
      */
     @Test
     void aResponseHeaderTemplateExpandsFromTheResponseValue() {
-        Route create = routes(api("""
+        TsonRoute create = routes(api("""
               a => !http.projection { resources: { "/orders" => {
                 POST => !http.operation { request: order  response: order  status: 201
                         response_headers: { Location => "/orders/{sku}"  Cache-Control => "no-store" } } } } }
@@ -1026,10 +1026,10 @@ class TsonServiceDescriptionTest {
         String api = aliased("/o/{id}", "request: order_ref  response: order_alias");
         TsonServiceDescription described = routes(api);
 
-        assertEquals(List.of(new PayloadType(PROTOCOL_ID, "order_ref"), new PayloadType(API_ID, "order_alias")),
+        assertEquals(List.of(new TsonPayloadType(PROTOCOL_ID, "order_ref"), new TsonPayloadType(API_ID, "order_alias")),
                 List.copyOf(described.payloadTypes()));
-        assertEquals(new PayloadType(API_ID, "ref_alias"), described.payloadType(TypeRef.of("ref_alias")));
-        assertEquals(new PayloadType(API_ID, "ref_alias2"), described.payloadType(TypeRef.of("ref_alias2")));
+        assertEquals(new TsonPayloadType(API_ID, "ref_alias"), described.payloadType(TypeRef.of("ref_alias")));
+        assertEquals(new TsonPayloadType(API_ID, "ref_alias2"), described.payloadType(TypeRef.of("ref_alias2")));
         assertEquals(List.of(Order.class), described.boundClasses(Map.of("order_alias", Order.class)));
         assertEquals(List.of(), described.boundClasses(Map.of("order", Order.class)));
 
@@ -1053,11 +1053,11 @@ class TsonServiceDescriptionTest {
     @Test
     void aRequestThatIsAPlainAliasOfARecordIsPlacedAsTheRecord() {
         TsonServiceDescription described = routes(aliased("/o/{id}", "request: ref_alias2  response: order"));
-        Route fetch = described.route(HttpVerb.GET, "/o/{id}").orElseThrow();
+        TsonRoute fetch = described.route(HttpVerb.GET, "/o/{id}").orElseThrow();
 
         assertEquals(Map.of("id", Location.PATH), fetch.placement().fields());
         assertEquals("ref_alias2", fetch.request().orElseThrow().name());
-        assertTrue(described.payloadTypes().contains(new PayloadType(API_ID, "ref_alias2")),
+        assertTrue(described.payloadTypes().contains(new TsonPayloadType(API_ID, "ref_alias2")),
                 () -> "" + described.payloadTypes());
     }
 
@@ -1079,7 +1079,7 @@ class TsonServiceDescriptionTest {
      */
     @Test
     void aFieldTypedByAPlainAliasOfAScalarIsAdmittedInThePath() {
-        Route route = routes(aliased("/o/{sku}", "request: by_sku  response: order")).routes().getFirst();
+        TsonRoute route = routes(aliased("/o/{sku}", "request: by_sku  response: order")).routes().getFirst();
 
         assertEquals(Map.of("sku", Location.PATH), route.placement().fields());
     }
@@ -1093,7 +1093,7 @@ class TsonServiceDescriptionTest {
         assertEquals("'a GET /o' places 'tags' in the QUERY, but it is an array of order_alias, and a repeated query "
                 + "value carries a scalar", refusedAliased("/o", "request: by_tags  response: order"));
 
-        Route route = routes(aliased("/o", "request: by_skus  response: order")).routes().getFirst();
+        TsonRoute route = routes(aliased("/o", "request: by_skus  response: order")).routes().getFirst();
         assertEquals(List.of("id", "skus"), route.placement().at(Location.QUERY));
     }
 
@@ -1103,7 +1103,7 @@ class TsonServiceDescriptionTest {
      */
     @Test
     void aResponseHeaderExpandsOverARecordReachedThroughAPlainAlias() {
-        Route route = routes(aliased("/o/{id}", "request: order_ref  response: reply_alias  "
+        TsonRoute route = routes(aliased("/o/{id}", "request: order_ref  response: reply_alias  "
                 + "response_headers: { ETag => \"{sku}\" }")).routes().getFirst();
 
         assertEquals(Map.of("etag", "A-1"), route.expandResponseHeaders(field -> field.equals("sku") ? "A-1" : null));
@@ -1130,7 +1130,7 @@ class TsonServiceDescriptionTest {
      */
     @Test
     void anErrorThatIsAPlainAliasFixesTheStatusItsTargetFixes() {
-        Route route = routes(aliased("/o/{id}", "request: order_ref  response: order  errors: [sku_missing]"))
+        TsonRoute route = routes(aliased("/o/{id}", "request: order_ref  response: order  errors: [sku_missing]"))
                 .routes().getFirst();
 
         assertEquals("sku_missing", route.errorFor(404).orElseThrow().name());

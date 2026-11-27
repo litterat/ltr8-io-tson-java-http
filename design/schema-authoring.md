@@ -23,7 +23,8 @@ touches, and the schema-language rules that read like bugs when they bite. Curre
   schema map of the same name is open to every importer and only a member path two schemas declare collides
   (`design/service-description.md`, "One root name per schema"). `service.tn` declares everything, annotations included,
   under `service`, `http.tn` under `http`, `problem.tn` under `problem` and `deployment.tn` under `deployment`, each
-  reserved only against a root that is no schema map, and each names its own entries by the same path from inside the
+  reserved only against a root that is no schema map (measured for `service` and `http`, and the spec's rule for the
+  other two), and each names its own entries by the same path from inside the
   map. A bound class's `@Typename` is the qualified name (`problem.details`, `deployment.descriptor`).
 - An optional field is `name?: T`; `name: T?` is a required field admitting `_`. A `text` field accepts any token.
   A `pattern` is I-Regexp and `^`/`$` are literal characters.

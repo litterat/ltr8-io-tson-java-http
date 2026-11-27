@@ -3,7 +3,7 @@
  * protocols of exchanges, the records it reads to, the join that holds a protocol against a Java interface, and the
  * bind context that maps schema types to classes with startup semantics. The root package is the API: {@code
  * TsonBindings}, {@code TsonServiceSchema}, the holder of {@code service.tn}, the join {@code TsonServiceProtocol} and
- * {@code ExchangeName}. {@code schema} holds the records that mirror {@code service.tn}'s types and nothing else, and
+ * {@code TsonExchangeName}. {@code schema} holds the records that mirror {@code service.tn}'s types and nothing else, and
  * names nothing of the root. {@code internal} is the type resolution the join shares with {@code io.ltr8.tson.http},
  * which projects a protocol onto HTTP and is the one module it is exported to.
  */

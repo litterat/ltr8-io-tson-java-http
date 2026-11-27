@@ -16,7 +16,7 @@ import io.ltr8.tson.base.CanonicalIdentity;
  *                 prepareToRead} take it
  * @param name     the type's name in the declaring schema
  */
-public record PayloadType(String schemaId, String name) {
+public record TsonPayloadType(String schemaId, String name) {
 
     /**
      * The declaring schema's canonical identity ([TSON-DATA] §2.2.1): the namespace a reader asks the binder for the

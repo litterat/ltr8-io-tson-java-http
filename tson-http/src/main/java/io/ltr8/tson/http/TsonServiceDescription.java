@@ -26,7 +26,7 @@ import io.ltr8.tson.schema.meta.Top;
 import io.ltr8.tson.schema.meta.TypeRef;
 import io.ltr8.tson.schema.meta.ValueEntry;
 import io.ltr8.tson.schema.meta.ValueRef;
-import io.ltr8.tson.service.ExchangeName;
+import io.ltr8.tson.service.TsonExchangeName;
 import io.ltr8.tson.service.internal.Landed;
 import io.ltr8.tson.service.schema.Exchange;
 import io.ltr8.tson.service.schema.Protocol;
@@ -47,7 +47,7 @@ import java.util.regex.Pattern;
 
 /**
  * The service a schema describes, read back from its resolved entries: every endpoint of every entry applying {@code
- * http.projection}, each resolved into a {@link Route}.
+ * http.projection}, each resolved into a {@link TsonRoute}.
  *
  * <h2>What the resolver checked, and what this does</h2>
  *
@@ -69,9 +69,9 @@ import java.util.regex.Pattern;
  * <ul>
  *   <li>a binding's or an exemption's exchange belongs to a protocol its projection binds;</li>
  *   <li>the {@code binds} claim holds -- every exchange of every bound protocol is bound, or exempted in {@code
- *       not_bound} with a reason -- held per {@link ExchangeName}, never per name;</li>
+ *       not_bound} with a reason -- held per {@link TsonExchangeName}, never per name;</li>
  *   <li>each request record's fields are placed over the path, query, headers and body exactly once
- *       ({@link RequestPlacement});</li>
+ *       ({@link TsonRequestPlacement});</li>
  *   <li>no exchange of a protocol a projection binds, and no verb key of an endpoint binding no exchange, is
  *       marked both {@code @service.safe} and {@code @service.destructive}, which exclude each other; a protocol no
  *       projection binds is not judged here;</li>
@@ -99,14 +99,14 @@ import java.util.regex.Pattern;
  * record, and the names its declaration writes are looked up in the foreign schema's namespace, never the
  * description's ({@code Landed}). A route names the type as the description wrote it; {@link #payloadTypes()} names
  * it where it is declared, the declaring schema and the entry's own name, which is what the binder is asked ({@link
- * PayloadType}).
+ * TsonPayloadType}).
  *
  * <p><b>A payload type that is a plain alias</b>, reaching no extern, is judged as the entry the alias reaches past
  * every hop, so a request, a response or an error aliasing a record is that record to its placement, its response
  * headers and its status pin; a route and {@link #payloadTypes()} name it as written, the alias in the schema
  * declaring it.
  *
- * <p>The security schemes in force for an endpoint are resolved here too, {@link Route#security()}: the endpoint's
+ * <p>The security schemes in force for an endpoint are resolved here too, {@link TsonRoute#security()}: the endpoint's
  * own {@code security} when it writes one, an empty one meaning open, else its projection's. The resolver judged
  * every name a scheme, and an api key carried in a header is held to RFC 9110's token grammar here, since its
  * {@code name} is {@code text}; nothing here or anywhere in this library enforces a scheme.
@@ -136,15 +136,15 @@ public final class TsonServiceDescription {
     private final Tson tson;
     private final String schemaId;
     private final TsonLinkedSchema linked;
-    private final List<Route> routes;
-    private final Set<PayloadType> payloadTypes;
+    private final List<TsonRoute> routes;
+    private final Set<TsonPayloadType> payloadTypes;
 
-    private TsonServiceDescription(Tson tson, String schemaId, TsonLinkedSchema linked, List<Route> routes) {
+    private TsonServiceDescription(Tson tson, String schemaId, TsonLinkedSchema linked, List<TsonRoute> routes) {
         this.tson = tson;
         this.schemaId = schemaId;
         this.linked = linked;
         this.routes = List.copyOf(routes);
-        Set<PayloadType> types = new LinkedHashSet<>();
+        Set<TsonPayloadType> types = new LinkedHashSet<>();
         this.routes.forEach(route -> route.payloadTypes().forEach(reference -> types.add(payloadType(reference))));
         this.payloadTypes = Collections.unmodifiableSet(types);
     }
@@ -156,11 +156,11 @@ public final class TsonServiceDescription {
         }
         TsonLinkedSchema linked = tson.loader().resolveLinked(schemaId);
         DataBindContext context = tson.dataBindContext();
-        List<Route> routes = new ArrayList<>();
-        Map<String, Route> byKey = new LinkedHashMap<>();
+        List<TsonRoute> routes = new ArrayList<>();
+        Map<String, TsonRoute> byKey = new LinkedHashMap<>();
         projections(linked.schema().entries()).forEach((name, http) -> {
-            for (Route route : read(name, http, linked)) {
-                Route earlier = byKey.putIfAbsent(route.key(), route);
+            for (TsonRoute route : read(name, http, linked)) {
+                TsonRoute earlier = byKey.putIfAbsent(route.key(), route);
                 if (earlier != null) {
                     throw new IllegalArgumentException("'" + route.key() + "' is declared twice, and a server serves "
                             + "one handler for a verb and a path");
@@ -168,7 +168,7 @@ public final class TsonServiceDescription {
                 routes.add(route);
             }
         });
-        for (Route route : routes) {
+        for (TsonRoute route : routes) {
             route.request().ifPresent(request -> ChosenTypes.requireBound(route.key(), request, linked, context));
         }
         requireNoBindingByExternName(schemaId, linked, closure(tson, linked).values(), routes, context);
@@ -184,9 +184,9 @@ public final class TsonServiceDescription {
      * entry of that name as its own, which such a binding may be for.
      */
     private static void requireNoBindingByExternName(String schemaId, TsonLinkedSchema linked,
-                                                     Collection<TsonLinkedSchema> closure, List<Route> routes,
+                                                     Collection<TsonLinkedSchema> closure, List<TsonRoute> routes,
                                                      DataBindContext context) {
-        Map<String, Route> namedAt = new LinkedHashMap<>();
+        Map<String, TsonRoute> namedAt = new LinkedHashMap<>();
         routes.forEach(route -> route.payloadTypes().forEach(type -> namedAt.putIfAbsent(type.name(), route)));
         namedAt.forEach((name, route) -> {
             if (!(linked.schema().entries().get(name) instanceof Extern)
@@ -251,19 +251,19 @@ public final class TsonServiceDescription {
         return value == null ? "null" : value.getClass().getSimpleName();
     }
 
-    private static List<Route> read(String httpName, HttpProjection http, TsonLinkedSchema scope) {
+    private static List<TsonRoute> read(String httpName, HttpProjection http, TsonLinkedSchema scope) {
         Map<String, Protocol> protocols = bound(httpName, http);
         // Every exchange the projection claims, bound or exempted, states facts that must agree with each other.
         protocols.forEach((name, protocol) -> protocol.exchanges().keySet().forEach(key -> requireFactsExclusive(
-                new ExchangeName(name, key).toString(), protocol.exchanges().getAnnotations(key))));
-        List<Route> routes = new ArrayList<>();
-        Set<ExchangeName> bound = new LinkedHashSet<>();
+                new TsonExchangeName(name, key).toString(), protocol.exchanges().getAnnotations(key))));
+        List<TsonRoute> routes = new ArrayList<>();
+        Set<TsonExchangeName> bound = new LinkedHashSet<>();
         http.resources().forEach((path, resource) -> {
             resource.endpoints().forEach((verbKey, endpoint) -> {
                 String label = httpName + " " + verbKey + " " + path;
                 HttpVerb verb = HttpVerb.valueOf(verbKey);
                 Annotations onVerb = resource.endpoints().getAnnotations(verbKey);
-                Optional<ExchangeName> exchange = Optional.empty();
+                Optional<TsonExchangeName> exchange = Optional.empty();
                 Optional<TypeRef> request;
                 Optional<TypeRef> response = Optional.empty();
                 List<TypeRef> errors;
@@ -280,7 +280,7 @@ public final class TsonServiceDescription {
                         errors = doc.errors();
                     }
                     case Binding b -> {
-                        ExchangeName named = boundExchange(label, b, protocols);
+                        TsonExchangeName named = boundExchange(label, b, protocols);
                         Exchange e = b.exchange().get();
                         exchange = Optional.of(named);
                         bound.add(named);
@@ -292,7 +292,7 @@ public final class TsonServiceDescription {
                         docs = facts;
                     }
                 }
-                RequestPlacement placement = RequestPlacement.of(label, verb, path, endpoint.query(),
+                TsonRequestPlacement placement = TsonRequestPlacement.of(label, verb, path, endpoint.query(),
                         endpoint.headers(), endpoint.body(), request, scope);
                 if (exchange.isEmpty()) {
                     requireFactsExclusive(label, facts);
@@ -312,7 +312,7 @@ public final class TsonServiceDescription {
                         .map(ValueRef::get).toList();
                 security.forEach(scheme -> requireHeaderToken(label, scheme));
                 Annotations fallback = docs;
-                routes.add(new Route(verb, path, exchange, request, response, errorStatuses(label, errors, scope),
+                routes.add(new TsonRoute(verb, path, exchange, request, response, errorStatuses(label, errors, scope),
                         endpoint.status(), safe, idempotent, destructive, document, mediaTypes, placement,
                         text(onVerb, "service.summary").or(() -> text(fallback, "service.summary")),
                         text(onVerb, "doc").or(() -> text(fallback, "doc")), security, endpoint.responseHeaders()));
@@ -377,7 +377,7 @@ public final class TsonServiceDescription {
                     throw new IllegalArgumentException(declared + ", but the response type '" + type + "' declares no "
                             + "field '" + variable + "' -- it declares " + record.fields().keySet());
                 }
-                RequestPlacement.notOneScalar(field, landed).ifPresent(because -> {
+                TsonRequestPlacement.notOneScalar(field, landed).ifPresent(because -> {
                     throw new IllegalArgumentException(declared + ", but '" + variable + "' of '" + type + "' is "
                             + because + ", and a header's variable expands from one scalar");
                 });
@@ -413,8 +413,8 @@ public final class TsonServiceDescription {
     }
 
     /** The exchange a binding names, which must belong to a protocol its projection binds. */
-    private static ExchangeName boundExchange(String label, Binding binding, Map<String, Protocol> protocols) {
-        ExchangeName named = ExchangeName.of(binding.exchange());
+    private static TsonExchangeName boundExchange(String label, Binding binding, Map<String, Protocol> protocols) {
+        TsonExchangeName named = TsonExchangeName.of(binding.exchange());
         if (!protocols.containsKey(named.owner())) {
             throw new IllegalArgumentException("'" + label + "' binds '" + named + "', an exchange of a protocol "
                     + "this projection does not bind -- bound: " + protocols.keySet());
@@ -427,20 +427,20 @@ public final class TsonServiceDescription {
      * naming an exchange of a protocol the projection does not bind exempts nothing it claims, so it is refused.
      */
     private static void requireComplete(String httpName, HttpProjection http, Map<String, Protocol> protocols,
-                                        Set<ExchangeName> bound) {
-        Set<ExchangeName> claimed = new LinkedHashSet<>();
+                                        Set<TsonExchangeName> bound) {
+        Set<TsonExchangeName> claimed = new LinkedHashSet<>();
         protocols.forEach((name, protocol) ->
-                protocol.exchanges().keySet().forEach(e -> claimed.add(new ExchangeName(name, e))));
-        Set<ExchangeName> exempt = new LinkedHashSet<>();
+                protocol.exchanges().keySet().forEach(e -> claimed.add(new TsonExchangeName(name, e))));
+        Set<TsonExchangeName> exempt = new LinkedHashSet<>();
         for (Exemption exemption : http.notBound()) {
-            ExchangeName exchange = ExchangeName.of(exemption.exchange());
+            TsonExchangeName exchange = TsonExchangeName.of(exemption.exchange());
             if (!claimed.contains(exchange)) {
                 throw new IllegalArgumentException("'" + httpName + "' exempts '" + exchange + "', which is not an "
                         + "exchange of a protocol it binds -- claimed: " + claimed);
             }
             exempt.add(exchange);
         }
-        List<ExchangeName> missing = claimed.stream().filter(e -> !bound.contains(e) && !exempt.contains(e))
+        List<TsonExchangeName> missing = claimed.stream().filter(e -> !bound.contains(e) && !exempt.contains(e))
                 .toList();
         if (!missing.isEmpty()) {
             throw new IllegalArgumentException("'" + httpName + "' binds protocols declaring " + missing
@@ -549,12 +549,12 @@ public final class TsonServiceDescription {
     }
 
     /** Every endpoint, in the order the description's http projections declare them. */
-    public List<Route> routes() {
+    public List<TsonRoute> routes() {
         return routes;
     }
 
     /** The endpoint serving {@code verb} at the declared {@code path}, if this description declares one. */
-    public Optional<Route> route(HttpVerb verb, String path) {
+    public Optional<TsonRoute> route(HttpVerb verb, String path) {
         return routes.stream().filter(route -> route.verb() == verb && route.path().equals(path)).findFirst();
     }
 
@@ -604,9 +604,9 @@ public final class TsonServiceDescription {
     /**
      * Every payload type this description's endpoints name -- requests, responses and errors, in the order the
      * endpoints declare them -- each where it is declared, the schema declaring it and its name there, which is what a
-     * reader asks the bind context for its class ({@link PayloadType}). A type named through an extern is the foreign
+     * reader asks the bind context for its class ({@link TsonPayloadType}). A type named through an extern is the foreign
      * entry it lands on, so {@code order_v1} and {@code order_v2}, externs of two schemas' {@code order}, are two
-     * payload types named {@code order}, and a route still names each by its local name ({@link Route#response()},
+     * payload types named {@code order}, and a route still names each by its local name ({@link TsonRoute#response()},
      * {@link #payloadType}). A plain alias reaching no extern is named as written, the alias in the schema declaring
      * it, though a TSON read of it asks the bind context for the entry the alias reaches.
      *
@@ -614,29 +614,29 @@ public final class TsonServiceDescription {
      * problem.details} the transport writes itself, as {@link TsonHttpException} does, may be named here and mapped
      * by nobody. {@link #boundClasses} is the filtered form, which is what a warm-up wants.
      */
-    public Set<PayloadType> payloadTypes() {
+    public Set<TsonPayloadType> payloadTypes() {
         return payloadTypes;
     }
 
     /**
      * {@code type}, a name a route of this description writes, where it is declared: past its extern to the foreign
      * entry it lands on, where it names one, and otherwise as written, a plain alias included. Its {@link
-     * PayloadType#schemaId()} is the schema a body of the type is read under by its own name, in either encoding.
+     * TsonPayloadType#schemaId()} is the schema a body of the type is read under by its own name, in either encoding.
      */
-    public PayloadType payloadType(TypeRef type) {
+    public TsonPayloadType payloadType(TypeRef type) {
         Landed landed = Landed.of(linked, type.name());
         String identity = landed.identity();
         String declaring = landed.in().identity().equals(identity) ? landed.in().schema().id()
                 : tson.schemaRegistry().getByCanonicalIdentity(identity).map(found -> found.schema().id())
                         .orElseThrow(() -> new IllegalStateException("'" + identity + "' declares '" + landed.name()
                                 + "', a payload type of '" + schemaId + "', and is not resolved"));
-        return new PayloadType(declaring, landed.name());
+        return new TsonPayloadType(declaring, landed.name());
     }
 
     /**
      * The Java classes {@code bindings} maps this description's payload types to -- what to warm at startup,
      * derived rather than listed. {@code bindings} is a name-only map, as {@code TsonBindings.of} takes, so each
-     * payload type is looked up by {@link PayloadType#name()}, the name a reader asks, never an extern's local name.
+     * payload type is looked up by {@link TsonPayloadType#name()}, the name a reader asks, never an extern's local name.
      *
      * <p>Hand-listing them is how a response type added to a description never gets warmed: nothing connects
      * the two lists, and the omission costs only latency, so nothing reports it. A type {@code bindings} does
@@ -656,7 +656,7 @@ public final class TsonServiceDescription {
     public List<Class<?>> boundClasses() {
         DataNameBinder binder = tson.dataBindContext().nameBinder();
         List<Class<?>> bound = new ArrayList<>();
-        for (PayloadType type : payloadTypes) {
+        for (TsonPayloadType type : payloadTypes) {
             try {
                 bound.add(binder.resolve(type.identity(), type.name()));
             } catch (DataBindException unbound) {

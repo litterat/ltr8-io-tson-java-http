@@ -6,7 +6,7 @@ import io.ltr8.tson.Tson;
 import io.ltr8.tson.base.ProcessorConfig;
 import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
-import io.ltr8.tson.http.Route;
+import io.ltr8.tson.http.TsonRoute;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonHttpSchema;
@@ -158,7 +158,7 @@ public final class OrderServer {
         // one the description does not declare, so a moved endpoint fails at the handler that outlived it.
         TsonServiceCoverage coverage = TsonServiceCoverage.of(described);
 
-        Route create = coverage.serving(HttpVerb.POST, "/orders");
+        TsonRoute create = coverage.serving(HttpVerb.POST, "/orders");
         // The description says whether the endpoint speaks JSON, so the route's codec follows it rather than a
         // second statement here disagreeing with it.
         TsonHttpCodec createCodec = create.speaksJson() ? codec.acceptingJson() : codec;
@@ -187,7 +187,7 @@ public final class OrderServer {
         // angle form matches across them -- which is exactly why a claim names the declared template rather than
         // comparing paths. Publishing at the identity path is what makes an !!import URL dereferenceable, and
         // the API description is a schema too, so the catalog serves it like everything else.
-        Route getSchema = coverage.serving(HttpVerb.GET, "/{+schemaPath}");
+        TsonRoute getSchema = coverage.serving(HttpVerb.GET, "/{+schemaPath}");
         app.get("/<path>", TsonHandler.asHandler(codec,
                 schemaRoute(getSchema, catalog(described, schemas))));
 
@@ -206,7 +206,7 @@ public final class OrderServer {
      * document's headers are literals, checked at startup, and a miss or a refused method is the error boundary's,
      * carrying none of them.
      */
-    private static TsonHandler schemaRoute(Route route, TsonSchemaCatalog catalog) {
+    private static TsonHandler schemaRoute(TsonRoute route, TsonSchemaCatalog catalog) {
         TsonSchemaHandler served = TsonSchemaHandler.of(catalog);
         return context -> {
             if ((context.method().equals("GET") || context.method().equals("HEAD"))

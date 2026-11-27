@@ -58,7 +58,7 @@ import java.util.regex.Pattern;
  * aliases a record is placed as that record, a field typed by an alias of a record or an array is no scalar in the
  * path, and an array of an alias of a record has no query spelling. A refusal names the type as it was written.
  */
-public record RequestPlacement(Map<String, Location> fields) {
+public record TsonRequestPlacement(Map<String, Location> fields) {
 
     /** Where one request field travels. */
     public enum Location { PATH, QUERY, HEADER, BODY }
@@ -73,8 +73,9 @@ public record RequestPlacement(Map<String, Location> fields) {
      *
      * @param scope the description, in whose namespace {@code request} is written
      */
-    static RequestPlacement of(String name, HttpVerb verb, String path, List<String> query, Map<String, String> headers,
-                               Optional<String> body, Optional<TypeRef> request, TsonLinkedSchema scope) {
+    static TsonRequestPlacement of(String name, HttpVerb verb, String path, List<String> query,
+                                   Map<String, String> headers, Optional<String> body, Optional<TypeRef> request,
+                                   TsonLinkedSchema scope) {
         Map<String, RecordField> declared = new LinkedHashMap<>();
         // No request: no field is declared to judge, so the landing is never asked a name.
         Landed landed = request.map(ref -> Landed.of(scope, ref.name()).pastAliases())
@@ -116,7 +117,7 @@ public record RequestPlacement(Map<String, Location> fields) {
             requireInRemainderBody(name, field, spelled, sibling, sibling, inRecordOrder.get(sibling), placed,
                     remainderIsBody);
         }));
-        return new RequestPlacement(Collections.unmodifiableMap(inRecordOrder));
+        return new TsonRequestPlacement(Collections.unmodifiableMap(inRecordOrder));
     }
 
     private static void place(String entry, Map<String, Location> placed, Map<String, RecordField> declared,

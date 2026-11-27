@@ -14,7 +14,7 @@ dependencies {
     // what a JSON tree read hands back. tson-java's own module, so the no-external-dependency rule holds.
     api("io.ltr8:tson-json:${property("tson.version")}")
     // service.tn, the join and TsonBindings. `api` because http.tn's records and the description name service.tn's
-    // records and ExchangeName, and TsonHttpSchema's bindings include TsonServiceSchema's.
+    // records and TsonExchangeName, and TsonHttpSchema's bindings include TsonServiceSchema's.
     api(project(":tson-service"))
     // The binding annotations, named directly: http.tn's records carry @Typename and @Field, and HttpProjection and
     // Resource hold an AnnotatedMap in their components. tson-java's own module.

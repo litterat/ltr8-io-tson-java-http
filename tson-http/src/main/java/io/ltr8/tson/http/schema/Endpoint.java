@@ -31,14 +31,14 @@ public sealed interface Endpoint permits Operation, Binding, Document {
 
     /**
      * The media types listed, as written: what an endpoint speaks beside {@code application/tson}, or the whole
-     * contract of a {@link Document}'s body. {@code Route.mediaTypes()} is the resolved set.
+     * contract of a {@link Document}'s body. {@code TsonRoute.mediaTypes()} is the resolved set.
      */
     List<String> mediaTypes();
 
     /**
      * The security schemes this endpoint names, each a reference delivered its scheme: empty when the endpoint
      * writes no {@code security}, so it inherits its projection's; present and empty when it writes {@code security:
-     * []}, which says it is open. {@code Route.security()} is the list in force.
+     * []}, which says it is open. {@code TsonRoute.security()} is the list in force.
      */
     Optional<List<ValueRef<SecurityScheme>>> security();
 

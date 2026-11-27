@@ -15,7 +15,7 @@ import io.ltr8.tson.base.source.SchemaAccess;
 import io.ltr8.tson.base.source.SchemaSource;
 import io.ltr8.tson.http.ExternExamples;
 import io.ltr8.tson.http.OrdersExamples;
-import io.ltr8.tson.http.PayloadType;
+import io.ltr8.tson.http.TsonPayloadType;
 import io.ltr8.tson.http.TsonHttpCodec;
 import io.ltr8.tson.http.TsonHttpException;
 import io.ltr8.tson.http.TsonHttpSchema;
@@ -205,8 +205,8 @@ class ExternProbeTest {
 
         assertEquals(List.of("order_v1", "order_v2"),
                 described.routes().stream().map(route -> route.response().orElseThrow().name()).toList());
-        assertEquals(List.of(new PayloadType(API, "order_ref"), new PayloadType(ORDER_1, "order"),
-                new PayloadType(ORDER_2, "order")), List.copyOf(described.payloadTypes()));
+        assertEquals(List.of(new TsonPayloadType(API, "order_ref"), new TsonPayloadType(ORDER_1, "order"),
+                new TsonPayloadType(ORDER_2, "order")), List.copyOf(described.payloadTypes()));
         assertEquals(List.of(API, TsonHttpSchema.ID, TsonServiceSchema.ID, ORDER_1, ORDER_2, ERRORS,
                         TsonProblemSchema.ID, KEYS),
                 List.copyOf(described.referencedSchemas()));
